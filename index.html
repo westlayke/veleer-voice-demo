@@ -544,7 +544,7 @@ const TOOLS = [
     permEmail: { type: "boolean", description: "Default true" }, permCalls: { type: "boolean", description: "Default true" }, permText: { type: "boolean", description: "Default false" },
     permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" } } },
   { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "summary"], props: Object.assign({}, FOR, {
-    date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES }, summary: { type: "string", description: "1-3 sentences, past tense" },
+    date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
     substantive: { type: "boolean" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") },
     nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "opportunity", name: "show_opportunity_draft", description: "Show a new Opportunity draft for a contact.", req: ["contact_name"], props: Object.assign({}, FOR, {
@@ -553,7 +553,7 @@ const TOOLS = [
     fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, campaign: { type: "string", enum: CAMPAIGNS }, plannedDate: S_DATE, amount: { type: "number" },
     askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
   { action: "ask", name: "show_ask_result_draft", description: "Show the Interaction report for the meeting where an ask was made, with the investor's response.", req: ["contact_name", "response", "summary"], props: Object.assign({}, FOR, {
-    date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES }, amount: { type: "number", description: "Amount asked; leave out to use the planned ask" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" },
+    date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, amount: { type: "number", description: "Amount asked; leave out to use the planned ask" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" },
     response: { type: "string", enum: ["Yes", "Counter-offer", "Considering", "No"] }, agreedAmount: { type: "number", description: "Verbal figure agreed" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "pledge", name: "show_pledge_draft", description: "Show a Record pledge draft on the contact's open opportunity.", req: ["contact_name", "amount", "confirmedBy", "firstDue"], props: Object.assign({}, FOR, {
     amount: { type: "number" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD; use today if not said" },
@@ -576,6 +576,7 @@ You never save anything. When you have enough, call the matching draft tool so t
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
+When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?"
 Write spoken email addresses as real addresses. Resolve relative dates against today.`;
 }
 
