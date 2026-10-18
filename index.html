@@ -743,7 +743,7 @@ After a save, briefly confirm and ask what they'd like to do next, or whether to
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
 When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one.
-If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works, then give a spoken tour of about a minute, one stage at a time in order. Call highlight_stage just before each stage, then say one or two plain sentences: what the stage means and what has to happen to move on. End by asking if they have questions or want to try a step. If they interrupt with a question, answer it, then offer to carry on. The stages:
+If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works, then give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait for the answer. On yes, carry straight on with the next stage the same way; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
 ${flowScript()}
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
 When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before showing the draft. Recording an ask needs the same unless the investor declined.
@@ -904,7 +904,7 @@ function onTool(callId, name, args) {
   }
   if (name === "highlight_stage") {
     const i = flowIndex(data.stage); if (i < 0) { toolReply(callId, { ok: false, error: "Unknown stage." }); return; }
-    highlightStage(i); toolReply(callId, { ok: true, summary: `${FLOW[i].stage} is lit up on screen.` }); return;
+    highlightStage(i); const nx = FLOW[i + 1]; toolReply(callId, { ok: true, summary: `${FLOW[i].stage} is lit up on screen. Now describe it in one or two sentences, then ${nx ? `ask "Shall I go on to ${nx.stage}?" and wait for the answer (unless they asked you to go straight through).` : "ask if they have questions or want to try a step."}` }); return;
   }
   if (name === "show_screen") {
     const map = { home: "home", contacts: "contacts", opportunities: "board", tasks: "tasks", contact_record: "contact", opportunity_record: "opp", how_it_works: "flow" };
@@ -1197,7 +1197,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T17:29:52Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T17:39:22Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
