@@ -104,6 +104,7 @@ main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; pa
 .wl-save h3 { margin: 0; font-size: 14px; color: var(--brand-ink); display: flex; align-items: center; gap: 7px; }
 .wl-save ol { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.45; } .wl-save li { padding-left: 2px; }
 .wl-save .ico { display: inline-flex; vertical-align: -3px; width: 18px; height: 18px; border: 1px solid var(--line); border-radius: 5px; align-items: center; justify-content: center; background: var(--surface); }
+.wl-inmic { display: inline-flex; vertical-align: -5px; width: 22px; height: 22px; border-radius: 50%; background: var(--brand); color: #fff; align-items: center; justify-content: center; margin: 0 1px; }
 .wl-save small { font-size: 12.5px; color: var(--muted); }
 .wl-tips b { color: var(--fg); font-weight: 600; }
 /* journey card */
@@ -759,7 +760,7 @@ function saveTip() {
     : android ? [`Tap ${dots} at the top right of Chrome.`, `Tap <b>Add to home screen</b> (or <b>Install app</b>).`, `Tap <b>Add</b> or <b>Install</b>.`]
     : [`Open this link on your phone.`, `iPhone: tap ${share} Share, then <b>Add to Home Screen</b>.`, `Android: tap ${dots}, then <b>Add to home screen</b>.`];
   return `<div class="wl-save"><h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Keep Veleer on your phone</h3>
-    <ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol><small>Then open it from the Veleer icon. It works like an app, with the mic ready.</small></div>`;
+    <ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol><small>Then open it from the Veleer icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small></div>`;
 }
 function welcomeModal() {
   const h = document.getElementById("modal");
@@ -767,7 +768,7 @@ function welcomeModal() {
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
     <span class="wl-mic">${mic(24)}</span>
     <h2 id="wmTitle">Talk to Veleer like a colleague</h2>
-    <p>Tap the mic, say what happened, and Veleer drafts the record. You check it and tap Save.</p>
+    <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span>, say what happened, and Veleer drafts the record. You check it and tap Save.</p>
     <ul class="wl-tips"><li><b>Interrupt any time,</b> just like a phone call.</li><li><b>Fix things out loud:</b> “Change the email to…”</li><li><b>Say “that’s it for now”</b> to stop. Pick up any time.</li></ul>
     ${saveTip()}
     <button class="btn blue" data-act4="welcome-ok">Got it</button></div></div>`;
