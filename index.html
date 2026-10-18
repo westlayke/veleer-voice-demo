@@ -218,8 +218,8 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 "use strict";
 const OFFICER = "Dana Rivera", OFFICER_INITIALS = "DR";
 const STAGES = ["Qualification", "Cultivation", "Ask Planning", "Ask Made", "Commitment", "Closed"];
-const FUNDS = ["Scholarship fund", "Library reading room", "Building fund", "General operating"];
-const CAMPAIGNS = ["Building campaign 2027", "Scholars campaign 2026", "General / no campaign"];
+const FUNDS = ["C3 - Citizens Alliance", "C4 - Citizens Alliance", "PAC - Citizens Alliance"]; // entities (the guide renamed Fund to Entity)
+const CAMPAIGNS = ["Pennsylvania", "New Hampshire", "North Dakota", "Idaho", "National", "General / no campaign"];
 const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
 const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
 const MIC = '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
@@ -255,12 +255,12 @@ const ACTIONS = {
   opportunity: { title: "New opportunity", saved: "Opportunity created", saveLabel: "Save",
     fields: [
       { k: "name", label: "Opportunity name", req: true, fixed: true }, { k: "officer", label: "Gift officer", fixed: true },
-      { k: "fund", label: "Fund of interest", type: "select", opts: ["", ...FUNDS] }, { k: "potential", label: "Potential amount", type: "money" },
+      { k: "fund", label: "Entity of interest", type: "select", opts: ["", ...FUNDS] }, { k: "potential", label: "Potential amount", type: "money" },
       { k: "moveToCultivation", label: "Then move to Cultivation", type: "bool" }, { k: "notes", label: "Notes", type: "area" } ] },
   plan: { title: "Add ask", saved: "Ask planned", saveLabel: "Save",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "fund", label: "Fund", type: "select", opts: FUNDS, req: true }, { k: "campaign", label: "Campaign", type: "select", opts: CAMPAIGNS, req: true },
+      { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true }, { k: "campaign", label: "Campaign", type: "select", opts: CAMPAIGNS, req: true },
       { k: "plannedDate", label: "Planned ask date", type: "date", req: true }, { k: "amount", label: "Amount", type: "money", req: true },
       { k: "askType", label: "Ask type", type: "select", opts: ["Outright", "Pledge", "Planned gift"] },
       { k: "officer", label: "Gift officer", fixed: true }, { k: "participants", label: "Participants in the ask" } ],
@@ -269,7 +269,7 @@ const ACTIONS = {
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
       { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: MEET_TYPES, req: true },
-      { k: "amount", label: "Amount asked", type: "money", req: true }, { k: "fund", label: "Fund", type: "select", opts: FUNDS, req: true },
+      { k: "amount", label: "Amount asked", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
       { k: "response", label: "Response", type: "select", opts: ["Yes", "Counter-offer", "Considering", "No"], req: true },
       { k: "agreedAmount", label: "Agreed amount (verbal)", type: "money" }, { k: "summary", label: "Summary", type: "area", req: true },
       { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
@@ -277,7 +277,7 @@ const ACTIONS = {
   pledge: { title: "Record pledge", saved: "Pledge recorded", saveLabel: "Record pledge",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "amount", label: "Pledge amount", type: "money", req: true }, { k: "fund", label: "Fund", type: "select", opts: FUNDS, req: true },
+      { k: "amount", label: "Pledge amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
       { k: "confirmedBy", label: "Confirmed by", type: "select", opts: ["Email", "Phone", "In person"], req: true }, { k: "confirmedDate", label: "Confirmed on", type: "date", req: true },
       { k: "installments", label: "Payments", type: "money", num: true }, { k: "frequency", label: "Frequency", type: "select", opts: ["Annual", "Quarterly", "Monthly", "One payment"] },
       { k: "firstAmount", label: "First payment", type: "money" }, { k: "firstDue", label: "First payment due", type: "date", req: true } ],
@@ -289,13 +289,13 @@ const ACTIONS = {
 const KEY = "veleer-voice-demo-v1";
 function seed() {
   const c = (first, last, status, capacity, howMet) => ({ id: uid(), first, last, status, capacity, howMet, permEmail: true, permCalls: true, permText: false, added: "2025-03-14", example: true });
-  const contacts = [c("Ruth", "Abernathy", "Investor", "A", "Long-time scholarship supporter."), c("Ken", "Ito", "Investor", "B", "Board member's referral."),
-    c("James", "Okafor", "Prospect", "C", "Met at the alumni luncheon."), c("Priya", "Sandaruwan", "Prospect", "B", "Building campaign kickoff."), c("Elena", "Vasquez", "Investor", "B", "Assigned by Luis Ortega.")];
+  const contacts = [c("Ruth", "Abernathy", "Investor", "A", "Long-time supporter of the national program."), c("Ken", "Ito", "Investor", "B", "Board member's referral."),
+    c("James", "Okafor", "Prospect", "C", "Met at the alumni luncheon."), c("Priya", "Sandaruwan", "Prospect", "B", "Met at the Pennsylvania campaign kickoff."), c("Elena", "Vasquez", "Investor", "B", "Assigned by Luis Ortega.")];
   const [ab, it, ok, sa, va] = contacts;
   const o = (ct, stage, fund, potential, ask) => ({ id: uid(), contactId: ct.id, name: `${ct.last}, ${ct.first} - ${YEAR}`, stage, fund, potential, asks: ask ? [ask] : [], pledge: null, created: "2026-02-01", example: true });
-  const opps = [o(ab, "Cultivation", "Scholarship fund", 75000), o(it, "Ask Made", "Building fund", 30000, { fund: "Building fund", campaign: "Building campaign 2027", amount: 30000, askType: "Pledge", status: "Asked", plannedDate: "2026-09-30" }),
-    o(ok, "Qualification", "General operating", 20000), o(sa, "Cultivation", "Building fund", 25000),
-    o(va, "Ask Planning", "Scholarship fund", 40000, { fund: "Scholarship fund", campaign: "Scholars campaign 2026", amount: 40000, askType: "Outright", status: "Planned", plannedDate: "2026-11-05" })];
+  const opps = [o(ab, "Cultivation", "C3 - Citizens Alliance", 75000), o(it, "Ask Made", "C4 - Citizens Alliance", 30000, { fund: "C4 - Citizens Alliance", campaign: "Pennsylvania", amount: 30000, askType: "Pledge", status: "Asked", plannedDate: "2026-09-30" }),
+    o(ok, "Qualification", "PAC - Citizens Alliance", 20000), o(sa, "Cultivation", "C3 - Citizens Alliance", 25000),
+    o(va, "Ask Planning", "C3 - Citizens Alliance", 40000, { fund: "C3 - Citizens Alliance", campaign: "New Hampshire", amount: 40000, askType: "Outright", status: "Planned", plannedDate: "2026-11-05" })];
   return { contacts, opps };
 }
 const fresh = () => Object.assign({ v: 2, screen: "home", sel: { contact: null, opp: null }, interactions: [], tasks: [], history: [], seenWelcome: false,
@@ -319,6 +319,10 @@ try {
 } catch (e) {}
 (() => { const h = location.hash || ""; const m = /[#&]xai=([^&]+)/.exec(h), c = /[#&]code=([^&]+)/.exec(h);
   try { if (m) S.settings.xaiKey = decodeURIComponent(m[1]).trim(); if (c) S.settings.demoCode = decodeURIComponent(c[1]).trim(); } catch (e) {} })();
+// earlier versions used funds and campaigns that the guide has since replaced
+(() => { const FIXC = { "Building campaign 2027": "Pennsylvania", "Scholars campaign 2026": "National" };
+  const fx = (x) => { if (!x) return; if (x.fund && !FUNDS.includes(x.fund)) x.fund = "C3 - Citizens Alliance"; if (x.campaign && !CAMPAIGNS.includes(x.campaign)) x.campaign = FIXC[x.campaign] || "General / no campaign"; };
+  S.opps.forEach(o => { fx(o); (o.asks || []).forEach(fx); fx(o.pledge); }); })();
 if (!S.settings.voicePicked) S.settings.voice = "ara"; // Ara is the default until someone picks a voice in Settings
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
@@ -536,15 +540,15 @@ const TOOLS = [
     substantive: { type: "boolean" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") },
     nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "opportunity", name: "show_opportunity_draft", description: "Show a new Opportunity draft for a contact.", req: ["contact_name"], props: Object.assign({}, FOR, {
-    fund: { type: "string", enum: FUNDS }, potential: { type: "number", description: "Dollars" }, moveToCultivation: { type: "boolean", description: "True only if the officer asks to move it to Cultivation" }, notes: { type: "string" } }) },
+    fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, potential: { type: "number", description: "Dollars" }, moveToCultivation: { type: "boolean", description: "True only if the officer asks to move it to Cultivation" }, notes: { type: "string" } }) },
   { action: "plan", name: "show_ask_plan_draft", description: "Show a planned Ask draft (Add ask) on the contact's open opportunity.", req: ["contact_name", "fund", "campaign", "plannedDate", "amount"], props: Object.assign({}, FOR, {
-    fund: { type: "string", enum: FUNDS }, campaign: { type: "string", enum: CAMPAIGNS }, plannedDate: S_DATE, amount: { type: "number" },
+    fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, campaign: { type: "string", enum: CAMPAIGNS }, plannedDate: S_DATE, amount: { type: "number" },
     askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
   { action: "ask", name: "show_ask_result_draft", description: "Show the Interaction report for the meeting where an ask was made, with the investor's response.", req: ["contact_name", "response", "summary"], props: Object.assign({}, FOR, {
-    date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES }, amount: { type: "number", description: "Amount asked; leave out to use the planned ask" }, fund: { type: "string", enum: FUNDS },
+    date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES }, amount: { type: "number", description: "Amount asked; leave out to use the planned ask" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" },
     response: { type: "string", enum: ["Yes", "Counter-offer", "Considering", "No"] }, agreedAmount: { type: "number", description: "Verbal figure agreed" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "pledge", name: "show_pledge_draft", description: "Show a Record pledge draft on the contact's open opportunity.", req: ["contact_name", "amount", "confirmedBy", "firstDue"], props: Object.assign({}, FOR, {
-    amount: { type: "number" }, fund: { type: "string", enum: FUNDS }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD; use today if not said" },
+    amount: { type: "number" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD; use today if not said" },
     installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: ["Annual", "Quarterly", "Monthly", "One payment"] }, firstAmount: { type: "number" }, firstDue: S_DATE }) }
 ];
 const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, description: t.description + " Call it again with corrections if the officer changes something.", parameters: { type: "object", properties: t.props, required: t.req } }))
