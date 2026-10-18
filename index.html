@@ -261,6 +261,12 @@ const ACTIONS = {
       { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated" },
       { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
     pairs: [["date", "meetingType"]] },
+  task: { title: "New task", saved: "Task added", saveLabel: "Save task",
+    fields: [
+      { k: "forName", label: "Contact", fixed: true },
+      { k: "text", label: "Task", req: true }, { k: "due", label: "Due date", type: "date" },
+      { k: "onOpp", label: "Add to the opportunity", type: "bool" } ],
+    left: "Every task belongs to the contact. Tick Add to the opportunity to file it on their open opportunity too." },
   opportunity: { title: "New opportunity", saved: "Opportunity created", saveLabel: "Save",
     fields: [
       { k: "name", label: "Opportunity name", req: true, fixed: true }, { k: "officer", label: "Gift officer", fixed: true },
@@ -366,6 +372,7 @@ function resolveTarget(action, spoken) {
   if (list.length > 1) return { error: `More than one contact matches: ${list.map(nameOf).join(", ")}. Ask which one.` };
   const contact = list[0];
   if (action === "interaction") return { contact, opp: openOpp(contact.id) || null };
+  if (action === "task") return { contact, opp: openOpp(contact.id) || null };
   const opp = openOpp(contact.id);
   if (action === "opportunity") return opp ? { error: `${nameOf(contact)} already has an open opportunity (${opp.name}, in ${opp.stage}). Veleer keeps one open opportunity per investor; offer to work on that one instead.` } : { contact };
   if (!opp) return { error: `${nameOf(contact)} has no open opportunity yet. Offer to create one first.` };
@@ -381,6 +388,7 @@ function prefill(action, d, t) {
   const out = Object.assign({}, d);
   const c = t.contact, o = t.opp, a = latestAsk(o);
   if (action === "interaction") out.forName = nameOf(c);
+  if (action === "task") { out.forName = nameOf(c); if (out.onOpp && !o) out.onOpp = false; }
   if (["plan", "ask", "pledge"].includes(action)) out.forName = o ? o.name : "";
   if (action === "interaction" || action === "ask") { if (!out.date) out.date = todayISO(); if (!out.meetingType) out.meetingType = "In person"; }
   if (action === "opportunity") { out.name = `${c.last}, ${c.first} - ${YEAR}`; out.officer = OFFICER; }
@@ -420,7 +428,7 @@ function draftHTML() {
     if (paired.has(f.k)) { const pair = A.pairs.find(p => p[0] === f.k); if (pair) body += `<div class="two">${pair.map(k => fieldHTML(A.fields.find(x => x.k === k), d, fv)).join("")}</div>`; continue; }
     body += fieldHTML(f, d, fv);
   }
-  const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : esc(V.target.opp ? V.target.opp.name : nameOf(V.target.contact));
+  const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : V.action === "task" ? `For ${esc(nameOf(V.target.contact))}${V.target.opp ? " · open opportunity " + esc(V.target.opp.name) : ""}` : esc(V.target.opp ? V.target.opp.name : nameOf(V.target.contact));
   let dupe = "";
   if (V.action === "contact") { const m = findContacts(`${d.first || ""} ${d.last || ""}`); dupe = m.length ? `<div class="note">Possible match: ${esc(m.map(nameOf).join(", "))} is already a contact. Save only if this is someone new.</div>` : `<div class="left">Checked for duplicates: no existing contact matches ${esc((d.first || "") + " " + (d.last || ""))}.</div>`; }
   return `<div class="grab"></div>
@@ -494,6 +502,13 @@ const APPLY = {
     if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, text: d.nextStep, due: d.nextDue, done: false });
     S.sel.contact = c.id; S.screen = "contact"; return { contact: c };
   },
+  task(d, t) {
+    const c = t.contact, oppId = d.onOpp && t.opp ? t.opp.id : null;
+    S.tasks.unshift({ id: uid(), contactId: c.id, oppId, text: d.text, due: d.due, done: false });
+    log(`Task added: ${d.text}${d.due ? ", due " + fmtDate(d.due) : ""}`, { contactId: c.id, oppId });
+    if (oppId) { S.sel.opp = oppId; S.screen = "opp"; } else { S.sel.contact = c.id; S.screen = "contact"; }
+    return t;
+  },
   opportunity(d, t) {
     const c = t.contact;
     const op = { id: uid(), contactId: c.id, name: `${c.last}, ${c.first} - ${YEAR}`, stage: "Qualification", fund: d.fund || null, potential: d.potential, notes: d.notes, asks: [], pledge: null, created: todayISO() };
@@ -556,6 +571,9 @@ const TOOLS = [
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
     substantive: { type: "boolean" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") },
     nextStep: { type: "string" }, nextDue: S_DATE }) },
+  { action: "task", name: "show_task_draft", description: "Show a new Task draft for a contact, optionally filed on their open opportunity.", req: ["contact_name", "text"], props: Object.assign({}, FOR, {
+    text: { type: "string", description: "What to do, as a short imperative, e.g. Send Ruth the annual report" }, due: S_DATE,
+    onOpp: { type: "boolean", description: "True if the officer wants the task on the contact's opportunity (or is looking at it); false for the contact only" } }) },
   { action: "opportunity", name: "show_opportunity_draft", description: "Show a new Opportunity draft for a contact.", req: ["contact_name"], props: Object.assign({}, FOR, {
     fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, potential: { type: "number", description: "Dollars" }, moveToCultivation: { type: "boolean", description: "True only if the officer asks to move it to Cultivation" }, notes: { type: "string" } }) },
   { action: "plan", name: "show_ask_plan_draft", description: "Show a planned Ask draft (Add ask) on the contact's open opportunity.", req: ["contact_name", "fund", "campaign", "plannedDate", "amount"], props: Object.assign({}, FOR, {
@@ -581,12 +599,13 @@ function grokInstructions() {
   return `You are the voice assistant inside Veleer, the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
-The officer can do any of these, in any order, for any contact: add a contact, log a meeting, create an opportunity, plan an ask, record an ask and the response, record a pledge, or see a screen. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
+The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, plan an ask, record an ask and the response, record a pledge, or see a screen. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. When you have enough, call the matching draft tool so the draft appears on screen, then ask the officer to check it and tap the button at the bottom of the draft, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
 When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one.
+When adding a task, ask for a due date if none was said (they can skip it). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
 When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?"
 Write spoken email addresses as real addresses. Resolve relative dates against today.`;
 }
@@ -773,7 +792,7 @@ function topbar(title, back) {
   <button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
-const SAY_LIST = ["Let's add a contact", "Log a meeting", "Create an opportunity", "Plan an ask", "Record an ask", "Record a pledge", "Show me a list of contacts", "Show me my opportunities"];
+const SAY_LIST = ["Let's add a contact", "Log a meeting", "Create an opportunity", "Plan an ask", "Record an ask", "Record a pledge", "Add a task", "Show me a list of contacts", "Show me my opportunities"];
 function sayList() {
   return `<ul class="saylist">${SAY_LIST.map(line => `<li data-say="${esc(line)}" role="button" tabindex="0"><span class="sl-mic">${mic(14)}</span><span class="sl-line">“${esc(line)}”</span></li>`).join("")}</ul>`;
 }
@@ -865,10 +884,11 @@ function contactScreen() {
     ${c.permSource ? `<div style="font-size:12.5px;color:var(--muted)">Permission source: ${esc(c.permSource)} · recorded by voice</div>` : ""}
   </div>
   <dl class="kv"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
-  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button>${o ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div></section>
+  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button><button class="btn out" data-say="Add a task for ${esc(who)}">Add a task</button>${o ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div></section>
   ${o ? `<section class="panel"><div class="ph"><h2>Opportunity</h2></div><div class="row tap" data-opp="${o.id}"><div class="t"><span class="lnk">${esc(o.name)}</span><div class="s">${esc(o.stage)}${o.pledge ? " · pledged " + money(o.pledge.amount) : ""}</div></div><span class="chev">›</span></div></section>` : ""}
   <section class="panel"><div class="ph"><h2>Interactions</h2><span class="meta">${ints.length}</span></div>
   ${ints.length ? ints.map(i => `<div class="row"><div class="t">${esc(i.type)} · ${fmtDate(i.date)} ${i.kind === "ask" ? '<span class="alert info">Ask made</span>' : ""} <span class="via">${mic(11)} via voice</span><div class="s">${esc(i.summary)}</div></div></div>`).join("") : `<div class="empty">No interactions yet.</div>`}</section>
+  ${tasksPanel(S.tasks.filter(t => t.contactId === c.id), "Tasks")}
   ${historyPanel(x => x.contactId === c.id)}
   </main>`;
 }
@@ -894,6 +914,7 @@ function oppScreen() {
   </section>
   ${o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd></dl></section>` : ""}
   ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : esc(x.status)}</div></div></div>`).join("")}</section>` : ""}
+  ${tasksPanel(S.tasks.filter(t => t.oppId === o.id), "Tasks on this opportunity")}
   ${historyPanel(x => x.oppId === o.id)}
   </main>`;
 }
@@ -908,9 +929,14 @@ function boardScreen() {
   }).join("")}</div></div>
   <div class="empty" style="font-size:12.5px">Cards move only when something is recorded. Swipe sideways to see every stage.</div></section></main>`;
 }
+const taskWhere = (t) => { const o = t.oppId && oppById(t.oppId); return o ? o.name : nameOf(contactById(t.contactId)); };
+function tasksPanel(list, label) {
+  const open = list.filter(t => !t.done);
+  return `<section class="panel"><div class="ph"><h2>${label}</h2><span class="meta">${open.length} open</span></div>${open.length ? open.map(t => `<div class="row"><div class="t">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"}${t.oppId ? " · on the opportunity" : ""}</div></div></div>`).join("") : `<div class="empty">No open tasks.</div>`}</section>`;
+}
 function tasksScreen() {
   return topbar("Tasks") + `<main><section class="panel"><div class="ph"><h2>My tasks</h2><span class="meta">${S.tasks.filter(t => !t.done).length} open</span></div>
-  ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(nameOf(contactById(t.contactId)))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. A next step you mention by voice creates one.</div>`}</section></main>`;
+  ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(taskWhere(t))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. Say “Add a task”, or mention a next step when you log a meeting.</div>`}</section></main>`;
 }
 function settingsScreen() {
   return topbar("Settings", "home") + `<main>
