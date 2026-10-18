@@ -1063,11 +1063,11 @@ function topbar(title, back, logo) {
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
 const SAY_GROUPS = [
-  { tone: "people", lines: ["Let's add a contact", "Log a meeting", "Add a task"] },
-  { tone: "pipe", lines: ["Create an opportunity", "Move James to Cultivation", "Plan an ask", "Record an ask"] },
-  { tone: "money", lines: ["Record a pledge", "Record a gift", "Record a payment"] },
-  { tone: "giving", lines: ["What has Ruth given?", "How much has Ken given this year?", "When was Elena's last gift?", "What's Ruth's lifetime giving?"] },
-  { tone: "look", lines: ["Walk me through the process", "Show me a list of contacts", "Show me my opportunities"] }
+  { tone: "people", lines: ["Add a contact", "Log a meeting"] },
+  { tone: "pipe", lines: ["Plan an ask", "Record an ask"] },
+  { tone: "money", lines: ["Record a pledge", "Record a gift"] },
+  { tone: "giving", lines: ["What has Ruth given?", "Elena's last gift?"] },
+  { tone: "look", lines: ["Explain the process", "My opportunities"] }
 ];
 function sayList() {
   return `<div class="saypills">${SAY_GROUPS.map(g => g.lines.map(line => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`).join("")).join("")}</div>`;
@@ -1127,7 +1127,7 @@ function needsAttention() {
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
   return topbar("Home", null, true) + `<main>
-  <section class="panel"><div class="flowtile" data-act2="flowhome"><div class="fti">${FI('<circle cx="5" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M14 14l3 3"/>')}</div><div class="ftt"><b>VoiceCRM - Hear How It Works</b><span>From contact to Closed Won, with a spoken overview</span></div><span style="color:var(--muted);font-size:20px">›</span></div></section>
+  <section class="panel"><div class="flowtile" data-act2="flowhome"><div class="fti">${FI('<circle cx="5" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M14 14l3 3"/>')}</div><div class="ftt"><b>VoiceCRM - Hear How It Works</b><span>Spoken overview, contact to Closed Won</span></div><span style="color:var(--muted);font-size:20px">›</span></div></section>
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
   <section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">this fiscal year</span></div>
@@ -1306,7 +1306,7 @@ document.addEventListener("click", (e) => {
   const say = e.target.closest("[data-say]");
   if (say) { const line = say.dataset.say;
     if (/^Show me a list of contacts/.test(line)) { go("contacts"); return; }
-    if (/^Show me my opportunities/.test(line)) { go("board"); return; }
+    if (/^(Show me )?my opportunities/i.test(line)) { go("board"); return; }
     ask(`"${line}"`); return; }
   const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); tellPicked("contact"); return; }
   const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); tellPicked("opp"); return; }
@@ -1328,7 +1328,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T18:46:21Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T18:52:01Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
