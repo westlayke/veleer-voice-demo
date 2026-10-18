@@ -2,8 +2,9 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#e6edf7">
 <meta name="apple-mobile-web-app-title" content="CitizensCRM">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon-v2.png">
+<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="icon" href="icon-192-v2.png">
 <title>Veleer Voice Demo</title>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
 </head><body>
@@ -822,7 +823,7 @@ function needsAttention() {
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
   return topbar("Home") + `<main>
-  <div class="brand"><img src="logo.png?v=2" alt="Citizens Alliance" width="130" height="133"></div>
+  <div class="brand"><img src="logo-v2.png" alt="Citizens Alliance" width="130" height="133"></div>
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
   <section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">this fiscal year</span></div>
