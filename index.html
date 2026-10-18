@@ -668,7 +668,7 @@ async function startCall(opening) {
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
     G.ws.onclose = () => { if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Try again in a moment."); } };
     G.ws.onerror = () => {};
-  } catch (e) { endCall(); toast(callError(e)); }
+  } catch (e) { endCall(); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); }
 }
 function endCall() {
   G.live = false; stopPlayback();
@@ -769,6 +769,19 @@ function saveTip() {
     : [`Open this link on your phone.`, `iPhone: tap ${share} Share, then <b>Add to Home Screen</b>.`, `Android: tap ${dots}, then <b>Add to home screen</b>.`];
   return `<div class="wl-save"><h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Keep Veleer on your phone</h3>
     <ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol><small>Then open it from the Veleer icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small></div>`;
+}
+// a phone that opens the demo without its #code (for example from the home-screen icon) asks for the code word once
+function codeModal(opening) {
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="cmTitle">
+    <h2 id="cmTitle">Enter the demo code word</h2>
+    <p>${S.settings.demoCode ? "That code word didn't work." : "This copy of the demo doesn't have its code word yet."} It's the word after <b>#code=</b> in the demo link you were sent.</p>
+    <input id="codeIn" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Code word" style="font:inherit;font-size:16px;padding:11px 12px;border:1px solid var(--line);border-radius:10px">
+    <button class="btn blue" id="codeGo">Save and start</button><button class="btn quiet" id="codeX">Cancel</button></div></div>`;
+  const inp = document.getElementById("codeIn"); inp.focus();
+  const go = () => { const v = inp.value.trim(); if (!v) return; S.settings.demoCode = v; save(); h.innerHTML = ""; startCall(opening); };
+  document.getElementById("codeGo").onclick = go; inp.onkeydown = (e) => { if (e.key === "Enter") go(); };
+  document.getElementById("codeX").onclick = () => { h.innerHTML = ""; };
 }
 function welcomeModal() {
   const h = document.getElementById("modal");
