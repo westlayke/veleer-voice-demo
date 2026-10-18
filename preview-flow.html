@@ -289,7 +289,7 @@ const ACTIONS = {
   interaction: { title: "Interaction report", saved: "Interaction report saved", saveLabel: "Save",
     fields: [
       { k: "forName", label: "Contact", fixed: true },
-      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: MEET_TYPES, req: true },
+      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: ["", ...MEET_TYPES], req: true },
       { k: "summary", label: "Summary", type: "area", req: true }, { k: "substantive", label: "Substantive interaction", type: "bool" },
       { k: "outcome", label: "Outcome", type: "select", opts: ["", ...OUTCOMES] },
       { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated" },
@@ -318,7 +318,7 @@ const ACTIONS = {
   ask: { title: "Interaction report · the ask", saved: "Ask recorded", saveLabel: "Save",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: MEET_TYPES, req: true },
+      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: ["", ...MEET_TYPES], req: true },
       { k: "amount", label: "Amount asked", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
       { k: "response", label: "Response", type: "select", opts: RESPONSES, req: true },
       { k: "agreedAmount", label: "Agreed or counter amount (verbal)", type: "money" }, { k: "lostReason", label: "Reason (if declined)" }, { k: "summary", label: "Summary", type: "area", req: true },
@@ -466,7 +466,7 @@ function prefill(action, d, t) {
   if (action === "cultivate" && !out.decision) out.decision = "Move to Cultivation";
   if (action === "gift") { if (!out.fund) out.fund = (a && a.fund) || o.fund || ""; if (out.amount == null && a) out.amount = a.amount; if (!out.date) out.date = todayISO(); }
   if (action === "payment") { if (out.amount == null && o.pledge) out.amount = o.pledge.firstAmount; if (!out.date) out.date = todayISO(); }
-  if (action === "interaction" || action === "ask") { if (!out.date) out.date = todayISO(); if (!out.meetingType) out.meetingType = "In person"; }
+  if (action === "interaction" || action === "ask") { if (!out.date) out.date = todayISO(); }
   if (action === "opportunity") { out.name = `${c.last}, ${c.first} - ${YEAR}`; out.officer = OFFICER; }
   if (action === "plan") { out.officer = OFFICER; if (!out.fund && o.fund) out.fund = o.fund; }
   if (action === "ask") { if (out.amount == null && a) out.amount = a.amount; if (!out.fund) out.fund = (a && a.fund) || o.fund || ""; }
@@ -695,7 +695,7 @@ const TOOLS = [
     first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
     permEmail: { type: "boolean", description: "Default true" }, permCalls: { type: "boolean", description: "Default true" }, permText: { type: "boolean", description: "Default false" },
     permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" } } },
-  { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "summary"], props: Object.assign({}, FOR, {
+  { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "date", "meetingType", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
     substantive: { type: "boolean", description: "True when it was a real conversation with the person about the relationship or the gift; emails and research notes are not substantive" },
     outcome: { type: "string", enum: OUTCOMES, description: "Pick from this list only; leave out if the officer didn't say" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") },
@@ -708,7 +708,7 @@ const TOOLS = [
   { action: "plan", name: "show_ask_plan_draft", description: "Show a planned Ask draft (Add ask) on the contact's open opportunity.", req: ["contact_name", "fund", "campaign", "plannedDate", "amount"], props: Object.assign({}, FOR, {
     fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, campaign: { type: "string", enum: CAMPAIGNS }, plannedDate: S_DATE, amount: { type: "number" },
     askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
-  { action: "ask", name: "show_ask_result_draft", description: "Show the Interaction report for the meeting where an ask was made, with the investor's response.", req: ["contact_name", "response", "summary"], props: Object.assign({}, FOR, {
+  { action: "ask", name: "show_ask_result_draft", description: "Show the Interaction report for the meeting where an ask was made, with the investor's response.", req: ["contact_name", "date", "meetingType", "response", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, amount: { type: "number", description: "Amount asked; leave out to use the planned ask" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" },
     response: { type: "string", enum: RESPONSES, description: "Accepted (yes), Countered (a different amount), Awaiting (still thinking it over) or Declined (no)" }, agreedAmount: { type: "number", description: "Verbal figure agreed, or the counter amount" },
     lostReason: { type: "string", description: "Required when Declined: why, in a few words" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: S_DATE }) },
@@ -748,7 +748,7 @@ ${flowScript()}
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
 When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before showing the draft. Recording an ask needs the same unless the investor declined.
 When adding a task, ask for a due date if none was said (they can skip it). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
-When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?"
+When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?" Always pass date and meetingType in show_interaction_draft and show_ask_result_draft: the date resolved from what the officer said (for example yesterday), and the type they said. Leaving them out puts today and In person on the draft.
 Write spoken email addresses as real addresses. Resolve relative dates against today.
 Process FAQ (from the Chief Gift Officer's Guide):
 ${FAQ_TEXT}`;
@@ -856,12 +856,12 @@ function endCall() {
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  G.ws = G.stream = G.ctx = G.node = null; G.buf = [];
+  G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.responding = G.qInstr = G.qCreate = false; clearTimeout(G.qTimer);
   paintCall(); render();
 }
 function tellPicked(kind) {
   if (!G.live) return;
-  send({ type: "session.update", session: { instructions: grokInstructions() } });
+  whenIdle("instr");
   const c = focusContact(); if (!c) return;
   const o = kind === "opp" ? oppById(S.sel.opp) : openOpp(c.id);
   const what = kind === "opp" ? `the opportunity ${o.name} (${o.stage}) for ${nameOf(c)}` : `the contact record for ${nameOf(c)}${o ? ` (open opportunity in ${o.stage})` : " (no open opportunity)"}`;
@@ -869,7 +869,7 @@ function tellPicked(kind) {
 }
 function notice(text) {
   send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(App notice, not spoken by the officer) " + text }] } });
-  send({ type: "response.create" });
+  whenIdle("create");
 }
 // Voice entry points: a request from a button or list line either opens the call with it or passes it to the live call.
 function ask(request) {
@@ -880,17 +880,29 @@ function onEvent(e) {
   const t = e.type || "";
   if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
-  else if (t === "response.created") { G.bot = ""; }
+  else if (t === "response.created") { G.bot = ""; G.responding = true; }
   else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); if (G.status !== "Speaking") { G.status = "Speaking"; paintCall(); } }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; paintCall(); }
-  else if (t === "response.done") { setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
+  else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
   else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message) toast("Grok: " + e.error.message); }
 }
+// A new response or session update sent while Grok is still speaking cuts off what it was saying ("Opening the…"),
+// so both wait until the current response is done.
+function flushQueued() {
+  clearTimeout(G.qTimer); G.qTimer = null;
+  if (G.qInstr) { G.qInstr = false; send({ type: "session.update", session: { instructions: grokInstructions() } }); }
+  if (G.qCreate) { G.qCreate = false; send({ type: "response.create" }); }
+}
+function whenIdle(kind) {
+  if (kind === "instr") G.qInstr = true; else G.qCreate = true;
+  if (!G.responding) { flushQueued(); return; }
+  clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { G.responding = false; flushQueued(); }, 6000); // in case response.done never arrives
+}
 function toolReply(callId, out, speak = true) {
   send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(out) } });
-  if (speak) send({ type: "response.create" });
+  if (speak) whenIdle("create");
 }
 function onTool(callId, name, args) {
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
@@ -919,7 +931,7 @@ function onTool(callId, name, args) {
     } else if (target === "contacts") summary = `Contacts shown: ${S.contacts.map(nameOf).join(", ")}.`;
     else if (target === "board") summary = `Opportunities board shown: ${S.opps.filter(o => o.stage !== "Closed").map(o => o.name + " in " + o.stage).join("; ")}.`;
     if (target === "flow") S.flowBack = "home";
-    go(target); G.handled.size && send({ type: "session.update", session: { instructions: grokInstructions() } });
+    go(target); G.handled.size && whenIdle("instr");
     toolReply(callId, { ok: true, summary }); return;
   }
   const tool = TOOLS.find(t => t.name === name);
@@ -934,11 +946,11 @@ function onTool(callId, name, args) {
 }
 function grokSaved(action, r) {
   if (!G.live) return;
-  send({ type: "session.update", session: { instructions: grokInstructions() } });
+  whenIdle("instr");
   const who = r && r.contact ? nameOf(r.contact) : "";
   const hasOpp = r && r.contact && openOpp(r.contact.id);
   const o = r && r.opp, closed = o && o.stage === "Closed" ? ` The opportunity is now Closed ${o.closed}.` : "";
-  const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? "for example plan an ask or log another meeting" : "for example create an opportunity or log another meeting") : "";
+  const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? (hasOpp.stage === "Qualification" ? "for example move the opportunity to Cultivation if it's ready, or log another meeting" : hasOpp.stage === "Cultivation" ? "for example plan an ask or log another meeting" : "for example add a task or log another meeting") : "for example create an opportunity or log another meeting") : "";
   notice(`The officer tapped ${ACTIONS[action].saveLabel}: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} Confirm in a few words, then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
@@ -1197,7 +1209,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T17:39:22Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T17:51:08Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
