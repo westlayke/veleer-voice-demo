@@ -259,6 +259,9 @@ const CAMPAIGNS = ["Pennsylvania", "New Hampshire", "North Dakota", "Idaho", "Na
 const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
 const OUTCOMES = ["Interested, continue cultivation", "Ask made", "Ask accepted", "Not now, revisit", "Not interested", "Referred elsewhere"];
 const NO_NEXT_STEP = ["Not interested", "Referred elsewhere"];
+const RESPONSES = ["Awaiting", "Accepted", "Countered", "Declined"];
+const PAY_METHODS = ["Check", "Credit card", "Bank transfer", "Wire", "Stock", "Other"];
+const PLEDGE_FOLLOWUP_DAYS = 10; // demo default; the guide's pledge reminder interval is still open with the customer
 const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
 const MIC = '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
 const mic = (s) => MIC.replace(/SZ/g, s);
@@ -269,6 +272,7 @@ const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.g
 const fmtDate = (s) => { if (!s) return ""; const d = new Date(s + "T12:00:00"); return isNaN(d) ? s : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined }); };
 const longToday = () => new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 const uid = () => Math.random().toString(36).slice(2, 9);
+const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const YEAR = new Date().getFullYear();
 
 /* ---------- actions: what the officer can do by voice, in any order ---------- */
@@ -316,11 +320,11 @@ const ACTIONS = {
       { k: "forName", label: "Opportunity", fixed: true },
       { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: MEET_TYPES, req: true },
       { k: "amount", label: "Amount asked", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
-      { k: "response", label: "Response", type: "select", opts: ["Yes", "Counter-offer", "Considering", "No"], req: true },
-      { k: "agreedAmount", label: "Agreed amount (verbal)", type: "money" }, { k: "summary", label: "Summary", type: "area", req: true },
+      { k: "response", label: "Response", type: "select", opts: RESPONSES, req: true },
+      { k: "agreedAmount", label: "Agreed or counter amount (verbal)", type: "money" }, { k: "lostReason", label: "Reason (if declined)" }, { k: "summary", label: "Summary", type: "area", req: true },
       { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
     pairs: [["date", "meetingType"], ["amount", "fund"]],
-    left: "An ask meeting is substantive, so it needs a next step and its due date unless the investor said no." },
+    left: "An ask meeting is substantive, so it needs a next step and its due date unless the investor declined. A declined ask closes the opportunity as Closed Lost and needs a reason." },
   pledge: { title: "Record pledge", saved: "Pledge recorded", saveLabel: "Record pledge",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
@@ -329,7 +333,27 @@ const ACTIONS = {
       { k: "installments", label: "Payments", type: "money", num: true }, { k: "frequency", label: "Frequency", type: "select", opts: ["Annual", "Quarterly", "Monthly", "One payment"] },
       { k: "firstAmount", label: "First payment", type: "money" }, { k: "firstDue", label: "First payment due", type: "date", req: true } ],
     pairs: [["confirmedBy", "confirmedDate"], ["installments", "frequency"], ["firstAmount", "firstDue"]],
-    left: "No pledge card is needed. The pledge is confirmed by email, phone or in person." }
+    left: "No pledge card is needed. The pledge is confirmed by email, phone or in person." },
+  cultivate: { title: "Move to Cultivation?", saved: "Decision recorded", saveLabel: "Confirm",
+    fields: [
+      { k: "forName", label: "Opportunity", fixed: true },
+      { k: "decision", label: "Decision", type: "select", opts: ["Move to Cultivation", "Defer"], req: true },
+      { k: "reason", label: "Reason (needed to defer)", type: "area" }, { k: "reconsiderOn", label: "Reconsider on", type: "date" } ],
+    left: "All three criteria are met: accepted, rated and talked to. Defer keeps it in Qualification; the prompt comes back on the Reconsider on date or after the next substantive interaction." },
+  gift: { title: "Record gift", saved: "Gift recorded", saveLabel: "Record gift",
+    fields: [
+      { k: "forName", label: "Opportunity", fixed: true },
+      { k: "amount", label: "Gift amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
+      { k: "date", label: "Received on", type: "date", req: true }, { k: "method", label: "Payment method", type: "select", opts: PAY_METHODS, req: true } ],
+    pairs: [["amount", "fund"], ["date", "method"]],
+    left: "An outright gift skips Commitment: saving closes the opportunity as Closed Won." },
+  payment: { title: "Record payment", saved: "Payment recorded", saveLabel: "Record payment",
+    fields: [
+      { k: "forName", label: "Opportunity", fixed: true },
+      { k: "amount", label: "Payment amount", type: "money", req: true },
+      { k: "date", label: "Received on", type: "date", req: true }, { k: "method", label: "Payment method", type: "select", opts: PAY_METHODS, req: true } ],
+    pairs: [["date", "method"]],
+    left: "The first payment on the pledge closes the opportunity as Closed Won. Later installments are tracked on the pledge." }
 };
 
 /* ---------- state ---------- */
@@ -340,7 +364,7 @@ function seed() {
     c("James", "Okafor", "Prospect", "C", "Met at the alumni luncheon."), c("Priya", "Sandaruwan", "Prospect", "B", "Met at the Pennsylvania campaign kickoff."), c("Elena", "Vasquez", "Investor", "B", "Assigned by Luis Ortega.")];
   const [ab, it, ok, sa, va] = contacts;
   const o = (ct, stage, fund, potential, ask) => ({ id: uid(), contactId: ct.id, name: `${ct.last}, ${ct.first} - ${YEAR}`, stage, fund, potential, asks: ask ? [ask] : [], pledge: null, created: "2026-02-01", example: true });
-  const opps = [o(ab, "Cultivation", "C3 - Citizens Alliance", 75000), o(it, "Ask Made", "C4 - Citizens Alliance", 30000, { fund: "C4 - Citizens Alliance", campaign: "Pennsylvania", amount: 30000, askType: "Pledge", status: "Asked", plannedDate: "2026-09-30" }),
+  const opps = [o(ab, "Cultivation", "C3 - Citizens Alliance", 75000), o(it, "Ask Made", "C4 - Citizens Alliance", 30000, { fund: "C4 - Citizens Alliance", campaign: "Pennsylvania", amount: 30000, askType: "Pledge", status: "Made", askedOn: "2026-09-30", plannedDate: "2026-09-30" }),
     o(ok, "Qualification", "PAC - Citizens Alliance", 20000), o(sa, "Cultivation", "C3 - Citizens Alliance", 25000),
     o(va, "Ask Planning", "C3 - Citizens Alliance", 40000, { fund: "C3 - Citizens Alliance", campaign: "New Hampshire", amount: 40000, askType: "Outright", status: "Planned", plannedDate: "2026-11-05" })];
   return { contacts, opps };
@@ -370,6 +394,9 @@ try {
 (() => { const FIXC = { "Building campaign 2027": "Pennsylvania", "Scholars campaign 2026": "National" };
   const fx = (x) => { if (!x) return; if (x.fund && !FUNDS.includes(x.fund)) x.fund = "C3 - Citizens Alliance"; if (x.campaign && !CAMPAIGNS.includes(x.campaign)) x.campaign = FIXC[x.campaign] || "General / no campaign"; };
   S.opps.forEach(o => { fx(o); (o.asks || []).forEach(fx); fx(o.pledge); }); })();
+// earlier versions used the responses Yes / Counter-offer / Considering / No
+(() => { const ST = { Asked: "Made", Pledged: "Accepted" }, RS = { Yes: "Accepted", "Counter-offer": "Countered", Considering: "Awaiting", No: "Declined" };
+  S.opps.forEach(o => (o.asks || []).forEach(a => { if (ST[a.status]) a.status = ST[a.status]; if (RS[a.response]) a.response = RS[a.response]; })); })();
 if (!S.settings.voicePicked) S.settings.voice = "ara"; // Ara is the default until someone picks a voice in Settings
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
@@ -379,6 +406,12 @@ const nameOf = (c) => c ? `${c.first} ${c.last}` : "";
 const openOpp = (cid) => S.opps.find(o => o.contactId === cid && o.stage !== "Closed");
 const latestAsk = (o) => o && o.asks.length ? o.asks[0] : null;
 const askedOf = (o) => { const a = latestAsk(o); return a && a.status !== "Planned" ? a.amount : 0; };
+const agreed = (a) => !!a && (a.status === "Accepted" || /Agreed/.test(a.status));
+const subCount = (c) => S.interactions.filter(i => i.contactId === c.id && i.substantive).length;
+const cultMissing = (c) => [!c.capacity && "a capacity rating", !subCount(c) && "a substantive interaction"].filter(Boolean);
+// Qualification -> Cultivation: criteria met and not deferred (a defer lasts until its Reconsider on date or the next substantive interaction)
+const deferActive = (o) => { const f = o.defer, c = contactById(o.contactId); return !!f && (!f.until || f.until > todayISO()) && subCount(c) <= f.subs; };
+const readyForCultivation = (o) => { const c = contactById(o.contactId); return o.stage === "Qualification" && !!c && !cultMissing(c).length && !deferActive(o); };
 const log = (text, ids, via = true) => S.history.unshift(Object.assign({ at: new Date().toISOString(), text, via }, ids));
 
 /* ---------- finding the contact the officer means ---------- */
@@ -408,9 +441,17 @@ function resolveTarget(action, spoken) {
   const opp = openOpp(contact.id);
   if (action === "opportunity") return opp ? { error: `${nameOf(contact)} already has an open opportunity (${opp.name}, in ${opp.stage}). Veleer keeps one open opportunity per investor; offer to work on that one instead.` } : { contact };
   if (!opp) return { error: `${nameOf(contact)} has no open opportunity yet. Offer to create one first.` };
-  if (action === "plan" && ["Ask Made", "Commitment"].includes(opp.stage)) return { error: `${opp.name} is already in ${opp.stage}; an ask has been made. Offer to record the ask's outcome or the pledge instead.` };
-  if (action === "ask" && opp.stage === "Commitment") return { error: `${opp.name} already has a pledge recorded (Commitment).` };
-  if (action === "pledge" && opp.stage === "Commitment") return { error: `${opp.name} already has a pledge recorded.` };
+  const qual = `${opp.name} is still in Qualification. An ask can be planned only once it is in Cultivation, which needs a capacity rating, a substantive interaction and the officer's confirmation${cultMissing(contact).length ? "; it still needs " + cultMissing(contact).join(" and ") : "; the criteria are met, so offer to move it to Cultivation"}.`;
+  if (action === "cultivate") {
+    if (opp.stage !== "Qualification") return { error: `${opp.name} is already in ${opp.stage}.` };
+    const m = cultMissing(contact); if (m.length) return { error: `${opp.name} can't move to Cultivation yet: it still needs ${m.join(" and ")}. Offer to log a meeting.` };
+  }
+  if ((action === "plan" || action === "ask") && opp.stage === "Qualification") return { error: qual };
+  if (action === "plan" && opp.stage === "Ask Planning") return { error: `${opp.name} already has an ask planned for ${fmtDate(latestAsk(opp).plannedDate)}. Offer to record the ask once it's made.` };
+  if (action === "plan" && ["Ask Made", "Commitment"].includes(opp.stage)) return { error: `${opp.name} is already in ${opp.stage}; an ask has been made. Offer to record the pledge${opp.stage === "Commitment" ? " payment" : " or gift"} instead.` };
+  if (action === "ask" && opp.stage === "Commitment") return { error: `${opp.name} already has a pledge recorded (Commitment). Offer to record a payment.` };
+  if ((action === "pledge" || action === "gift") && opp.stage !== "Ask Made") return { error: opp.stage === "Commitment" ? `${opp.name} already has a pledge recorded. Offer to record a payment.` : `${opp.name} is in ${opp.stage}. A ${action} is recorded after the ask is made and the investor says yes. Offer to ${opp.stage === "Ask Planning" ? "record the ask first" : opp.stage === "Cultivation" ? "plan the ask first" : "log a meeting"}.` };
+  if (action === "payment" && opp.stage !== "Commitment") return { error: `${opp.name} has no pledge recorded yet (it is in ${opp.stage}). ${opp.stage === "Ask Made" ? "Offer to record the pledge, or Record gift for an outright gift." : "A payment is recorded once there is a pledge."}` };
   return { contact, opp };
 }
 
@@ -421,7 +462,10 @@ function prefill(action, d, t) {
   const c = t.contact, o = t.opp, a = latestAsk(o);
   if (action === "interaction") out.forName = nameOf(c);
   if (action === "task") { out.forName = nameOf(c); if (out.onOpp && !o) out.onOpp = false; }
-  if (["plan", "ask", "pledge"].includes(action)) out.forName = o ? o.name : "";
+  if (["plan", "ask", "pledge", "cultivate", "gift", "payment"].includes(action)) out.forName = o ? o.name : "";
+  if (action === "cultivate" && !out.decision) out.decision = "Move to Cultivation";
+  if (action === "gift") { if (!out.fund) out.fund = (a && a.fund) || o.fund || ""; if (out.amount == null && a) out.amount = a.amount; if (!out.date) out.date = todayISO(); }
+  if (action === "payment") { if (out.amount == null && o.pledge) out.amount = o.pledge.firstAmount; if (!out.date) out.date = todayISO(); }
   if (action === "interaction" || action === "ask") { if (!out.date) out.date = todayISO(); if (!out.meetingType) out.meetingType = "In person"; }
   if (action === "opportunity") { out.name = `${c.last}, ${c.first} - ${YEAR}`; out.officer = OFFICER; }
   if (action === "plan") { out.officer = OFFICER; if (!out.fund && o.fund) out.fund = o.fund; }
@@ -496,7 +540,7 @@ document.getElementById("overlay").addEventListener("click", (e) => {
 function saveDraft() {
   const d = readDraft(), A = ACTIONS[V.action];
   const miss = A.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));
-  if (!miss.length && ((V.action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) || (V.action === "ask" && d.response !== "No"))) {
+  if (!miss.length && ((V.action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) || (V.action === "ask" && d.response !== "Declined"))) {
     const need = [!String(d.nextStep || "").trim() && "Next step", !d.nextDue && "Next step due"].filter(Boolean);
     if (need.length) {
       const msg = `Add the ${need.join(" and ").toLowerCase()} before saving. A substantive interaction needs a next step and its due date.`;
@@ -506,6 +550,15 @@ function saveDraft() {
       if (G.live) notice(`The officer tapped ${A.saveLabel} but the draft has no ${need.join(" or ").toLowerCase()}. Explain in one sentence that a substantive interaction needs a next step and its due date, ask what it is and when it's due, then call the draft tool again.`);
       return;
     }
+  }
+  const ruleMsg = miss.length ? "" : V.action === "ask" && d.response === "Declined" && !String(d.lostReason || "").trim() ? ["lostReason", "Add the reason before saving. A declined ask closes the opportunity as Closed Lost, with a reason.", "the ask was declined but there is no reason. Explain that a declined ask closes the opportunity as Closed Lost and needs a reason, ask why"]
+    : V.action === "cultivate" && d.decision === "Defer" && !String(d.reason || "").trim() ? ["reason", "Add a reason before saving. Deferring needs a reason, which the Chief Gift Officer can see.", "they chose Defer without a reason. Explain that a defer needs a reason the Chief Gift Officer can see, ask for it"] : "";
+  if (ruleMsg) {
+    const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = ruleMsg[1];
+    const first = document.getElementById("f_" + ruleMsg[0]); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+    toast(ruleMsg[1]);
+    if (G.live) notice(`The officer tapped ${A.saveLabel} but ${ruleMsg[2]}, then call the draft tool again.`);
+    return;
   }
   if (!miss.length && V.action === "contact" && !String(d.email || "").trim() && !String(d.mobile || "").trim()) {
     const msg = "Add an email or a mobile number before saving. A contact needs at least one.";
@@ -556,14 +609,15 @@ const APPLY = {
     const c = t.contact;
     const op = { id: uid(), contactId: c.id, name: `${c.last}, ${c.first} - ${YEAR}`, stage: "Qualification", fund: d.fund || null, potential: d.potential, notes: d.notes, asks: [], pledge: null, created: todayISO() };
     S.opps.push(op); log("Opportunity created in Qualification", { contactId: c.id, oppId: op.id });
-    if (d.moveToCultivation) { op.stage = "Cultivation"; log("Moved to Cultivation", { contactId: c.id, oppId: op.id }); }
+    if (d.moveToCultivation && !cultMissing(c).length) { op.stage = "Cultivation"; log("Moved to Cultivation (criteria met: capacity rating and a substantive interaction)", { contactId: c.id, oppId: op.id }); }
     S.sel.opp = op.id; S.screen = "opp"; return { contact: c, opp: op };
   },
   plan(d, t) {
     const o = t.opp;
     o.asks.unshift({ fund: d.fund, campaign: d.campaign, plannedDate: d.plannedDate, amount: d.amount, askType: d.askType || "Outright", participants: d.participants, status: "Planned" });
     o.stage = "Ask Planning"; log(`Ask planned: ${money(d.amount)} for ${d.fund}, ${fmtDate(d.plannedDate)}. Moved to Ask Planning`, { contactId: o.contactId, oppId: o.id });
-    S.tasks.unshift({ id: uid(), contactId: o.contactId, text: `Make the ask: ${money(d.amount)} for ${d.fund}`, due: d.plannedDate, done: false });
+    const remind = addDays(d.plannedDate, -7); // the reminder is due seven days before the planned ask date
+    S.tasks.unshift({ id: uid(), contactId: o.contactId, oppId: o.id, text: `Make the ask: ${money(d.amount)} for ${d.fund} on ${fmtDate(d.plannedDate)}`, due: remind < todayISO() ? todayISO() : remind, done: false, auto: true });
     S.sel.opp = o.id; S.screen = "opp"; return t;
   },
   ask(d, t) {
@@ -571,13 +625,16 @@ const APPLY = {
     S.interactions.unshift({ id: uid(), contactId: c.id, oppId: o.id, date: d.date, type: d.meetingType, summary: d.summary, substantive: true, kind: "ask" });
     S.tasks.forEach(k => { if (k.contactId === c.id && /^Make the ask/.test(k.text)) k.done = true; });
     let a = latestAsk(o);
-    if (!a || a.status !== "Planned") { a = { fund: d.fund, campaign: "General / no campaign", amount: d.amount, askType: "Outright", plannedDate: d.date }; o.asks.unshift(a); }
-    Object.assign(a, { amount: d.amount, fund: d.fund, status: "Asked", askedOn: d.date, response: d.response });
-    if (d.response === "Yes") { a.status = "Agreed, pledge to follow"; if (d.agreedAmount) a.amount = d.agreedAmount; }
-    if (d.response === "Counter-offer") { a.status = "Countered"; o.asks.unshift({ fund: a.fund, campaign: a.campaign, amount: d.agreedAmount || a.amount, askType: a.askType, status: "Agreed, pledge to follow", plannedDate: d.date }); }
-    if (d.response === "No") a.status = "Declined";
-    o.stage = "Ask Made"; log(`Ask recorded: ${d.response}${d.agreedAmount ? ", " + money(d.agreedAmount) : ""}. Moved to Ask Made`, { contactId: c.id, oppId: o.id });
+    if (!a || !["Planned", "Made"].includes(a.status)) { a = { fund: d.fund, campaign: "General / no campaign", amount: d.amount, askType: "Outright", plannedDate: d.date }; o.asks.unshift(a); }
+    Object.assign(a, { amount: d.amount, fund: d.fund, status: "Made", askedOn: a.askedOn || d.date, response: d.response });
+    if (d.response === "Accepted") { a.status = "Accepted"; if (d.agreedAmount) a.amount = d.agreedAmount; }
+    if (d.response === "Countered") { a.status = "Countered"; o.asks.unshift({ fund: a.fund, campaign: a.campaign, amount: d.agreedAmount || a.amount, askType: a.askType, status: "Agreed, pledge to follow", plannedDate: d.date, askedOn: d.date }); }
+    if (d.response === "Declined") { a.status = "Declined"; a.reason = d.lostReason; }
+    const ids = { contactId: c.id, oppId: o.id };
+    if (d.response === "Declined") { o.stage = "Closed"; o.closed = "Lost"; o.lostReason = d.lostReason; o.closedOn = d.date; log(`Ask recorded: Declined. Closed Lost: ${d.lostReason}`, ids); }
+    else { o.stage = "Ask Made"; log(`Ask recorded: ${d.response}${d.agreedAmount ? ", " + money(d.agreedAmount) : ""}. Moved to Ask Made`, ids); }
     if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: d.nextStep, due: d.nextDue, done: false });
+    if (d.response === "Accepted" || d.response === "Countered") S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: `Follow up on agreed pledge: ${money(latestAsk(o).amount)}`, due: addDays(d.date || todayISO(), PLEDGE_FOLLOWUP_DAYS), done: false, auto: true });
     S.sel.opp = o.id; S.screen = "opp"; return t;
   },
   pledge(d, t) {
@@ -585,10 +642,38 @@ const APPLY = {
     o.pledge = { amount: d.amount, fund: d.fund, confirmedBy: d.confirmedBy, confirmedDate: d.confirmedDate, installments: toNum(d.installments) || 1, frequency: d.frequency, firstAmount: d.firstAmount || d.amount, firstDue: d.firstDue };
     let a = latestAsk(o);
     if (!a) { a = { fund: d.fund, campaign: "General / no campaign", amount: d.amount, askType: "Pledge", plannedDate: d.confirmedDate }; o.asks.unshift(a); }
-    a.status = "Pledged";
+    a.status = "Accepted";
     o.stage = "Commitment"; c.status = "Investor";
-    S.tasks.forEach(k => { if (k.contactId === c.id && /pledge/i.test(k.text)) k.done = true; });
+    S.tasks.forEach(k => { if (k.contactId === c.id && /^Follow up on agreed pledge/.test(k.text)) k.done = true; });
     log(`Pledge recorded: ${money(d.amount)}, confirmed by ${String(d.confirmedBy).toLowerCase()} on ${fmtDate(d.confirmedDate)}. Moved to Commitment`, { contactId: c.id, oppId: o.id });
+    S.sel.opp = o.id; S.screen = "opp"; return t;
+  },
+  gift(d, t) {
+    const o = t.opp, c = t.contact;
+    o.gift = { amount: d.amount, fund: d.fund, date: d.date, method: d.method };
+    let a = latestAsk(o);
+    if (!a) { a = { fund: d.fund, campaign: "General / no campaign", amount: d.amount, askType: "Outright", plannedDate: d.date }; o.asks.unshift(a); }
+    a.status = "Accepted";
+    o.stage = "Closed"; o.closed = "Won"; o.closedOn = d.date; c.status = "Investor";
+    S.tasks.forEach(k => { if (k.contactId === c.id && /^Follow up on agreed pledge/.test(k.text)) k.done = true; });
+    log(`Gift recorded: ${money(d.amount)} to ${d.fund} by ${String(d.method).toLowerCase()}, ${fmtDate(d.date)}. Closed Won`, { contactId: c.id, oppId: o.id });
+    S.sel.opp = o.id; S.screen = "opp"; return t;
+  },
+  payment(d, t) {
+    const o = t.opp, c = t.contact, p = o.pledge;
+    p.payments = (p.payments || []).concat([{ amount: d.amount, date: d.date, method: d.method }]);
+    const paid = p.payments.reduce((n, x) => n + (x.amount || 0), 0);
+    p.status = paid >= p.amount ? "Paid in full" : "Current";
+    o.stage = "Closed"; o.closed = "Won"; o.closedOn = d.date;
+    log(`Payment recorded: ${money(d.amount)} by ${String(d.method).toLowerCase()}, ${fmtDate(d.date)}. Closed Won`, { contactId: c.id, oppId: o.id });
+    S.sel.opp = o.id; S.screen = "opp"; return t;
+  },
+  cultivate(d, t) {
+    const o = t.opp, c = t.contact, ids = { contactId: c.id, oppId: o.id };
+    if (d.decision === "Defer") {
+      o.defer = { reason: d.reason, until: d.reconsiderOn || "", subs: subCount(c), on: todayISO() };
+      log(`Move to Cultivation deferred: ${d.reason}${d.reconsiderOn ? ". Reconsider on " + fmtDate(d.reconsiderOn) : ""}`, ids);
+    } else { o.stage = "Cultivation"; delete o.defer; log("Moved to Cultivation (criteria met: capacity rating and a substantive interaction)", ids); }
     S.sel.opp = o.id; S.screen = "opp"; return t;
   }
 };
@@ -625,10 +710,17 @@ const TOOLS = [
     askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
   { action: "ask", name: "show_ask_result_draft", description: "Show the Interaction report for the meeting where an ask was made, with the investor's response.", req: ["contact_name", "response", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, amount: { type: "number", description: "Amount asked; leave out to use the planned ask" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" },
-    response: { type: "string", enum: ["Yes", "Counter-offer", "Considering", "No"] }, agreedAmount: { type: "number", description: "Verbal figure agreed" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: S_DATE }) },
+    response: { type: "string", enum: RESPONSES, description: "Accepted (yes), Countered (a different amount), Awaiting (still thinking it over) or Declined (no)" }, agreedAmount: { type: "number", description: "Verbal figure agreed, or the counter amount" },
+    lostReason: { type: "string", description: "Required when Declined: why, in a few words" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "pledge", name: "show_pledge_draft", description: "Show a Record pledge draft on the contact's open opportunity.", req: ["contact_name", "amount", "confirmedBy", "firstDue"], props: Object.assign({}, FOR, {
     amount: { type: "number" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD; use today if not said" },
-    installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: ["Annual", "Quarterly", "Monthly", "One payment"] }, firstAmount: { type: "number" }, firstDue: S_DATE }) }
+    installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: ["Annual", "Quarterly", "Monthly", "One payment"] }, firstAmount: { type: "number" }, firstDue: S_DATE }) },
+  { action: "cultivate", name: "show_cultivation_decision", description: "Show the Move to Cultivation? decision for an opportunity in Qualification: move it, or defer with a reason and an optional reconsider-on date.", req: ["contact_name", "decision"], props: Object.assign({}, FOR, {
+    decision: { type: "string", enum: ["Move to Cultivation", "Defer"] }, reason: { type: "string", description: "Required to defer" }, reconsiderOn: S_DATE }) },
+  { action: "gift", name: "show_gift_draft", description: "Show a Record gift draft for an outright gift on an opportunity in Ask Made. Saving closes it as Closed Won.", req: ["contact_name", "amount", "method"], props: Object.assign({}, FOR, {
+    amount: { type: "number" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, date: { type: "string", description: "YYYY-MM-DD the gift arrived; use today if not said" }, method: { type: "string", enum: PAY_METHODS } }) },
+  { action: "payment", name: "show_payment_draft", description: "Show a Record payment draft for a payment on the pledge of an opportunity in Commitment. The first payment closes it as Closed Won.", req: ["contact_name", "method"], props: Object.assign({}, FOR, {
+    amount: { type: "number", description: "Leave out to use the scheduled first payment" }, date: { type: "string", description: "YYYY-MM-DD the payment arrived; use today if not said" }, method: { type: "string", enum: PAY_METHODS } }) }
 ];
 const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, description: t.description + " Call it again with corrections if the officer changes something.", parameters: { type: "object", properties: t.props, required: t.req } }))
   .concat([{ type: "function", name: "show_screen", description: "Open a screen when the officer asks to see something. For a contact's record or opportunity, pass contact_name.", parameters: { type: "object", properties: Object.assign({ screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record", "how_it_works"] } }, FOR), required: ["screen"] } },
@@ -644,7 +736,8 @@ function grokInstructions() {
   return `You are the voice assistant inside Veleer, the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
-The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, plan an ask, record an ask and the response, record a pledge, or see a screen. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
+The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, or see a screen.
+Stage rules the app enforces: an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. When you have enough, call the matching draft tool so the draft appears on screen, then ask the officer to check it and tap the button at the bottom of the draft, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
@@ -653,7 +746,7 @@ When adding a new contact, always ask for their email and their mobile number (o
 If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works, then give a spoken tour of about a minute, one stage at a time in order. Call highlight_stage just before each stage, then say one or two plain sentences: what the stage means and what has to happen to move on. End by asking if they have questions or want to try a step. If they interrupt with a question, answer it, then offer to carry on. The stages:
 ${flowScript()}
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
-When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before showing the draft. Recording an ask needs the same unless the investor said no.
+When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before showing the draft. Recording an ask needs the same unless the investor declined.
 When adding a task, ask for a due date if none was said (they can skip it). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
 When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?"
 Write spoken email addresses as real addresses. Resolve relative dates against today.
@@ -844,8 +937,9 @@ function grokSaved(action, r) {
   send({ type: "session.update", session: { instructions: grokInstructions() } });
   const who = r && r.contact ? nameOf(r.contact) : "";
   const hasOpp = r && r.contact && openOpp(r.contact.id);
+  const o = r && r.opp, closed = o && o.stage === "Closed" ? ` The opportunity is now Closed ${o.closed}.` : "";
   const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? "for example plan an ask or log another meeting" : "for example create an opportunity or log another meeting") : "";
-  notice(`The officer tapped ${ACTIONS[action].saveLabel}: ${ACTIONS[action].saved}${who ? " for " + who : ""}. Confirm in a few words, then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
+  notice(`The officer tapped ${ACTIONS[action].saveLabel}: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} Confirm in a few words, then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
 
@@ -856,7 +950,7 @@ function topbar(title, back) {
   <button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
-const SAY_LIST = ["Let's add a contact", "Log a meeting", "Create an opportunity", "Plan an ask", "Record an ask", "Record a pledge", "Add a task", "Walk me through the process", "Show me a list of contacts", "Show me my opportunities"];
+const SAY_LIST = ["Let's add a contact", "Log a meeting", "Create an opportunity", "Plan an ask", "Record an ask", "Record a pledge", "Record a gift", "Record a payment", "Add a task", "Walk me through the process", "Show me a list of contacts", "Show me my opportunities"];
 function sayList() {
   return `<ul class="saylist">${SAY_LIST.map(line => `<li data-say="${esc(line)}" role="button" tabindex="0"><span class="sl-mic">${mic(14)}</span><span class="sl-line">“${esc(line)}”</span></li>`).join("")}</ul>`;
 }
@@ -904,10 +998,10 @@ function needsAttention() {
   const rows = [];
   myOpen().forEach(o => {
     const c = contactById(o.contactId);
-    if (o.stage === "Qualification" && c && c.capacity && S.interactions.some(i => i.contactId === c.id && i.substantive))
+    if (readyForCultivation(o))
       rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t"><span class="alert ok">Ready for Cultivation</span><div class="s" style="margin-top:5px">${esc(o.name)}</div></div><span class="chev">›</span></div>`);
     const a = latestAsk(o);
-    if (o.stage === "Ask Made" && a && /Agreed/.test(a.status)) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t"><span class="alert warn">Pledge to record</span><div class="s" style="margin-top:5px">${esc(o.name)} · agreed ${money(a.amount)}</div></div><span class="chev">›</span></div>`);
+    if (o.stage === "Ask Made" && agreed(a)) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t"><span class="alert warn">Pledge to record</span><div class="s" style="margin-top:5px">${esc(o.name)} · agreed ${money(a.amount)}</div></div><span class="chev">›</span></div>`);
   });
   S.tasks.filter(t => !t.done).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">›</span></div>`));
   return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
@@ -942,6 +1036,7 @@ function contactScreen() {
   if (!c) return contactsScreen();
   const flag = (on, label) => `<span class="flag ${on ? "yes" : "no"}">${on ? "✓" : "✕"} ${label}</span>`;
   const o = openOpp(c.id), ints = S.interactions.filter(i => i.contactId === c.id), who = nameOf(c);
+  const cOpps = S.opps.filter(x => x.contactId === c.id).sort((x, y) => (x.stage === "Closed") - (y.stage === "Closed"));
   return topbar("Contact", "contacts") + `<main>
   <section class="panel"><div class="hero"><h2>${esc(who)}</h2>
     <div class="flags"><span class="pill">${esc(c.status)}</span><span class="pill">${c.capacity ? "Capacity " + c.capacity + " · " + CAPACITY[c.capacity] : "Capacity not rated"}</span></div>
@@ -950,7 +1045,7 @@ function contactScreen() {
   </div>
   <dl class="kv"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
   <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button><button class="btn out" data-say="Add a task for ${esc(who)}">Add a task</button>${o ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div></section>
-  ${o ? `<section class="panel"><div class="ph"><h2>Opportunity</h2></div><div class="row tap" data-opp="${o.id}"><div class="t"><span class="lnk">${esc(o.name)}</span><div class="s">${esc(o.stage)}${o.pledge ? " · pledged " + money(o.pledge.amount) : ""}</div></div><span class="chev">›</span></div></section>` : ""}
+  ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">›</span></div>`).join("")}</section>` : ""}
   <section class="panel"><div class="ph"><h2>Interactions</h2><span class="meta">${ints.length}</span></div>
   ${ints.length ? ints.map(i => `<div class="row"><div class="t">${esc(i.type)} · ${fmtDate(i.date)} ${i.kind === "ask" ? '<span class="alert info">Ask made</span>' : ""} <span class="via">${mic(11)} via voice</span><div class="s">${esc(i.summary)}</div></div></div>`).join("") : `<div class="empty">No interactions yet.</div>`}</section>
   ${tasksPanel(S.tasks.filter(t => t.contactId === c.id), "Tasks")}
@@ -958,28 +1053,34 @@ function contactScreen() {
   </main>`;
 }
 const STAGE_BTN = { Qualification: "Log interaction", Cultivation: "+ Add ask", "Ask Planning": "Record the ask", "Ask Made": "Record pledge", Commitment: "Record payment" };
-const STAGE_SAY = { Qualification: "Log a meeting", Cultivation: "Plan an ask", "Ask Planning": "Record the ask", "Ask Made": "Record a pledge" };
+const STAGE_SAY = { Qualification: "Log a meeting", Cultivation: "Plan an ask", "Ask Planning": "Record the ask", "Ask Made": "Record a pledge", Commitment: "Record a payment" };
+const stageName = (o) => o.stage === "Closed" ? "Closed " + (o.closed || "Won") : o.stage;
 function oppScreen() {
   const o = oppById(S.sel.opp);
   if (!o) return boardScreen();
   const c = contactById(o.contactId), idx = STAGES.indexOf(o.stage), a = latestAsk(o), asked = askedOf(o);
   let alert = "";
-  if (o.stage === "Qualification" && c.capacity && S.interactions.some(i => i.contactId === c.id && i.substantive)) alert = `<span class="alert ok">Ready for Cultivation</span>`;
+  const met = o.stage === "Qualification" && !cultMissing(c).length;
+  if (readyForCultivation(o)) alert = `<span class="alert ok">Ready for Cultivation</span>`;
+  else if (met && o.defer) alert = `<span class="alert info">Deferred${o.defer.until ? " until " + fmtDate(o.defer.until) : ""}: ${esc(o.defer.reason)}</span>`;
   if (o.stage === "Ask Planning" && a) alert = `<span class="alert info">Ask planned for ${fmtDate(a.plannedDate)}</span>`;
-  if (o.stage === "Ask Made" && a && /Agreed/.test(a.status)) alert = `<span class="alert warn">Pledge to record</span>`;
+  if (o.stage === "Ask Made" && agreed(a)) alert = `<span class="alert ok">Agreed, pledge to follow · ${money(a.amount)} verbal</span>`;
+  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = Math.max(0, Math.round((new Date(todayISO()) - new Date(a.askedOn || todayISO())) / 864e5)); alert = `<span class="alert ${days >= 14 ? "warn" : "info"}">Awaiting response · ${days} day${days === 1 ? "" : "s"}</span>`; }
+  if (o.stage === "Closed") alert = o.closed === "Lost" ? `<span class="alert warn">Closed Lost${o.lostReason ? ": " + esc(o.lostReason) : ""}</span>` : `<span class="alert ok">Closed Won${o.gift ? " · gift of " + money(o.gift.amount) + " received" : o.pledge && o.pledge.payments ? " · first payment received" : ""}</span>`;
   if (o.stage === "Commitment" && o.pledge) alert = `<span class="alert ok">First payment of ${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</span>`;
-  const label = STAGE_BTN[o.stage];
-  const btn = !label ? "" : o.stage === "Commitment" ? `<button class="btn out" disabled title="Outside this demo">${label}</button>`
-    : `<button class="btn blue" data-say="${esc(STAGE_SAY[o.stage])} for ${esc(nameOf(c))}">${mic(18)} ${label}</button>`;
+  const outright = o.stage === "Ask Made" && a && a.askType === "Outright";
+  const label = outright ? "Record gift" : STAGE_BTN[o.stage], sayIt = outright ? "Record a gift" : STAGE_SAY[o.stage];
+  const btn = !label ? "" : `<button class="btn blue" data-say="${esc(sayIt)} for ${esc(nameOf(c))}">${mic(18)} ${label}</button>`;
   return topbar("Opportunity", "board") + `<main>
   <section class="panel"><div class="hero"><h2>${esc(o.name)}</h2><div style="color:var(--muted);font-size:13px"><span class="lnk" data-contact="${c.id}" role="button" tabindex="0">${esc(nameOf(c))}</span> · ${OFFICER}${o.fund ? " · " + esc(o.fund) : ""}</div>${alert ? `<div>${alert}</div>` : ""}</div>
-    <div class="track">${STAGES.map((s, i) => `<div class="${i < idx ? "done" : i === idx ? "on" : ""}">${s.replace("Qualification", "Qualif.").replace("Cultivation", "Cultiv.")}</div>`).join("")}</div>
-    <span class="flowlink" data-act2="flowat" data-stage="${esc(o.stage)}">What it takes to move on from ${esc(o.stage)} ›</span>
-    <div class="tiles"><div class="tile"><div class="k">Potential</div><div class="v">${money(o.potential)}</div></div><div class="tile ${asked ? "hl" : ""}"><div class="k">Asked</div><div class="v">${money(asked)}</div></div><div class="tile ${o.pledge ? "hl" : ""}"><div class="k">Pledged</div><div class="v">${money(o.pledge ? o.pledge.amount : 0)}</div></div></div>
-    <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:8px">${o.stage === "Qualification" && alert ? `<button class="btn out" data-act2="cultivate">Move to Cultivation</button>` : ""}${btn}</div>
+    <div class="track">${STAGES.map((s, i) => `<div class="${i < idx ? "done" : i === idx ? "on" : ""}">${s === "Closed" && o.closed ? (o.closed === "Lost" ? "Lost" : "Won") : s.replace("Qualification", "Qualif.").replace("Cultivation", "Cultiv.")}</div>`).join("")}</div>
+    ${o.stage === "Closed" ? "" : `<span class="flowlink" data-act2="flowat" data-stage="${esc(o.stage)}">What it takes to move on from ${esc(o.stage)} ›</span>`}
+    <div class="tiles"><div class="tile"><div class="k">Potential</div><div class="v">${money(o.potential)}</div></div><div class="tile ${asked ? "hl" : ""}"><div class="k">Asked</div><div class="v">${money(asked)}</div></div>${o.gift ? `<div class="tile hl"><div class="k">Received</div><div class="v">${money(o.gift.amount)}</div></div>` : `<div class="tile ${o.pledge ? "hl" : ""}"><div class="k">Pledged</div><div class="v">${money(o.pledge ? o.pledge.amount : 0)}</div></div>`}</div>
+    <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:8px">${met ? `<button class="btn ${readyForCultivation(o) ? "blue" : "out"}" data-act2="cultivate">Move to Cultivation?</button>` : ""}${btn}</div>
   </section>
-  ${o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd></dl></section>` : ""}
-  ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : esc(x.status)}</div></div></div>`).join("")}</section>` : ""}
+  ${o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd>${o.pledge.payments ? `<dt>Received</dt><dd>${o.pledge.payments.map(x => `${money(x.amount)} on ${fmtDate(x.date)} (${esc(String(x.method).toLowerCase())})`).join("<br>")}</dd><dt>Status</dt><dd>${esc(o.pledge.status)}</dd>` : ""}</dl></section>` : ""}
+  ${o.gift ? `<section class="panel"><div class="ph"><h2>Gift</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.gift.amount)}</dd><dt>Entity</dt><dd>${esc(o.gift.fund)}</dd><dt>Received</dt><dd>${fmtDate(o.gift.date)} · ${esc(o.gift.method)}</dd></dl></section>` : ""}
+  ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : x.status === "Made" ? "awaiting response" : esc(x.status)}${x.reason ? ": " + esc(x.reason) : ""}</div></div></div>`).join("")}</section>` : ""}
   ${tasksPanel(S.tasks.filter(t => t.oppId === o.id), "Tasks on this opportunity")}
   ${historyPanel(x => x.oppId === o.id)}
   </main>`;
@@ -1006,15 +1107,15 @@ const FLOW = [
   { stage: "Contact", icon: FI('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>'), means: "A person we know: a prospect, an investor or an ally.",
     move: ["Add the contact: a name plus an email or a mobile number.", "Create an opportunity for them. It starts in Qualification."], tryLine: "Let's add a contact" },
   { stage: "Qualification", icon: FI('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'), means: "Is this person a real prospect for us?",
-    move: ["Accepted: an officer owns the opportunity.", "Rated: a capacity rating, A to D, is on the contact.", "Talked to: a substantive call or meeting is logged.", "Confirmed: the officer taps Move to Cultivation."], tryLine: "Log a meeting" },
+    move: ["Accepted: an officer owns the opportunity.", "Rated: a capacity rating, A to D, is on the contact.", "Talked to: a substantive call or meeting is logged.", "Confirmed: the officer taps Move to Cultivation, or defers with a reason and an optional Reconsider on date."], tryLine: "Log a meeting" },
   { stage: "Cultivation", icon: FI('<path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z"/>'), means: "Building the relationship until the investor is ready to be asked.",
-    move: ["Plan the ask with Add ask: entity, campaign, planned date and amount."], tryLine: "Plan an ask" },
+    move: ["Plan the ask with Add ask: entity, campaign, planned date and amount. A reminder task is due seven days before the planned date."], note: "An ask can be planned only once the opportunity is in Cultivation.", tryLine: "Plan an ask" },
   { stage: "Ask Planning", icon: FI('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'), means: "The ask is planned, with an amount and a date.",
-    move: ["Make the ask, then record it with the investor's response: yes, counter-offer, considering or no."], tryLine: "Record an ask" },
+    move: ["Make the ask, then record it with the investor's response: accepted, countered, awaiting or declined."], note: "A declined ask closes the opportunity as Closed Lost, with a reason.", tryLine: "Record an ask" },
   { stage: "Ask Made", icon: FI('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/>'), means: "The investor has been asked. We wait for their answer or the pledge details.",
-    move: ["Record the pledge once the investor confirms it by email, phone or in person."], note: "An outright gift skips Commitment and closes the opportunity as Closed Won.", tryLine: "Record a pledge" },
+    move: ["After a yes, a Follow up on agreed pledge task reminds the officer to get the confirmation.", "Record the pledge once the investor confirms it by email, phone or in person."], note: "An outright gift is recorded with Record gift: it skips Commitment and closes the opportunity as Closed Won.", tryLine: "Record a pledge" },
   { stage: "Commitment", icon: FI('<path d="M4 20h16M6 16l9.5-9.5a2.1 2.1 0 0 1 3 3L9 19H6z"/>'), means: "The pledge is recorded. We wait for the first payment.",
-    move: ["The first payment comes in and is recorded."], note: "Recording payments is outside this demo." },
+    move: ["Record the first payment with Record payment when it comes in."], tryLine: "Record a payment" },
   { stage: "Closed Won", icon: FI('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>'), means: "The money is in. Later installments are tracked on the pledge.", move: [] }
 ];
 const flowIndex = (name) => FLOW.findIndex(f => f.stage.toLowerCase() === String(name || "").toLowerCase().replace(/^closed$/, "closed won"));
@@ -1085,7 +1186,7 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("[data-act2]"); if (!a) return;
   const act = a.dataset.act2;
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
-  else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { o.stage = "Cultivation"; log("Moved to Cultivation (criteria met: capacity rating and a substantive interaction)", { contactId: o.contactId, oppId: o.id }, false); save(); render(); toast("Moved to Cultivation"); } }
+  else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
   else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); S.settings = keep; save(); render(); welcomeModal(); toast("Demo restarted"); }
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
@@ -1096,7 +1197,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T17:16:54Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T17:29:52Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
