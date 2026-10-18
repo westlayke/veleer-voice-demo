@@ -11,10 +11,10 @@
 /* Layout: one phone-width app column (max 440px, centred on wider screens), sticky top bar, fixed tab bar with a centre mic, bottom sheet for voice drafts. */
 :root {
   --bg: #f4f6f9; --surface: #ffffff; --surface2: #eef1f5; --line: #d5dae2;
-  --fg: #1c1f24; --muted: #5b6370; --brand: #2f74d0; --brand-soft: #e8f0fb; --brand-line: #9dbbe4; --brand-ink: #1f4f8f;
+  --fg: #1c1f24; --muted: #4b525d; --brand: #2f74d0; --brand-soft: #e8f0fb; --brand-line: #9dbbe4; --brand-ink: #1f4f8f;
   --bar: #e6edf7; --ok: #1f7a37; --ok-soft: #e3f3e7; --warn: #8a5a00; --warn-soft: #fff4dc; --warn-line: #e0a020;
   --bad: #c2333b; --scrim: rgba(20,26,36,.55); --shadow: 0 6px 24px rgba(20,30,50,.18);
-  --font: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --font: "Titillium Web", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif; /* matches the SpiceCRM deployment */
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
@@ -27,8 +27,12 @@
   --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
   --scrim: rgba(0,0,0,.6); --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark }
 * { box-sizing: border-box; }
+@font-face { font-family: "Titillium Web"; font-weight: 400; font-display: swap; src: url(fonts/titillium-web-400.woff2) format("woff2"); }
+@font-face { font-family: "Titillium Web"; font-weight: 600; font-display: swap; src: url(fonts/titillium-web-600.woff2) format("woff2"); }
+@font-face { font-family: "Titillium Web"; font-weight: 700; font-display: swap; src: url(fonts/titillium-web-700.woff2) format("woff2"); }
+button, input, select, textarea { font-family: inherit; line-height: 1.2; }
 html, body { height: 100%; }
-body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; -webkit-tap-highlight-color: transparent; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.28; -webkit-tap-highlight-color: transparent; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bar); }
 button { font: inherit; color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--brand-line); outline-offset: 1px; }
