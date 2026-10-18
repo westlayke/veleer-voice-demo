@@ -126,6 +126,9 @@ main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; pa
 .wl-role b { color: var(--brand-ink); }
 .wl-av { width: 34px; height: 34px; flex: none; border-radius: 50%; background: var(--brand-soft, #e3edf9); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
 .top.withlogo { height: 64px; position: sticky; }
+.top .who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.top .who b { font-size: 17px; white-space: nowrap; }
+.top .who span { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .top-logo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 58px; width: auto; display: block; pointer-events: none; }
 .brand { display: flex; justify-content: center; padding: 2px 0 0; } .brand img { width: 130px; height: auto; display: block; }
 .wl-save small { font-size: 12.5px; color: var(--muted); }
@@ -1058,7 +1061,7 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
 /* ---------- screens ---------- */
 const go = (s) => { S.screen = s; save(); render(); window.scrollTo(0, 0); };
 function topbar(title, back, logo) {
-  return `<header class="top${logo ? " withlogo" : ""}">${logo ? '<img class="top-logo" src="logo-v2.png" alt="Citizens Alliance" width="57" height="58">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}<h1>${esc(title)}</h1>
+  return `<header class="top${logo ? " withlogo" : ""}">${logo ? '<img class="top-logo" src="logo-v2.png" alt="Citizens Alliance" width="57" height="58">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}${logo ? `<div class="who"><b>${OFFICER}</b><span>You're the gift officer</span></div>` : `<h1>${esc(title)}</h1>`}
   <button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
@@ -1328,7 +1331,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T18:55:15Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T19:07:49Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
