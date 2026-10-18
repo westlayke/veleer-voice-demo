@@ -257,6 +257,8 @@ const STAGES = ["Qualification", "Cultivation", "Ask Planning", "Ask Made", "Com
 const FUNDS = ["C3 - Citizens Alliance", "C4 - Citizens Alliance", "PAC - Citizens Alliance"]; // entities (the guide renamed Fund to Entity)
 const CAMPAIGNS = ["Pennsylvania", "New Hampshire", "North Dakota", "Idaho", "National", "General / no campaign"];
 const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
+const OUTCOMES = ["Interested, continue cultivation", "Ask made", "Ask accepted", "Not now, revisit", "Not interested", "Referred elsewhere"];
+const NO_NEXT_STEP = ["Not interested", "Referred elsewhere"];
 const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
 const MIC = '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
 const mic = (s) => MIC.replace(/SZ/g, s);
@@ -285,9 +287,11 @@ const ACTIONS = {
       { k: "forName", label: "Contact", fixed: true },
       { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: MEET_TYPES, req: true },
       { k: "summary", label: "Summary", type: "area", req: true }, { k: "substantive", label: "Substantive interaction", type: "bool" },
+      { k: "outcome", label: "Outcome", type: "select", opts: ["", ...OUTCOMES] },
       { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated" },
       { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
-    pairs: [["date", "meetingType"]] },
+    pairs: [["date", "meetingType"]],
+    left: "A substantive interaction needs a next step and its due date, unless the outcome is Not interested or Referred elsewhere." },
   task: { title: "New task", saved: "Task added", saveLabel: "Save task",
     fields: [
       { k: "forName", label: "Contact", fixed: true },
@@ -315,7 +319,8 @@ const ACTIONS = {
       { k: "response", label: "Response", type: "select", opts: ["Yes", "Counter-offer", "Considering", "No"], req: true },
       { k: "agreedAmount", label: "Agreed amount (verbal)", type: "money" }, { k: "summary", label: "Summary", type: "area", req: true },
       { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
-    pairs: [["date", "meetingType"], ["amount", "fund"]] },
+    pairs: [["date", "meetingType"], ["amount", "fund"]],
+    left: "An ask meeting is substantive, so it needs a next step and its due date unless the investor said no." },
   pledge: { title: "Record pledge", saved: "Pledge recorded", saveLabel: "Record pledge",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
@@ -491,6 +496,17 @@ document.getElementById("overlay").addEventListener("click", (e) => {
 function saveDraft() {
   const d = readDraft(), A = ACTIONS[V.action];
   const miss = A.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));
+  if (!miss.length && ((V.action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) || (V.action === "ask" && d.response !== "No"))) {
+    const need = [!String(d.nextStep || "").trim() && "Next step", !d.nextDue && "Next step due"].filter(Boolean);
+    if (need.length) {
+      const msg = `Add the ${need.join(" and ").toLowerCase()} before saving. A substantive interaction needs a next step and its due date.`;
+      const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
+      const first = document.getElementById(need[0] === "Next step" ? "f_nextStep" : "f_nextDue"); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+      toast(msg);
+      if (G.live) notice(`The officer tapped ${A.saveLabel} but the draft has no ${need.join(" or ").toLowerCase()}. Explain in one sentence that a substantive interaction needs a next step and its due date, ask what it is and when it's due, then call the draft tool again.`);
+      return;
+    }
+  }
   if (!miss.length && V.action === "contact" && !String(d.email || "").trim() && !String(d.mobile || "").trim()) {
     const msg = "Add an email or a mobile number before saving. A contact needs at least one.";
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
@@ -523,10 +539,10 @@ const APPLY = {
   },
   interaction(d, t) {
     const c = t.contact;
-    S.interactions.unshift({ id: uid(), contactId: c.id, oppId: t.opp ? t.opp.id : null, date: d.date, type: d.meetingType, summary: d.summary, substantive: !!d.substantive, kind: "meeting" });
+    S.interactions.unshift({ id: uid(), contactId: c.id, oppId: t.opp ? t.opp.id : null, date: d.date, type: d.meetingType, summary: d.summary, substantive: !!d.substantive, outcome: d.outcome || "", kind: "meeting" });
     if (d.capacity) { c.capacity = d.capacity; log(`Capacity rated ${d.capacity} (${CAPACITY[d.capacity]})`, { contactId: c.id }); }
     log(`Interaction report: ${d.meetingType}, ${fmtDate(d.date)}`, { contactId: c.id, oppId: t.opp ? t.opp.id : null });
-    if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, text: d.nextStep, due: d.nextDue, done: false });
+    if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: t.opp ? t.opp.id : null, text: d.nextStep, due: d.nextDue, done: false });
     S.sel.contact = c.id; S.screen = "contact"; return { contact: c };
   },
   task(d, t) {
@@ -561,7 +577,7 @@ const APPLY = {
     if (d.response === "Counter-offer") { a.status = "Countered"; o.asks.unshift({ fund: a.fund, campaign: a.campaign, amount: d.agreedAmount || a.amount, askType: a.askType, status: "Agreed, pledge to follow", plannedDate: d.date }); }
     if (d.response === "No") a.status = "Declined";
     o.stage = "Ask Made"; log(`Ask recorded: ${d.response}${d.agreedAmount ? ", " + money(d.agreedAmount) : ""}. Moved to Ask Made`, { contactId: c.id, oppId: o.id });
-    if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, text: d.nextStep, due: d.nextDue, done: false });
+    if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: d.nextStep, due: d.nextDue, done: false });
     S.sel.opp = o.id; S.screen = "opp"; return t;
   },
   pledge(d, t) {
@@ -596,7 +612,8 @@ const TOOLS = [
     permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" } } },
   { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
-    substantive: { type: "boolean" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") },
+    substantive: { type: "boolean", description: "True when it was a real conversation with the person about the relationship or the gift; emails and research notes are not substantive" },
+    outcome: { type: "string", enum: OUTCOMES, description: "Pick from this list only; leave out if the officer didn't say" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") },
     nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "task", name: "show_task_draft", description: "Show a new Task draft for a contact, optionally filed on their open opportunity.", req: ["contact_name", "text"], props: Object.assign({}, FOR, {
     text: { type: "string", description: "What to do, as a short imperative, e.g. Send Ruth the annual report" }, due: S_DATE,
@@ -625,7 +642,7 @@ function crmSnapshot() {
 function grokInstructions() {
   const f = focusContact();
   return `You are the voice assistant inside Veleer, the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
-Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
+Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, plan an ask, record an ask and the response, record a pledge, or see a screen. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. When you have enough, call the matching draft tool so the draft appears on screen, then ask the officer to check it and tap the button at the bottom of the draft, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
@@ -636,6 +653,7 @@ When adding a new contact, always ask for their email and their mobile number (o
 If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works, then give a spoken tour of about a minute, one stage at a time in order. Call highlight_stage just before each stage, then say one or two plain sentences: what the stage means and what has to happen to move on. End by asking if they have questions or want to try a step. If they interrupt with a question, answer it, then offer to carry on. The stages:
 ${flowScript()}
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
+When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before showing the draft. Recording an ask needs the same unless the investor said no.
 When adding a task, ask for a due date if none was said (they can skip it). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
 When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?"
 Write spoken email addresses as real addresses. Resolve relative dates against today.
@@ -1078,7 +1096,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T17:02:23Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T17:16:54Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
