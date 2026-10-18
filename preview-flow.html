@@ -1001,7 +1001,7 @@ const flowIndex = (name) => FLOW.findIndex(f => f.stage.toLowerCase() === String
 function flowScreen() {
   const at = S.flowAt == null ? -1 : S.flowAt;
   return topbar("How it works", S.flowBack || "home") + `<main>
-  <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">Moving from first contact to Closed Won</h2>
+  <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">Moving from first contact to 'Closed Won'...</h2>
     <p>Every opportunity moves through the same stages. Tap a stage to see what has to happen before it can move on.</p>
     <button class="btn blue" data-say="Walk me through the process">${mic(18)} Hear the overview</button></div></section>
   <section class="panel"><ol class="flowpath">${FLOW.map((f, i) => {
