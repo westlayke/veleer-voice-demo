@@ -644,7 +644,10 @@ function gcalLink(d, c) {
   const start = new Date(`${d.date}T${d.time || "09:00"}:00`), end = new Date(start.getTime() + mins * 6e4);
   const f = (x) => `${x.getFullYear()}${String(x.getMonth() + 1).padStart(2, "0")}${String(x.getDate()).padStart(2, "0")}T${String(x.getHours()).padStart(2, "0")}${String(x.getMinutes()).padStart(2, "0")}00`;
   const details = [`${d.meetingType || "Meeting"} with ${nameOf(c)}${c.mobile ? " · " + c.mobile : ""}${c.email ? " · " + c.email : ""}`, d.notes || "", "Scheduled from Veleer"].filter(Boolean).join("\n\n");
-  return "https://calendar.google.com/calendar/render?" + new URLSearchParams({ action: "TEMPLATE", text: d.title || `Meeting with ${nameOf(c)}`, dates: `${f(start)}/${f(end)}`, details, location: d.location || "" }).toString().replace("%2F", "/");
+  const q = { action: "TEMPLATE", text: d.title || `Meeting with ${nameOf(c)}`, dates: `${f(start)}/${f(end)}`, details, location: d.location || "" };
+  if (c.email) q.add = c.email; // the contact as a guest, so Google offers to send the invite when the officer saves
+  if (d.meetingType === "Video call") q.vcon = "meet"; // asks Google Calendar to attach a Meet link (not an official link option; the event screen also has an Add Google Meet button)
+  return "https://calendar.google.com/calendar/render?" + new URLSearchParams(q).toString().replace("%2F", "/");
 }
 const fmtTime = (t) => { if (!t) return ""; const [h, m] = t.split(":").map(Number); return `${(h % 12) || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
 const APPLY = {
@@ -1438,7 +1441,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T20:52:34Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T20:57:23Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
