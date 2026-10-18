@@ -15,17 +15,20 @@
   --fg: #1c1f24; --muted: #4b525d; --brand: #2f74d0; --brand-soft: #e8f0fb; --brand-line: #9dbbe4; --brand-ink: #1f4f8f;
   --bar: #e6edf7; --ok: #1f7a37; --ok-soft: #e3f3e7; --warn: #8a5a00; --warn-soft: #fff4dc; --warn-line: #e0a020;
   --bad: #c2333b; --scrim: rgba(20,26,36,.55); --shadow: 0 6px 24px rgba(20,30,50,.18);
+  --pv: #6b3fb5; --pv-soft: #f1eafb; --pv-line: #c7b2ea; --sl: #3e4a5c; --sl-soft: #eceff3; --sl-line: #c3cad5;
   --font: "Titillium Web", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif; /* matches the SpiceCRM deployment */
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
   --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
   --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
+  --pv: #c9a8f5; --pv-soft: #2a2140; --pv-line: #5d4a86; --sl: #c3cbd6; --sl-soft: #252c36; --sl-line: #4a5565;
   --scrim: rgba(0,0,0,.6); --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
   --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
   --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
+  --pv: #c9a8f5; --pv-soft: #2a2140; --pv-line: #5d4a86; --sl: #c3cbd6; --sl-soft: #252c36; --sl-line: #4a5565;
   --scrim: rgba(0,0,0,.6); --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark }
 * { box-sizing: border-box; }
 @font-face { font-family: "Titillium Web"; font-weight: 400; font-display: swap; src: url(fonts/titillium-web-400.woff2) format("woff2"); }
@@ -86,6 +89,15 @@ main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; pa
 .kv dt { color: var(--muted); } .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .via { color: var(--brand); font-size: 12px; font-weight: 700; white-space: nowrap; }
 /* say-things list + welcome popup */
+.saypills { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 12px 14px; }
+.sp { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; padding: 5px 10px 5px 5px; border-radius: 999px; border: 1px solid; cursor: pointer; text-align: left; }
+.sp .spm { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; background: var(--surface); }
+.sp:active { filter: brightness(.95); }
+.sp.t-people { color: var(--brand-ink); background: var(--brand-soft); border-color: var(--brand-line); }
+.sp.t-pipe { color: var(--ok); background: var(--ok-soft); border-color: var(--ok); }
+.sp.t-money { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
+.sp.t-giving { color: var(--pv); background: var(--pv-soft); border-color: var(--pv-line); }
+.sp.t-look { color: var(--sl); background: var(--sl-soft); border-color: var(--sl-line); }
 .saylist { list-style: none; margin: 0; padding: 4px 0; }
 .saylist li { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 15px; cursor: pointer; border-bottom: 1px solid var(--line); }
 .saylist li:last-child { border-bottom: 0; }
@@ -953,7 +965,7 @@ function onEvent(e) {
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
   else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) toast("Grok: " + e.error.message); }
-  if (t === "conversation.item.added" && e.item && e.item.id) { (G.respItems = G.respItems || []).push(e.item.id); if (G.tour) G.tourItems.push(e.item.id); }
+  if (t === "conversation.item.added" && e.item && e.item.id) { if (e.item.type !== "function_call") (G.respItems = G.respItems || []).push(e.item.id); if (G.tour && e.item.type !== "function_call" && !G.tourItems.includes(e.item.id)) G.tourItems.push(e.item.id); }
 }
 // A new response or session update sent while Grok is still speaking cuts off what it was saying ("Opening the…"),
 // so both wait until the current response is done.
@@ -1048,9 +1060,15 @@ function topbar(title, back) {
   <button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
-const SAY_LIST = ["Let's add a contact", "Log a meeting", "Create an opportunity", "Plan an ask", "Record an ask", "Record a pledge", "Record a gift", "Record a payment", "Add a task", "Walk me through the process", "What has Ruth given?", "Show me a list of contacts", "Show me my opportunities"];
+const SAY_GROUPS = [
+  { tone: "people", lines: ["Let's add a contact", "Log a meeting", "Add a task"] },
+  { tone: "pipe", lines: ["Create an opportunity", "Move James to Cultivation", "Plan an ask", "Record an ask"] },
+  { tone: "money", lines: ["Record a pledge", "Record a gift", "Record a payment"] },
+  { tone: "giving", lines: ["What has Ruth given?", "How much has Ken given this year?", "When was Elena's last gift?", "What's Ruth's lifetime giving?"] },
+  { tone: "look", lines: ["Walk me through the process", "Show me a list of contacts", "Show me my opportunities"] }
+];
 function sayList() {
-  return `<ul class="saylist">${SAY_LIST.map(line => `<li data-say="${esc(line)}" role="button" tabindex="0"><span class="sl-mic">${mic(14)}</span><span class="sl-line">“${esc(line)}”</span></li>`).join("")}</ul>`;
+  return `<div class="saypills">${SAY_GROUPS.map(g => g.lines.map(line => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`).join("")).join("")}</div>`;
 }
 function saveTip() {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
@@ -1309,7 +1327,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T18:33:47Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T18:40:04Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
