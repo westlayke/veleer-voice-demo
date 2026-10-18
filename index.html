@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#e6edf7">
+<title>Veleer Voice Demo</title>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+</head><body>
+<style>
+/* Layout: one phone-width app column (max 440px, centred on wider screens), sticky top bar, fixed tab bar with a centre mic, bottom sheet for voice drafts. */
+:root {
+  --bg: #f4f6f9; --surface: #ffffff; --surface2: #eef1f5; --line: #d5dae2;
+  --fg: #1c1f24; --muted: #5b6370; --brand: #2f74d0; --brand-soft: #e8f0fb; --brand-line: #9dbbe4; --brand-ink: #1f4f8f;
+  --bar: #e6edf7; --ok: #1f7a37; --ok-soft: #e3f3e7; --warn: #8a5a00; --warn-soft: #fff4dc; --warn-line: #e0a020;
+  --bad: #c2333b; --scrim: rgba(20,26,36,.55); --shadow: 0 6px 24px rgba(20,30,50,.18);
+  --font: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
+  --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
+  --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
+  --scrim: rgba(0,0,0,.6); --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
+  --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
+  --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
+  --scrim: rgba(0,0,0,.6); --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; -webkit-tap-highlight-color: transparent; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bar); }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--brand-line); outline-offset: 1px; }
+.app { max-width: 440px; margin: 0 auto; min-height: 100%; background: var(--bg); padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; display: flex; align-items: center; gap: 10px; height: 56px; background: var(--bar); border-bottom: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.top h1 { margin: 0; font-size: 18px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.back { border: 0; background: none; font-size: 24px; line-height: 1; padding: 4px 6px 4px 0; color: var(--brand); cursor: pointer; }
+.iconbtn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+.chip { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
+main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ph { display: flex; align-items: baseline; gap: 8px; padding: 11px 14px 9px; background: var(--surface2); border-bottom: 1px solid var(--line); }
+.ph h2 { margin: 0; font-size: 16px; }
+.ph .meta { margin-left: auto; color: var(--muted); font-size: 13px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.row .t { flex: 1; min-width: 0; }
+.row .s { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.row.tap { cursor: pointer; } .row.tap:active { background: var(--surface2); }
+.lnk { color: var(--brand); }
+.chev { color: var(--muted); }
+.empty { padding: 14px; color: var(--muted); font-size: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 14px; }
+.tile { border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; min-width: 0; }
+.tile .k { font-size: 12px; color: var(--muted); } .tile .v { font-size: 18px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.tile.hl { border-color: var(--brand-line); background: var(--brand-soft); }
+.alert { display: inline-block; border-radius: 10px; padding: 2px 9px; font-size: 12.5px; font-weight: 700; border: 1px solid; }
+.alert.ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+.alert.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
+.alert.info { background: var(--brand-soft); color: var(--brand-ink); border-color: var(--brand-line); }
+.pill { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--surface2); }
+.flag { display: inline-flex; align-items: center; gap: 4px; border-radius: 12px; font-size: 13px; padding: 2px 9px; border: 1px solid; }
+.flag.yes { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.flag.no { background: var(--surface2); border-color: var(--line); color: var(--muted); }
+.flags { display: flex; gap: 6px; flex-wrap: wrap; }
+.hero { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.hero h2 { margin: 0; font-size: 21px; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; border-radius: 12px; font-size: 16px; font-weight: 700; border: 0; cursor: pointer; padding: 0 16px; }
+.btn.blue { background: var(--brand); color: #fff; }
+.btn.out { background: var(--surface); color: var(--brand); border: 1.5px solid var(--brand); }
+.btn.quiet { background: var(--surface2); color: var(--fg); border: 1px solid var(--line); font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btns { display: flex; gap: 8px; } .btns > * { flex: 1; }
+.track { display: flex; gap: 3px; padding: 4px 14px 12px; }
+.track div { flex: 1; text-align: center; font-size: 10.5px; color: var(--muted); padding-top: 7px; border-top: 5px solid var(--line); }
+.track div.done { border-color: var(--brand-line); }
+.track div.on { border-color: var(--brand); color: var(--brand); font-weight: 700; }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; padding: 12px 14px; font-size: 14px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.via { color: var(--brand); font-size: 12px; font-weight: 700; white-space: nowrap; }
+/* journey card */
+.steps { list-style: none; margin: 0; padding: 4px 0; }
+.steps li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 14px; font-size: 14px; }
+.steps .n { width: 24px; height: 24px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 1.5px solid var(--line); color: var(--muted); }
+.steps li.done .n { background: var(--ok); border-color: var(--ok); color: #fff; }
+.steps li.on { background: var(--brand-soft); }
+.steps li.on .n { background: var(--brand); border-color: var(--brand); color: #fff; }
+.steps li.on b { color: var(--brand-ink); }
+.say { font-size: 13px; color: var(--muted); font-style: italic; margin-top: 3px; line-height: 1.4; }
+/* board */
+.boardwrap { overflow-x: auto; }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: 168px; gap: 8px; padding: 12px 14px; }
+.col { background: var(--surface2); border-radius: 10px; padding: 8px; min-height: 120px; }
+.col h3 { margin: 0 0 8px; font-size: 13px; display: flex; justify-content: space-between; } .col h3 span { color: var(--muted); font-weight: 400; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+.card.me { border: 2px solid var(--brand); }
+.card .amt { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* tab bar */
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.tabbar .in { max-width: 440px; margin: 0 auto; display: flex; justify-content: space-around; align-items: center; height: 64px; }
+.tab { border: 0; background: none; font-size: 11.5px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; min-width: 60px; }
+.tab.on { color: var(--brand); font-weight: 700; }
+.micbtn { width: 58px; height: 58px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); margin-top: -18px; cursor: pointer; }
+.micbtn.pulse { animation: pulse 1.6s ease-out infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(47,116,208,.55); } 100% { box-shadow: 0 0 0 16px rgba(47,116,208,0); } }
+@media (prefers-reduced-motion: reduce) { .micbtn.pulse, .dots i, .wave i { animation: none !important; } }
+/* sheet */
+.scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; align-items: flex-end; justify-content: center; }
+.sheet { width: 100%; max-width: 440px; max-height: calc(100% - 24px - env(safe-area-inset-top, 0px)); overflow-y: auto; background: var(--surface); border-radius: 18px 18px 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: var(--shadow); }
+.grab { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 0; }
+.sh { display: flex; align-items: flex-start; gap: 10px; padding: 10px 16px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 2; }
+.sh h3 { margin: 4px 0 0; font-size: 17px; } .sh .s { font-size: 13px; color: var(--muted); margin-top: 3px; }
+.vh { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--brand); }
+.x { margin-left: auto; border: 0; background: var(--surface2); width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; flex: none; color: var(--muted); }
+.sb { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.listen { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 16px 8px; text-align: center; }
+.bigmic { width: 84px; height: 84px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; animation: pulse 1.6s ease-out infinite; }
+.wave { display: flex; gap: 4px; height: 22px; align-items: center; } .wave i { width: 4px; background: var(--brand); border-radius: 2px; animation: wv 1s ease-in-out infinite; }
+.wave i:nth-child(2) { animation-delay: .15s } .wave i:nth-child(3) { animation-delay: .3s } .wave i:nth-child(4) { animation-delay: .45s } .wave i:nth-child(5) { animation-delay: .6s }
+@keyframes wv { 0%,100% { height: 5px } 50% { height: 22px } }
+.transcript { width: 100%; min-height: 90px; text-align: left; background: var(--surface2); border-radius: 10px; padding: 10px 12px; font-size: 16px; line-height: 1.45; }
+.transcript .interim { color: var(--muted); }
+.hint { width: 100%; text-align: left; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.hint b { color: var(--fg); font-weight: 600; }
+.note { font-size: 13px; color: var(--warn); background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: 9px; padding: 8px 10px; width: 100%; text-align: left; }
+textarea.say-in { width: 100%; min-height: 120px; border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); resize: vertical; }
+.thinking { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; padding: 18px 16px; }
+.dots { display: flex; gap: 4px; } .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); animation: bl 1.2s infinite; }
+.dots i:nth-child(2) { animation-delay: .2s } .dots i:nth-child(3) { animation-delay: .4s }
+@keyframes bl { 0%,80%,100% { opacity: .25 } 40% { opacity: 1 } }
+.said { font-size: 14px; font-style: italic; color: var(--muted); background: var(--surface2); border-left: 4px solid var(--line); border-radius: 6px; padding: 8px 11px; line-height: 1.4; }
+details.said summary { font-style: normal; color: var(--brand); font-weight: 600; cursor: pointer; }
+.fld { display: flex; flex-direction: column; gap: 5px; padding: 8px 0 8px 10px; border-left: 3px solid transparent; }
+.fld.v { border-left-color: var(--brand-line); }
+.fld.miss { border-left-color: var(--bad); }
+.lbl { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.lbl .req { color: var(--bad); } .lbl .via { margin-left: auto; }
+.two .vt { display: none; }
+.fld input[type=text], .fld input[type=date], .fld select, .fld textarea { width: 100%; min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
+.fld textarea { min-height: 64px; resize: vertical; }
+.fld.chk input { border-color: var(--warn-line); background: var(--warn-soft); }
+.cn { font-size: 12.5px; color: var(--warn); }
+.tg { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.tg input { width: 22px; height: 22px; accent-color: var(--brand); flex: none; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.left { font-size: 13px; color: var(--muted); background: var(--surface2); border-radius: 9px; padding: 9px 11px; }
+.savebar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 6px; }
+.savebar small { text-align: center; color: var(--muted); font-size: 12.5px; }
+.err { color: var(--bad); font-size: 14px; }
+/* toast */
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 35; background: var(--fg); color: var(--bg); border-radius: 12px; padding: 10px 14px; font-size: 14px; display: flex; gap: 14px; align-items: center; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+.toast button { border: 0; background: none; color: var(--bg); font-weight: 700; text-decoration: underline; cursor: pointer; }
+.next { background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.next b { color: var(--brand-ink); }
+.done-card { background: var(--ok-soft); border: 1px solid var(--ok); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.done-card h2 { margin: 0; font-size: 18px; color: var(--ok); }
+.set label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.set input, .set select { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 15px; background: var(--surface); color: var(--fg); }
+.status-line { font-size: 13.5px; display: flex; gap: 8px; align-items: center; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; } .dot.g { background: var(--ok); } .dot.r { background: var(--bad); } .dot.a { background: var(--warn-line); }
+</style>
+
+<div class="app" id="app"></div>
+<nav class="tabbar" aria-label="Main"><div class="in" id="tabs"></div></nav>
+<div id="overlay"></div>
+<div id="toastHost"></div>
+
+<script>
+(() => {
+"use strict";
+const OFFICER = "Dana Rivera", OFFICER_INITIALS = "DR";
+const STAGES = ["Qualification", "Cultivation", "Ask Planning", "Ask Made", "Commitment", "Closed"];
+const FUNDS = ["Scholarship fund", "Library reading room", "Building fund", "General operating"];
+const CAMPAIGNS = ["Building campaign 2027", "Scholars campaign 2026", "General / no campaign"];
+const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
+const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
+const MIC = '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
+const mic = (s) => MIC.replace(/SZ/g, s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (n) => n == null || n === "" || isNaN(n) ? "$0" : "$" + Math.round(Number(n)).toLocaleString("en-US");
+const toNum = (v) => { if (v == null || v === "") return null; const n = Number(String(v).replace(/[^0-9.]/g, "")); return isNaN(n) ? null : n; };
+const iso = (d) => d.toISOString().slice(0, 10);
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return iso(d); };
+const fmtDate = (s) => { if (!s) return ""; const d = new Date(s + "T12:00:00"); return isNaN(d) ? s : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined }); };
+const longToday = () => new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+/* ---------- journey steps ---------- */
+const STEPS = [
+  { id: "contact", short: "Add the contact", title: "New contact",
+    say: "New contact, Maria Delgado. I met her tonight at the Spring Gala. Her email is maria dot delgado at gmail dot com and her mobile is 555 010 0142. She's happy to get emails and calls but no texts. She's interested in the library reading room.",
+    task: "Create a new Contact (a person) from what the gift officer said.",
+    schema: `{"first": string, "last": string, "email": string|null, "mobile": string|null, "permEmail": boolean, "permCalls": boolean, "permText": boolean, "permSource": string|null, "howMet": string|null}`,
+    rules: `Write spoken emails as real addresses ("dot" -> ".", "at" -> "@"). Format US phone numbers like (555) 010-0142. permEmail and permCalls default true and permText defaults false unless the officer says otherwise. permSource describes how the permission was given, e.g. "told Dana Rivera in person at the Spring Gala, Oct 17", or null if not said. howMet is one short sentence: where they met and any interest mentioned.`,
+    fields: [
+      { k: "first", label: "First name", req: true }, { k: "last", label: "Last name", req: true },
+      { k: "email", label: "Email", check: "Spoken addresses are easy to mishear. Check the spelling before you save." },
+      { k: "mobile", label: "Mobile" },
+      { k: "permEmail", label: "Email permitted", type: "bool" }, { k: "permCalls", label: "Calls permitted", type: "bool" }, { k: "permText", label: "Texting permitted", type: "bool" },
+      { k: "permSource", label: "Permission source" }, { k: "howMet", label: "How we met", type: "area" } ],
+    pairs: [["first", "last"]],
+    left: "Not filled by voice: capacity rating, Ally - Do Not Solicit and Do Not Contact." },
+  { id: "interaction", short: "Log the first meeting", title: "Interaction report",
+    say: "Log a coffee meeting with Maria today. We talked for an hour about the reading room renovation, she wants to see the plans. She owns two restaurants downtown, I'd rate her capacity a B. Next step, send her the reading room plans by next Friday.",
+    task: "Draft an Interaction report for a meeting with the contact, plus a capacity rating and one next step if mentioned.",
+    schema: `{"date": "YYYY-MM-DD", "meetingType": one of ${JSON.stringify(MEET_TYPES)}, "summary": string, "substantive": boolean, "capacity": "A"|"B"|"C"|"D"|"E"|null, "nextStep": string|null, "nextDue": "YYYY-MM-DD"|null}`,
+    rules: `Capacity ratings: ${Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ")}. Only set capacity if the officer states a rating or a clear amount. A substantive interaction is a real two-way conversation about the investor's interests or giving. summary is 1-3 plain sentences in the officer's voice, past tense. Resolve relative dates against today.`,
+    fields: [
+      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: MEET_TYPES, req: true },
+      { k: "summary", label: "Summary", type: "area", req: true }, { k: "substantive", label: "Substantive interaction", type: "bool" },
+      { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated" },
+      { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
+    pairs: [["date", "meetingType"]] },
+  { id: "opportunity", short: "Create the opportunity", title: "New opportunity",
+    say: "Create an opportunity for Maria for the library reading room, potential around fifty thousand, and move it to Cultivation.",
+    task: "Create an Opportunity for this investor, and say whether the officer asked to move it to Cultivation.",
+    schema: `{"fund": one of ${JSON.stringify(FUNDS)} or null, "potential": number|null, "moveToCultivation": boolean, "notes": string|null}`,
+    rules: `potential is a dollar amount as a plain number. moveToCultivation is true only if the officer says to move it to Cultivation.`,
+    fields: [
+      { k: "name", label: "Opportunity name", req: true, fixed: true }, { k: "officer", label: "Gift officer", fixed: true },
+      { k: "fund", label: "Fund of interest", type: "select", opts: ["", ...FUNDS] }, { k: "potential", label: "Potential amount", type: "money" },
+      { k: "moveToCultivation", label: "Then move to Cultivation", type: "bool" }, { k: "notes", label: "Notes", type: "area" } ] },
+  { id: "plan", short: "Plan the ask", title: "Add ask",
+    say: "Plan an ask of fifty thousand dollars for the library reading room fund, building campaign 2027, as a pledge. I'll ask her on November 12th, and bring our executive director along.",
+    task: "Plan an Ask on the opportunity (Ask Planning).",
+    schema: `{"fund": one of ${JSON.stringify(FUNDS)}, "campaign": one of ${JSON.stringify(CAMPAIGNS)}, "plannedDate": "YYYY-MM-DD", "amount": number, "askType": "Outright"|"Pledge"|"Planned gift", "participants": string|null}`,
+    rules: `askType defaults to "Outright" unless the officer says pledge, multi-year or similar. If no campaign is named use "General / no campaign". participants are other people joining the ask, as plain words.`,
+    fields: [
+      { k: "fund", label: "Fund", type: "select", opts: FUNDS, req: true }, { k: "campaign", label: "Campaign", type: "select", opts: CAMPAIGNS, req: true },
+      { k: "plannedDate", label: "Planned ask date", type: "date", req: true }, { k: "amount", label: "Amount", type: "money", req: true },
+      { k: "askType", label: "Ask type", type: "select", opts: ["Outright", "Pledge", "Planned gift"] },
+      { k: "officer", label: "Gift officer", fixed: true }, { k: "participants", label: "Participants in the ask" } ],
+    pairs: [["plannedDate", "amount"]] },
+  { id: "ask", short: "Record the ask", title: "Interaction report · the ask",
+    say: "I met Maria for lunch today and asked her for fifty thousand for the reading room. She said yes! She'll confirm a pledge over two years by email next week.",
+    task: "Draft the Interaction report for the meeting where the ask was made, with the investor's response.",
+    schema: `{"date": "YYYY-MM-DD", "meetingType": one of ${JSON.stringify(MEET_TYPES)}, "response": "Yes"|"Counter-offer"|"Considering"|"No", "agreedAmount": number|null, "summary": string, "nextStep": string|null, "nextDue": "YYYY-MM-DD"|null}`,
+    rules: `agreedAmount is the verbal figure the investor agreed to (the counter-offer amount if they countered), else null. If the officer mentions the pledge to follow, nextStep is like "Record the pledge when Maria confirms" with a due date if one is implied (e.g. "next week" = 7 days from today).`,
+    fields: [
+      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: MEET_TYPES, req: true },
+      { k: "asked", label: "Ask made", fixed: true },
+      { k: "response", label: "Response", type: "select", opts: ["Yes", "Counter-offer", "Considering", "No"], req: true },
+      { k: "agreedAmount", label: "Agreed amount (verbal)", type: "money" }, { k: "summary", label: "Summary", type: "area", req: true },
+      { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
+    pairs: [["date", "meetingType"]] },
+  { id: "pledge", short: "Record the pledge", title: "Record pledge",
+    say: "Maria confirmed her pledge by email today. Fifty thousand over two years, paid annually, first payment of twenty-five thousand due January 15th.",
+    task: "Record the Pledge on the opportunity.",
+    schema: `{"amount": number, "confirmedBy": "Email"|"Phone"|"In person", "confirmedDate": "YYYY-MM-DD", "installments": number, "frequency": "Annual"|"Quarterly"|"Monthly"|"One payment", "firstAmount": number|null, "firstDue": "YYYY-MM-DD"}`,
+    rules: `installments is the number of payments (e.g. 2 years paid annually = 2). If firstAmount is not stated, use amount / installments. Resolve dates like "January 15th" to the next such date after today.`,
+    fields: [
+      { k: "amount", label: "Pledge amount", type: "money", req: true }, { k: "fund", label: "Fund", fixed: true },
+      { k: "confirmedBy", label: "Confirmed by", type: "select", opts: ["Email", "Phone", "In person"], req: true }, { k: "confirmedDate", label: "Confirmed on", type: "date", req: true },
+      { k: "installments", label: "Payments", type: "money", num: true }, { k: "frequency", label: "Frequency", type: "select", opts: ["Annual", "Quarterly", "Monthly", "One payment"] },
+      { k: "firstAmount", label: "First payment", type: "money" }, { k: "firstDue", label: "First payment due", type: "date", req: true } ],
+    pairs: [["confirmedBy", "confirmedDate"], ["installments", "frequency"], ["firstAmount", "firstDue"]],
+    left: "No pledge card is needed. The pledge is confirmed by email, phone or in person." }
+];
+
+/* ---------- state ---------- */
+const KEY = "veleer-voice-demo-v1";
+const fresh = () => ({ step: 0, screen: "home", contact: null, interactions: [], tasks: [], opp: null, history: [], settings: { apiKey: "", model: "claude-haiku-5-5" } });
+let S = fresh();
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(fresh(), JSON.parse(raw)); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const fullName = () => S.contact ? `${S.contact.first} ${S.contact.last}` : "";
+const oppName = () => S.contact ? `${S.contact.last}, ${S.contact.first} - ${new Date().getFullYear()}` : "";
+const log = (text, via = true) => S.history.unshift({ at: new Date().toISOString(), text, via });
+
+/* ---------- AI ---------- */
+let sampleFn = null, aiProbe = "checking";
+(async () => {
+  try {
+    if (window.claude && typeof window.claude.use === "function") {
+      sampleFn = await window.claude.use("sample");
+    }
+  } catch (e) { sampleFn = null; }
+  aiProbe = "done"; render();
+})();
+const aiSource = () => sampleFn ? "claude" : (S.settings.apiKey ? "api" : "none");
+
+function buildPrompt(step, transcript) {
+  const ctx = { today: todayISO() + " (" + longToday() + ")", giftOfficer: OFFICER,
+    contact: S.contact ? { name: fullName(), capacity: S.contact.capacity || null } : null,
+    opportunity: S.opp ? { name: S.opp.name, stage: S.opp.stage, fund: S.opp.fund, plannedAsk: S.opp.ask || null } : null };
+  return `You fill in a draft form in Veleer, a fundraising CRM, from what a gift officer said out loud on their phone. The officer will check the draft and tap Save, so fill only what they actually said or what clearly follows; use null when unsure.
+
+Task: ${step.task}
+Rules: ${step.rules}
+Context: ${JSON.stringify(ctx)}
+
+What the officer said (speech recognition, may contain small errors):
+"""${transcript}"""
+
+Reply with ONLY a JSON object of this shape, no prose and no code fences:
+${step.schema}`;
+}
+
+function parseJSON(text) {
+  const t = String(text).replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
+  const a = t.indexOf("{"), b = t.lastIndexOf("}");
+  return JSON.parse(a >= 0 ? t.slice(a, b + 1) : t);
+}
+
+async function askClaude(prompt, signal) {
+  if (sampleFn) {
+    const r = await sampleFn(prompt, { modelTier: "quick", signal, cache: false });
+    return parseJSON(r.text);
+  }
+  if (S.settings.apiKey) {
+    const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", signal,
+      headers: { "content-type": "application/json", "x-api-key": S.settings.apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: S.settings.model || "claude-haiku-5-5", max_tokens: 800, messages: [{ role: "user", content: prompt }] }) });
+    if (!res.ok) { const body = await res.text().catch(() => ""); throw { code: "api_" + res.status, message: body.slice(0, 200) }; }
+    const j = await res.json();
+    return parseJSON((j.content || []).map(c => c.text || "").join(""));
+  }
+  throw { code: "no_ai" };
+}
+const aiErrorText = (e) => {
+  const c = e && e.code;
+  if (c === "no_ai") return "Claude isn't connected on this copy of the demo. Open Settings (the gear) and add an API key.";
+  if (c === "not_granted") return "Claude wasn't allowed to fill drafts in this view. Reload the page and allow it when asked.";
+  if (c === "rate_limited") return "Claude is busy for a moment. Wait a few seconds and tap Try again.";
+  if (c === "api_401") return "The API key in Settings was refused. Check it and try again.";
+  if (c === "cancelled") return "Stopped.";
+  if (e instanceof SyntaxError) return "Claude's answer couldn't be read as a draft. Tap Try again.";
+  return "Claude couldn't fill the draft (" + (c || (e && e.message) || "network") + "). Check the connection and tap Try again.";
+};
+
+/* ---------- speech ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, finalText = "", interimText = "", micBlocked = false;
+
+/* ---------- voice sheet ---------- */
+let V = null; // { step, mode: listen|type|thinking|draft|error, transcript, data, err, ctl }
+function openVoice() {
+  if (S.step >= STEPS.length) { toast("The demo journey is complete. Restart it from Settings."); return; }
+  const step = STEPS[S.step];
+  V = { step, mode: (SR && !micBlocked) ? "listen" : "type", transcript: "" };
+  renderOverlay();
+  if (V.mode === "listen") startListening();
+}
+function closeVoice() { stopRec(true); if (V && V.ctl) V.ctl.abort(); V = null; renderOverlay(); }
+function startListening() {
+  finalText = ""; interimText = "";
+  try {
+    rec = new SR(); rec.lang = "en-US"; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = (ev) => {
+      let fin = "", int = "";
+      for (let i = 0; i < ev.results.length; i++) { const r = ev.results[i]; if (r.isFinal) fin += r[0].transcript; else int += r[0].transcript; }
+      finalText = fin; interimText = int; paintTranscript();
+    };
+    rec.onerror = (ev) => {
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed" || ev.error === "audio-capture") {
+        micBlocked = true; rec = null;
+        if (V) { V.mode = "type"; V.note = "The microphone isn't available here, so use your keyboard's dictation key (the mic on the keyboard), or type."; renderOverlay(); }
+      }
+    };
+    rec.onend = () => { if (rec && V && V.mode === "listen" && !V.stopping) { try { rec.start(); } catch (e) {} } };
+    rec.start();
+  } catch (e) { micBlocked = true; V.mode = "type"; renderOverlay(); }
+}
+function stopRec(abort) { if (rec) { const r = rec; rec = null; try { abort ? r.abort() : r.stop(); } catch (e) {} } }
+function paintTranscript() {
+  const el = document.getElementById("tx"); if (!el) return;
+  el.innerHTML = (finalText || interimText) ? `${esc(finalText)} <span class="interim">${esc(interimText)}</span>` : `<span class="interim">Listening…</span>`;
+  const d = document.getElementById("doneBtn"); if (d) d.disabled = !(finalText + interimText).trim();
+}
+function finishListening() {
+  if (!V) return; V.stopping = true;
+  const text = (finalText + " " + interimText).trim();
+  stopRec(false);
+  if (!text) return;
+  runAI(text);
+}
+async function runAI(text) {
+  V.transcript = text; V.mode = "thinking"; V.err = null; renderOverlay();
+  V.ctl = new AbortController();
+  try {
+    const data = await askClaude(buildPrompt(V.step, text), V.ctl.signal);
+    if (!V) return;
+    V.data = prefill(V.step, data); V.fromVoice = new Set(Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined));
+    V.mode = "draft"; renderOverlay();
+  } catch (e) {
+    if (!V) return;
+    V.mode = "error"; V.err = aiErrorText(e); renderOverlay();
+  }
+}
+function prefill(step, d) {
+  const out = Object.assign({}, d);
+  if (step.id === "opportunity") { out.name = oppName(); out.officer = OFFICER; if (!out.fund && S.contact && S.contact.interest) out.fund = S.contact.interest; }
+  if (step.id === "plan") { out.officer = OFFICER; }
+  if (step.id === "ask") { out.asked = S.opp && S.opp.ask ? `${money(S.opp.ask.amount)} · ${S.opp.ask.askType} · ${S.opp.ask.fund}` : ""; }
+  if (step.id === "pledge") { out.fund = S.opp && S.opp.ask ? S.opp.ask.fund : (S.opp && S.opp.fund) || ""; if (out.firstAmount == null && out.amount && out.installments) out.firstAmount = Math.round(out.amount / out.installments); }
+  return out;
+}
+
+function fieldHTML(f, d, fromVoice) {
+  const v = d[f.k];
+  const voiced = fromVoice.has(f.k) && !f.fixed;
+  const missing = f.req && (v === null || v === undefined || v === "");
+  const cls = ["fld", voiced ? "v" : "", missing ? "miss" : "", f.check && v ? "chk" : ""].join(" ");
+  const tag = voiced ? `<span class="via">${mic(12)} <span class="vt">from voice</span></span>` : (f.fixed ? `<span class="via" style="color:var(--muted)">filled in</span>` : "");
+  const lab = `<div class="lbl">${esc(f.label)}${f.req ? '<span class="req">*</span>' : ""}${tag}</div>`;
+  const id = "f_" + f.k;
+  let input;
+  if (f.type === "bool") return `<div class="${cls}"><label class="tg" for="${id}"><input type="checkbox" id="${id}" ${v ? "checked" : ""}> ${esc(f.label)}${voiced ? ` <span class="via" style="margin-left:auto">${mic(12)} from voice</span>` : ""}</label></div>`;
+  if (f.type === "select") input = `<select id="${id}">${(f.opts.includes(v) || !v ? f.opts : [v, ...f.opts]).map(o => `<option value="${esc(o)}" ${o === (v || "") ? "selected" : ""}>${esc(o === "" ? "Not set" : (f.fmt ? f.fmt(o) : o))}</option>`).join("")}</select>`;
+  else if (f.type === "area") input = `<textarea id="${id}">${esc(v)}</textarea>`;
+  else if (f.type === "date") input = `<input type="date" id="${id}" value="${esc(v || "")}">`;
+  else if (f.type === "money") input = `<input type="text" inputmode="decimal" id="${id}" value="${v == null || v === "" ? "" : esc(f.num ? v : money(v))}">`;
+  else input = `<input type="text" id="${id}" value="${esc(v)}" ${f.fixed ? "readonly" : ""}>`;
+  return `<div class="${cls}">${lab}${input}${f.check && v ? `<div class="cn">! Check this. ${esc(f.check)}</div>` : ""}</div>`;
+}
+function draftHTML() {
+  const st = V.step, d = V.data, fv = V.fromVoice;
+  const paired = new Set((st.pairs || []).flat());
+  let body = "";
+  for (const f of st.fields) {
+    if (paired.has(f.k)) {
+      const pair = st.pairs.find(p => p[0] === f.k);
+      if (pair) body += `<div class="two">${pair.map(k => fieldHTML(st.fields.find(x => x.k === k), d, fv)).join("")}</div>`;
+      continue;
+    }
+    body += fieldHTML(f, d, fv);
+  }
+  const sub = st.id === "contact" ? `Contact · added by ${OFFICER}` : st.id === "opportunity" ? `For ${esc(fullName())}` : `${esc(S.opp ? S.opp.name : fullName())}`;
+  const dupe = st.id === "contact" ? `<div class="left">Checked for duplicates: no existing contact matches ${esc((d.first || "") + " " + (d.last || ""))}.</div>` : "";
+  return `<div class="grab"></div>
+  <div class="sh"><div style="min-width:0"><div class="vh">${mic(15)} Draft from voice · check and save</div><h3>${esc(st.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
+  <div class="sb">
+    <details class="said"><summary>View transcript</summary><div style="margin-top:6px">“${esc(V.transcript)}”</div></details>
+    ${dupe}
+    <form id="draftForm" novalidate>${body}</form>
+    ${st.left ? `<div class="left">${esc(st.left)}</div>` : ""}
+    <div class="err" id="draftErr" hidden></div>
+    <button class="btn quiet" data-act="redo">${mic(16)} Say it again</button>
+  </div>
+  <div class="savebar"><button class="btn blue" data-act="save">${st.id === "contact" ? "Save contact" : st.id === "pledge" ? "Record pledge" : "Save"}</button><small>Nothing is saved until you tap ${st.id === "contact" ? "Save contact" : st.id === "pledge" ? "Record pledge" : "Save"}</small></div>`;
+}
+function readDraft() {
+  const out = Object.assign({}, V.data);
+  for (const f of V.step.fields) {
+    const el = document.getElementById("f_" + f.k); if (!el || f.fixed) continue;
+    if (f.type === "bool") out[f.k] = el.checked;
+    else if (f.type === "money") out[f.k] = toNum(el.value);
+    else out[f.k] = el.value.trim();
+  }
+  return out;
+}
+
+function renderOverlay() {
+  const host = document.getElementById("overlay");
+  if (!V) { host.innerHTML = ""; return; }
+  const st = V.step;
+  let inner = "";
+  const head = (sub) => `<div class="grab"></div><div class="sh"><div><div class="vh">${mic(15)} Voice · step ${S.step + 1} of ${STEPS.length}</div><h3>${esc(st.short)}</h3>${sub ? `<div class="s">${sub}</div>` : ""}</div><button class="x" data-act="close" aria-label="Close">×</button></div>`;
+  const hint = `<div class="hint"><b>Try saying:</b> “${esc(st.say)}”</div>`;
+  if (V.mode === "listen") inner = head("Speak naturally, then tap Done") + `<div class="listen"><div class="bigmic">${mic(38)}</div><div class="wave"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="transcript" id="tx" aria-live="polite"><span class="interim">Listening…</span></div>
+      <div class="btns" style="width:100%"><button class="btn quiet" data-act="type">Type instead</button><button class="btn blue" id="doneBtn" data-act="done" disabled>Done</button></div>${hint}</div>`;
+  else if (V.mode === "type") inner = head("Tap the mic on your keyboard to dictate, or type") + `<div class="sb">${V.note ? `<div class="note">${esc(V.note)}</div>` : ""}
+      <textarea class="say-in" id="typed" placeholder="Say or type what happened…">${esc(V.transcript || "")}</textarea>
+      <button class="btn blue" data-act="send">Fill the draft</button>${hint}${SR && !micBlocked ? `<button class="btn quiet" data-act="listen">${mic(16)} Use the microphone</button>` : ""}</div>`;
+  else if (V.mode === "thinking") inner = head("") + `<div class="sb"><div class="said">“${esc(V.transcript)}”</div><div class="thinking"><div class="dots"><i></i><i></i><i></i></div> Claude is filling the draft…</div><button class="btn quiet" data-act="close">Cancel</button></div>`;
+  else if (V.mode === "error") inner = head("") + `<div class="sb"><div class="said">“${esc(V.transcript)}”</div><div class="err">${esc(V.err)}</div><div class="btns"><button class="btn quiet" data-act="edit">Edit what I said</button><button class="btn blue" data-act="retry">Try again</button></div></div>`;
+  else if (V.mode === "draft") inner = draftHTML();
+  host.innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(st.short)}">${inner}</div></div>`;
+  if (V.mode === "listen") paintTranscript();
+  if (V.mode === "type") { const t = document.getElementById("typed"); if (t) setTimeout(() => t.focus(), 50); }
+}
+
+document.getElementById("overlay").addEventListener("click", (e) => {
+  const a = e.target.closest("[data-act]"); if (!a) return;
+  const act = a.dataset.act;
+  if (act === "scrim" && e.target !== a) return;
+  if (act === "close" || act === "scrim") { if (V && V.mode === "draft" && act === "scrim") return; closeVoice(); }
+  else if (act === "done") finishListening();
+  else if (act === "type") { V.stopping = true; stopRec(true); V.transcript = (finalText + " " + interimText).trim(); V.mode = "type"; V.note = ""; renderOverlay(); }
+  else if (act === "listen") { V.mode = "listen"; V.stopping = false; renderOverlay(); startListening(); }
+  else if (act === "send") { const t = document.getElementById("typed").value.trim(); if (t) runAI(t); }
+  else if (act === "retry") runAI(V.transcript);
+  else if (act === "edit") { V.mode = "type"; V.note = ""; renderOverlay(); }
+  else if (act === "redo") { V.transcript = ""; V.stopping = false; V.mode = (SR && !micBlocked) ? "listen" : "type"; renderOverlay(); if (V.mode === "listen") startListening(); }
+  else if (act === "save") saveDraft();
+});
+
+function saveDraft() {
+  const d = readDraft(), st = V.step;
+  const miss = st.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));
+  if (miss.length) { const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = "Fill in " + miss.map(f => f.label).join(", ") + " before saving."; return; }
+  const undo = JSON.stringify(S);
+  APPLY[st.id](d);
+  S.step++; save();
+  V = null; renderOverlay(); render();
+  window.scrollTo(0, 0);
+  toast(SAVED[st.id], () => { S = Object.assign(fresh(), JSON.parse(undo)); save(); render(); });
+}
+const SAVED = { contact: "Contact saved", interaction: "Interaction report saved", opportunity: "Opportunity created", plan: "Ask planned", ask: "Ask recorded", pledge: "Pledge recorded" };
+
+const APPLY = {
+  contact(d) {
+    const interest = FUNDS.find(f => (d.howMet || "").toLowerCase().includes(f.toLowerCase().replace(" fund", ""))) || null;
+    S.contact = { first: d.first, last: d.last, email: d.email, mobile: d.mobile, permEmail: !!d.permEmail, permCalls: !!d.permCalls, permText: !!d.permText,
+      permSource: d.permSource, howMet: d.howMet, capacity: null, status: "Prospect", added: todayISO(), interest };
+    log(`Contact added by ${OFFICER}`); S.screen = "contact";
+  },
+  interaction(d) {
+    S.interactions.unshift({ date: d.date, type: d.meetingType, summary: d.summary, substantive: !!d.substantive, kind: "meeting" });
+    if (d.capacity) { S.contact.capacity = d.capacity; log(`Capacity rated ${d.capacity} (${CAPACITY[d.capacity]})`); }
+    log(`Interaction report: ${d.meetingType}, ${fmtDate(d.date)}`);
+    if (d.nextStep) S.tasks.unshift({ text: d.nextStep, due: d.nextDue, done: false });
+    S.screen = "contact";
+  },
+  opportunity(d) {
+    S.opp = { name: oppName(), officer: OFFICER, stage: "Qualification", fund: d.fund || null, potential: d.potential, notes: d.notes, ask: null, asks: [], pledge: null, created: todayISO() };
+    log(`Opportunity created in Qualification`);
+    if (d.moveToCultivation) moveToCultivation(true);
+    S.screen = "opp";
+  },
+  plan(d) {
+    S.opp.ask = { fund: d.fund, campaign: d.campaign, plannedDate: d.plannedDate, amount: d.amount, askType: d.askType || "Outright", participants: d.participants, status: "Planned" };
+    S.opp.asks.unshift(Object.assign({}, S.opp.ask));
+    if (S.opp.stage === "Qualification") S.opp.stage = "Cultivation";
+    S.opp.stage = "Ask Planning"; log(`Ask planned: ${money(d.amount)} for ${d.fund}, ${fmtDate(d.plannedDate)}. Moved to Ask Planning`);
+    S.tasks.unshift({ text: `Make the ask: ${money(d.amount)} for ${d.fund}`, due: d.plannedDate, done: false });
+    S.screen = "opp";
+  },
+  ask(d) {
+    S.interactions.unshift({ date: d.date, type: d.meetingType, summary: d.summary, substantive: true, kind: "ask" });
+    S.tasks.forEach(t => { if (/^Make the ask/.test(t.text)) t.done = true; });
+    const a = S.opp.ask; a.status = "Asked"; a.askedOn = d.date; a.response = d.response;
+    if (d.response === "Yes" || d.response === "Counter-offer") {
+      const agreed = d.agreedAmount || a.amount;
+      if (d.response === "Counter-offer") { a.status = "Countered"; S.opp.asks.unshift({ fund: a.fund, campaign: a.campaign, amount: agreed, askType: a.askType, status: "Agreed, pledge to follow", plannedDate: d.date }); S.opp.ask = S.opp.asks[0]; }
+      else { a.status = "Agreed, pledge to follow"; a.amount = agreed; }
+    }
+    S.opp.asks[0] = Object.assign({}, S.opp.ask);
+    S.opp.stage = "Ask Made"; log(`Ask recorded: ${d.response}${d.agreedAmount ? ", " + money(d.agreedAmount) : ""}. Moved to Ask Made`);
+    if (d.nextStep) S.tasks.unshift({ text: d.nextStep, due: d.nextDue, done: false });
+    S.screen = "opp";
+  },
+  pledge(d) {
+    S.opp.pledge = { amount: d.amount, confirmedBy: d.confirmedBy, confirmedDate: d.confirmedDate, installments: toNum(d.installments) || 1, frequency: d.frequency, firstAmount: d.firstAmount || d.amount, firstDue: d.firstDue };
+    S.opp.ask.status = "Pledged"; S.opp.asks[0] = Object.assign({}, S.opp.ask);
+    S.opp.stage = "Commitment"; S.contact.status = "Investor";
+    S.tasks.forEach(t => { if (/pledge/i.test(t.text)) t.done = true; });
+    log(`Pledge recorded: ${money(d.amount)}, confirmed by ${String(d.confirmedBy).toLowerCase()} on ${fmtDate(d.confirmedDate)}. Moved to Commitment`);
+    S.screen = "opp";
+  }
+};
+function moveToCultivation(viaVoice) { S.opp.stage = "Cultivation"; log("Moved to Cultivation (criteria met: capacity rating and a substantive interaction)", viaVoice); }
+
+/* ---------- toast ---------- */
+let toastTimer = null;
+function toast(text, undo) {
+  const h = document.getElementById("toastHost");
+  h.innerHTML = `<div class="toast" role="status"><span>${esc(text)}</span>${undo ? '<button id="undoBtn">Undo</button>' : ""}</div>`;
+  if (undo) document.getElementById("undoBtn").onclick = () => { undo(); h.innerHTML = ""; };
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { h.innerHTML = ""; }, 6000);
+}
+
+/* ---------- screens ---------- */
+const go = (s) => { S.screen = s; save(); render(); window.scrollTo(0, 0); };
+function topbar(title, back) {
+  return `<header class="top">${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}<h1>${esc(title)}</h1>
+  <button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+  <div class="chip">${OFFICER_INITIALS}</div></header>`;
+}
+const asked = () => S.opp && S.opp.ask && S.opp.ask.status !== "Planned" ? S.opp.ask.amount : 0;
+const pledged = () => S.opp && S.opp.pledge ? S.opp.pledge.amount : 0;
+function stageButton() {
+  if (!S.opp) return "";
+  const map = { Qualification: "Log interaction", Cultivation: "+ Add ask", "Ask Planning": "Record the ask", "Ask Made": "Record pledge", Commitment: "Record payment" };
+  const label = map[S.opp.stage]; if (!label) return "";
+  if (S.opp.stage === "Commitment") return `<button class="btn out" disabled title="Outside this demo">${label}</button>`;
+  return `<button class="btn blue" data-act2="voice">${mic(18)} ${label}</button>`;
+}
+function needsAttention() {
+  const rows = [];
+  if (S.opp && S.opp.stage === "Qualification" && S.contact && S.contact.capacity && S.interactions.some(i => i.substantive))
+    rows.push(`<div class="row tap" data-go="opp"><div class="t"><span class="alert ok">Ready for Cultivation</span><div class="s" style="margin-top:5px">${esc(S.opp.name)}</div></div><span class="chev">›</span></div>`);
+  if (S.opp && S.opp.stage === "Ask Made") rows.push(`<div class="row tap" data-go="opp"><div class="t"><span class="alert warn">Pledge to record</span><div class="s" style="margin-top:5px">${esc(S.opp.name)} · agreed ${money(asked())}</div></div><span class="chev">›</span></div>`);
+  S.tasks.filter(t => !t.done).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(fullName())}</div></div><span class="chev">›</span></div>`));
+  return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
+}
+function journey() {
+  return `<ol class="steps">${STEPS.map((s, i) => `<li class="${i < S.step ? "done" : i === S.step ? "on" : ""}"><span class="n">${i < S.step ? "✓" : i + 1}</span><div><b>${esc(s.short)}</b>${i === S.step ? `<div class="say">Tap the mic and say something like: “${esc(s.say)}”</div>` : ""}</div></li>`).join("")}</ol>`;
+}
+function homeScreen() {
+  const finished = S.step >= STEPS.length;
+  return topbar("Home") + `<main>
+  ${finished ? doneCard() : ""}
+  <section class="panel"><div class="ph"><h2>Voice demo</h2><span class="meta">${Math.min(S.step, STEPS.length)} of ${STEPS.length} done</span></div>${journey()}</section>
+  <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
+  <section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">this fiscal year</span></div>
+    <div class="tiles"><div class="tile"><div class="k">Open opps</div><div class="v">${S.opp && S.opp.stage !== "Closed" ? 1 : 0}</div></div>
+    <div class="tile ${asked() ? "hl" : ""}"><div class="k">Asked</div><div class="v">${money(asked())}</div></div>
+    <div class="tile ${pledged() ? "hl" : ""}"><div class="k">Pledged</div><div class="v">${money(pledged())}</div></div></div>
+    ${S.opp ? `<div class="row tap" data-go="opp"><div class="t">${esc(S.opp.name)}<div class="s">${esc(S.opp.stage)}${S.opp.fund ? " · " + esc(S.opp.fund) : ""}</div></div><span class="chev">›</span></div>` : ""}
+  </section>
+  ${aiBanner()}
+  </main>`;
+}
+function aiBanner() {
+  if (aiProbe === "checking" || aiSource() !== "none") return "";
+  return `<section class="note" style="border-radius:12px">Claude isn't connected on this copy of the demo, so voice drafts can't be filled yet. <button class="btn quiet" data-go="settings" style="margin-top:8px;width:100%">Open Settings</button></section>`;
+}
+function doneCard() {
+  return `<section class="done-card"><h2>Pledge recorded</h2><div>${esc(fullName())} went from a new contact to a ${money(pledged())} pledge, all by voice. The opportunity stays in Commitment until the first payment arrives.</div>
+  <div class="btns"><button class="btn quiet" data-go="board">See the board</button><button class="btn out" data-act2="restart">Run it again</button></div></section>`;
+}
+function contactScreen() {
+  const c = S.contact;
+  if (!c) return topbar("Contacts") + `<main><section class="panel"><div class="empty">No contacts yet in this demo. Tap the mic and add one by voice.</div></section></main>`;
+  const flag = (on, label) => `<span class="flag ${on ? "yes" : "no"}">${on ? "✓" : "✕"} ${label}</span>`;
+  const nextStep = S.step < STEPS.length && S.step <= 2 ? `<section class="next"><b>What next?</b><div style="font-size:14px">${esc(STEPS[S.step].short)}. Tap the mic and say it.</div><button class="btn blue" data-act2="voice">${mic(18)} ${esc(STEPS[S.step].short)}</button></section>` : "";
+  return topbar("Contact", "home") + `<main>
+  <section class="panel"><div class="hero"><h2>${esc(fullName())}</h2>
+    <div class="flags"><span class="pill">${esc(c.status)}</span><span class="pill">${c.capacity ? "Capacity " + c.capacity + " · " + CAPACITY[c.capacity] : "Capacity not rated"}</span></div>
+    <div class="flags">${flag(c.permEmail, "Email")}${flag(c.permCalls, "Calls")}${flag(c.permText, c.permText ? "Texts" : "Texts not permitted")}</div>
+    ${c.permSource ? `<div class="s" style="font-size:12.5px;color:var(--muted)">Permission source: ${esc(c.permSource)} · recorded by voice</div>` : ""}
+  </div>
+  <dl class="kv"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
+  ${nextStep}
+  ${S.opp ? `<section class="panel"><div class="ph"><h2>Opportunity</h2></div><div class="row tap" data-go="opp"><div class="t"><span class="lnk">${esc(S.opp.name)}</span><div class="s">${esc(S.opp.stage)}${S.opp.pledge ? " · pledged " + money(S.opp.pledge.amount) : ""}</div></div><span class="chev">›</span></div></section>` : ""}
+  <section class="panel"><div class="ph"><h2>Interactions</h2><span class="meta">${S.interactions.length}</span></div>
+  ${S.interactions.length ? S.interactions.map(i => `<div class="row"><div class="t">${esc(i.type)} · ${fmtDate(i.date)} ${i.kind === "ask" ? '<span class="alert info">Ask made</span>' : ""} <span class="via">${mic(11)} via voice</span><div class="s">${esc(i.summary)}</div></div></div>`).join("") : `<div class="empty">No interactions yet.</div>`}</section>
+  ${historyPanel()}
+  </main>`;
+}
+function oppScreen() {
+  const o = S.opp;
+  if (!o) return topbar("Opportunities") + `<main><section class="panel"><div class="empty">No opportunities yet. They appear here once you create one by voice.</div></section></main>`;
+  const idx = STAGES.indexOf(o.stage);
+  let alert = "";
+  if (o.stage === "Qualification") alert = `<span class="alert ok">Ready for Cultivation</span>`;
+  if (o.stage === "Ask Planning" && o.ask) alert = `<span class="alert info">Ask planned for ${fmtDate(o.ask.plannedDate)}</span>`;
+  if (o.stage === "Ask Made") alert = `<span class="alert warn">Pledge to record</span>`;
+  if (o.stage === "Commitment" && o.pledge) alert = `<span class="alert ok">First payment of ${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</span>`;
+  return topbar("Opportunity", "home") + `<main>
+  <section class="panel"><div class="hero"><h2>${esc(o.name)}</h2><div class="s" style="color:var(--muted);font-size:13px">${esc(fullName())} · ${OFFICER}${o.fund ? " · " + esc(o.fund) : ""}</div>${alert ? `<div>${alert}</div>` : ""}</div>
+    <div class="track">${STAGES.map((s, i) => `<div class="${i < idx ? "done" : i === idx ? "on" : ""}">${s.replace("Qualification", "Qualif.").replace("Cultivation", "Cultiv.")}</div>`).join("")}</div>
+    <div class="tiles"><div class="tile"><div class="k">Potential</div><div class="v">${money(o.potential)}</div></div><div class="tile ${asked() ? "hl" : ""}"><div class="k">Asked</div><div class="v">${money(asked())}</div></div><div class="tile ${pledged() ? "hl" : ""}"><div class="k">Pledged</div><div class="v">${money(pledged())}</div></div></div>
+    <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:8px">${o.stage === "Qualification" ? `<button class="btn blue" data-act2="cultivate">Move to Cultivation</button>` : stageButton()}</div>
+  </section>
+  ${S.step >= STEPS.length ? doneCard() : ""}
+  ${o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd></dl></section>` : ""}
+  ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(a => `<div class="row"><div class="t">${money(a.amount)} · ${esc(a.askType)} · ${esc(a.fund)}<div class="s">${esc(a.campaign)} · ${a.status === "Planned" ? "planned for " + fmtDate(a.plannedDate) : esc(a.status)}</div></div></div>`).join("")}</section>` : ""}
+  ${historyPanel()}
+  </main>`;
+}
+function historyPanel() {
+  if (!S.history.length) return "";
+  return `<section class="panel"><div class="ph"><h2>History</h2></div>${S.history.slice(0, 8).map(h => `<div class="row"><div class="t" style="font-size:14px">${esc(h.text)}<div class="s">${new Date(h.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${OFFICER}${h.via ? " · via voice" : ""}</div></div></div>`).join("")}</section>`;
+}
+function boardScreen() {
+  const others = [
+    { stage: "Qualification", n: "Okafor, James - 2026", a: "Potential $20,000" }, { stage: "Cultivation", n: "Abernathy, Ruth - 2026", a: "Potential $75,000" },
+    { stage: "Cultivation", n: "Sandaruwan, Priya - 2026", a: "Potential $25,000" }, { stage: "Ask Planning", n: "Vasquez, Elena - 2026", a: "Ask $40,000" },
+    { stage: "Ask Made", n: "Ito, Ken - 2026", a: "Asked $30,000" } ];
+  return topbar("Opportunities") + `<main>
+  <section class="panel"><div class="ph"><h2>My open opportunities</h2><span class="meta">Board</span></div>
+  <div class="boardwrap"><div class="board">${STAGES.slice(0, 5).map(s => {
+    const mine = S.opp && S.opp.stage === s ? `<div class="card me" data-go="opp"><b>${esc(S.opp.name)}</b><span class="amt">${S.opp.pledge ? "Pledged " + money(S.opp.pledge.amount) : asked() ? "Asked " + money(asked()) : S.opp.ask ? "Ask " + money(S.opp.ask.amount) : "Potential " + money(S.opp.potential)}</span><span class="via">${mic(11)} updated by voice</span></div>` : "";
+    const os = others.filter(x => x.stage === s);
+    return `<div class="col"><h3>${s} <span>${os.length + (mine ? 1 : 0)}</span></h3><div style="display:flex;flex-direction:column;gap:6px">${mine}${os.map(x => `<div class="card"><b>${esc(x.n)}</b><span class="amt">${esc(x.a)}</span></div>`).join("")}</div></div>`;
+  }).join("")}</div></div>
+  <div class="empty" style="font-size:12.5px">Other cards are example data. Cards move only when something is recorded.</div></section></main>`;
+}
+function tasksScreen() {
+  return topbar("Tasks") + `<main><section class="panel"><div class="ph"><h2>My tasks</h2><span class="meta">${S.tasks.filter(t => !t.done).length} open</span></div>
+  ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(fullName())}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. A next step you mention by voice creates one.</div>`}</section></main>`;
+}
+function settingsScreen() {
+  const src = aiSource();
+  const line = src === "claude" ? `<span class="dot g"></span> Claude is connected through your Claude account.` : src === "api" ? `<span class="dot g"></span> Claude is connected with the API key below.` : aiProbe === "checking" ? `<span class="dot a"></span> Checking for Claude…` : `<span class="dot r"></span> Claude isn't connected. Add an API key below.`;
+  const micLine = !SR ? `<span class="dot a"></span> This browser has no speech recognition. Use the keyboard's dictation key.` : micBlocked ? `<span class="dot a"></span> The microphone was blocked here. Keyboard dictation still works.` : `<span class="dot g"></span> Speech recognition is available. The browser asks for the mic the first time.`;
+  return topbar("Settings", "home") + `<main>
+  <section class="panel"><div class="ph"><h2>Demo setup</h2></div><div class="sb set">
+    <div class="status-line">${line}</div><div class="status-line">${micLine}</div>
+    ${src === "claude" ? "" : `<label for="apiKey">Anthropic API key (kept only on this phone)<input id="apiKey" type="password" autocomplete="off" value="${esc(S.settings.apiKey)}" placeholder="sk-ant-…"></label>
+    <label for="model">Model<select id="model">${["claude-haiku-5-5", "claude-sonnet-5-5"].map(m => `<option ${m === S.settings.model ? "selected" : ""}>${m}</option>`).join("")}</select></label>
+    <button class="btn blue" data-act2="savekey">Save</button>`}
+  </div></section>
+  <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Clears Maria and everything recorded, and starts the journey again at step 1.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
+  </main>`;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  const s = S.screen;
+  app.innerHTML = s === "contact" ? contactScreen() : s === "opp" ? oppScreen() : s === "board" ? boardScreen() : s === "tasks" ? tasksScreen() : s === "settings" ? settingsScreen() : homeScreen();
+  const tab = (id, label, icon) => `<button class="tab ${s === id || (id === "board" && s === "opp") ? "on" : ""}" data-go="${id}">${icon}<span>${label}</span></button>`;
+  const I = (p) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  document.getElementById("tabs").innerHTML =
+    tab("home", "Home", I('<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>')) +
+    tab("contact", "Contacts", I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>')) +
+    `<button class="micbtn ${S.step < STEPS.length ? "pulse" : ""}" data-act2="voice" aria-label="Speak">${mic(28)}</button>` +
+    tab("board", "Opportunities", I('<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/>')) +
+    tab("tasks", "Tasks", I('<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'));
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#overlay")) return;
+  const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
+  const a = e.target.closest("[data-act2]"); if (!a) return;
+  const act = a.dataset.act2;
+  if (act === "voice") openVoice();
+  else if (act === "cultivate") { moveToCultivation(false); save(); render(); toast("Moved to Cultivation"); }
+  else if (act === "restart") { const keep = S.settings; S = fresh(); S.settings = keep; save(); render(); toast("Demo restarted"); }
+  else if (act === "savekey") { S.settings.apiKey = document.getElementById("apiKey").value.trim(); S.settings.model = document.getElementById("model").value; save(); render(); toast("Saved"); }
+});
+
+render();
+window.__demo = { get state() { return S; }, STEPS, setSample(fn) { sampleFn = fn; render(); } };
+})();
+</script>
+
+</body></html>
