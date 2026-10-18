@@ -238,6 +238,8 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 .flowtile .fti { width: 40px; height: 40px; border-radius: 10px; background: var(--brand-soft); color: var(--brand); display: flex; align-items: center; justify-content: center; flex: none; }
 .flowtile .ftt { flex: 1; } .flowtile .ftt b { display: block; font-size: 15px; } .flowtile .ftt span { font-size: 13px; color: var(--muted); }
 .flowlink { display: block; padding: 0 14px 12px; font-size: 13.5px; color: var(--brand); cursor: pointer; font-weight: 600; }
+.updbar { position: fixed; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top, 0px)); z-index: 60; display: flex; align-items: center; gap: 10px; background: var(--brand); color: #fff; border-radius: 12px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.25); font-size: 14px; }
+.updbar b { flex: 1; } .updbar button { border: 0; border-radius: 9px; padding: 8px 12px; font: inherit; font-weight: 700; background: #fff; color: var(--brand); cursor: pointer; }
 </style>
 
 <div class="app" id="app"></div>
@@ -1033,6 +1035,7 @@ function settingsScreen() {
     <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option ${v === S.settings.voice ? "selected" : ""}>${v}</option>`).join("")}</select></label>
     <button class="btn blue" data-act2="savexai">Save</button>
   </div></section>
+  <section class="panel"><div class="ph"><h2>Version</h2><span class="meta">${esc(buildLabel())}</span></div><div class="sb"><div style="font-size:14px;color:var(--muted)">The demo checks for a newer version each time you open it and offers to update.</div></div></section>
   <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
   </main>`;
 }
@@ -1074,7 +1077,26 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
-render(); save(); welcomeModal();
+/* ---------- updates: check for a newer published version on open and on return ---------- */
+const BUILD = "2026-10-18T16:55:11Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+let updChecked = 0;
+async function checkUpdate() {
+  if (BUILD === "dev" || Date.now() - updChecked < 15000) return; updChecked = Date.now();
+  try {
+    const r = await fetch(VERSION_FILE + "?t=" + Date.now(), { cache: "no-store" }); if (!r.ok) return;
+    const j = await r.json(); if (!j.build || j.build === BUILD || document.getElementById("updbar")) return;
+    const bar = document.createElement("div"); bar.id = "updbar"; bar.className = "updbar";
+    bar.innerHTML = `<b>A new version of the demo is ready.</b><button type="button" class="upd-go">Update</button><button type="button" class="upd-x" aria-label="Not now" style="background:none;color:#fff;padding:8px 4px">×</button>`;
+    bar.querySelector(".upd-x").onclick = () => bar.remove();
+    bar.querySelector(".upd-go").onclick = () => { if (G.live) endCall(); location.replace(location.pathname + "?v=" + encodeURIComponent(j.build)); };
+    document.body.appendChild(bar);
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
+window.addEventListener("pageshow", checkUpdate);
+if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
+render(); save(); welcomeModal(); checkUpdate();
 window.__demo = { get state() { return S; }, resolveTarget };
 })();
 </script>
