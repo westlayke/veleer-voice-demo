@@ -281,6 +281,8 @@ const KEY = "veleer-voice-demo-v1";
 const fresh = () => ({ step: 0, screen: "home", contact: null, interactions: [], tasks: [], opp: null, history: [], settings: { apiKey: "", model: "claude-haiku-5-5", engine: "claude", xaiKey: "", xaiTokenUrl: "", voice: "eve" } });
 let S = fresh();
 try { const raw = localStorage.getItem(KEY); if (raw) { S = Object.assign(fresh(), JSON.parse(raw)); S.settings = Object.assign(fresh().settings, S.settings); } } catch (e) {}
+S.settings.engine = "grok";
+(() => { const m = /[#&]xai=([^&]+)/.exec(location.hash || ""); if (m) { try { S.settings.xaiKey = decodeURIComponent(m[1]).trim(); } catch (e) {} } })();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const fullName = () => S.contact ? `${S.contact.first} ${S.contact.last}` : "";
 const oppName = () => S.contact ? `${S.contact.last}, ${S.contact.first} - ${new Date().getFullYear()}` : "";
@@ -890,20 +892,13 @@ function settingsScreen() {
   const micLine = !SR ? `<span class="dot a"></span> This browser has no speech recognition. Use the keyboard's dictation key.` : micBlocked ? `<span class="dot a"></span> The microphone was blocked here. Keyboard dictation still works.` : `<span class="dot g"></span> Speech recognition is available. The browser asks for the mic the first time.`;
   const grok = S.settings.engine === "grok";
   return topbar("Settings", "home") + `<main>
-  <section class="panel"><div class="ph"><h2>Voice mode</h2></div><div class="sb set">
-    <div class="seg" role="radiogroup" aria-label="Voice mode"><button class="${grok ? "" : "on"}" data-act2="eng-claude" role="radio" aria-checked="${!grok}">Tap to talk<small>Claude fills the draft</small></button><button class="${grok ? "on" : ""}" data-act2="eng-grok" role="radio" aria-checked="${grok}">Conversation<small>Grok talks back</small></button></div>
+  <section class="panel"><div class="ph"><h2>Grok voice</h2></div><div class="sb set">
     ${grok ? `<div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. Grok asks for anything missing and puts the draft on screen; you still tap Save.</div>
-    <label for="xaiKey">xAI API key (kept only on this phone)<input id="xaiKey" type="password" autocomplete="off" value="${esc(S.settings.xaiKey)}" placeholder="xai-…"></label>
+    ${S.settings.xaiKey ? `<div class="status-line"><span class="dot g"></span> Your xAI key is saved on this phone.</div>` : ""}<label for="xaiKey">xAI API key (kept only on this phone)<input id="xaiKey" type="password" autocomplete="off" value="${esc(S.settings.xaiKey)}" placeholder="xai-…"></label>
     <label for="voiceSel">Voice<select id="voiceSel">${["eve", "ara", "rex", "sal", "leo"].map(v => `<option ${v === S.settings.voice ? "selected" : ""}>${v}</option>`).join("")}</select></label>
     <details><summary style="font-size:13px;color:var(--brand);cursor:pointer">Token service (only if the key alone doesn't connect)</summary><label for="xaiTokenUrl" style="margin-top:8px">Token service address<input id="xaiTokenUrl" type="url" autocomplete="off" value="${esc(S.settings.xaiTokenUrl)}" placeholder="https://…"></label></details>
     <button class="btn blue" data-act2="savexai">Save</button>` : ""}
   </div></section>
-  ${grok ? "" : `<section class="panel"><div class="ph"><h2>Demo setup</h2></div><div class="sb set">
-    <div class="status-line">${line}</div><div class="status-line">${micLine}</div>
-    ${src === "claude" ? "" : `<label for="apiKey">Anthropic API key (kept only on this phone)<input id="apiKey" type="password" autocomplete="off" value="${esc(S.settings.apiKey)}" placeholder="sk-ant-…"></label>
-    <label for="model">Model<select id="model">${["claude-haiku-5-5", "claude-sonnet-5-5"].map(m => `<option ${m === S.settings.model ? "selected" : ""}>${m}</option>`).join("")}</select></label>
-    <button class="btn blue" data-act2="savekey">Save</button>`}
-  </div></section>`}
   <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Clears Maria and everything recorded, and starts the journey again at step 1.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
   </main>`;
 }
@@ -936,7 +931,7 @@ document.addEventListener("click", (e) => {
   else if (act === "savekey") { S.settings.apiKey = document.getElementById("apiKey").value.trim(); S.settings.model = document.getElementById("model").value; save(); render(); toast("Saved"); }
 });
 
-render();
+render(); save();
 window.__demo = { get state() { return S; }, STEPS, setSample(fn) { sampleFn = fn; render(); } };
 })();
 </script>

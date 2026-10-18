@@ -1,9 +1,5 @@
 # Veleer voice demo
 
-A click-through phone demo of Veleer: one investor goes from new contact to recorded pledge by voice.
+A click-through phone demo of Veleer: one investor goes from new contact to recorded pledge in a two-way voice conversation with Grok (xAI). Grok asks for anything missing and puts each draft on screen; nothing is saved until the officer taps Save.
 
-Two voice modes, chosen in Settings (the gear):
-- **Tap to talk**: the phone turns speech into words and Claude fills each draft. Needs an Anthropic API key.
-- **Conversation**: a two-way voice conversation with Grok (xAI) that you can interrupt. Grok asks for anything missing and puts the draft on screen. Needs an xAI API key.
-
-Keys are stored only in the browser that enters them. Nothing is saved until the officer taps Save. Restart the demo from Settings.
+The xAI API key is never stored in this repository. Enter it in Settings (the gear), or open the page once with `#xai=YOUR_KEY` added to the address; it is then kept in that browser only. Restart the demo from Settings.
