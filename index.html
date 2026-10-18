@@ -584,12 +584,13 @@ function paintCall() {
   el.innerHTML = `<div class="cb-in"><span class="dot ${G.status === "Connecting…" ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b>${G.bot ? `<div class="cb-cap">${esc(G.bot)}</div>` : ""}</div><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
 }
 const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
+const DEMO_CODE = "veleer2026"; // built in at the owner's request so nobody has to type it; change it here and in Cloudflare together
 const tokenUrl = () => S.settings.xaiTokenUrl || TOKEN_URL;
 const canTalk = () => !!(S.settings.xaiKey || tokenUrl());
 async function mintToken() {
   let j;
   if (!S.settings.xaiKey && tokenUrl()) {
-    const r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || "" } });
+    const r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || DEMO_CODE } });
     if (!r.ok) throw new Error(r.status === 401 ? "bad_code" : "service_" + r.status);
     j = await r.json();
   } else {
