@@ -794,7 +794,15 @@ const callError = (e) => {
   if (e instanceof TypeError) return "This browser couldn't reach the voice service. Check the connection and try again.";
   return "The conversation couldn't start (" + m + ").";
 };
-const send = (o) => { if (G.ws && G.ws.readyState === 1) G.ws.send(JSON.stringify(o)); };
+const send = (o) => { if (o.type !== "input_audio_buffer.append") vlog("→ " + o.type + (o.item ? " " + (o.item.type === "message" ? "notice: " + String(o.item.content[0].text).slice(40, 120) : o.item.type) : "")); if (G.ws && G.ws.readyState === 1) G.ws.send(JSON.stringify(o)); };
+/* Voice log: the last few hundred events of the conversation, kept on this phone so the officer can copy it from Settings when something sounds wrong. */
+const LOGKEY = "veleer-voice-log";
+let VLOG = []; try { VLOG = JSON.parse(localStorage.getItem(LOGKEY) || "[]"); } catch (e) {}
+function vlog(text) {
+  const d = new Date(); VLOG.push(d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0") + " " + text);
+  if (VLOG.length > 400) VLOG = VLOG.slice(-400);
+  clearTimeout(vlog.t); vlog.t = setTimeout(() => { try { localStorage.setItem(LOGKEY, JSON.stringify(VLOG)); } catch (e) {} }, 500);
+}
 function b64FromInt16(i16) { const u8 = new Uint8Array(i16.buffer); let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
 function int16FromB64(b) { const s = atob(b), u8 = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i); return new Int16Array(u8.buffer, 0, u8.length >> 1); }
 function downsample(f32, from) {
@@ -811,9 +819,10 @@ function playChunk(b64) {
   const at = Math.max(G.ctx.currentTime + 0.02, G.playHead); src.start(at); G.playHead = at + buf.duration;
   G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
 }
-function stopPlayback() { G.sources.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = []; G.playHead = 0; }
+function stopPlayback() { if (G.sources.length) vlog(`playback stopped (${G.sources.length} chunks cut)`); G.sources.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = []; G.playHead = 0; }
 
 async function startCall(opening) {
+  vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
   G.live = true; G.status = "Connecting…"; G.bot = ""; G.handled = new Set(); paintCall(); render();
   try {
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -847,7 +856,7 @@ async function startCall(opening) {
       G.status = "Listening"; paintCall();
     };
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
-    G.ws.onclose = () => { if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Try again in a moment."); } };
+    G.ws.onclose = (ev) => { vlog("connection closed " + (ev && ev.code)); if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Try again in a moment."); } };
     G.ws.onerror = () => {};
   } catch (e) { endCall(); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); }
 }
@@ -856,7 +865,7 @@ function endCall() {
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.responding = G.qInstr = G.qCreate = false; clearTimeout(G.qTimer);
+  vlog("=== conversation ended"); G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = false; clearTimeout(G.qTimer);
   paintCall(); render();
 }
 function tellPicked(kind) {
@@ -878,6 +887,12 @@ function ask(request) {
 }
 function onEvent(e) {
   const t = e.type || "";
+  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; vlog("← audio starts"); } }
+  else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
+    if (t === "response.done") G.audioOn = false;
+    vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
+      + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
+  }
   if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
   else if (t === "response.created") { G.bot = ""; G.responding = true; }
@@ -1167,6 +1182,9 @@ function settingsScreen() {
     <button class="btn blue" data-act2="savexai">Save</button>
   </div></section>
   <section class="panel"><div class="ph"><h2>Version</h2><span class="meta">${esc(buildLabel())}</span></div><div class="sb"><div style="font-size:14px;color:var(--muted)">The demo checks for a newer version each time you open it and offers to update.</div></div></section>
+  <section class="panel"><div class="ph"><h2>Voice log</h2><span class="meta">${VLOG.length} lines</span></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">If something sounds wrong, tap Copy log and paste it to Claude.</div>
+    <textarea id="vlogTxt" readonly style="font:12px/1.35 ui-monospace,Menlo,monospace;height:160px;white-space:pre">${esc(VLOG.slice(-150).join("\n"))}</textarea>
+    <button class="btn out" data-act2="copylog">Copy log</button><button class="btn quiet" data-act2="clearlog">Clear log</button></div></section>
   <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
   </main>`;
 }
@@ -1203,13 +1221,16 @@ document.addEventListener("click", (e) => {
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
   else if (act === "flowat") { S.flowBack = "opp"; highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
+  else if (act === "copylog") { const txt = VLOG.join("\n"); const done = () => toast("Log copied. Paste it to Claude.");
+    (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("vlogTxt"); el.value = txt; el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the text and copy it."); } }); }
+  else if (act === "clearlog") { VLOG = []; try { localStorage.removeItem(LOGKEY); } catch (e) {} render(); toast("Log cleared"); }
   else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
   else if (act === "savexai") { S.settings.xaiKey = document.getElementById("xaiKey").value.trim(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; save(); render(); toast("Saved"); }
 });
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T17:56:36Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T18:07:23Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
