@@ -100,6 +100,11 @@ main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; pa
 .wl-mic { width: 44px; height: 44px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
 .wl-tips { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 14px; color: var(--muted); line-height: 1.4; }
 .wl-tips li { padding-left: 16px; position: relative; } .wl-tips li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-line); }
+.wl-save { border: 1px solid var(--brand-line); background: var(--brand-soft, #eef4fc); border-radius: 12px; padding: 11px 12px; display: flex; flex-direction: column; gap: 7px; }
+.wl-save h3 { margin: 0; font-size: 14px; color: var(--brand-ink); display: flex; align-items: center; gap: 7px; }
+.wl-save ol { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.45; } .wl-save li { padding-left: 2px; }
+.wl-save .ico { display: inline-flex; vertical-align: -3px; width: 18px; height: 18px; border: 1px solid var(--line); border-radius: 5px; align-items: center; justify-content: center; background: var(--surface); }
+.wl-save small { font-size: 12.5px; color: var(--muted); }
 .wl-tips b { color: var(--fg); font-weight: 600; }
 /* journey card */
 .steps { list-style: none; margin: 0; padding: 4px 0; }
@@ -744,6 +749,18 @@ const SAY_LIST = ["Let's add a contact", "Log a meeting", "Create an opportunity
 function sayList() {
   return `<ul class="saylist">${SAY_LIST.map(line => `<li data-say="${esc(line)}" role="button" tabindex="0"><span class="sl-mic">${mic(14)}</span><span class="sl-line">“${esc(line)}”</span></li>`).join("")}</ul>`;
 }
+function saveTip() {
+  const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
+  if (standalone) return "";
+  const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
+  const share = `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg></span>`;
+  const dots = `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span>`;
+  const steps = ios ? [`Tap ${share} Share at the bottom of Safari.`, `Scroll down and tap <b>Add to Home Screen</b>.`, `Tap <b>Add</b>.`]
+    : android ? [`Tap ${dots} at the top right of Chrome.`, `Tap <b>Add to home screen</b> (or <b>Install app</b>).`, `Tap <b>Add</b> or <b>Install</b>.`]
+    : [`Open this link on your phone.`, `iPhone: tap ${share} Share, then <b>Add to Home Screen</b>.`, `Android: tap ${dots}, then <b>Add to home screen</b>.`];
+  return `<div class="wl-save"><h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Keep Veleer on your phone</h3>
+    <ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol><small>Then open it from the Veleer icon. It works like an app, with the mic ready.</small></div>`;
+}
 function welcomeModal() {
   const h = document.getElementById("modal");
   if (S.seenWelcome) { h.innerHTML = ""; return; }
@@ -752,6 +769,7 @@ function welcomeModal() {
     <h2 id="wmTitle">Talk to Veleer like a colleague</h2>
     <p>Tap the mic, say what happened, and Veleer drafts the record. You check it and tap Save.</p>
     <ul class="wl-tips"><li><b>Interrupt any time,</b> just like a phone call.</li><li><b>Fix things out loud:</b> “Change the email to…”</li><li><b>Say “that’s it for now”</b> to stop. Pick up any time.</li></ul>
+    ${saveTip()}
     <button class="btn blue" data-act4="welcome-ok">Got it</button></div></div>`;
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a) { S.seenWelcome = true; save(); welcomeModal(); } });
