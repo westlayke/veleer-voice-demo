@@ -200,16 +200,21 @@ details.said summary { font-style: normal; color: var(--brand); font-weight: 600
 .lbl { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .lbl .req { color: var(--bad); } .lbl .via { margin-left: auto; }
 .two .vt { display: none; }
-.fld input[type=text], .fld input[type=date], .fld select, .fld textarea { width: 100%; min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
+.fld input[type=text], .fld input[type=date], .fld input[type=time], .fld select, .fld textarea { width: 100%; min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
 .fld textarea { min-height: 64px; resize: vertical; }
 .fld.chk input { border-color: var(--warn-line); background: var(--warn-soft); }
 .cn { font-size: 12.5px; color: var(--warn); }
 .tg { display: flex; align-items: center; gap: 10px; font-size: 15px; }
 .tg input { width: 22px; height: 22px; accent-color: var(--brand); flex: none; }
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+/* iPhone draws date and time boxes wider than their column and centres the text; keep them inside the column */
+.fld input[type=date], .fld input[type=time] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; box-sizing: border-box; text-align: left; }
+.fld input[type=date]::-webkit-date-and-time-value, .fld input[type=time]::-webkit-date-and-time-value { text-align: left; }
+.fld:has(> label.tg) { padding-top: 10px; padding-bottom: 12px; }
 .left { font-size: 13px; color: var(--muted); background: var(--surface2); border-radius: 9px; padding: 9px 11px; }
 .savebar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 6px; }
 .savebar small { text-align: center; color: var(--muted); font-size: 12.5px; }
+.savebar { box-shadow: 0 -10px 14px -10px rgba(0,0,0,.22); } /* shows the form carries on under the button */
 .err { color: var(--bad); font-size: 14px; }
 /* conversation */
 .callbar { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 50; display: flex; justify-content: center; padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); pointer-events: none; }
@@ -1520,7 +1525,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T21:46:04Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T21:54:57Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
