@@ -595,7 +595,8 @@ const TOOLS = [
     installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: ["Annual", "Quarterly", "Monthly", "One payment"] },
     firstAmount: { type: "number" }, firstDue: { type: "string", description: "YYYY-MM-DD" } } }
 ];
-const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, description: t.description + " Call it for the current step only, and call it again with corrections if the officer changes something.", parameters: { type: "object", properties: t.props, required: t.req } }));
+const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, description: t.description + " Call it for the current step only, and call it again with corrections if the officer changes something.", parameters: { type: "object", properties: t.props, required: t.req } }))
+  .concat([{ type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop here for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
 function grokInstructions() {
   const cur = STEPS[S.step];
@@ -605,6 +606,7 @@ Speak warmly and briefly: one or two short sentences per turn. Ask at most one q
 You never save anything. When you have enough, call the draft tool for the current step so the draft appears on screen, then ask the officer to check it and tap Save. If they correct something, call the tool again with the fix. Only say something is saved after the app tells you so.
 Current step (${S.step + 1} of ${STEPS.length}): ${cur ? cur.short + ". Use the tool " + TOOLS[S.step].name + "." : "All steps are done. Congratulate the officer briefly."}
 What is already recorded: ${JSON.stringify(ctx)}
+The officer can stop at any point. Never start the next step on your own: after a save, wait for the officer to say they want to continue. If they want to stop, say a brief goodbye and call stop_conversation.
 Write spoken email addresses as real addresses. Resolve relative dates against today.`;
 }
 
@@ -692,7 +694,7 @@ async function startCall() {
       else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
       srcNode.connect(G.node);
       const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
-      notice(`The officer just opened the conversation. Greet them in one short sentence and ask about: ${STEPS[S.step].short}.`);
+      notice(S.step === 0 ? `The officer just opened the conversation. Greet them in one short sentence and ask about: ${STEPS[S.step].short}.` : `The officer is back to continue. In one short sentence, say where they left off (${STEPS[S.step - 1].short.toLowerCase()} is done) and ask if they want to ${STEPS[S.step].short.toLowerCase()} now.`);
       G.status = "Listening"; paintCall();
     };
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
@@ -701,7 +703,7 @@ async function startCall() {
   } catch (e) { endCall(); toast(callError(e)); }
 }
 function endCall() {
-  G.live = false; stopPlayback();
+  G.live = false; G.ending = false; stopPlayback();
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
@@ -726,6 +728,13 @@ function onEvent(e) {
 }
 function onTool(callId, name, args) {
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
+  if (name === "stop_conversation") {
+    send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify({ ok: true }) } });
+    G.ending = true; G.status = "Ending…"; paintCall();
+    const waitEnd = Date.now() + 8000;
+    const tick = () => { if (!G.live) return; const playing = G.ctx && G.playHead > G.ctx.currentTime; if (playing && Date.now() < waitEnd) setTimeout(tick, 300); else { endCall(); toast(S.step < STEPS.length ? `Stopped after: ${STEPS[S.step - 1] ? STEPS[S.step - 1].short.toLowerCase() : "start"}. Tap the mic to pick up again.` : "Conversation ended."); } };
+    setTimeout(tick, 1200); return;
+  }
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   const tool = TOOLS.find(t => t.name === name), cur = STEPS[S.step];
   let out;
@@ -743,7 +752,10 @@ function grokSaved(stepDone) {
   if (!G.live) return;
   send({ type: "session.update", session: { instructions: grokInstructions() } });
   const next = STEPS[S.step];
-  notice(`The officer tapped Save: ${SAVED[stepDone.id]}. ${next ? "Next step: " + next.short + ". Confirm in a few words and ask about it." : "That was the last step: the pledge is recorded and the opportunity is in Commitment. Congratulate them in one sentence."}`);
+  const ask = stepDone.id === "contact" || stepDone.id === "interaction";
+  notice(`The officer tapped Save: ${SAVED[stepDone.id]}. ` + (!next ? "That was the last step: the pledge is recorded and the opportunity is in Commitment. Congratulate them in one sentence."
+    : ask ? `Confirm in a few words, then ask whether they want to keep going and ${next.short.toLowerCase()} now, or stop here for today. Do not start the next step until they say to continue.`
+    : `Confirm in a few words and ask whether they're ready to ${next.short.toLowerCase()}, or would rather stop here.`));
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
 
