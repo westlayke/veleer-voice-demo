@@ -80,7 +80,7 @@ main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; pa
 .btn.out { background: var(--surface); color: var(--brand); border: 1.5px solid var(--brand); }
 .btn.quiet { background: var(--surface2); color: var(--fg); border: 1px solid var(--line); font-weight: 600; }
 .btn:disabled { opacity: .5; cursor: default; }
-.btns { display: flex; gap: 8px; } .btns > * { flex: 1; }
+.btns { display: flex; gap: 8px; } .btns > * { flex: 1; } a.btn { text-decoration: none; }
 .track { display: flex; gap: 3px; padding: 4px 14px 12px; }
 .track div { flex: 1; text-align: center; font-size: 10.5px; color: var(--muted); padding-top: 7px; border-top: 5px solid var(--line); }
 .track div.done { border-color: var(--brand-line); }
@@ -391,11 +391,13 @@ function givingOf(c) {
 
 /* ---------- state ---------- */
 const KEY = "veleer-voice-demo-v1";
+const SEED_MOBILES = { "Ruth Abernathy": "(555) 010-0141", "Ken Ito": "(555) 010-0142", "James Okafor": "(555) 010-0143", "Priya Sandaruwan": "(555) 010-0144", "Elena Vasquez": "(555) 010-0145" };
 function seed() {
   const c = (first, last, status, capacity, howMet) => ({ id: uid(), first, last, status, capacity, howMet, permEmail: true, permCalls: true, permText: false, added: "2025-03-14", example: true });
   const contacts = [c("Ruth", "Abernathy", "Investor", "A", "Long-time supporter of the national program."), c("Ken", "Ito", "Investor", "B", "Board member's referral."),
     c("James", "Okafor", "Prospect", "C", "Met at the alumni luncheon."), c("Priya", "Sandaruwan", "Prospect", "B", "Met at the Pennsylvania campaign kickoff."), c("Elena", "Vasquez", "Investor", "B", "Assigned by Luis Ortega.")];
   const [ab, it, ok, sa, va] = contacts;
+  contacts.forEach(ct => { ct.mobile = SEED_MOBILES[ct.first + " " + ct.last] || ""; });
   contacts.forEach(ct => { ct.gifts = (SEED_GIFTS[ct.first + " " + ct.last] || []).map(g => Object.assign({}, g)); });
   const o = (ct, stage, fund, potential, ask) => ({ id: uid(), contactId: ct.id, name: `${ct.last}, ${ct.first} - ${YEAR}`, stage, fund, potential, asks: ask ? [ask] : [], pledge: null, created: "2026-02-01", example: true });
   const opps = [o(ab, "Cultivation", "C3 - Citizens Alliance", 75000), o(it, "Ask Made", "C4 - Citizens Alliance", 30000, { fund: "C4 - Citizens Alliance", campaign: "Pennsylvania", amount: 30000, askType: "Pledge", status: "Made", askedOn: "2026-09-30", plannedDate: "2026-09-30" }),
@@ -425,6 +427,8 @@ try {
 (() => { const h = location.hash || ""; const c = /[#&]code=([^&]+)/.exec(h);
   delete S.settings.xaiKey; // the key lives only in Cloudflare; forget any key an older version saved on this phone
   try { if (c) S.settings.demoCode = decodeURIComponent(c[1]).trim(); } catch (e) {} })();
+// example contacts saved before they had mobile numbers get them now
+S.contacts.forEach(ct => { if (ct.example && !ct.mobile) ct.mobile = SEED_MOBILES[ct.first + " " + ct.last] || ""; });
 // earlier versions used funds and campaigns that the guide has since replaced
 (() => { const FIXC = { "Building campaign 2027": "Pennsylvania", "Scholars campaign 2026": "National" };
   const fx = (x) => { if (!x) return; if (x.fund && !FUNDS.includes(x.fund)) x.fund = "C3 - Citizens Alliance"; if (x.campaign && !CAMPAIGNS.includes(x.campaign)) x.campaign = FIXC[x.campaign] || "General / no campaign"; };
@@ -763,6 +767,7 @@ const TOOLS = [
 ];
 const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, description: t.description + " Call it as soon as you know what the officer wants to do, with whatever you know so far, then again after each answer with everything known so far.", parameters: { type: "object", properties: t.props, required: t.req.filter(k => k === "contact_name") } }))
   .concat([{ type: "function", name: "show_screen", description: "Open a screen when the officer asks to see something. For a contact's record or opportunity, pass contact_name.", parameters: { type: "object", properties: Object.assign({ screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record", "how_it_works"] } }, FOR), required: ["screen"] } },
+    { type: "function", name: "call_contact", description: "Put a Call button for a contact on screen when the officer wants to phone them. The officer taps it; the phone places the call.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
     { type: "function", name: "get_giving", description: "Look up a contact's giving: lifetime total, this year's total, the last gift with its date, and any open pledge balance. Also opens their contact record.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
     { type: "function", name: "highlight_stage", description: "During the process overview, light up one stage on the How it works screen. Call it just before you describe that stage.", parameters: { type: "object", properties: { stage: { type: "string", enum: FLOW.map(f => f.stage) } }, required: ["stage"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
@@ -776,7 +781,7 @@ function grokInstructions() {
   return `You are the voice assistant inside Veleer, the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
-The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, or see a screen.
+The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, phone a contact, or see a screen.
 Stage rules the app enforces: an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen from the start, before asking anything. Then ask for what is still needed one question at a time, and after each answer call the tool again so the form fills in as they talk. When the tool says nothing more is needed, ask the officer to check the draft and tap the button at the bottom of it, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
@@ -787,6 +792,7 @@ If the officer asks how the process works, for an overview, or to be walked thro
 ${flowScript()}
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
 When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before asking them to save. Recording an ask needs the same unless the investor declined.
+When the officer wants to phone a contact, call call_contact. Only offer calls the app allows (the contact needs a phone number and Calls permitted on).
 When the officer asks about a contact's giving (lifetime, this year, year to date, last gift or donation), call get_giving and speak the figures it returns; never estimate them.
 When adding a task, ask for a due date if none was said (they can skip it). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
 When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?" Always pass date and meetingType in show_interaction_draft and show_ask_result_draft: the date resolved from what the officer said (for example yesterday), and the type they said. Leaving them out puts today and In person on the draft.
@@ -883,6 +889,7 @@ function letSleep() { try { G.wake && G.wake.release(); } catch (e) {} G.wake = 
 // locking the phone pauses the page, which cuts the mic and Grok's connection: end the conversation cleanly instead of leaving it hanging
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && G.live) { vlog("phone locked or app hidden: ending conversation"); G.endedByLock = true; endCall(); }
+  else if (document.visibilityState === "visible" && S.pendingCall) { G.endedByLock = false; callDoneModal(); }
   else if (document.visibilityState === "visible" && G.endedByLock) { G.endedByLock = false; toast("The conversation ended when the phone locked. Tap the mic to carry on."); }
 });
 async function startCall(opening) {
@@ -1000,6 +1007,15 @@ function onTool(callId, name, args) {
     const waitEnd = Date.now() + 8000;
     const tick = () => { if (!G.live) return; const playing = G.ctx && G.playHead > G.ctx.currentTime; if (playing && Date.now() < waitEnd) setTimeout(tick, 300); else { endCall(); toast("Conversation ended. Tap the mic any time to carry on."); } };
     setTimeout(tick, 1200); return;
+  }
+  if (name === "call_contact") {
+    const r = resolveTarget("interaction", data.contact_name);
+    if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
+    const c = r.contact; S.sel.contact = c.id; go("contact");
+    if (!c.mobile) { toolReply(callId, { ok: false, error: `${nameOf(c)} has no phone number on record.` }); return; }
+    if (!c.permCalls) { toolReply(callId, { ok: false, error: `Calls aren't permitted for ${nameOf(c)} (Calls permitted is off on the contact).` }); return; }
+    callPromptModal(c); whenIdle("instr");
+    toolReply(callId, { ok: true, status: `A Call button for ${nameOf(c)} is on screen. In one short sentence, tell the officer to tap Call, and that you'll help write up the call when they're back. Our conversation ends when the call starts.` }); return;
   }
   if (name === "get_giving") {
     const r = resolveTarget("interaction", data.contact_name);
@@ -1169,6 +1185,43 @@ function givingPanel(c) {
     <div class="tile"><div class="k">Last gift</div><div class="v">${v.last ? money(v.last.amount) : "None"}</div>${v.last ? `<div class="k" style="margin-top:2px">${fmtDate(v.last.date)}</div>` : ""}</div></div>
     ${v.pledgeLeft ? `<div class="empty" style="font-size:13px;text-align:left;padding-top:0">Open pledge balance: ${money(v.pledgeLeft)}</div>` : ""}</section>`;
 }
+/* ---------- phone calls: the phone app places the call; on return the app offers the call report ---------- */
+const PHONE_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>';
+const telOf = (c) => "tel:" + String(c.mobile || "").replace(/[^0-9+]/g, "");
+const callBtn = (c) => c.mobile && c.permCalls ? `<div class="btns" style="margin-top:8px"><a class="btn out" href="${telOf(c)}" data-call="${c.id}">${PHONE_SVG} Call ${esc(c.first)}</a></div>` : "";
+function placeCall(id) {
+  const c = contactById(id); if (!c) return;
+  if (G.live) endCall(); // the call takes the microphone
+  document.getElementById("modal").innerHTML = "";
+  S.pendingCall = { contactId: id, at: Date.now() }; log(`Phone call to ${nameOf(c)} started from the app`, { contactId: id }, false); save();
+}
+function callDoneModal() {
+  const pc = S.pendingCall, c = pc && contactById(pc.contactId);
+  if (!c || Date.now() - pc.at > 3 * 3600e3) { if (pc) { delete S.pendingCall; save(); } return; }
+  const h = document.getElementById("modal"), who = nameOf(c);
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="cdTitle">
+    <span class="wl-mic">${PHONE_SVG}</span>
+    <h2 id="cdTitle">How did the call with ${esc(c.first)} go?</h2>
+    <p>Log it now. The Interaction report opens with Phone call and today's date, and Grok helps you write it up.</p>
+    <button class="btn blue" id="cdLog">${mic(16)} Log the call</button><button class="btn quiet" id="cdX">Not now</button></div></div>`;
+  document.getElementById("cdLog").onclick = () => {
+    delete S.pendingCall; save(); h.innerHTML = "";
+    S.sel.contact = c.id; go("contact");
+    const t = resolveTarget("interaction", who);
+    V = { action: "interaction", target: t, data: prefill("interaction", { meetingType: "Phone call", date: todayISO() }, t), fromVoice: new Set() }; renderOverlay();
+    startCall(`The officer just finished a phone call with ${who}. The Interaction report is already on screen with Phone call and today's date. Ask how the call went, then fill in the report by calling show_interaction_draft for ${who} after each answer.`);
+  };
+  document.getElementById("cdX").onclick = () => { delete S.pendingCall; save(); h.innerHTML = ""; toast(`You can log it later from ${c.first}'s record.`); };
+}
+function callPromptModal(c) {
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="cpTitle">
+    <span class="wl-mic">${PHONE_SVG}</span>
+    <h2 id="cpTitle">Call ${esc(nameOf(c))}?</h2>
+    <p>${esc(c.mobile)}. Your phone places the call. When you come back, the app opens the call report.</p>
+    <a class="btn blue" href="${telOf(c)}" data-call="${c.id}">${PHONE_SVG} Call</a><button class="btn quiet" id="cpX">Cancel</button></div></div>`;
+  document.getElementById("cpX").onclick = () => { h.innerHTML = ""; };
+}
 function contactScreen() {
   const c = contactById(S.sel.contact);
   if (!c) return contactsScreen();
@@ -1182,7 +1235,7 @@ function contactScreen() {
     ${c.permSource ? `<div style="font-size:12.5px;color:var(--muted)">Permission source: ${esc(c.permSource)} · recorded by voice</div>` : ""}
   </div>
   <dl class="kv"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
-  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button><button class="btn out" data-say="Add a task for ${esc(who)}">Add a task</button>${o ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div></section>
+  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button><button class="btn out" data-say="Add a task for ${esc(who)}">Add a task</button>${o ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div>${callBtn(c)}</section>
   ${givingPanel(c)}
   ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">›</span></div>`).join("")}</section>` : ""}
   <section class="panel"><div class="ph"><h2>Interactions</h2><span class="meta">${ints.length}</span></div>
@@ -1300,6 +1353,7 @@ function settingsScreen() {
   </main>`;
 }
 
+setTimeout(() => { if (S.pendingCall) callDoneModal(); }, 600);
 function render() {
   const app = document.getElementById("app");
   const s = S.screen;
@@ -1315,6 +1369,7 @@ function render() {
 }
 
 document.addEventListener("click", (e) => {
+  const cl = e.target.closest("[data-call]"); if (cl) { placeCall(cl.dataset.call); return; }
   if (e.target.closest("#overlay") || e.target.closest("#modal")) return;
   const say = e.target.closest("[data-say]");
   if (say) { const line = say.dataset.say;
@@ -1341,7 +1396,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T20:16:15Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T20:31:02Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
