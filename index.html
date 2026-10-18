@@ -358,7 +358,11 @@ let rec = null, finalText = "", interimText = "", micBlocked = false;
 /* ---------- voice sheet ---------- */
 let V = null; // { step, mode: listen|type|thinking|draft|error, transcript, data, err, ctl }
 function openVoice() {
-  if (S.settings.engine === "grok") { if (G.live) toast("Grok is listening. Just tell it what happened."); else startCall(); return; }
+  if (S.settings.engine === "grok") {
+    if (!G.live) { startCall(); return; }
+    if (S.step < STEPS.length) notice(`The officer tapped the ${STEPS[S.step].short} button. Ask them in one short question for what you need to ${STEPS[S.step].short.toLowerCase()}.`);
+    return;
+  }
   if (S.step >= STEPS.length) { toast("The demo journey is complete. Restart it from Settings."); return; }
   const step = STEPS[S.step];
   V = { step, mode: (SR && !micBlocked) ? "listen" : "type", transcript: "" };
@@ -413,6 +417,9 @@ async function runAI(text) {
 }
 function prefill(step, d) {
   const out = Object.assign({}, d);
+  // Dates the officer rarely says aloud default to today; they stay editable on the draft.
+  if (step.id === "interaction" || step.id === "ask") { if (!out.date) out.date = todayISO(); if (!out.meetingType) out.meetingType = "In person"; }
+  if (step.id === "pledge") { if (!out.confirmedDate) out.confirmedDate = todayISO(); if (!out.installments) out.installments = 1; if (!out.frequency) out.frequency = out.installments > 1 ? "Annual" : "One payment"; }
   if (step.id === "opportunity") { out.name = oppName(); out.officer = OFFICER; if (!out.fund && S.contact && S.contact.interest) out.fund = S.contact.interest; }
   if (step.id === "plan") { out.officer = OFFICER; }
   if (step.id === "ask") { out.asked = S.opp && S.opp.ask ? `${money(S.opp.ask.amount)} · ${S.opp.ask.askType} · ${S.opp.ask.fund}` : ""; }
@@ -513,7 +520,14 @@ document.getElementById("overlay").addEventListener("click", (e) => {
 function saveDraft() {
   const d = readDraft(), st = V.step;
   const miss = st.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));
-  if (miss.length) { const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = "Fill in " + miss.map(f => f.label).join(", ") + " before saving."; return; }
+  if (miss.length) {
+    const msg = "Fill in " + miss.map(f => f.label).join(", ") + " before saving.";
+    const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
+    const first = document.getElementById("f_" + miss[0].k); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+    toast(msg);
+    if (G.live && V.conv) notice(`The officer tapped Save but the draft is missing: ${miss.map(f => f.label).join(", ")}. Ask for it in one short question, then call the draft tool again with everything filled in.`);
+    return;
+  }
   const undo = JSON.stringify(S);
   APPLY[st.id](d);
   S.step++; save();
@@ -596,8 +610,8 @@ const TOOLS = [
   { id: "ask", name: "show_ask_result_draft", description: "Show the Interaction report for the meeting where the ask was made, with the investor's response.", req: ["date", "meetingType", "response", "summary"], props: {
     date: { type: "string", description: "YYYY-MM-DD" }, meetingType: { type: "string", enum: MEET_ENUM }, response: { type: "string", enum: ["Yes", "Counter-offer", "Considering", "No"] },
     agreedAmount: { type: "number", description: "Verbal figure agreed" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: { type: "string", description: "YYYY-MM-DD" } } },
-  { id: "pledge", name: "show_pledge_draft", description: "Show the Record pledge draft.", req: ["amount", "confirmedBy", "firstDue"], props: {
-    amount: { type: "number" }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD" },
+  { id: "pledge", name: "show_pledge_draft", description: "Show the Record pledge draft.", req: ["amount", "confirmedBy", "confirmedDate", "firstDue"], props: {
+    amount: { type: "number" }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD; use today if the officer doesn't say" },
     installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: ["Annual", "Quarterly", "Monthly", "One payment"] },
     firstAmount: { type: "number" }, firstDue: { type: "string", description: "YYYY-MM-DD" } } }
 ];
