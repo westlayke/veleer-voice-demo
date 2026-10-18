@@ -743,7 +743,7 @@ After a save, briefly confirm and ask what they'd like to do next, or whether to
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
 When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one.
-If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works, then give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait for the answer. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
+If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first (no "Opening the overview"), then give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait for the answer. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
 ${flowScript()}
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
 When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before showing the draft. Recording an ask needs the same unless the investor declined.
@@ -794,6 +794,7 @@ const callError = (e) => {
   if (e instanceof TypeError) return "This browser couldn't reach the voice service. Check the connection and try again.";
   return "The conversation couldn't start (" + m + ").";
 };
+const BARGE_RMS = 0.06; // mic level needed to interrupt Grok while it is speaking; tune from the voice log's "mic while Grok spoke" lines
 const send = (o) => { if (o.type !== "input_audio_buffer.append") vlog("→ " + o.type + (o.item ? " " + (o.item.type === "message" ? "notice: " + String(o.item.content[0].text).slice(40, 120) : o.item.type) : "")); if (G.ws && G.ws.readyState === 1) G.ws.send(JSON.stringify(o)); };
 /* Voice log: the last few hundred events of the conversation, kept on this phone so the officer can copy it from Settings when something sounds wrong. */
 const LOGKEY = "veleer-voice-log";
@@ -841,6 +842,13 @@ async function startCall(opening) {
       const srcNode = G.ctx.createMediaStreamSource(G.stream);
       const onPcm = (f32) => {
         if (!G.ctx) return;
+        // Echo guard: while Grok's voice is playing, the phone's mic can hear the speaker and Grok cuts itself off.
+        // Quiet sound during playback is sent as silence; speaking up over Grok still interrupts it.
+        if (G.playHead > G.ctx.currentTime + 0.03) {
+          let sq = 0; for (let i = 0; i < f32.length; i++) sq += f32[i] * f32[i];
+          const rms = Math.sqrt(sq / f32.length); G.echoPeak = Math.max(G.echoPeak || 0, rms);
+          if (rms < BARGE_RMS) f32 = new Float32Array(f32.length); else G.barge = (G.barge || 0) + 1;
+        }
         G.buf.push(downsample(f32, G.ctx.sampleRate));
         const total = G.buf.reduce((n, a) => n + a.length, 0);
         if (total < 2400) return; // ~100 ms
@@ -887,10 +895,10 @@ function ask(request) {
 }
 function onEvent(e) {
   const t = e.type || "";
-  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; vlog("← audio starts"); } }
+  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
   else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
-    if (t === "response.done") G.audioOn = false;
-    vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
+    if (t === "response.done") { G.audioOn = false; setTimeout(() => { G.audioSamples = 0; }, 0); if (G.echoPeak) vlog(`mic while Grok spoke: peak ${G.echoPeak.toFixed(3)}, ${G.barge || 0} loud frames passed (interrupt level ${BARGE_RMS})`); G.echoPeak = 0; G.barge = 0; }
+    vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
   if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; paintCall(); }
@@ -1232,7 +1240,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T18:12:25Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T18:16:48Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
