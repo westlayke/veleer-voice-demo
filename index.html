@@ -252,7 +252,7 @@ const ACTIONS = {
       { k: "permEmail", label: "Email permitted", type: "bool" }, { k: "permCalls", label: "Calls permitted", type: "bool" }, { k: "permText", label: "Texting permitted", type: "bool" },
       { k: "permSource", label: "Permission source" }, { k: "howMet", label: "How we met", type: "area" } ],
     pairs: [["first", "last"]],
-    left: "Not filled by voice: capacity rating, Ally - Do Not Solicit and Do Not Contact." },
+    left: "A contact needs an email or a mobile number (at least one). Not filled by voice: capacity rating, Ally - Do Not Solicit and Do Not Contact." },
   interaction: { title: "Interaction report", saved: "Interaction report saved", saveLabel: "Save",
     fields: [
       { k: "forName", label: "Contact", fixed: true },
@@ -456,6 +456,14 @@ document.getElementById("overlay").addEventListener("click", (e) => {
 function saveDraft() {
   const d = readDraft(), A = ACTIONS[V.action];
   const miss = A.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));
+  if (!miss.length && V.action === "contact" && !String(d.email || "").trim() && !String(d.mobile || "").trim()) {
+    const msg = "Add an email or a mobile number before saving. A contact needs at least one.";
+    const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
+    const first = document.getElementById("f_email"); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+    toast(msg);
+    if (G.live) notice(`The officer tapped ${A.saveLabel} but the contact has no email or mobile number. Explain that a contact needs at least one, ask for it, then call the draft tool again.`);
+    return;
+  }
   if (miss.length) {
     const msg = "Fill in " + miss.map(f => f.label).join(", ") + " before saving.";
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
@@ -540,7 +548,7 @@ function toast(text, undo) {
 const S_DATE = { type: "string", description: "YYYY-MM-DD" };
 const FOR = { contact_name: { type: "string", description: "Full name of the contact this is for, as the officer said it" } };
 const TOOLS = [
-  { action: "contact", name: "show_contact_draft", description: "Show a new Contact draft.", req: ["first", "last"], props: {
+  { action: "contact", name: "show_contact_draft", description: "Show a new Contact draft. A contact needs at least an email or a mobile number.", req: ["first", "last"], props: {
     first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
     permEmail: { type: "boolean", description: "Default true" }, permCalls: { type: "boolean", description: "Default true" }, permText: { type: "boolean", description: "Default false" },
     permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" } } },
@@ -571,13 +579,14 @@ function crmSnapshot() {
 function grokInstructions() {
   const f = focusContact();
   return `You are the voice assistant inside Veleer, the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
-Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
+Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, create an opportunity, plan an ask, record an ask and the response, record a pledge, or see a screen. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. When you have enough, call the matching draft tool so the draft appears on screen, then ask the officer to check it and tap the button at the bottom of the draft, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
+When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one.
 When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?"
 Write spoken email addresses as real addresses. Resolve relative dates against today.`;
 }
