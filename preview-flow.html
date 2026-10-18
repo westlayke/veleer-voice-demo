@@ -125,6 +125,8 @@ main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; pa
 .wl-role { display: flex; gap: 10px; align-items: center; background: var(--surface-2, #f3f5f8); border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; font-size: 14px; line-height: 1.4; }
 .wl-role b { color: var(--brand-ink); }
 .wl-av { width: 34px; height: 34px; flex: none; border-radius: 50%; background: var(--brand-soft, #e3edf9); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.top.withlogo { height: 64px; position: sticky; }
+.top-logo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 58px; width: auto; display: block; pointer-events: none; }
 .brand { display: flex; justify-content: center; padding: 2px 0 0; } .brand img { width: 130px; height: auto; display: block; }
 .wl-save small { font-size: 12.5px; color: var(--muted); }
 .wl-tips b { color: var(--fg); font-weight: 600; }
@@ -1055,8 +1057,8 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
 
 /* ---------- screens ---------- */
 const go = (s) => { S.screen = s; save(); render(); window.scrollTo(0, 0); };
-function topbar(title, back) {
-  return `<header class="top">${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}<h1>${esc(title)}</h1>
+function topbar(title, back, logo) {
+  return `<header class="top${logo ? " withlogo" : ""}">${logo ? '<img class="top-logo" src="logo-v2.png" alt="Citizens Alliance" width="57" height="58">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}<h1>${esc(title)}</h1>
   <button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
@@ -1124,8 +1126,7 @@ function needsAttention() {
 }
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
-  return topbar("Home") + `<main>
-  <div class="brand"><img src="logo-v2.png" alt="Citizens Alliance" width="130" height="133"></div>
+  return topbar("Home", null, true) + `<main>
   <section class="panel"><div class="flowtile" data-act2="flowhome"><div class="fti">${FI('<circle cx="5" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M14 14l3 3"/>')}</div><div class="ftt"><b>VoiceCRM - Hear How It Works</b><span>From contact to Closed Won, with a spoken overview</span></div><span style="color:var(--muted);font-size:20px">›</span></div></section>
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
@@ -1327,7 +1328,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T18:40:04Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T18:46:21Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
