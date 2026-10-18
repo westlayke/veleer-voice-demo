@@ -299,7 +299,7 @@ function seed() {
   return { contacts, opps };
 }
 const fresh = () => Object.assign({ v: 2, screen: "home", sel: { contact: null, opp: null }, interactions: [], tasks: [], history: [], seenWelcome: false,
-  settings: { xaiKey: "", xaiTokenUrl: "", demoCode: "", voice: "eve" } }, seed());
+  settings: { xaiKey: "", xaiTokenUrl: "", demoCode: "", voice: "ara", voicePicked: false } }, seed());
 let S = fresh();
 try {
   const raw = localStorage.getItem(KEY);
@@ -319,6 +319,7 @@ try {
 } catch (e) {}
 (() => { const h = location.hash || ""; const m = /[#&]xai=([^&]+)/.exec(h), c = /[#&]code=([^&]+)/.exec(h);
   try { if (m) S.settings.xaiKey = decodeURIComponent(m[1]).trim(); if (c) S.settings.demoCode = decodeURIComponent(c[1]).trim(); } catch (e) {} })();
+if (!S.settings.voicePicked) S.settings.voice = "ara"; // Ara is the default until someone picks a voice in Settings
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
 const contactById = (id) => S.contacts.find(c => c.id === id);
@@ -638,7 +639,7 @@ async function startCall(opening) {
     } catch (x) { worklet = false; }
     G.ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
     G.ws.onopen = () => {
-      send({ type: "session.update", session: { voice: S.settings.voice || "eve", instructions: grokInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
+      send({ type: "session.update", session: { voice: S.settings.voice || "ara", instructions: grokInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
         audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 } } } } });
       const srcNode = G.ctx.createMediaStreamSource(G.stream);
       const onPcm = (f32) => {
@@ -876,7 +877,7 @@ function settingsScreen() {
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. Grok asks for anything missing and puts the draft on screen; you still tap Save.</div>
     ${S.settings.xaiKey ? `<div class="status-line"><span class="dot g"></span> Your xAI key is saved on this phone.</div>` : tokenUrl() ? `<div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>` : ""}
     <label for="xaiKey">xAI API key${tokenUrl() ? " (optional)" : ""} (kept only on this phone)<input id="xaiKey" type="password" autocomplete="off" value="${esc(S.settings.xaiKey)}" placeholder="xai-…"></label>
-    <label for="voiceSel">Voice<select id="voiceSel">${["eve", "ara", "rex", "sal", "leo"].map(v => `<option ${v === S.settings.voice ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option ${v === S.settings.voice ? "selected" : ""}>${v}</option>`).join("")}</select></label>
     <button class="btn blue" data-act2="savexai">Save</button>
   </div></section>
   <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
@@ -913,7 +914,7 @@ document.addEventListener("click", (e) => {
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { o.stage = "Cultivation"; log("Moved to Cultivation (criteria met: capacity rating and a substantive interaction)", { contactId: o.contactId, oppId: o.id }, false); save(); render(); toast("Moved to Cultivation"); } }
   else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); S.settings = keep; save(); render(); welcomeModal(); toast("Demo restarted"); }
   else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
-  else if (act === "savexai") { S.settings.xaiKey = document.getElementById("xaiKey").value.trim(); S.settings.voice = document.getElementById("voiceSel").value; save(); render(); toast("Saved"); }
+  else if (act === "savexai") { S.settings.xaiKey = document.getElementById("xaiKey").value.trim(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; save(); render(); toast("Saved"); }
 });
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
