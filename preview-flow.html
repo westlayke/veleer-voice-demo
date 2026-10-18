@@ -404,7 +404,7 @@ function seed() {
   return { contacts, opps };
 }
 const fresh = () => Object.assign({ v: 2, screen: "home", sel: { contact: null, opp: null }, interactions: [], tasks: [], history: [], seenWelcome: false,
-  settings: { xaiKey: "", xaiTokenUrl: "", demoCode: "", voice: "ara", voicePicked: false } }, seed());
+  settings: { xaiTokenUrl: "", demoCode: "", voice: "ara", voicePicked: false } }, seed());
 let S = fresh();
 try {
   const raw = localStorage.getItem(KEY);
@@ -422,8 +422,9 @@ try {
     }
   }
 } catch (e) {}
-(() => { const h = location.hash || ""; const m = /[#&]xai=([^&]+)/.exec(h), c = /[#&]code=([^&]+)/.exec(h);
-  try { if (m) S.settings.xaiKey = decodeURIComponent(m[1]).trim(); if (c) S.settings.demoCode = decodeURIComponent(c[1]).trim(); } catch (e) {} })();
+(() => { const h = location.hash || ""; const c = /[#&]code=([^&]+)/.exec(h);
+  delete S.settings.xaiKey; // the key lives only in Cloudflare; forget any key an older version saved on this phone
+  try { if (c) S.settings.demoCode = decodeURIComponent(c[1]).trim(); } catch (e) {} })();
 // earlier versions used funds and campaigns that the guide has since replaced
 (() => { const FIXC = { "Building campaign 2027": "Pennsylvania", "Scholars campaign 2026": "National" };
   const fx = (x) => { if (!x) return; if (x.fund && !FUNDS.includes(x.fund)) x.fund = "C3 - Citizens Alliance"; if (x.campaign && !CAMPAIGNS.includes(x.campaign)) x.campaign = FIXC[x.campaign] || "General / no campaign"; };
@@ -825,26 +826,17 @@ function paintCall() {
 const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
 const DEMO_CODE = "veleer2026"; // built in at the owner's request so nobody has to type it; change it here and in Cloudflare together
 const tokenUrl = () => S.settings.xaiTokenUrl || TOKEN_URL;
-const canTalk = () => !!(S.settings.xaiKey || tokenUrl());
+const canTalk = () => !!tokenUrl();
 async function mintToken() {
-  let j;
-  if (!S.settings.xaiKey && tokenUrl()) {
-    const r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || DEMO_CODE } });
-    if (!r.ok) throw new Error(r.status === 401 ? "bad_code" : "service_" + r.status);
-    j = await r.json();
-  } else {
-    if (!S.settings.xaiKey) throw new Error("no_xai_key");
-    const r = await fetch("https://api.x.ai/v1/realtime/client_secrets", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + S.settings.xaiKey }, body: JSON.stringify({ expires_after: { seconds: 300 } }) });
-    if (!r.ok) throw new Error("token_" + r.status);
-    j = await r.json();
-  }
+  const r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || DEMO_CODE } });
+  if (!r.ok) throw new Error(r.status === 401 ? "bad_code" : "service_" + r.status);
+  const j = await r.json();
   const t = j.value || (j.client_secret && (j.client_secret.value || j.client_secret)) || j.token || j.secret;
   if (!t || typeof t !== "string") throw new Error("token_shape");
   return t;
 }
 const callError = (e) => {
   const m = String(e && e.message || e);
-  if (m === "no_xai_key") return "Add your xAI API key in Settings to start a conversation.";
   if (m === "bad_code") return "This demo link isn't valid any more. Ask for a new link.";
   if (m.startsWith("service_")) return "The demo's voice service didn't answer (" + m.slice(8) + "). Try again in a moment.";
   if (m === "token_401" || m === "token_403") return "xAI refused the API key in Settings. Check it and try again.";
@@ -1277,8 +1269,7 @@ function settingsScreen() {
   return topbar("Settings", "home") + `<main>
   <section class="panel"><div class="ph"><h2>Grok voice</h2></div><div class="sb set">
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. Grok asks for anything missing and puts the draft on screen; you still tap Save.</div>
-    ${S.settings.xaiKey ? `<div class="status-line"><span class="dot g"></span> Your xAI key is saved on this phone.</div>` : tokenUrl() ? `<div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>` : ""}
-    <label for="xaiKey">xAI API key${tokenUrl() ? " (optional)" : ""} (kept only on this phone)<input id="xaiKey" type="password" autocomplete="off" value="${esc(S.settings.xaiKey)}" placeholder="xai-…"></label>
+    <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
     <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option ${v === S.settings.voice ? "selected" : ""}>${v}</option>`).join("")}</select></label>
     <button class="btn blue" data-act2="savexai">Save</button>
   </div></section>
@@ -1326,12 +1317,12 @@ document.addEventListener("click", (e) => {
     (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("vlogTxt"); el.value = txt; el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the text and copy it."); } }); }
   else if (act === "clearlog") { VLOG = []; try { localStorage.removeItem(LOGKEY); } catch (e) {} render(); toast("Log cleared"); }
   else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
-  else if (act === "savexai") { S.settings.xaiKey = document.getElementById("xaiKey").value.trim(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; save(); render(); toast("Saved"); }
+  else if (act === "savexai") { S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; save(); render(); toast("Saved"); }
 });
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T19:07:49Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T19:31:04Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
