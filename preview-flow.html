@@ -427,6 +427,8 @@ try {
 (() => { const h = location.hash || ""; const c = /[#&]code=([^&]+)/.exec(h);
   delete S.settings.xaiKey; // the key lives only in Cloudflare; forget any key an older version saved on this phone
   try { if (c) S.settings.demoCode = decodeURIComponent(c[1]).trim(); } catch (e) {} })();
+// contacts added by voice before the permission defaults were fixed came out with email and calls off; the guide has them on
+if (!S.permFix1) { S.contacts.forEach(ct => { if (!ct.example && !ct.permEmail && !ct.permCalls) { ct.permEmail = true; ct.permCalls = true; } }); S.permFix1 = true; }
 // example contacts saved before they had mobile numbers get them now
 S.contacts.forEach(ct => { if (ct.example && !ct.mobile) ct.mobile = SEED_MOBILES[ct.first + " " + ct.last] || ""; });
 // earlier versions used funds and campaigns that the guide has since replaced
@@ -518,6 +520,7 @@ function prefill(action, d, t) {
     if (!out.frequency) out.frequency = out.installments > 1 ? "Annual" : "One payment";
     if (out.firstAmount == null && out.amount && out.installments) out.firstAmount = Math.round(out.amount / out.installments);
   }
+  if (action === "contact") { if (out.permEmail == null) out.permEmail = true; if (out.permCalls == null) out.permCalls = true; if (out.permText == null) out.permText = false; } // guide defaults
   return out;
 }
 function fieldHTML(f, d, fromVoice) {
@@ -1396,7 +1399,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T20:31:02Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T20:39:09Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
