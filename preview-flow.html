@@ -191,7 +191,8 @@ details.said summary { font-style: normal; color: var(--brand); font-weight: 600
 .callbar { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 50; display: flex; justify-content: center; padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); pointer-events: none; }
 .callbar[hidden] { display: none; }
 .cb-in { pointer-events: auto; width: 100%; max-width: 430px; display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1.5px solid var(--brand-line); border-radius: 14px; padding: 9px 10px 9px 12px; box-shadow: var(--shadow); }
-.cb-t { flex: 1; min-width: 0; font-size: 14px; } .cb-cap { color: var(--muted); font-size: 13px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cb-t { flex: 1; min-width: 0; font-size: 14px; } .cb-cap { color: var(--muted); font-size: 13px; line-height: 18px; margin-top: 2px; max-height: 36px; overflow: hidden; scroll-behavior: smooth; }
+.cb-cap[hidden] { display: none; }
 .cb-end { min-height: 36px; padding: 0 14px; font-size: 14px; color: var(--bad); }
 body.incall .app { padding-top: 70px; }
 body.incall .top { top: calc(env(safe-area-inset-top, 0px) + 70px); }
@@ -756,12 +757,31 @@ ${FAQ_TEXT}`;
 
 const G = { live: false, ws: null, ctx: null, stream: null, node: null, sources: [], playHead: 0, bot: "", status: "", handled: new Set(), buf: [] };
 const callbar = () => document.getElementById("callbar");
+// Caption: each reply's words, scrolled in step with its audio. Replies queue up, so show the one being heard now.
+function capNow() {
+  if (!G.caps || !G.caps.length || !G.ctx) return null;
+  const now = G.ctx.currentTime;
+  return G.caps.find(c => c.t0 != null && now < c.t1) || G.caps.filter(c => c.text && (c.t0 == null || now >= c.t0)).pop() || null;
+}
+function capTick() {
+  const el = document.getElementById("cbCap"); if (!el) return;
+  const c = capNow();
+  if (!c || !c.text) { el.hidden = true; el.textContent = ""; return; }
+  el.hidden = false; if (el.textContent !== c.text) el.textContent = c.text;
+  const lines = Math.round(el.scrollHeight / 18);
+  if (lines <= 2) { el.scrollTop = 0; return; }
+  const frac = c.t0 == null ? 0 : Math.max(0, Math.min(1, (G.ctx.currentTime - c.t0) / Math.max(0.1, c.t1 - c.t0)));
+  const line = Math.min(lines - 2, Math.max(0, Math.floor(frac * lines) - 0)); // the line being spoken sits on top, the next one below it
+  if (el.scrollTop !== line * 18) el.scrollTop = line * 18;
+}
+setInterval(() => { if (G.live) capTick(); }, 200);
 function paintCall() {
   const el = callbar(); if (!el) return;
   document.body.classList.toggle("incall", G.live);
   el.hidden = !G.live;
   if (!G.live) return;
-  el.innerHTML = `<div class="cb-in"><span class="dot ${G.status === "Connecting…" ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b>${G.bot ? `<div class="cb-cap">${esc(G.bot)}</div>` : ""}</div><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
+  el.innerHTML = `<div class="cb-in"><span class="dot ${G.status === "Connecting…" ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div></div><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
+  capTick();
 }
 const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
 const DEMO_CODE = "veleer2026"; // built in at the owner's request so nobody has to type it; change it here and in Cloudflare together
@@ -818,13 +838,14 @@ function playChunk(b64) {
   for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 32768;
   const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.ctx.destination);
   const at = Math.max(G.ctx.currentTime + 0.02, G.playHead); src.start(at); G.playHead = at + buf.duration;
+  const cap = G.caps && G.caps[G.caps.length - 1]; if (cap) { if (cap.t0 == null) cap.t0 = at; cap.t1 = G.playHead; }
   G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
 }
 function stopPlayback() { if (G.sources.length) vlog(`playback stopped (${G.sources.length} chunks cut)`); G.sources.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = []; G.playHead = 0; }
 
 async function startCall(opening) {
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
-  G.live = true; G.status = "Connecting…"; G.bot = ""; G.handled = new Set(); paintCall(); render();
+  G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.handled = new Set(); paintCall(); render();
   try {
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
     G.ctx.resume();
@@ -901,11 +922,11 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; paintCall(); }
+  if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
-  else if (t === "response.created") { G.bot = ""; G.responding = true; }
+  else if (t === "response.created") { G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
   else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); if (G.status !== "Speaking") { G.status = "Speaking"; paintCall(); } }
-  else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; paintCall(); }
+  else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
@@ -1240,7 +1261,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T18:16:48Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T18:23:27Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
