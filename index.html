@@ -625,7 +625,7 @@ function paintCall() {
   if (!G.live) return;
   el.innerHTML = `<div class="cb-in"><span class="dot ${G.status === "Connecting…" ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b>${G.bot ? `<div class="cb-cap">${esc(G.bot)}</div>` : ""}</div><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
 }
-const TOKEN_URL = ""; // shared key-holder service; anyone with a demo link can start a conversation
+const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
 const tokenUrl = () => S.settings.xaiTokenUrl || TOKEN_URL;
 const canTalk = () => !!(S.settings.xaiKey || tokenUrl());
 async function mintToken() {
