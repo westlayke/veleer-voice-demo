@@ -460,7 +460,7 @@ function saveDraft() {
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
     const first = document.getElementById("f_" + miss[0].k); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
     toast(msg);
-    if (G.live) notice(`The officer tapped Save but the draft is missing: ${miss.map(f => f.label).join(", ")}. Ask for it in one short question, then call the draft tool again with everything filled in.`);
+    if (G.live) notice(`The officer tapped ${A.saveLabel} but the draft is missing: ${miss.map(f => f.label).join(", ")}. Ask for it in one short question, then call the draft tool again with everything filled in.`);
     return;
   }
   const undo = JSON.stringify(S), action = V.action, t = V.target;
@@ -572,7 +572,7 @@ function grokInstructions() {
   return `You are the voice assistant inside Veleer, the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for something the form needs that the officer hasn't said. Never make up details.
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, create an opportunity, plan an ask, record an ask and the response, record a pledge, or see a screen. Each contact has at most one open opportunity.
-You never save anything. When you have enough, call the matching draft tool so the draft appears on screen, then ask the officer to check it and tap Save. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
+You never save anything. When you have enough, call the matching draft tool so the draft appears on screen, then ask the officer to check it and tap the button at the bottom of the draft, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
@@ -743,14 +743,14 @@ function onTool(callId, name, args) {
   const fromVoice = new Set(Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined));
   V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice };
   renderOverlay();
-  toolReply(callId, { ok: true, status: "The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap Save." });
+  toolReply(callId, { ok: true, button: ACTIONS[tool.action].saveLabel, status: `The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${ACTIONS[tool.action].saveLabel}" button (say that exact label).` });
 }
 function grokSaved(action, r) {
   if (!G.live) return;
   send({ type: "session.update", session: { instructions: grokInstructions() } });
   const who = r && r.contact ? nameOf(r.contact) : "";
   const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? "for example create an opportunity or log another meeting" : "";
-  notice(`The officer tapped Save: ${ACTIONS[action].saved}${who ? " for " + who : ""}. Confirm in a few words, then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
+  notice(`The officer tapped ${ACTIONS[action].saveLabel}: ${ACTIONS[action].saved}${who ? " for " + who : ""}. Confirm in a few words, then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
 
