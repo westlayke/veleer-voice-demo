@@ -715,6 +715,14 @@ function endCall() {
   G.ws = G.stream = G.ctx = G.node = null; G.buf = [];
   paintCall(); render();
 }
+function tellPicked(kind) {
+  if (!G.live) return;
+  send({ type: "session.update", session: { instructions: grokInstructions() } });
+  const c = focusContact(); if (!c) return;
+  const o = kind === "opp" ? oppById(S.sel.opp) : openOpp(c.id);
+  const what = kind === "opp" ? `the opportunity ${o.name} (${o.stage}) for ${nameOf(c)}` : `the contact record for ${nameOf(c)}${o ? ` (open opportunity in ${o.stage})` : " (no open opportunity)"}`;
+  notice(`The officer tapped on screen and opened ${what}. Treat ${nameOf(c)} as the contact they mean from now on. In one short sentence, say you see they picked ${nameOf(c)} and ask what they'd like to do.`);
+}
 function notice(text) {
   send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(App notice, not spoken by the officer) " + text }] } });
   send({ type: "response.create" });
@@ -972,8 +980,8 @@ document.addEventListener("click", (e) => {
     if (/^Show me a list of contacts/.test(line)) { go("contacts"); return; }
     if (/^Show me my opportunities/.test(line)) { go("board"); return; }
     ask(`"${line}"`); return; }
-  const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); if (G.live) send({ type: "session.update", session: { instructions: grokInstructions() } }); return; }
-  const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); if (G.live) send({ type: "session.update", session: { instructions: grokInstructions() } }); return; }
+  const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); tellPicked("contact"); return; }
+  const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); tellPicked("opp"); return; }
   const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
   const a = e.target.closest("[data-act2]"); if (!a) return;
   const act = a.dataset.act2;
