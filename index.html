@@ -105,6 +105,9 @@ main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; pa
 .wl-save ol { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.45; } .wl-save li { padding-left: 2px; }
 .wl-save .ico { display: inline-flex; vertical-align: -3px; width: 18px; height: 18px; border: 1px solid var(--line); border-radius: 5px; align-items: center; justify-content: center; background: var(--surface); }
 .wl-inmic { display: inline-flex; vertical-align: -5px; width: 22px; height: 22px; border-radius: 50%; background: var(--brand); color: #fff; align-items: center; justify-content: center; margin: 0 1px; }
+.wl-role { display: flex; gap: 10px; align-items: center; background: var(--surface-2, #f3f5f8); border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; font-size: 14px; line-height: 1.4; }
+.wl-role b { color: var(--brand-ink); }
+.wl-av { width: 34px; height: 34px; flex: none; border-radius: 50%; background: var(--brand-soft, #e3edf9); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
 .wl-save small { font-size: 12.5px; color: var(--muted); }
 .wl-tips b { color: var(--fg); font-weight: 600; }
 /* journey card */
@@ -771,6 +774,7 @@ function welcomeModal() {
   const h = document.getElementById("modal");
   if (S.seenWelcome) { h.innerHTML = ""; return; }
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
+    <div class="wl-role"><span class="wl-av">DR</span><div><b>You're Dana Rivera</b>, a gift officer at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
     <span class="wl-mic">${mic(24)}</span>
     <h2 id="wmTitle">Talk to Veleer like a colleague</h2>
     <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span>, say what happened, and Veleer drafts the record. You check it and tap Save.</p>
