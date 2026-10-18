@@ -80,6 +80,27 @@ main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; pa
 .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; padding: 12px 14px; font-size: 14px; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .via { color: var(--brand); font-size: 12px; font-weight: 700; white-space: nowrap; }
+/* say-things list + welcome popup */
+.saylist { list-style: none; margin: 0; padding: 4px 0; }
+.saylist li { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 15px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.saylist li:last-child { border-bottom: 0; }
+.saylist li:active { background: var(--surface2); }
+.saylist li.on { background: var(--brand-soft); } .saylist li.on .sl-line { color: var(--brand-ink); font-weight: 700; }
+.saylist li.done .sl-line { color: var(--muted); }
+.sl-mic { width: 26px; height: 26px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: flex; align-items: center; justify-content: center; flex: none; }
+.saylist li.on .sl-mic { background: var(--brand); color: #fff; }
+.sl-line { flex: 1; min-width: 0; }
+.sl-tag { font-size: 12px; font-weight: 700; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
+.sl-tag.ok { color: var(--ok); background: var(--ok-soft); } .sl-tag.next { color: #fff; background: var(--brand); }
+.ph-help { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-weight: 700; cursor: pointer; }
+.scrim.center { align-items: center; padding: 20px; z-index: 60; }
+.wmodal { width: 100%; max-width: 360px; background: var(--surface); border-radius: 18px; padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
+.wmodal h2 { margin: 2px 0 0; font-size: 21px; line-height: 1.25; color: var(--brand-ink); text-wrap: balance; }
+.wmodal p { margin: 0; font-size: 15px; line-height: 1.45; }
+.wl-mic { width: 44px; height: 44px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.wl-tips { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 14px; color: var(--muted); line-height: 1.4; }
+.wl-tips li { padding-left: 16px; position: relative; } .wl-tips li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-line); }
+.wl-tips b { color: var(--fg); font-weight: 600; }
 /* journey card */
 .steps { list-style: none; margin: 0; padding: 4px 0; }
 .steps li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 14px; font-size: 14px; }
@@ -182,6 +203,7 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 <div class="app" id="app"></div>
 <nav class="tabbar" aria-label="Main"><div class="in" id="tabs"></div></nav>
 <div id="overlay"></div>
+<div id="modal"></div>
 <div id="toastHost"></div>
 <div id="callbar" class="callbar" hidden aria-live="polite"></div>
 
@@ -278,7 +300,7 @@ const STEPS = [
 
 /* ---------- state ---------- */
 const KEY = "veleer-voice-demo-v1";
-const fresh = () => ({ step: 0, screen: "home", contact: null, interactions: [], tasks: [], opp: null, history: [], settings: { apiKey: "", model: "claude-haiku-5-5", engine: "grok", xaiKey: "", xaiTokenUrl: "", demoCode: "", voice: "eve" } });
+const fresh = () => ({ step: 0, screen: "home", contact: null, interactions: [], tasks: [], opp: null, history: [], seenWelcome: false, settings: { apiKey: "", model: "claude-haiku-5-5", engine: "grok", xaiKey: "", xaiTokenUrl: "", demoCode: "", voice: "eve" } });
 let S = fresh();
 try { const raw = localStorage.getItem(KEY); if (raw) { S = Object.assign(fresh(), JSON.parse(raw)); S.settings = Object.assign(fresh().settings, S.settings); } } catch (e) {}
 S.settings.engine = "grok";
@@ -616,6 +638,7 @@ const TOOLS = [
     firstAmount: { type: "number" }, firstDue: { type: "string", description: "YYYY-MM-DD" } } }
 ];
 const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, description: t.description + " Call it for the current step only, and call it again with corrections if the officer changes something.", parameters: { type: "object", properties: t.props, required: t.req } }))
+  .concat([{ type: "function", name: "show_screen", description: "Open a screen in the app when the officer asks to see something, e.g. a list of contacts or their opportunities.", parameters: { type: "object", properties: { screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record"] } }, required: ["screen"] } }])
   .concat([{ type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop here for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
 function grokInstructions() {
@@ -626,6 +649,7 @@ Speak warmly and briefly: one or two short sentences per turn. Ask at most one q
 You never save anything. When you have enough, call the draft tool for the current step so the draft appears on screen, then ask the officer to check it and tap Save. If they correct something, call the tool again with the fix. Only say something is saved after the app tells you so.
 Current step (${S.step + 1} of ${STEPS.length}): ${cur ? cur.short + ". Use the tool " + TOOLS[S.step].name + "." : "All steps are done. Congratulate the officer briefly."}
 What is already recorded: ${JSON.stringify(ctx)}
+The officer may also ask to see things ("show me my contacts", "show me my opportunities"); call show_screen and describe what's there in one sentence. If they ask for a step that comes later in the journey, explain in one sentence what has to happen first and offer to do that now.
 The officer can stop at any point. Never start the next step on your own: after a save, wait for the officer to say they want to continue. If they want to stop, say a brief goodbye and call stop_conversation.
 Write spoken email addresses as real addresses. Resolve relative dates against today.`;
 }
@@ -753,6 +777,16 @@ function onEvent(e) {
 }
 function onTool(callId, name, args) {
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
+  if (name === "show_screen") {
+    let sc = {}; try { sc = JSON.parse(args || "{}"); } catch (x) {}
+    const map = { home: "home", contacts: "contacts", opportunities: "board", tasks: "tasks", contact_record: "contact", opportunity_record: "opp" };
+    const target = map[sc.screen] || "home"; go(target);
+    const summary = target === "contacts" ? `Contacts shown: ${EXAMPLE_CONTACTS.length + (S.contact ? 1 : 0)}${S.contact ? ", including " + fullName() + " (new)" : ""}.`
+      : target === "board" ? `Opportunities board shown. ${S.opp ? S.opp.name + " is in " + S.opp.stage + "." : "No opportunity for the new contact yet."} Five other example opportunities are on the board.`
+      : "Screen shown.";
+    send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify({ ok: true, summary }) } });
+    send({ type: "response.create" }); return;
+  }
   if (name === "stop_conversation") {
     send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify({ ok: true }) } });
     G.ending = true; G.status = "Ending…"; paintCall();
@@ -817,6 +851,29 @@ function needsAttention() {
   S.tasks.filter(t => !t.done).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(fullName())}</div></div><span class="chev">›</span></div>`));
   return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
 }
+const SAY_LIST = [
+  { step: "contact", line: "Let's add a contact" }, { step: "interaction", line: "Log a meeting" }, { step: "opportunity", line: "Create an opportunity" },
+  { step: "plan", line: "Plan an ask" }, { step: "ask", line: "Record an ask" }, { step: "pledge", line: "Record a pledge" },
+  { go: "contacts", line: "Show me a list of contacts" }, { go: "board", line: "Show me my opportunities" } ];
+function sayList() {
+  return `<ul class="saylist">${SAY_LIST.map(it => {
+    const i = it.step ? STEPS.findIndex(s => s.id === it.step) : -1;
+    const st = i < 0 ? "" : i < S.step ? "done" : i === S.step ? "on" : "later";
+    const tag = st === "done" ? `<span class="sl-tag ok">✓ Done</span>` : st === "on" ? `<span class="sl-tag next">Next</span>` : "";
+    return `<li class="${st}" data-act2="${it.go ? "goto-" + it.go : "voice"}" role="button" tabindex="0"><span class="sl-mic">${mic(14)}</span><span class="sl-line">“${esc(it.line)}”</span>${tag}</li>`;
+  }).join("")}</ul>`;
+}
+function welcomeModal() {
+  const h = document.getElementById("modal");
+  if (S.seenWelcome) { h.innerHTML = ""; return; }
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
+    <span class="wl-mic">${mic(24)}</span>
+    <h2 id="wmTitle">Talk to Veleer like a colleague</h2>
+    <p>Tap the mic, say what happened, and Veleer drafts the record. You check it and tap Save.</p>
+    <ul class="wl-tips"><li><b>Interrupt any time,</b> just like a phone call.</li><li><b>Fix things out loud:</b> “Change the email to…”</li><li><b>Say “that’s it for now”</b> to stop. Veleer picks up where you left off.</li></ul>
+    <button class="btn blue" data-act4="welcome-ok">Got it</button></div></div>`;
+}
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a) { S.seenWelcome = true; save(); welcomeModal(); } });
 function journey() {
   return `<ol class="steps">${STEPS.map((s, i) => `<li class="${i < S.step ? "done" : i === S.step ? "on" : ""}"><span class="n">${i < S.step ? "✓" : i + 1}</span><div><b>${esc(s.short)}</b>${i === S.step ? `<div class="say">${S.settings.engine === "grok" ? "Tap the mic, then tell Grok about it, for example:" : "Tap the mic and say something like:"} “${esc(s.say)}”</div>` : ""}</div></li>`).join("")}</ol>`;
 }
@@ -824,7 +881,7 @@ function homeScreen() {
   const finished = S.step >= STEPS.length;
   return topbar("Home") + `<main>
   ${finished ? doneCard() : ""}
-  <section class="panel"><div class="ph"><h2>Voice demo</h2><span class="meta">${Math.min(S.step, STEPS.length)} of ${STEPS.length} done</span></div>${journey()}</section>
+  <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
   <section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">this fiscal year</span></div>
     <div class="tiles"><div class="tile"><div class="k">Open opps</div><div class="v">${S.opp && S.opp.stage !== "Closed" ? 1 : 0}</div></div>
@@ -843,6 +900,15 @@ function aiBanner() {
 function doneCard() {
   return `<section class="done-card"><h2>Pledge recorded</h2><div>${esc(fullName())} went from a new contact to a ${money(pledged())} pledge, all by voice. The opportunity stays in Commitment until the first payment arrives.</div>
   <div class="btns"><button class="btn quiet" data-go="board">See the board</button><button class="btn out" data-act2="restart">Run it again</button></div></section>`;
+}
+const EXAMPLE_CONTACTS = [["Abernathy, Ruth", "Investor · capacity A"], ["Ito, Ken", "Investor · capacity B"], ["Okafor, James", "Prospect · capacity C"], ["Sandaruwan, Priya", "Prospect · capacity B"], ["Vasquez, Elena", "Investor · capacity B"]];
+function contactsScreen() {
+  const rows = EXAMPLE_CONTACTS.map(([n, m]) => ({ n, m, me: false }));
+  if (S.contact) rows.push({ n: `${S.contact.last}, ${S.contact.first}`, m: `${S.contact.status}${S.contact.capacity ? " · capacity " + S.contact.capacity : ""} · added today`, me: true });
+  rows.sort((a, b) => a.n.localeCompare(b.n));
+  return topbar("Contacts") + `<main><section class="panel"><div class="ph"><h2>My contacts</h2><span class="meta">${rows.length}</span></div>
+  ${rows.map(r => `<div class="row ${r.me ? "tap" : ""}" ${r.me ? 'data-go="contact"' : ""}><div class="t">${r.me ? `<span class="lnk">${esc(r.n)}</span> <span class="alert info">New</span>` : esc(r.n)}<div class="s">${esc(r.m)}</div></div>${r.me ? '<span class="chev">›</span>' : ""}</div>`).join("")}
+  <div class="empty" style="font-size:12.5px">Other contacts are example data.</div></section></main>`;
 }
 function contactScreen() {
   const c = S.contact;
@@ -926,12 +992,12 @@ function settingsScreen() {
 function render() {
   const app = document.getElementById("app");
   const s = S.screen;
-  app.innerHTML = s === "contact" ? contactScreen() : s === "opp" ? oppScreen() : s === "board" ? boardScreen() : s === "tasks" ? tasksScreen() : s === "settings" ? settingsScreen() : homeScreen();
-  const tab = (id, label, icon) => `<button class="tab ${s === id || (id === "board" && s === "opp") ? "on" : ""}" data-go="${id}">${icon}<span>${label}</span></button>`;
+  app.innerHTML = s === "contacts" ? contactsScreen() : s === "contact" ? contactScreen() : s === "opp" ? oppScreen() : s === "board" ? boardScreen() : s === "tasks" ? tasksScreen() : s === "settings" ? settingsScreen() : homeScreen();
+  const tab = (id, label, icon) => `<button class="tab ${s === id || (id === "board" && s === "opp") || (id === "contacts" && s === "contact") ? "on" : ""}" data-go="${id}">${icon}<span>${label}</span></button>`;
   const I = (p) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   document.getElementById("tabs").innerHTML =
     tab("home", "Home", I('<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>')) +
-    tab("contact", "Contacts", I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>')) +
+    tab("contacts", "Contacts", I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>')) +
     `<button class="micbtn ${G.live ? "oncall" : S.step < STEPS.length ? "pulse" : ""}" data-act2="mic" aria-label="${G.live ? "End conversation" : S.settings.engine === "grok" ? "Start conversation" : "Speak"}">${G.live ? '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>' : mic(28)}</button>` +
     tab("board", "Opportunities", I('<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/>')) +
     tab("tasks", "Tasks", I('<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'));
@@ -945,13 +1011,15 @@ document.addEventListener("click", (e) => {
   if (act === "voice") openVoice();
   else if (act === "mic") { if (G.live) endCall(); else openVoice(); }
   else if (act === "cultivate") { moveToCultivation(false); save(); render(); toast("Moved to Cultivation"); }
-  else if (act === "restart") { const keep = S.settings; S = fresh(); S.settings = keep; save(); render(); toast("Demo restarted"); }
+  else if (act === "restart") { const keep = S.settings; S = fresh(); S.settings = keep; save(); render(); welcomeModal(); toast("Demo restarted"); }
+  else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
+  else if (act.startsWith("goto-")) go(act.slice(5));
   else if (act === "eng-claude" || act === "eng-grok") { if (G.live) endCall(); S.settings.engine = act === "eng-grok" ? "grok" : "claude"; save(); render(); }
   else if (act === "savexai") { S.settings.xaiKey = document.getElementById("xaiKey").value.trim(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.xaiTokenUrl = document.getElementById("xaiTokenUrl").value.trim(); save(); render(); toast("Saved"); }
   else if (act === "savekey") { S.settings.apiKey = document.getElementById("apiKey").value.trim(); S.settings.model = document.getElementById("model").value; save(); render(); toast("Saved"); }
 });
 
-render(); save();
+render(); save(); welcomeModal();
 window.__demo = { get state() { return S; }, STEPS, setSample(fn) { sampleFn = fn; render(); } };
 })();
 </script>
