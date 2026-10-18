@@ -845,7 +845,7 @@ function stopPlayback() { if (G.sources.length) vlog(`playback stopped (${G.sour
 
 async function startCall(opening) {
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
-  G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.handled = new Set(); paintCall(); render();
+  G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); paintCall(); render();
   try {
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
     G.ctx.resume();
@@ -918,19 +918,20 @@ function onEvent(e) {
   const t = e.type || "";
   if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
   else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
-    if (t === "response.done") { G.audioOn = false; setTimeout(() => { G.audioSamples = 0; }, 0); if (G.echoPeak) vlog(`mic while Grok spoke: peak ${G.echoPeak.toFixed(3)}, ${G.barge || 0} loud frames passed (interrupt level ${BARGE_RMS})`); G.echoPeak = 0; G.barge = 0; }
+    if (t === "response.done") { if (G.tourEnding) { G.tour = false; G.tourEnding = false; } G.audioOn = false; setTimeout(() => { G.audioSamples = 0; }, 0); if (G.echoPeak) vlog(`mic while Grok spoke: peak ${G.echoPeak.toFixed(3)}, ${G.barge || 0} loud frames passed (interrupt level ${BARGE_RMS})`); G.echoPeak = 0; G.barge = 0; }
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
   if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
-  else if (t === "response.created") { G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
+  else if (t === "response.created") { G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
   else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); if (G.status !== "Speaking") { G.status = "Speaking"; paintCall(); } }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
-  else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message) toast("Grok: " + e.error.message); }
+  else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) toast("Grok: " + e.error.message); }
+  if (t === "conversation.item.added" && e.item && e.item.id) { (G.respItems = G.respItems || []).push(e.item.id); if (G.tour) G.tourItems.push(e.item.id); }
 }
 // A new response or session update sent while Grok is still speaking cuts off what it was saying ("Opening the…"),
 // so both wait until the current response is done.
@@ -960,13 +961,20 @@ function onTool(callId, name, args) {
   }
   if (name === "highlight_stage") {
     const i = flowIndex(data.stage); if (i < 0) { toolReply(callId, { ok: false, error: "Unknown stage." }); return; }
+    if (i === 0) { // a new walkthrough: drop the earlier one from the conversation so Grok doesn't carry on from its old words
+      const old = (G.tourItems || []).filter(id => !(G.respItems || []).includes(id));
+      old.forEach(id => send({ type: "conversation.item.delete", item_id: id }));
+      if (old.length) vlog(`removed ${old.length} items of the earlier walkthrough`);
+      G.tourItems = (G.respItems || []).slice(); G.tour = true; G.tourEnding = false;
+    }
+    if (i === FLOW.length - 1) G.tourEnding = true;
     highlightStage(i); const f = FLOW[i], nx = FLOW[i + 1];
     const facts = `${f.means}${f.move.length ? " To move on: " + f.move.join(" ") : ""}${f.note ? " " + f.note : ""}`;
     toolReply(callId, { ok: true, summary: `${f.stage} is lit up on screen. Your next words are about ${f.stage} only: start with "${f.stage}" and say one or two sentences based on this: ${facts} Say nothing about earlier stages and don't finish or repeat anything you said before. Then ${nx ? `ask "Shall I go on to ${nx.stage}?" and wait for the answer (unless they asked you to go straight through). When they say yes, call highlight_stage for ${nx.stage} before saying anything.` : "ask if they have questions or want to try a step."}` }); return;
   }
   if (name === "show_screen") {
     const map = { home: "home", contacts: "contacts", opportunities: "board", tasks: "tasks", contact_record: "contact", opportunity_record: "opp", how_it_works: "flow" };
-    const target = map[data.screen] || "home";
+    const target = map[data.screen] || "home"; if (target !== "flow") G.tour = false;
     let summary = "Screen shown.";
     if (target === "contact" || target === "opp") {
       const r = resolveTarget("interaction", data.contact_name);
@@ -980,6 +988,7 @@ function onTool(callId, name, args) {
     go(target); G.handled.size && whenIdle("instr");
     toolReply(callId, { ok: true, summary }); return;
   }
+  G.tour = false; // the officer moved on to other work; keep it out of the walkthrough that gets dropped
   const tool = TOOLS.find(t => t.name === name);
   if (!tool) { toolReply(callId, { ok: false, error: "Unknown tool." }); return; }
   const target = resolveTarget(tool.action, data.contact_name);
@@ -1261,7 +1270,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T18:23:27Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T18:27:52Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
