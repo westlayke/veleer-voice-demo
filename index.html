@@ -357,6 +357,21 @@ const ACTIONS = {
     left: "The first payment on the pledge closes the opportunity as Closed Won. Later installments are tracked on the pledge." }
 };
 
+/* ---------- giving history (example gifts already received) ---------- */
+const g = (date, amount, fund, method) => ({ date, amount, fund, method });
+const SEED_GIFTS = {
+  "Ruth Abernathy": [g("2026-03-15", 15000, "C3 - Citizens Alliance", "Check"), g("2025-11-20", 50000, "C3 - Citizens Alliance", "Stock"), g("2024-12-10", 40000, "C3 - Citizens Alliance", "Check"), g("2023-12-05", 30000, "C4 - Citizens Alliance", "Check"), g("2022-11-30", 25000, "C3 - Citizens Alliance", "Check")],
+  "Ken Ito": [g("2025-10-02", 12000, "C4 - Citizens Alliance", "Bank transfer"), g("2024-09-18", 10000, "C4 - Citizens Alliance", "Bank transfer")],
+  "Elena Vasquez": [g("2026-02-10", 2500, "PAC - Citizens Alliance", "Credit card"), g("2025-06-04", 8000, "C3 - Citizens Alliance", "Check"), g("2023-05-22", 5000, "C3 - Citizens Alliance", "Check")]
+};
+function givingOf(c) {
+  const gs = (c.gifts || []).slice().sort((a, b) => b.date.localeCompare(a.date)), yr = todayISO().slice(0, 4);
+  const sum = (l) => l.reduce((n, x) => n + (x.amount || 0), 0);
+  const o = S.opps.find(x => x.contactId === c.id && x.pledge && x.pledge.status !== "Paid in full" && x.pledge.status !== "Written off");
+  const pledgeLeft = o ? Math.max(0, o.pledge.amount - sum(o.pledge.payments || [])) : 0;
+  return { lifetime: sum(gs), ytd: sum(gs.filter(x => x.date.startsWith(yr))), last: gs[0] || null, count: gs.length, pledgeLeft };
+}
+
 /* ---------- state ---------- */
 const KEY = "veleer-voice-demo-v1";
 function seed() {
@@ -364,6 +379,7 @@ function seed() {
   const contacts = [c("Ruth", "Abernathy", "Investor", "A", "Long-time supporter of the national program."), c("Ken", "Ito", "Investor", "B", "Board member's referral."),
     c("James", "Okafor", "Prospect", "C", "Met at the alumni luncheon."), c("Priya", "Sandaruwan", "Prospect", "B", "Met at the Pennsylvania campaign kickoff."), c("Elena", "Vasquez", "Investor", "B", "Assigned by Luis Ortega.")];
   const [ab, it, ok, sa, va] = contacts;
+  contacts.forEach(ct => { ct.gifts = (SEED_GIFTS[ct.first + " " + ct.last] || []).map(g => Object.assign({}, g)); });
   const o = (ct, stage, fund, potential, ask) => ({ id: uid(), contactId: ct.id, name: `${ct.last}, ${ct.first} - ${YEAR}`, stage, fund, potential, asks: ask ? [ask] : [], pledge: null, created: "2026-02-01", example: true });
   const opps = [o(ab, "Cultivation", "C3 - Citizens Alliance", 75000), o(it, "Ask Made", "C4 - Citizens Alliance", 30000, { fund: "C4 - Citizens Alliance", campaign: "Pennsylvania", amount: 30000, askType: "Pledge", status: "Made", askedOn: "2026-09-30", plannedDate: "2026-09-30" }),
     o(ok, "Qualification", "PAC - Citizens Alliance", 20000), o(sa, "Cultivation", "C3 - Citizens Alliance", 25000),
@@ -395,6 +411,8 @@ try {
 (() => { const FIXC = { "Building campaign 2027": "Pennsylvania", "Scholars campaign 2026": "National" };
   const fx = (x) => { if (!x) return; if (x.fund && !FUNDS.includes(x.fund)) x.fund = "C3 - Citizens Alliance"; if (x.campaign && !CAMPAIGNS.includes(x.campaign)) x.campaign = FIXC[x.campaign] || "General / no campaign"; };
   S.opps.forEach(o => { fx(o); (o.asks || []).forEach(fx); fx(o.pledge); }); })();
+// earlier versions had no giving history
+S.contacts.forEach(c => { if (!c.gifts) c.gifts = c.example ? (SEED_GIFTS[c.first + " " + c.last] || []).map(x => Object.assign({}, x)) : []; });
 // earlier versions used the responses Yes / Counter-offer / Considering / No
 (() => { const ST = { Asked: "Made", Pledged: "Accepted" }, RS = { Yes: "Accepted", "Counter-offer": "Countered", Considering: "Awaiting", No: "Declined" };
   S.opps.forEach(o => (o.asks || []).forEach(a => { if (ST[a.status]) a.status = ST[a.status]; if (RS[a.response]) a.response = RS[a.response]; })); })();
@@ -587,7 +605,7 @@ function saveDraft() {
 const APPLY = {
   contact(d) {
     const ct = { id: uid(), first: d.first, last: d.last, email: d.email, mobile: d.mobile, permEmail: !!d.permEmail, permCalls: !!d.permCalls, permText: !!d.permText,
-      permSource: d.permSource, howMet: d.howMet, capacity: null, status: "Prospect", added: todayISO() };
+      permSource: d.permSource, howMet: d.howMet, capacity: null, status: "Prospect", added: todayISO(), gifts: [] };
     S.contacts.push(ct); log(`Contact added by ${OFFICER}`, { contactId: ct.id });
     S.sel.contact = ct.id; S.screen = "contact"; return { contact: ct };
   },
@@ -652,6 +670,7 @@ const APPLY = {
   gift(d, t) {
     const o = t.opp, c = t.contact;
     o.gift = { amount: d.amount, fund: d.fund, date: d.date, method: d.method };
+    (c.gifts = c.gifts || []).push({ date: d.date, amount: d.amount, fund: d.fund, method: d.method });
     let a = latestAsk(o);
     if (!a) { a = { fund: d.fund, campaign: "General / no campaign", amount: d.amount, askType: "Outright", plannedDate: d.date }; o.asks.unshift(a); }
     a.status = "Accepted";
@@ -663,6 +682,7 @@ const APPLY = {
   payment(d, t) {
     const o = t.opp, c = t.contact, p = o.pledge;
     p.payments = (p.payments || []).concat([{ amount: d.amount, date: d.date, method: d.method }]);
+    (c.gifts = c.gifts || []).push({ date: d.date, amount: d.amount, fund: p.fund, method: d.method, pledge: true });
     const paid = p.payments.reduce((n, x) => n + (x.amount || 0), 0);
     p.status = paid >= p.amount ? "Paid in full" : "Current";
     o.stage = "Closed"; o.closed = "Won"; o.closedOn = d.date;
@@ -725,6 +745,7 @@ const TOOLS = [
 ];
 const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, description: t.description + " Call it again with corrections if the officer changes something.", parameters: { type: "object", properties: t.props, required: t.req } }))
   .concat([{ type: "function", name: "show_screen", description: "Open a screen when the officer asks to see something. For a contact's record or opportunity, pass contact_name.", parameters: { type: "object", properties: Object.assign({ screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record", "how_it_works"] } }, FOR), required: ["screen"] } },
+    { type: "function", name: "get_giving", description: "Look up a contact's giving: lifetime total, this year's total, the last gift with its date, and any open pledge balance. Also opens their contact record.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
     { type: "function", name: "highlight_stage", description: "During the process overview, light up one stage on the How it works screen. Call it just before you describe that stage.", parameters: { type: "object", properties: { stage: { type: "string", enum: FLOW.map(f => f.stage) } }, required: ["stage"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
@@ -748,6 +769,7 @@ If the officer asks how the process works, for an overview, or to be walked thro
 ${flowScript()}
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
 When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before showing the draft. Recording an ask needs the same unless the investor declined.
+When the officer asks about a contact's giving (lifetime, this year, year to date, last gift or donation), call get_giving and speak the figures it returns; never estimate them.
 When adding a task, ask for a due date if none was said (they can skip it). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
 When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?" Always pass date and meetingType in show_interaction_draft and show_ask_result_draft: the date resolved from what the officer said (for example yesterday), and the type they said. Leaving them out puts today and In person on the draft.
 Write spoken email addresses as real addresses. Resolve relative dates against today.
@@ -959,6 +981,15 @@ function onTool(callId, name, args) {
     const tick = () => { if (!G.live) return; const playing = G.ctx && G.playHead > G.ctx.currentTime; if (playing && Date.now() < waitEnd) setTimeout(tick, 300); else { endCall(); toast("Conversation ended. Tap the mic any time to carry on."); } };
     setTimeout(tick, 1200); return;
   }
+  if (name === "get_giving") {
+    const r = resolveTarget("interaction", data.contact_name);
+    if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
+    const c = r.contact, v = givingOf(c); S.sel.contact = c.id; go("contact"); whenIdle("instr");
+    toolReply(callId, { ok: true, contact: nameOf(c), lifetime: money(v.lifetime), this_year: money(v.ytd), number_of_gifts: v.count,
+      last_gift: v.last ? `${money(v.last.amount)} on ${fmtDate(v.last.date)}${v.last.date.slice(0, 4) !== todayISO().slice(0, 4) ? " " + v.last.date.slice(0, 4) : ""} to ${v.last.fund}` : "none",
+      open_pledge_balance: v.pledgeLeft ? money(v.pledgeLeft) : "none",
+      say: "Say these figures in one or two sentences, e.g. lifetime, then this year, then the last gift and its date. 'This year' means since January 1." }); return;
+  }
   if (name === "highlight_stage") {
     const i = flowIndex(data.stage); if (i < 0) { toolReply(callId, { ok: false, error: "Unknown stage." }); return; }
     if (i === 0) { // a new walkthrough: drop the earlier one from the conversation so Grok doesn't carry on from its old words
@@ -1017,7 +1048,7 @@ function topbar(title, back) {
   <button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
-const SAY_LIST = ["Let's add a contact", "Log a meeting", "Create an opportunity", "Plan an ask", "Record an ask", "Record a pledge", "Record a gift", "Record a payment", "Add a task", "Walk me through the process", "Show me a list of contacts", "Show me my opportunities"];
+const SAY_LIST = ["Let's add a contact", "Log a meeting", "Create an opportunity", "Plan an ask", "Record an ask", "Record a pledge", "Record a gift", "Record a payment", "Add a task", "Walk me through the process", "What has Ruth given?", "Show me a list of contacts", "Show me my opportunities"];
 function sayList() {
   return `<ul class="saylist">${SAY_LIST.map(line => `<li data-say="${esc(line)}" role="button" tabindex="0"><span class="sl-mic">${mic(14)}</span><span class="sl-line">“${esc(line)}”</span></li>`).join("")}</ul>`;
 }
@@ -1098,6 +1129,13 @@ function historyPanel(filter) {
   const h = S.history.filter(filter); if (!h.length) return "";
   return `<section class="panel"><div class="ph"><h2>History</h2></div>${h.slice(0, 8).map(x => `<div class="row"><div class="t" style="font-size:14px">${esc(x.text)}<div class="s">${new Date(x.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${OFFICER}${x.via ? " · via voice" : ""}</div></div></div>`).join("")}</section>`;
 }
+function givingPanel(c) {
+  const v = givingOf(c);
+  return `<section class="panel"><div class="ph"><h2>Giving</h2><span class="meta">${v.count} gift${v.count === 1 ? "" : "s"}</span></div>
+    <div class="tiles"><div class="tile"><div class="k">Lifetime</div><div class="v">${money(v.lifetime)}</div></div><div class="tile"><div class="k">This year</div><div class="v">${money(v.ytd)}</div></div>
+    <div class="tile"><div class="k">Last gift</div><div class="v">${v.last ? money(v.last.amount) : "None"}</div>${v.last ? `<div class="k" style="margin-top:2px">${fmtDate(v.last.date)}</div>` : ""}</div></div>
+    ${v.pledgeLeft ? `<div class="empty" style="font-size:13px;text-align:left;padding-top:0">Open pledge balance: ${money(v.pledgeLeft)}</div>` : ""}</section>`;
+}
 function contactScreen() {
   const c = contactById(S.sel.contact);
   if (!c) return contactsScreen();
@@ -1112,6 +1150,7 @@ function contactScreen() {
   </div>
   <dl class="kv"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
   <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button><button class="btn out" data-say="Add a task for ${esc(who)}">Add a task</button>${o ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div></section>
+  ${givingPanel(c)}
   ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">›</span></div>`).join("")}</section>` : ""}
   <section class="panel"><div class="ph"><h2>Interactions</h2><span class="meta">${ints.length}</span></div>
   ${ints.length ? ints.map(i => `<div class="row"><div class="t">${esc(i.type)} · ${fmtDate(i.date)} ${i.kind === "ask" ? '<span class="alert info">Ask made</span>' : ""} <span class="via">${mic(11)} via voice</span><div class="s">${esc(i.summary)}</div></div></div>`).join("") : `<div class="empty">No interactions yet.</div>`}</section>
@@ -1270,7 +1309,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T18:27:52Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T18:33:46Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
