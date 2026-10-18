@@ -148,6 +148,21 @@ details.said summary { font-style: normal; color: var(--brand); font-weight: 600
 .savebar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 6px; }
 .savebar small { text-align: center; color: var(--muted); font-size: 12.5px; }
 .err { color: var(--bad); font-size: 14px; }
+/* conversation */
+.callbar { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 50; display: flex; justify-content: center; padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); pointer-events: none; }
+.callbar[hidden] { display: none; }
+.cb-in { pointer-events: auto; width: 100%; max-width: 430px; display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1.5px solid var(--brand-line); border-radius: 14px; padding: 9px 10px 9px 12px; box-shadow: var(--shadow); }
+.cb-t { flex: 1; min-width: 0; font-size: 14px; } .cb-cap { color: var(--muted); font-size: 13px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cb-end { min-height: 36px; padding: 0 14px; font-size: 14px; color: var(--bad); }
+body.incall .app { padding-top: 70px; }
+body.incall .top { top: calc(env(safe-area-inset-top, 0px) + 70px); }
+body.incall::before { height: calc(env(safe-area-inset-top, 0px) + 70px); background: var(--bg); }
+body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px)); }
+.micbtn.oncall { background: var(--bad); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--brand); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); color: var(--brand); padding: 9px 6px; font-weight: 700; font-size: 14.5px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.seg button small { font-weight: 400; font-size: 12px; color: var(--muted); }
+.seg button.on { background: var(--brand); color: #fff; } .seg button.on small { color: #fff; opacity: .85; }
 /* toast */
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 35; background: var(--fg); color: var(--bg); border-radius: 12px; padding: 10px 14px; font-size: 14px; display: flex; gap: 14px; align-items: center; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
 .toast button { border: 0; background: none; color: var(--bg); font-weight: 700; text-decoration: underline; cursor: pointer; }
@@ -165,6 +180,7 @@ details.said summary { font-style: normal; color: var(--brand); font-weight: 600
 <nav class="tabbar" aria-label="Main"><div class="in" id="tabs"></div></nav>
 <div id="overlay"></div>
 <div id="toastHost"></div>
+<div id="callbar" class="callbar" hidden aria-live="polite"></div>
 
 <script>
 (() => {
@@ -259,9 +275,9 @@ const STEPS = [
 
 /* ---------- state ---------- */
 const KEY = "veleer-voice-demo-v1";
-const fresh = () => ({ step: 0, screen: "home", contact: null, interactions: [], tasks: [], opp: null, history: [], settings: { apiKey: "", model: "claude-haiku-5-5" } });
+const fresh = () => ({ step: 0, screen: "home", contact: null, interactions: [], tasks: [], opp: null, history: [], settings: { apiKey: "", model: "claude-haiku-5-5", engine: "claude", xaiKey: "", xaiTokenUrl: "", voice: "eve" } });
 let S = fresh();
-try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(fresh(), JSON.parse(raw)); } catch (e) {}
+try { const raw = localStorage.getItem(KEY); if (raw) { S = Object.assign(fresh(), JSON.parse(raw)); S.settings = Object.assign(fresh().settings, S.settings); } } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const fullName = () => S.contact ? `${S.contact.first} ${S.contact.last}` : "";
 const oppName = () => S.contact ? `${S.contact.last}, ${S.contact.first} - ${new Date().getFullYear()}` : "";
@@ -270,6 +286,7 @@ const log = (text, via = true) => S.history.unshift({ at: new Date().toISOString
 /* ---------- AI ---------- */
 let sampleFn = null, aiProbe = "checking";
 (async () => {
+  await null;
   try {
     if (window.claude && typeof window.claude.use === "function") {
       sampleFn = await window.claude.use("sample");
@@ -335,6 +352,7 @@ let rec = null, finalText = "", interimText = "", micBlocked = false;
 /* ---------- voice sheet ---------- */
 let V = null; // { step, mode: listen|type|thinking|draft|error, transcript, data, err, ctl }
 function openVoice() {
+  if (S.settings.engine === "grok") { if (G.live) toast("Grok is listening. Just tell it what happened."); else startCall(); return; }
   if (S.step >= STEPS.length) { toast("The demo journey is complete. Restart it from Settings."); return; }
   const step = STEPS[S.step];
   V = { step, mode: (SR && !micBlocked) ? "listen" : "type", transcript: "" };
@@ -430,12 +448,12 @@ function draftHTML() {
   return `<div class="grab"></div>
   <div class="sh"><div style="min-width:0"><div class="vh">${mic(15)} Draft from voice · check and save</div><h3>${esc(st.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
   <div class="sb">
-    <details class="said"><summary>View transcript</summary><div style="margin-top:6px">“${esc(V.transcript)}”</div></details>
+    ${V.conv ? `<div class="left">Drafted from your conversation. Say a correction out loud, or edit here.</div>` : `<details class="said"><summary>View transcript</summary><div style="margin-top:6px">“${esc(V.transcript)}”</div></details>`}
     ${dupe}
     <form id="draftForm" novalidate>${body}</form>
     ${st.left ? `<div class="left">${esc(st.left)}</div>` : ""}
     <div class="err" id="draftErr" hidden></div>
-    <button class="btn quiet" data-act="redo">${mic(16)} Say it again</button>
+    ${V.conv ? "" : `<button class="btn quiet" data-act="redo">${mic(16)} Say it again</button>`}
   </div>
   <div class="savebar"><button class="btn blue" data-act="save">${st.id === "contact" ? "Save contact" : st.id === "pledge" ? "Record pledge" : "Save"}</button><small>Nothing is saved until you tap ${st.id === "contact" ? "Save contact" : st.id === "pledge" ? "Record pledge" : "Save"}</small></div>`;
 }
@@ -496,6 +514,7 @@ function saveDraft() {
   V = null; renderOverlay(); render();
   window.scrollTo(0, 0);
   toast(SAVED[st.id], () => { S = Object.assign(fresh(), JSON.parse(undo)); save(); render(); });
+  grokSaved(st);
 }
 const SAVED = { contact: "Contact saved", interaction: "Interaction report saved", opportunity: "Opportunity created", plan: "Ask planned", ask: "Ask recorded", pledge: "Pledge recorded" };
 
@@ -552,6 +571,182 @@ const APPLY = {
 };
 function moveToCultivation(viaVoice) { S.opp.stage = "Cultivation"; log("Moved to Cultivation (criteria met: capacity rating and a substantive interaction)", viaVoice); }
 
+/* ---------- Grok conversation mode ---------- */
+const MEET_ENUM = MEET_TYPES;
+const TOOLS = [
+  { id: "contact", name: "show_contact_draft", description: "Show the new Contact draft on the officer's screen.", req: ["first", "last"], props: {
+    first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
+    permEmail: { type: "boolean", description: "Default true" }, permCalls: { type: "boolean", description: "Default true" }, permText: { type: "boolean", description: "Default false" },
+    permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" } } },
+  { id: "interaction", name: "show_interaction_draft", description: "Show the Interaction report draft for a meeting, with capacity rating and one next step.", req: ["date", "meetingType", "summary"], props: {
+    date: { type: "string", description: "YYYY-MM-DD" }, meetingType: { type: "string", enum: MEET_ENUM }, summary: { type: "string", description: "1-3 sentences, past tense" },
+    substantive: { type: "boolean" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") },
+    nextStep: { type: "string" }, nextDue: { type: "string", description: "YYYY-MM-DD" } } },
+  { id: "opportunity", name: "show_opportunity_draft", description: "Show the new Opportunity draft.", req: [], props: {
+    fund: { type: "string", enum: FUNDS }, potential: { type: "number", description: "Dollars" }, moveToCultivation: { type: "boolean", description: "True only if the officer asks to move it to Cultivation" }, notes: { type: "string" } } },
+  { id: "plan", name: "show_ask_plan_draft", description: "Show the planned Ask draft (Add ask).", req: ["fund", "campaign", "plannedDate", "amount"], props: {
+    fund: { type: "string", enum: FUNDS }, campaign: { type: "string", enum: CAMPAIGNS }, plannedDate: { type: "string", description: "YYYY-MM-DD" }, amount: { type: "number" },
+    askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } } },
+  { id: "ask", name: "show_ask_result_draft", description: "Show the Interaction report for the meeting where the ask was made, with the investor's response.", req: ["date", "meetingType", "response", "summary"], props: {
+    date: { type: "string", description: "YYYY-MM-DD" }, meetingType: { type: "string", enum: MEET_ENUM }, response: { type: "string", enum: ["Yes", "Counter-offer", "Considering", "No"] },
+    agreedAmount: { type: "number", description: "Verbal figure agreed" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: { type: "string", description: "YYYY-MM-DD" } } },
+  { id: "pledge", name: "show_pledge_draft", description: "Show the Record pledge draft.", req: ["amount", "confirmedBy", "firstDue"], props: {
+    amount: { type: "number" }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD" },
+    installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: ["Annual", "Quarterly", "Monthly", "One payment"] },
+    firstAmount: { type: "number" }, firstDue: { type: "string", description: "YYYY-MM-DD" } } }
+];
+const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, description: t.description + " Call it for the current step only, and call it again with corrections if the officer changes something.", parameters: { type: "object", properties: t.props, required: t.req } }));
+
+function grokInstructions() {
+  const cur = STEPS[S.step];
+  const ctx = { contact: S.contact ? { name: fullName(), capacity: S.contact.capacity } : null, opportunity: S.opp ? { name: S.opp.name, stage: S.opp.stage, fund: S.opp.fund, ask: S.opp.ask } : null };
+  return `You are the voice assistant inside Veleer, the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
+Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for something the form needs that the officer hasn't said. Never make up details.
+You never save anything. When you have enough, call the draft tool for the current step so the draft appears on screen, then ask the officer to check it and tap Save. If they correct something, call the tool again with the fix. Only say something is saved after the app tells you so.
+Current step (${S.step + 1} of ${STEPS.length}): ${cur ? cur.short + ". Use the tool " + TOOLS[S.step].name + "." : "All steps are done. Congratulate the officer briefly."}
+What is already recorded: ${JSON.stringify(ctx)}
+Write spoken email addresses as real addresses. Resolve relative dates against today.`;
+}
+
+const G = { live: false, ws: null, ctx: null, stream: null, node: null, sources: [], playHead: 0, bot: "", status: "", handled: new Set(), buf: [] };
+const callbar = () => document.getElementById("callbar");
+function paintCall() {
+  const el = callbar(); if (!el) return;
+  document.body.classList.toggle("incall", G.live);
+  el.hidden = !G.live;
+  if (!G.live) return;
+  el.innerHTML = `<div class="cb-in"><span class="dot ${G.status === "Connecting…" ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b>${G.bot ? `<div class="cb-cap">${esc(G.bot)}</div>` : ""}</div><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
+}
+async function mintToken() {
+  let j;
+  if (S.settings.xaiTokenUrl) {
+    const r = await fetch(S.settings.xaiTokenUrl, { method: "POST" });
+    if (!r.ok) throw new Error("token_" + r.status);
+    j = await r.json();
+  } else {
+    if (!S.settings.xaiKey) throw new Error("no_xai_key");
+    const r = await fetch("https://api.x.ai/v1/realtime/client_secrets", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + S.settings.xaiKey }, body: JSON.stringify({ expires_after: { seconds: 300 } }) });
+    if (!r.ok) throw new Error("token_" + r.status);
+    j = await r.json();
+  }
+  const t = j.value || (j.client_secret && (j.client_secret.value || j.client_secret)) || j.token || j.secret;
+  if (!t || typeof t !== "string") throw new Error("token_shape");
+  return t;
+}
+const callError = (e) => {
+  const m = String(e && e.message || e);
+  if (m === "no_xai_key") return "Add your xAI API key in Settings to start a conversation.";
+  if (m === "token_401" || m === "token_403") return "xAI refused the API key in Settings. Check it and try again.";
+  if (m.startsWith("token_")) return "xAI couldn't start a voice session (" + m.slice(6) + "). Try again in a moment.";
+  if (e && e.name === "NotAllowedError") return "The microphone is blocked. Allow it for this site in your browser settings.";
+  if (e instanceof TypeError) return "This browser couldn't reach xAI directly. A small token service is needed; see the note in Settings.";
+  return "The conversation couldn't start (" + m + ").";
+};
+const send = (o) => { if (G.ws && G.ws.readyState === 1) G.ws.send(JSON.stringify(o)); };
+function b64FromInt16(i16) { const u8 = new Uint8Array(i16.buffer); let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+function int16FromB64(b) { const s = atob(b), u8 = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i); return new Int16Array(u8.buffer, 0, u8.length >> 1); }
+function downsample(f32, from) {
+  if (from === 24000) return f32;
+  const ratio = from / 24000, n = Math.floor(f32.length / ratio), out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = f32[Math.floor(i * ratio)];
+  return out;
+}
+function playChunk(b64) {
+  const i16 = int16FromB64(b64); if (!i16.length) return;
+  const buf = G.ctx.createBuffer(1, i16.length, 24000), ch = buf.getChannelData(0);
+  for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 32768;
+  const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.ctx.destination);
+  const at = Math.max(G.ctx.currentTime + 0.02, G.playHead); src.start(at); G.playHead = at + buf.duration;
+  G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
+}
+function stopPlayback() { G.sources.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = []; G.playHead = 0; }
+
+async function startCall() {
+  if (S.step >= STEPS.length) { toast("The demo journey is complete. Restart it from Settings."); return; }
+  G.live = true; G.status = "Connecting…"; G.bot = ""; G.handled = new Set(); paintCall(); render();
+  try {
+    G.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    G.ctx.resume();
+    G.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    const token = await mintToken();
+    let worklet = false;
+    try {
+      const url = URL.createObjectURL(new Blob([`class C extends AudioWorkletProcessor{process(i){const c=i[0]&&i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor("cap",C)`], { type: "application/javascript" }));
+      await G.ctx.audioWorklet.addModule(url); worklet = true;
+    } catch (x) { worklet = false; }
+    G.ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
+    G.ws.onopen = () => {
+      send({ type: "session.update", session: { voice: S.settings.voice || "eve", instructions: grokInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
+        audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 } } } } });
+      const srcNode = G.ctx.createMediaStreamSource(G.stream);
+      const onPcm = (f32) => {
+        if (!G.ctx) return;
+        G.buf.push(downsample(f32, G.ctx.sampleRate));
+        const total = G.buf.reduce((n, a) => n + a.length, 0);
+        if (total < 2400) return; // ~100 ms
+        const i16 = new Int16Array(total); let o = 0;
+        G.buf.forEach(a => { for (let i = 0; i < a.length; i++) { const v = Math.max(-1, Math.min(1, a[i])); i16[o++] = v < 0 ? v * 0x8000 : v * 0x7fff; } }); G.buf = [];
+        send({ type: "input_audio_buffer.append", audio: b64FromInt16(i16) });
+      };
+      if (worklet) { G.node = new AudioWorkletNode(G.ctx, "cap"); G.node.port.onmessage = (ev) => onPcm(ev.data); }
+      else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
+      srcNode.connect(G.node);
+      const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
+      notice(`The officer just opened the conversation. Greet them in one short sentence and ask about: ${STEPS[S.step].short}.`);
+      G.status = "Listening"; paintCall();
+    };
+    G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
+    G.ws.onclose = (ev) => { if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Check the xAI key in Settings."); } };
+    G.ws.onerror = () => {};
+  } catch (e) { endCall(); toast(callError(e)); }
+}
+function endCall() {
+  G.live = false; stopPlayback();
+  try { G.ws && G.ws.close(); } catch (e) {}
+  try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  try { G.ctx && G.ctx.close(); } catch (e) {}
+  G.ws = G.stream = G.ctx = G.node = null; G.buf = [];
+  paintCall(); render();
+}
+function notice(text) {
+  send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(App notice, not spoken by the officer) " + text }] } });
+  send({ type: "response.create" });
+}
+function onEvent(e) {
+  const t = e.type || "";
+  if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; paintCall(); }
+  else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
+  else if (t === "response.created") { G.bot = ""; }
+  else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); if (G.status !== "Speaking") { G.status = "Speaking"; paintCall(); } }
+  else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; paintCall(); }
+  else if (t === "response.done") { setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
+  else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
+  else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
+  else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message) toast("Grok: " + e.error.message); }
+}
+function onTool(callId, name, args) {
+  if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
+  let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
+  const tool = TOOLS.find(t => t.name === name), cur = STEPS[S.step];
+  let out;
+  if (!tool || !cur || tool.id !== cur.id) out = { ok: false, error: `Not the current step. The current step is: ${cur ? cur.short : "none (all done)"}.` };
+  else {
+    const fv = new Set(Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined));
+    V = { step: cur, mode: "draft", conv: true, transcript: "", data: prefill(cur, data), fromVoice: fv };
+    renderOverlay();
+    out = { ok: true, status: "The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap Save." };
+  }
+  send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(out) } });
+  send({ type: "response.create" });
+}
+function grokSaved(stepDone) {
+  if (!G.live) return;
+  send({ type: "session.update", session: { instructions: grokInstructions() } });
+  const next = STEPS[S.step];
+  notice(`The officer tapped Save: ${SAVED[stepDone.id]}. ${next ? "Next step: " + next.short + ". Confirm in a few words and ask about it." : "That was the last step: the pledge is recorded and the opportunity is in Commitment. Congratulate them in one sentence."}`);
+}
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
+
 /* ---------- toast ---------- */
 let toastTimer = null;
 function toast(text, undo) {
@@ -586,7 +781,7 @@ function needsAttention() {
   return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
 }
 function journey() {
-  return `<ol class="steps">${STEPS.map((s, i) => `<li class="${i < S.step ? "done" : i === S.step ? "on" : ""}"><span class="n">${i < S.step ? "✓" : i + 1}</span><div><b>${esc(s.short)}</b>${i === S.step ? `<div class="say">Tap the mic and say something like: “${esc(s.say)}”</div>` : ""}</div></li>`).join("")}</ol>`;
+  return `<ol class="steps">${STEPS.map((s, i) => `<li class="${i < S.step ? "done" : i === S.step ? "on" : ""}"><span class="n">${i < S.step ? "✓" : i + 1}</span><div><b>${esc(s.short)}</b>${i === S.step ? `<div class="say">${S.settings.engine === "grok" ? "Tap the mic, then tell Grok about it, for example:" : "Tap the mic and say something like:"} “${esc(s.say)}”</div>` : ""}</div></li>`).join("")}</ol>`;
 }
 function homeScreen() {
   const finished = S.step >= STEPS.length;
@@ -604,6 +799,7 @@ function homeScreen() {
   </main>`;
 }
 function aiBanner() {
+  if (S.settings.engine === "grok") return S.settings.xaiKey || S.settings.xaiTokenUrl ? "" : `<section class="note" style="border-radius:12px">Conversation mode needs an xAI API key. <button class="btn quiet" data-go="settings" style="margin-top:8px;width:100%">Open Settings</button></section>`;
   if (aiProbe === "checking" || aiSource() !== "none") return "";
   return `<section class="note" style="border-radius:12px">Claude isn't connected on this copy of the demo, so voice drafts can't be filled yet. <button class="btn quiet" data-go="settings" style="margin-top:8px;width:100%">Open Settings</button></section>`;
 }
@@ -677,13 +873,22 @@ function settingsScreen() {
   const src = aiSource();
   const line = src === "claude" ? `<span class="dot g"></span> Claude is connected through your Claude account.` : src === "api" ? `<span class="dot g"></span> Claude is connected with the API key below.` : aiProbe === "checking" ? `<span class="dot a"></span> Checking for Claude…` : `<span class="dot r"></span> Claude isn't connected. Add an API key below.`;
   const micLine = !SR ? `<span class="dot a"></span> This browser has no speech recognition. Use the keyboard's dictation key.` : micBlocked ? `<span class="dot a"></span> The microphone was blocked here. Keyboard dictation still works.` : `<span class="dot g"></span> Speech recognition is available. The browser asks for the mic the first time.`;
+  const grok = S.settings.engine === "grok";
   return topbar("Settings", "home") + `<main>
-  <section class="panel"><div class="ph"><h2>Demo setup</h2></div><div class="sb set">
+  <section class="panel"><div class="ph"><h2>Voice mode</h2></div><div class="sb set">
+    <div class="seg" role="radiogroup" aria-label="Voice mode"><button class="${grok ? "" : "on"}" data-act2="eng-claude" role="radio" aria-checked="${!grok}">Tap to talk<small>Claude fills the draft</small></button><button class="${grok ? "on" : ""}" data-act2="eng-grok" role="radio" aria-checked="${grok}">Conversation<small>Grok talks back</small></button></div>
+    ${grok ? `<div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. Grok asks for anything missing and puts the draft on screen; you still tap Save.</div>
+    <label for="xaiKey">xAI API key (kept only on this phone)<input id="xaiKey" type="password" autocomplete="off" value="${esc(S.settings.xaiKey)}" placeholder="xai-…"></label>
+    <label for="voiceSel">Voice<select id="voiceSel">${["eve", "ara", "rex", "sal", "leo"].map(v => `<option ${v === S.settings.voice ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <details><summary style="font-size:13px;color:var(--brand);cursor:pointer">Token service (only if the key alone doesn't connect)</summary><label for="xaiTokenUrl" style="margin-top:8px">Token service address<input id="xaiTokenUrl" type="url" autocomplete="off" value="${esc(S.settings.xaiTokenUrl)}" placeholder="https://…"></label></details>
+    <button class="btn blue" data-act2="savexai">Save</button>` : ""}
+  </div></section>
+  ${grok ? "" : `<section class="panel"><div class="ph"><h2>Demo setup</h2></div><div class="sb set">
     <div class="status-line">${line}</div><div class="status-line">${micLine}</div>
     ${src === "claude" ? "" : `<label for="apiKey">Anthropic API key (kept only on this phone)<input id="apiKey" type="password" autocomplete="off" value="${esc(S.settings.apiKey)}" placeholder="sk-ant-…"></label>
     <label for="model">Model<select id="model">${["claude-haiku-5-5", "claude-sonnet-5-5"].map(m => `<option ${m === S.settings.model ? "selected" : ""}>${m}</option>`).join("")}</select></label>
     <button class="btn blue" data-act2="savekey">Save</button>`}
-  </div></section>
+  </div></section>`}
   <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Clears Maria and everything recorded, and starts the journey again at step 1.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
   </main>`;
 }
@@ -697,7 +902,7 @@ function render() {
   document.getElementById("tabs").innerHTML =
     tab("home", "Home", I('<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>')) +
     tab("contact", "Contacts", I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>')) +
-    `<button class="micbtn ${S.step < STEPS.length ? "pulse" : ""}" data-act2="voice" aria-label="Speak">${mic(28)}</button>` +
+    `<button class="micbtn ${G.live ? "oncall" : S.step < STEPS.length ? "pulse" : ""}" data-act2="mic" aria-label="${G.live ? "End conversation" : S.settings.engine === "grok" ? "Start conversation" : "Speak"}">${G.live ? '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>' : mic(28)}</button>` +
     tab("board", "Opportunities", I('<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/>')) +
     tab("tasks", "Tasks", I('<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'));
 }
@@ -708,8 +913,11 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("[data-act2]"); if (!a) return;
   const act = a.dataset.act2;
   if (act === "voice") openVoice();
+  else if (act === "mic") { if (G.live) endCall(); else openVoice(); }
   else if (act === "cultivate") { moveToCultivation(false); save(); render(); toast("Moved to Cultivation"); }
   else if (act === "restart") { const keep = S.settings; S = fresh(); S.settings = keep; save(); render(); toast("Demo restarted"); }
+  else if (act === "eng-claude" || act === "eng-grok") { if (G.live) endCall(); S.settings.engine = act === "eng-grok" ? "grok" : "claude"; save(); render(); }
+  else if (act === "savexai") { S.settings.xaiKey = document.getElementById("xaiKey").value.trim(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.xaiTokenUrl = document.getElementById("xaiTokenUrl").value.trim(); save(); render(); toast("Saved"); }
   else if (act === "savekey") { S.settings.apiKey = document.getElementById("apiKey").value.trim(); S.settings.model = document.getElementById("model").value; save(); render(); toast("Saved"); }
 });
 

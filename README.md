@@ -1,5 +1,9 @@
 # Veleer voice demo
 
-A click-through phone demo of Veleer: one investor goes from new contact to recorded pledge by voice, with Claude filling each draft.
+A click-through phone demo of Veleer: one investor goes from new contact to recorded pledge by voice.
 
-Open the published page on a phone, tap the gear, and paste an Anthropic API key (it is stored only in that browser). Restart the demo from the same Settings screen.
+Two voice modes, chosen in Settings (the gear):
+- **Tap to talk**: the phone turns speech into words and Claude fills each draft. Needs an Anthropic API key.
+- **Conversation**: a two-way voice conversation with Grok (xAI) that you can interrupt. Grok asks for anything missing and puts the draft on screen. Needs an xAI API key.
+
+Keys are stored only in the browser that enters them. Nothing is saved until the officer taps Save. Restart the demo from Settings.
