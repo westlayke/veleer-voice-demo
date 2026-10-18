@@ -5,7 +5,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon-v2.png">
 <link rel="manifest" href="manifest.webmanifest?v=2">
 <link rel="icon" href="icon-192-v2.png">
-<title>Veleer Voice Demo</title>
+<title>Citizens VCRM</title>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
 </head><body>
 <style>
@@ -72,6 +72,13 @@ main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; pa
 .flag { display: inline-flex; align-items: center; gap: 4px; border-radius: 12px; font-size: 13px; padding: 2px 9px; border: 1px solid; }
 .flag.yes { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
 .flag.no { background: var(--surface2); border-color: var(--line); color: var(--muted); }
+.goals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px 14px; } .goals .k { font-size: 12.5px; color: var(--muted); } .goals .v { font-size: 18px; font-weight: 700; margin: 2px 0 6px; } .goals small { font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.gbar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; } .gbar span { display: block; height: 100%; background: var(--blue, #2f74d0); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; } .seg button { font: inherit; font-size: 12.5px; padding: 4px 10px; border: 0; background: transparent; color: var(--muted); } .seg button.on { background: var(--blue, #2f74d0); color: #fff; }
+.lgroup { padding: 8px 14px 6px; font-size: 12.5px; font-weight: 700; color: var(--muted); background: var(--bg, #f3f5f9); border-top: 1px solid var(--line); } .lgroup span { font-weight: 400; }
+.flag.dnc { color: var(--bad); border-color: currentColor; }
+.search { font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; background: #fff; }
+details.trouble > summary { list-style: none; cursor: pointer; } details.trouble > summary::-webkit-details-marker { display: none; } details.trouble:not([open]) > summary { border-bottom: 0; }
 .flags { display: flex; gap: 6px; flex-wrap: wrap; }
 .hero { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .hero h2 { margin: 0; font-size: 21px; }
@@ -193,16 +200,21 @@ details.said summary { font-style: normal; color: var(--brand); font-weight: 600
 .lbl { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .lbl .req { color: var(--bad); } .lbl .via { margin-left: auto; }
 .two .vt { display: none; }
-.fld input[type=text], .fld input[type=date], .fld select, .fld textarea { width: 100%; min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
+.fld input[type=text], .fld input[type=date], .fld input[type=time], .fld select, .fld textarea { width: 100%; min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
 .fld textarea { min-height: 64px; resize: vertical; }
 .fld.chk input { border-color: var(--warn-line); background: var(--warn-soft); }
 .cn { font-size: 12.5px; color: var(--warn); }
 .tg { display: flex; align-items: center; gap: 10px; font-size: 15px; }
 .tg input { width: 22px; height: 22px; accent-color: var(--brand); flex: none; }
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+/* iPhone draws date and time boxes wider than their column and centres the text; keep them inside the column */
+.fld input[type=date], .fld input[type=time] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; box-sizing: border-box; text-align: left; }
+.fld input[type=date]::-webkit-date-and-time-value, .fld input[type=time]::-webkit-date-and-time-value { text-align: left; }
+.fld:has(> label.tg) { padding-top: 10px; padding-bottom: 12px; }
 .left { font-size: 13px; color: var(--muted); background: var(--surface2); border-radius: 9px; padding: 9px 11px; }
 .savebar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 6px; }
 .savebar small { text-align: center; color: var(--muted); font-size: 12.5px; }
+.savebar { box-shadow: 0 -10px 14px -10px rgba(0,0,0,.22); } /* shows the form carries on under the button */
 .err { color: var(--bad); font-size: 14px; }
 /* conversation */
 .callbar { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 50; display: flex; justify-content: center; padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); pointer-events: none; }
@@ -302,9 +314,10 @@ const ACTIONS = {
       { k: "email", label: "Email", check: "Spoken addresses are easy to mishear. Check the spelling before you save." },
       { k: "mobile", label: "Mobile" },
       { k: "permEmail", label: "Email permitted", type: "bool" }, { k: "permCalls", label: "Calls permitted", type: "bool" }, { k: "permText", label: "Texting permitted", type: "bool" },
+      { k: "ally", label: "Ally - Do Not Solicit", type: "bool" }, { k: "dnc", label: "Do Not Contact", type: "bool" },
       { k: "permSource", label: "Permission source" }, { k: "howMet", label: "How we met", type: "area" } ],
     pairs: [["first", "last"]],
-    left: "A contact needs an email or a mobile number (at least one). Not filled by voice: capacity rating, Ally - Do Not Solicit and Do Not Contact." },
+    left: "A contact needs an email or a mobile number (at least one). Not filled by voice: capacity rating. Voice ticks Ally - Do Not Solicit or Do Not Contact only when you say so." },
   interaction: { title: "Interaction report", saved: "Interaction report saved", saveLabel: "Save",
     fields: [
       { k: "forName", label: "Contact", fixed: true },
@@ -400,23 +413,42 @@ function givingOf(c) {
 
 /* ---------- state ---------- */
 const KEY = "veleer-voice-demo-v1";
+const SEED_EMAILS = { "Ruth Abernathy": "ruth.abernathy@example.org", "Ken Ito": "ken.ito@example.org", "James Okafor": "james.okafor@example.org", "Priya Sandaruwan": "priya.s@example.org", "Elena Vasquez": "elena.vasquez@example.org" };
+// past interactions, open tasks and booked meetings for the example contacts, so every panel has something in it
+function seedActivity(st) {
+  const T = todayISO(), by = (n) => st.contacts.find(c => c.example && c.first + " " + c.last === n), opp = (c) => c && st.opps.find(o => o.contactId === c.id && o.stage !== "Closed");
+  const ru = by("Ruth Abernathy"), ke = by("Ken Ito"), ja = by("James Okafor"), pr = by("Priya Sandaruwan"), el = by("Elena Vasquez");
+  const I = (c, daysAgo, type, summary, substantive, kind) => c && st.interactions.push({ id: uid(), contactId: c.id, oppId: opp(c) ? opp(c).id : null, date: addDays(T, -daysAgo), type, summary, substantive, outcome: "", kind: kind || "meeting", example: true });
+  I(ru, 36, "In person", "Lunch at the club. Keen on the national program; wants an update on Pennsylvania before the year-end ask.", true);
+  I(ke, 18, "In person", "Asked for a $30,000 pledge to C4, Pennsylvania campaign. Ken will talk it over with his wife.", true, "ask");
+  I(ja, 16, "Phone call", "Intro call after the alumni luncheon. Strong interest in the PAC program; open to a meeting.", true);
+  I(pr, 23, "Video call", "Talked through the Pennsylvania field plan. Asked for the budget summary.", true);
+  I(el, 59, "In person", "First meeting after Luis Ortega's handover. Toured the New Hampshire office.", true);
+  const K = (c, text, due, onOpp, example) => c && st.tasks.push({ id: uid(), contactId: c.id, oppId: onOpp && opp(c) ? opp(c).id : null, text, due, done: false, example: true });
+  K(ke, "Follow up on Ken's pledge decision", addDays(T, -4), true);
+  K(el, "Ask reminder: Vasquez, Elena - 2026", addDays(T, 11), true);
+  K(ru, "Send Ruth the Pennsylvania update", addDays(T, 6), false);
+  st.meetings = st.meetings || [];
+  if (ru) st.meetings.push({ id: uid(), contactId: ru.id, title: "Coffee with Ruth Abernathy", date: addDays(T, 5), time: "10:00", duration: "1 hour", type: "In person", location: "Blue Door Cafe", notes: "", example: true });
+  if (pr) st.meetings.push({ id: uid(), contactId: pr.id, title: "Budget walk-through with Priya Sandaruwan", date: addDays(T, 10), time: "15:00", duration: "45 minutes", type: "Video call", location: "", notes: "", example: true });
+}
 const SEED_MOBILES = { "Ruth Abernathy": "(555) 010-0141", "Ken Ito": "(555) 010-0142", "James Okafor": "(555) 010-0143", "Priya Sandaruwan": "(555) 010-0144", "Elena Vasquez": "(555) 010-0145" };
 function seed() {
   const c = (first, last, status, capacity, howMet) => ({ id: uid(), first, last, status, capacity, howMet, permEmail: true, permCalls: true, permText: false, added: "2025-03-14", example: true });
   const contacts = [c("Ruth", "Abernathy", "Investor", "A", "Long-time supporter of the national program."), c("Ken", "Ito", "Investor", "B", "Board member's referral."),
     c("James", "Okafor", "Prospect", "C", "Met at the alumni luncheon."), c("Priya", "Sandaruwan", "Prospect", "B", "Met at the Pennsylvania campaign kickoff."), c("Elena", "Vasquez", "Investor", "B", "Assigned by Luis Ortega.")];
   const [ab, it, ok, sa, va] = contacts;
-  contacts.forEach(ct => { ct.mobile = SEED_MOBILES[ct.first + " " + ct.last] || ""; });
+  contacts.forEach(ct => { ct.mobile = SEED_MOBILES[ct.first + " " + ct.last] || ""; ct.email = SEED_EMAILS[ct.first + " " + ct.last] || ""; });
   contacts.forEach(ct => { ct.gifts = (SEED_GIFTS[ct.first + " " + ct.last] || []).map(g => Object.assign({}, g)); });
   const o = (ct, stage, fund, potential, ask) => ({ id: uid(), contactId: ct.id, name: `${ct.last}, ${ct.first} - ${YEAR}`, stage, fund, potential, asks: ask ? [ask] : [], pledge: null, created: "2026-02-01", example: true });
   const opps = [o(ab, "Cultivation", "C3 - Citizens Alliance", 75000), o(it, "Ask Made", "C4 - Citizens Alliance", 30000, { fund: "C4 - Citizens Alliance", campaign: "Pennsylvania", amount: 30000, askType: "Pledge", status: "Made", askedOn: "2026-09-30", plannedDate: "2026-09-30" }),
     o(ok, "Qualification", "PAC - Citizens Alliance", 20000), o(sa, "Cultivation", "C3 - Citizens Alliance", 25000),
-    o(va, "Ask Planning", "C3 - Citizens Alliance", 40000, { fund: "C3 - Citizens Alliance", campaign: "New Hampshire", amount: 40000, askType: "Outright", status: "Planned", plannedDate: "2026-11-05" })];
+    o(va, "Ask Planning", "C3 - Citizens Alliance", 40000, { fund: "C3 - Citizens Alliance", campaign: "New Hampshire", amount: 40000, askType: "Outright", status: "Planned", plannedDate: addDays(todayISO(), 18) })];
   return { contacts, opps };
 }
 const fresh = () => Object.assign({ v: 2, screen: "home", sel: { contact: null, opp: null }, interactions: [], tasks: [], history: [], seenWelcome: false,
   settings: { xaiTokenUrl: "", demoCode: "", voice: "ara", voicePicked: false } }, seed());
-let S = fresh();
+let S = fresh(); seedActivity(S); S.seed2 = true;
 try {
   const raw = localStorage.getItem(KEY);
   if (raw) {
@@ -438,6 +470,8 @@ try {
   try { if (c) S.settings.demoCode = decodeURIComponent(c[1]).trim(); } catch (e) {} })();
 // contacts added by voice before the permission defaults were fixed came out with email and calls off; the guide has them on
 if (!S.permFix1) { S.contacts.forEach(ct => { if (!ct.example && !ct.permEmail && !ct.permCalls) { ct.permEmail = true; ct.permCalls = true; } }); S.permFix1 = true; }
+// phones that started before the example activity existed get it once
+if (!S.seed2) { S.contacts.forEach(ct => { if (ct.example && !ct.email) ct.email = SEED_EMAILS[ct.first + " " + ct.last] || ""; }); seedActivity(S); S.seed2 = true; }
 // example contacts saved before they had mobile numbers get them now
 S.contacts.forEach(ct => { if (ct.example && !ct.mobile) ct.mobile = SEED_MOBILES[ct.first + " " + ct.last] || ""; });
 // earlier versions used funds and campaigns that the guide has since replaced
@@ -488,6 +522,8 @@ function resolveTarget(action, spoken) {
   if (!list.length) return { error: spoken ? `No contact named "${spoken}". Known contacts: ${S.contacts.map(nameOf).join(", ")}. Ask who they mean, or offer to add them as a new contact.` : "Ask which contact this is for." };
   if (list.length > 1) return { error: `More than one contact matches: ${list.map(nameOf).join(", ")}. Ask which one.` };
   const contact = list[0];
+  if (contact.dnc && ["meeting", "plan", "ask", "opportunity"].includes(action)) return { error: `${nameOf(contact)} is marked Do Not Contact, so no outreach can be planned. Only a Chief Gift Officer can clear it.` };
+  if (contact.ally && ["opportunity", "plan", "ask", "pledge", "gift"].includes(action)) return { error: `${nameOf(contact)} is an Ally - Do Not Solicit, so they can't be asked for a gift. The officer who set the flag or the Chief Gift Officer can turn it off.` };
   if (action === "interaction") return { contact, opp: openOpp(contact.id) || null };
   if (action === "task" || action === "meeting") return { contact, opp: openOpp(contact.id) || null };
   const opp = openOpp(contact.id);
@@ -559,7 +595,7 @@ function draftHTML() {
     if (paired.has(f.k)) { const pair = A.pairs.find(p => p[0] === f.k); if (pair) body += `<div class="two">${pair.map(k => fieldHTML(A.fields.find(x => x.k === k), d, fv)).join("")}</div>`; continue; }
     body += fieldHTML(f, d, fv);
   }
-  const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : V.action === "task" ? `For ${esc(nameOf(V.target.contact))}${V.target.opp ? " · open opportunity " + esc(V.target.opp.name) : ""}` : esc(V.target.opp ? V.target.opp.name : nameOf(V.target.contact));
+  const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : V.action === "task" ? `For ${esc(nameOf(V.target.contact))}${V.target.opp ? " · open opportunity " + esc(V.target.opp.name) : ""}` : (V.target.contact ? esc(nameOf(V.target.contact)) + (V.target.opp ? " · " + esc(V.target.opp.name) : "") : esc(V.target.opp ? V.target.opp.name : ""));
   let dupe = "";
   if (V.action === "contact") { const m = findContacts(`${d.first || ""} ${d.last || ""}`); dupe = m.length ? `<div class="note">Possible match: ${esc(m.map(nameOf).join(", "))} is already a contact. Save only if this is someone new.</div>` : `<div class="left">Checked for duplicates: no existing contact matches ${esc((d.first || "") + " " + (d.last || ""))}.</div>`; }
   return `<div class="grab"></div>
@@ -643,7 +679,7 @@ function gcalLink(d, c) {
   const mins = { "30 minutes": 30, "45 minutes": 45, "1 hour": 60, "90 minutes": 90, "2 hours": 120 }[d.duration] || 60;
   const start = new Date(`${d.date}T${d.time || "09:00"}:00`), end = new Date(start.getTime() + mins * 6e4);
   const f = (x) => `${x.getFullYear()}${String(x.getMonth() + 1).padStart(2, "0")}${String(x.getDate()).padStart(2, "0")}T${String(x.getHours()).padStart(2, "0")}${String(x.getMinutes()).padStart(2, "0")}00`;
-  const details = [`${d.meetingType || "Meeting"} with ${nameOf(c)}${c.mobile ? " · " + c.mobile : ""}${c.email ? " · " + c.email : ""}`, d.notes || "", "Scheduled from Veleer"].filter(Boolean).join("\n\n");
+  const details = [`${d.meetingType || "Meeting"} with ${nameOf(c)}${c.mobile ? " · " + c.mobile : ""}${c.email ? " · " + c.email : ""}`, d.notes || "", "Scheduled from Citizens VCRM"].filter(Boolean).join("\n\n");
   const q = { action: "TEMPLATE", text: d.title || `Meeting with ${nameOf(c)}`, dates: `${f(start)}/${f(end)}`, details, location: d.location || "" };
   if (c.email) q.add = c.email; // the contact as a guest, so Google offers to send the invite when the officer saves
   if (d.meetingType === "Video call") q.vcon = "meet"; // asks Google Calendar to attach a Meet link (not an official link option; the event screen also has an Add Google Meet button)
@@ -655,14 +691,17 @@ const APPLY = {
     const c = t.contact; S.meetings = S.meetings || [];
     S.meetings.push({ id: uid(), contactId: c.id, title: d.title, date: d.date, time: d.time, duration: d.duration, type: d.meetingType, location: d.location, notes: d.notes });
     log(`Meeting scheduled: ${fmtDate(d.date)} at ${fmtTime(d.time)} (${d.meetingType})`, { contactId: c.id });
-    if (G.live) endCall(); // Google Calendar takes over the screen
+    G.leftFor = G.live ? "calendar-live" : "calendar"; if (G.live) endCall(); // Google Calendar takes over the screen
     window.open(gcalLink(d, c), "_blank");
     S.sel.contact = c.id; S.screen = "contact"; return { contact: c };
   },
   contact(d) {
     const ct = { id: uid(), first: d.first, last: d.last, email: d.email, mobile: d.mobile, permEmail: !!d.permEmail, permCalls: !!d.permCalls, permText: !!d.permText,
       permSource: d.permSource, howMet: d.howMet, capacity: null, status: "Prospect", added: todayISO(), gifts: [] };
+    ct.ally = !!d.ally; ct.dnc = !!d.dnc;
     S.contacts.push(ct); log(`Contact added by ${OFFICER}`, { contactId: ct.id });
+    if (ct.ally) log(`Ally - Do Not Solicit set by ${OFFICER}`, { contactId: ct.id });
+    if (ct.dnc) log(`Do Not Contact set by ${OFFICER}`, { contactId: ct.id });
     S.sel.contact = ct.id; S.screen = "contact"; return { contact: ct };
   },
   interaction(d, t) {
@@ -771,6 +810,7 @@ const TOOLS = [
   { action: "contact", name: "show_contact_draft", description: "Show a new Contact draft. A contact needs at least an email or a mobile number.", req: ["first", "last"], props: {
     first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
     permEmail: { type: "boolean", description: "Default true" }, permCalls: { type: "boolean", description: "Default true" }, permText: { type: "boolean", description: "Default false" },
+    ally: { type: "boolean", description: "Ally - Do Not Solicit: true only if the officer says this person must not be asked for a gift" }, dnc: { type: "boolean", description: "Do Not Contact: true only if the officer says the person asked not to be contacted" },
     permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" } } },
   { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "date", "meetingType", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
@@ -815,7 +855,7 @@ function crmSnapshot() {
 }
 function grokInstructions() {
   const f = focusContact();
-  return `You are the voice assistant inside Veleer, the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
+  return `You are the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
@@ -927,6 +967,7 @@ function letSleep() { try { G.wake && G.wake.release(); } catch (e) {} G.wake = 
 // locking the phone pauses the page, which cuts the mic and Grok's connection: end the conversation cleanly instead of leaving it hanging
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && G.live) { vlog("phone locked or app hidden: ending conversation"); G.endedByLock = true; endCall(); }
+  else if (document.visibilityState === "visible" && G.leftFor) { const was = G.leftFor; G.leftFor = null; G.endedByLock = false; toast(was === "calendar-live" ? "Welcome back. The conversation paused while you were in Google Calendar; tap the mic to carry on." : "Welcome back. If you tapped Save in Google Calendar, the meeting is in your calendar."); }
   else if (document.visibilityState === "visible" && S.pendingCall) { G.endedByLock = false; callDoneModal(); }
   else if (document.visibilityState === "visible" && G.endedByLock) { G.endedByLock = false; toast("The conversation ended when the phone locked. Tap the mic to carry on."); }
 });
@@ -1017,7 +1058,7 @@ function onEvent(e) {
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
-  else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) toast("Grok: " + e.error.message); }
+  else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) toast("Voice: " + e.error.message); }
   if (t === "conversation.item.added" && e.item && e.item.id) { if (e.item.type !== "function_call") (G.respItems = G.respItems || []).push(e.item.id); if (G.tour && e.item.type !== "function_call" && !G.tourItems.includes(e.item.id)) G.tourItems.push(e.item.id); }
 }
 // A new response or session update sent while Grok is still speaking cuts off what it was saying ("Opening the…"),
@@ -1051,6 +1092,7 @@ function onTool(callId, name, args) {
     if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
     const c = r.contact; S.sel.contact = c.id; go("contact");
     if (!c.mobile) { toolReply(callId, { ok: false, error: `${nameOf(c)} has no phone number on record.` }); return; }
+    if (c.dnc) { toolReply(callId, { ok: false, error: `${nameOf(c)} is marked Do Not Contact.` }); return; }
     if (!c.permCalls) { toolReply(callId, { ok: false, error: `Calls aren't permitted for ${nameOf(c)} (Calls permitted is off on the contact).` }); return; }
     callPromptModal(c); whenIdle("instr");
     toolReply(callId, { ok: true, status: `A Call button for ${nameOf(c)} is on screen. In one short sentence, tell the officer to tap Call, and that you'll help write up the call when they're back. Our conversation ends when the call starts.` }); return;
@@ -1149,8 +1191,8 @@ function saveTip() {
   const steps = ios ? [`Tap ${share} Share at the bottom of Safari.`, `Scroll down and tap <b>Add to Home Screen</b>.`, `Tap <b>Add</b>.`]
     : android ? [`Tap ${dots} at the top right of Chrome.`, `Tap <b>Add to home screen</b> (or <b>Install app</b>).`, `Tap <b>Add</b> or <b>Install</b>.`]
     : [`Open this link on your phone.`, `iPhone: tap ${share} Share, then <b>Add to Home Screen</b>.`, `Android: tap ${dots}, then <b>Add to home screen</b>.`];
-  return `<div class="wl-save"><h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Keep Veleer on your phone</h3>
-    <ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol><small>Then open it from the Veleer icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small></div>`;
+  return `<div class="wl-save"><h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Keep Citizens VCRM on your phone</h3>
+    <ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol><small>Then open it from the Citizens VCRM icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small></div>`;
 }
 // a phone that opens the demo without its #code (for example from the home-screen icon) asks for the code word once
 function codeModal(opening) {
@@ -1171,45 +1213,69 @@ function welcomeModal() {
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
     <div class="wl-role"><span class="wl-av">DR</span><div><b>You're Dana Rivera</b>, a gift officer at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
     <span class="wl-mic">${mic(24)}</span>
-    <h2 id="wmTitle">Talk to Veleer like a colleague</h2>
-    <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span>, say what happened, and Veleer drafts the record. You check it and tap Save.</p>
-    <ul class="wl-tips"><li><b>Interrupt any time,</b> just like a phone call.</li><li><b>Fix things out loud:</b> “Change the email to…”</li><li><b>Say “that’s it for now”</b> to stop. Pick up any time.</li></ul>
+    <h2 id="wmTitle">Talk to Citizens VCRM like a colleague</h2>
+    <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> and try: <b>“Log a meeting with Ruth.”</b> The assistant fills in the form as you talk; you check it and tap Save.</p>
     ${saveTip()}
     <button class="btn blue" data-act4="welcome-ok">Got it</button></div></div>`;
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a) { S.seenWelcome = true; save(); welcomeModal(); } });
 
 const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
+const AWAIT_WARN_DAYS = 14; // tenant setting in the guide; demo default
+function oppAlert(o) {
+  const a = latestAsk(o), c = contactById(o.contactId);
+  if (o.stage === "Closed") return o.closed === "Lost" ? { tone: "warn", text: "Closed Lost" } : { tone: "ok", text: "Closed Won" };
+  if (readyForCultivation(o)) return { tone: "ok", text: "Ready for Cultivation", act: true };
+  if (o.stage === "Ask Made" && agreed(a)) return { tone: "warn", text: "Pledge to record", act: true };
+  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = Math.max(0, Math.round((new Date(todayISO()) - new Date(a.askedOn || todayISO())) / 864e5)); return { tone: days >= AWAIT_WARN_DAYS ? "warn" : "info", text: `Awaiting response · ${days} day${days === 1 ? "" : "s"}`, act: days >= AWAIT_WARN_DAYS }; }
+  if (o.stage === "Ask Planning" && a) { const days = Math.round((new Date(a.plannedDate) - new Date(todayISO())) / 864e5); return { tone: days <= 7 ? "warn" : "info", text: days < 0 ? `Ask date passed ${fmtDate(a.plannedDate)}` : `Ask planned for ${fmtDate(a.plannedDate)}`, act: days <= 7 }; }
+  return null;
+}
+const alertPill = (al) => al ? `<span class="alert ${al.tone}">${esc(al.text)}</span>` : "";
 function needsAttention() {
   const rows = [];
   myOpen().forEach(o => {
     const c = contactById(o.contactId);
-    if (readyForCultivation(o))
-      rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t"><span class="alert ok">Ready for Cultivation</span><div class="s" style="margin-top:5px">${esc(o.name)}</div></div><span class="chev">›</span></div>`);
-    const a = latestAsk(o);
-    if (o.stage === "Ask Made" && agreed(a)) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t"><span class="alert warn">Pledge to record</span><div class="s" style="margin-top:5px">${esc(o.name)} · agreed ${money(a.amount)}</div></div><span class="chev">›</span></div>`);
+    const al = oppAlert(o);
+    if (al && al.act) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="s" style="margin-top:5px">${esc(o.name)}</div></div><span class="chev">›</span></div>`);
   });
-  S.tasks.filter(t => !t.done).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">›</span></div>`));
+  S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).sort((x, y) => x.due.localeCompare(y.due)).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${esc(t.text)}<div class="s">${t.due < todayISO() ? '<span class="alert warn" style="font-size:11px">Overdue</span> ' : ""}Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">›</span></div>`));
   return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
+}
+function upcomingPanel() {
+  const m = (S.meetings || []).filter(x => x.date >= todayISO()).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 3);
+  return `<section class="panel"><div class="ph"><h2>Upcoming meetings</h2><span class="meta">${m.length ? "next " + m.length : ""}</span></div>${m.length ? m.map(x => `<div class="row tap" data-contact="${x.contactId}"><div class="t">${esc(x.title)}<div class="s">${fmtDate(x.date)} · ${fmtTime(x.time)} · ${esc(x.type || "")}</div></div><span class="chev">›</span></div>`).join("") : `<div class="empty">No meetings booked. Say “Schedule a meeting with Ruth”.</div>`}</section>`;
+}
+// example goals until the customer gives real ones
+const GOALS = { raised: 300000, asks: 12 };
+function goalsPanel() {
+  const y = todayISO().slice(0, 4), raised = S.contacts.reduce((n, c) => n + givingOf(c).ytd, 0);
+  const asks = S.opps.reduce((n, o) => n + o.asks.filter(a => a.status !== "Planned" && String(a.askedOn || "").slice(0, 4) === y).length, 0);
+  const bar = (v, g) => `<div class="gbar"><span style="width:${Math.min(100, Math.round(v / g * 100))}%"></span></div>`;
+  return `<section class="panel"><div class="ph"><h2>My goals</h2><span class="meta">example goals · this year</span></div>
+    <div class="goals"><div><div class="k">Raised</div><div class="v">${money(raised)} <small>of ${money(GOALS.raised)}</small></div>${bar(raised, GOALS.raised)}</div>
+    <div><div class="k">Asks made</div><div class="v">${asks} <small>of ${GOALS.asks}</small></div>${bar(asks, GOALS.asks)}</div></div></section>`;
 }
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
   return topbar("Home", null, true) + `<main>
-  <section class="panel"><div class="flowtile" data-act2="flowhome"><div class="fti">${FI('<circle cx="5" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M14 14l3 3"/>')}</div><div class="ftt"><b>VoiceCRM - Hear How It Works</b><span>Spoken overview, contact to Closed Won</span></div><span style="color:var(--muted);font-size:20px">›</span></div></section>
+  <section class="panel"><div class="flowtile" data-act2="flowhome"><div class="fti">${FI('<circle cx="5" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M14 14l3 3"/>')}</div><div class="ftt"><b>Hear how it works</b><span>Spoken overview, contact to Closed Won</span></div><span style="color:var(--muted);font-size:20px">›</span></div></section>
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
-  <section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">this fiscal year</span></div>
+  ${upcomingPanel()}
+  <section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">open opportunities</span></div>
     <div class="tiles"><div class="tile"><div class="k">Open opps</div><div class="v">${open.length}</div></div>
     <div class="tile"><div class="k">Asked</div><div class="v">${money(asked)}</div></div>
     <div class="tile ${pledged ? "hl" : ""}"><div class="k">Pledged</div><div class="v">${money(pledged)}</div></div></div>
   </section>
+  ${goalsPanel()}
   ${canTalk() ? "" : `<section class="note" style="border-radius:12px">Voice needs an xAI API key on this phone. <button class="btn quiet" data-go="settings" style="margin-top:8px;width:100%">Open Settings</button></section>`}
   </main>`;
 }
 function contactsScreen() {
   const rows = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
-  return topbar("Contacts") + `<main><section class="panel"><div class="ph"><h2>My contacts</h2><span class="meta">${rows.length}</span></div>
-  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">›</span></div>`; }).join("")}
+  return topbar("Contacts") + `<main><input id="cSearch" class="search" type="search" placeholder="Search contacts" autocomplete="off"><section class="panel"><div class="ph"><h2>My contacts</h2><span class="meta">${rows.length}</span></div>
+  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">›</span></div>`; }).join("")}
   </section><button class="btn out" data-say="Let's add a contact">${mic(16)} Add a contact by voice</button></main>`;
 }
 function historyPanel(filter) {
@@ -1227,7 +1293,7 @@ function givingPanel(c) {
 const PHONE_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>';
 const telOf = (c) => "tel:" + String(c.mobile || "").replace(/[^0-9+]/g, "");
 const CAL_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
-const callBtn = (c) => `<div class="btns" style="margin-top:8px">${c.mobile && c.permCalls ? `<a class="btn out" href="${telOf(c)}" data-call="${c.id}">${PHONE_SVG} Call ${esc(c.first)}</a>` : ""}<button class="btn out" data-say="Schedule a meeting with ${esc(nameOf(c))}">${CAL_SVG} Schedule</button></div>`;
+const callBtn = (c) => c.dnc ? "" : `<div class="btns" style="margin-top:8px">${c.mobile && c.permCalls ? `<a class="btn out" href="${telOf(c)}" data-call="${c.id}">${PHONE_SVG} Call ${esc(c.first)}</a>` : ""}<button class="btn out" data-say="Schedule a meeting with ${esc(nameOf(c))}">${CAL_SVG} Schedule</button></div>`;
 function meetingsPanel(c) {
   const m = (S.meetings || []).filter(x => x.contactId === c.id && x.date >= todayISO()).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   if (!m.length) return "";
@@ -1246,7 +1312,7 @@ function callDoneModal() {
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="cdTitle">
     <span class="wl-mic">${PHONE_SVG}</span>
     <h2 id="cdTitle">How did the call with ${esc(c.first)} go?</h2>
-    <p>Log it now. The Interaction report opens with Phone call and today's date, and Grok helps you write it up.</p>
+    <p>Log it now. The Interaction report opens with Phone call and today's date, and the assistant helps you write it up.</p>
     <button class="btn blue" id="cdLog">${mic(16)} Log the call</button><button class="btn quiet" id="cdX">Not now</button></div></div>`;
   document.getElementById("cdLog").onclick = () => {
     delete S.pendingCall; save(); h.innerHTML = "";
@@ -1266,6 +1332,12 @@ function callPromptModal(c) {
     <a class="btn blue" href="${telOf(c)}" data-call="${c.id}">${PHONE_SVG} Call</a><button class="btn quiet" id="cpX">Cancel</button></div></div>`;
   document.getElementById("cpX").onclick = () => { h.innerHTML = ""; };
 }
+function interactionsPanel(list, always) {
+  if (!list.length && !always) return "";
+  const l = list.slice().sort((x, y) => String(y.date).localeCompare(String(x.date)));
+  return `<section class="panel"><div class="ph"><h2>Interactions</h2><span class="meta">${l.length}</span></div>
+  ${l.length ? l.map(i => `<div class="row"><div class="t">${esc(i.type)} · ${fmtDate(i.date)} ${i.kind === "ask" ? '<span class="alert info">Ask made</span>' : ""} ${i.example ? "" : `<span class="via">${mic(11)} via voice</span>`}<div class="s">${esc(i.summary)}</div></div></div>`).join("") : `<div class="empty">No interactions yet.</div>`}</section>`;
+}
 function contactScreen() {
   const c = contactById(S.sel.contact);
   if (!c) return contactsScreen();
@@ -1274,16 +1346,15 @@ function contactScreen() {
   const cOpps = S.opps.filter(x => x.contactId === c.id).sort((x, y) => (x.stage === "Closed") - (y.stage === "Closed"));
   return topbar("Contact", "contacts") + `<main>
   <section class="panel"><div class="hero"><h2>${esc(who)}</h2>
-    <div class="flags"><span class="pill">${esc(c.status)}</span><span class="pill">${c.capacity ? "Capacity " + c.capacity + " · " + CAPACITY[c.capacity] : "Capacity not rated"}</span></div>
-    <div class="flags">${flag(c.permEmail, "Email")}${flag(c.permCalls, "Calls")}${flag(c.permText, c.permText ? "Texts" : "Texts not permitted")}</div>
+    <div class="flags"><span class="pill">${c.ally ? "Ally" : esc(c.status)}</span><span class="pill">${c.capacity ? "Capacity " + c.capacity + " · " + CAPACITY[c.capacity] : "Capacity not rated"}</span></div>
+    <div class="flags">${c.dnc ? '<span class="flag no dnc">✕ Do Not Contact</span>' : flag(c.permEmail, "Email") + flag(c.permCalls, "Calls") + flag(c.permText, "Texts")}${c.ally ? '<span class="flag no">✕ Do not solicit</span>' : ""}</div>
     ${c.permSource ? `<div style="font-size:12.5px;color:var(--muted)">Permission source: ${esc(c.permSource)} · recorded by voice</div>` : ""}
   </div>
-  <dl class="kv"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
-  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button><button class="btn out" data-say="Add a task for ${esc(who)}">Add a task</button>${o ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div>${callBtn(c)}</section>
+  <dl class="kv" style="padding-top:0"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
+  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button><button class="btn out" data-say="Add a task for ${esc(who)}">Add a task</button>${o || c.ally ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div>${callBtn(c)}</section>
   ${givingPanel(c)}
   ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">›</span></div>`).join("")}</section>` : ""}
-  <section class="panel"><div class="ph"><h2>Interactions</h2><span class="meta">${ints.length}</span></div>
-  ${ints.length ? ints.map(i => `<div class="row"><div class="t">${esc(i.type)} · ${fmtDate(i.date)} ${i.kind === "ask" ? '<span class="alert info">Ask made</span>' : ""} <span class="via">${mic(11)} via voice</span><div class="s">${esc(i.summary)}</div></div></div>`).join("") : `<div class="empty">No interactions yet.</div>`}</section>
+  ${interactionsPanel(ints, true)}
   ${meetingsPanel(c)}
   ${tasksPanel(S.tasks.filter(t => t.contactId === c.id), "Tasks")}
   ${historyPanel(x => x.contactId === c.id)}
@@ -1318,18 +1389,28 @@ function oppScreen() {
   ${o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd>${o.pledge.payments ? `<dt>Received</dt><dd>${o.pledge.payments.map(x => `${money(x.amount)} on ${fmtDate(x.date)} (${esc(String(x.method).toLowerCase())})`).join("<br>")}</dd><dt>Status</dt><dd>${esc(o.pledge.status)}</dd>` : ""}</dl></section>` : ""}
   ${o.gift ? `<section class="panel"><div class="ph"><h2>Gift</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.gift.amount)}</dd><dt>Entity</dt><dd>${esc(o.gift.fund)}</dd><dt>Received</dt><dd>${fmtDate(o.gift.date)} · ${esc(o.gift.method)}</dd></dl></section>` : ""}
   ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : x.status === "Made" ? "awaiting response" : esc(x.status)}${x.reason ? ": " + esc(x.reason) : ""}</div></div></div>`).join("")}</section>` : ""}
+  ${interactionsPanel(S.interactions.filter(i => i.oppId === o.id || (i.contactId === o.contactId && !i.oppId)))}
   ${tasksPanel(S.tasks.filter(t => t.oppId === o.id), "Tasks on this opportunity")}
   ${historyPanel(x => x.oppId === o.id)}
   </main>`;
 }
+function oppListHTML() {
+  return STAGES.slice(0, 5).map(st => { const os = S.opps.filter(o => o.stage === st); if (!os.length) return "";
+    return `<div class="lgroup">${st} <span>${os.length}</span></div>` + os.map(o => { const a = latestAsk(o), c = contactById(o.contactId);
+      const amt = o.pledge ? "Pledged " + money(o.pledge.amount) : a ? (a.status === "Planned" ? "Ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
+      return `<div class="row tap" data-opp="${o.id}"><div class="t"><span class="lnk">${esc(nameOf(c))}</span><div class="s">${amt} · ${esc(o.fund || "")}</div>${oppAlert(o) ? `<div style="margin-top:5px">${alertPill(oppAlert(o))}</div>` : ""}</div><span class="chev">›</span></div>`; }).join(""); }).join("");
+}
 function boardScreen() {
+  const view = S.oppView || "list";
+  const sw = `<div class="seg" role="tablist"><button class="${view === "list" ? "on" : ""}" data-act2="oppview" data-v="list">List</button><button class="${view === "board" ? "on" : ""}" data-act2="oppview" data-v="board">Board</button></div>`;
+  if (view === "list") return topbar("Opportunities") + `<main><section class="panel"><div class="ph"><h2>My open opportunities</h2>${sw}</div>${oppListHTML()}</section></main>`;
   return topbar("Opportunities") + `<main>
-  <section class="panel"><div class="ph"><h2>My open opportunities</h2><span class="meta">Board</span></div>
+  <section class="panel"><div class="ph"><h2>My open opportunities</h2>${sw}</div>
   <div class="boardwrap"><div class="board">${STAGES.slice(0, 5).map(s => {
     const os = S.opps.filter(o => o.stage === s);
     return `<div class="col"><h3>${s} <span>${os.length}</span></h3><div style="display:flex;flex-direction:column;gap:6px">${os.map(o => { const a = latestAsk(o);
       const amt = o.pledge ? "Pledged " + money(o.pledge.amount) : a ? (a.status === "Planned" ? "Ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
-      return `<div class="card ${o.example ? "" : "me"}" data-opp="${o.id}"><b>${esc(o.name)}</b><span class="amt">${amt}</span>${o.example ? "" : `<span class="via">${mic(11)} added by voice</span>`}</div>`; }).join("")}</div></div>`;
+      return `<div class="card ${o.example ? "" : "me"}" data-opp="${o.id}"><b>${esc(o.name)}</b><span class="amt">${amt}</span>${alertPill(oppAlert(o))}${o.example ? "" : `<span class="via">${mic(11)} added by voice</span>`}</div>`; }).join("")}</div></div>`;
   }).join("")}</div></div>
   <div class="empty" style="font-size:12.5px">Cards move only when something is recorded. Swipe sideways to see every stage.</div></section></main>`;
 }
@@ -1359,7 +1440,7 @@ const flowIndex = (name) => FLOW.findIndex(f => f.stage.toLowerCase() === String
 function flowScreen() {
   const at = S.flowAt == null ? -1 : S.flowAt;
   return topbar("How it works", S.flowBack || "home") + `<main>
-  <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">Moving from first contact to 'Closed Won'...</h2>
+  <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">From first contact to Closed Won</h2>
     <p>Every opportunity moves through the same stages. Tap a stage to see what has to happen before it can move on.</p>
     <button class="btn blue" data-say="Walk me through the process">${mic(18)} Hear the overview</button></div></section>
   <section class="panel"><ol class="flowpath">${FLOW.map((f, i) => {
@@ -1384,16 +1465,16 @@ function tasksScreen() {
 }
 function settingsScreen() {
   return topbar("Settings", "home") + `<main>
-  <section class="panel"><div class="ph"><h2>Grok voice</h2></div><div class="sb set">
-    <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. Grok asks for anything missing and puts the draft on screen; you still tap Save.</div>
+  <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
+    <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. The assistant asks for anything missing and puts the draft on screen; you still tap Save.</div>
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
-    <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option ${v === S.settings.voice ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option value="${v}" ${v === S.settings.voice ? "selected" : ""}>${v[0].toUpperCase() + v.slice(1)}</option>`).join("")}</select></label>
     <button class="btn blue" data-act2="savexai">Save</button>
   </div></section>
   <section class="panel"><div class="ph"><h2>Version</h2><span class="meta">${esc(buildLabel())}</span></div><div class="sb"><div style="font-size:14px;color:var(--muted)">The demo checks for a newer version each time you open it and offers to update.</div></div></section>
-  <section class="panel"><div class="ph"><h2>Voice log</h2><span class="meta">${VLOG.length} lines</span></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">If something sounds wrong, tap Copy log and paste it to Claude.</div>
+  <details class="panel trouble"><summary class="ph"><h2>Troubleshooting</h2><span class="meta">voice log</span></summary><div class="sb set"><div style="font-size:14px;color:var(--muted)">If the voice misbehaves, tap Copy log and send it to your demo contact.</div>
     <textarea id="vlogTxt" readonly style="font:12px/1.35 ui-monospace,Menlo,monospace;height:160px;white-space:pre">${esc(VLOG.slice(-150).join("\n"))}</textarea>
-    <button class="btn out" data-act2="copylog">Copy log</button><button class="btn quiet" data-act2="clearlog">Clear log</button></div></section>
+    <button class="btn out" data-act2="copylog">Copy log</button><button class="btn quiet" data-act2="clearlog">Clear log</button></div></details>
   <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
   </main>`;
 }
@@ -1413,6 +1494,8 @@ function render() {
     tab("tasks", "Tasks", I('<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'));
 }
 
+document.addEventListener("input", (e) => { if (e.target.id !== "cSearch") return; const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll("[data-name]").forEach(row => { row.style.display = !q || row.dataset.name.includes(q) ? "" : "none"; }); });
 document.addEventListener("click", (e) => {
   const cl = e.target.closest("[data-call]"); if (cl) { placeCall(cl.dataset.call); return; }
   if (e.target.closest("#overlay") || e.target.closest("#modal")) return;
@@ -1428,7 +1511,8 @@ document.addEventListener("click", (e) => {
   const act = a.dataset.act2;
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
-  else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); S.settings = keep; save(); render(); welcomeModal(); toast("Demo restarted"); }
+  else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
+  else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.settings = keep; save(); render(); welcomeModal(); toast("Demo restarted"); }
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
   else if (act === "flowat") { S.flowBack = "opp"; highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
@@ -1441,7 +1525,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T20:59:22Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-18T21:57:56Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
