@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#e6edf7">
+<meta name="apple-mobile-web-app-title" content="CitizensCRM">
+<link rel="apple-touch-icon" href="apple-touch-icon-v2.png">
+<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="icon" href="icon-192-v2.png">
+<title>Veleer Voice Demo (preview)</title>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+</head><body>
+<style>
+/* Layout: one phone-width app column (max 440px, centred on wider screens), sticky top bar, fixed tab bar with a centre mic, bottom sheet for voice drafts. */
+:root {
+  --bg: #f4f6f9; --surface: #ffffff; --surface2: #eef1f5; --line: #d5dae2;
+  --fg: #1c1f24; --muted: #4b525d; --brand: #2f74d0; --brand-soft: #e8f0fb; --brand-line: #9dbbe4; --brand-ink: #1f4f8f;
+  --bar: #e6edf7; --ok: #1f7a37; --ok-soft: #e3f3e7; --warn: #8a5a00; --warn-soft: #fff4dc; --warn-line: #e0a020;
+  --bad: #c2333b; --scrim: rgba(20,26,36,.55); --shadow: 0 6px 24px rgba(20,30,50,.18);
+  --font: "Titillium Web", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif; /* matches the SpiceCRM deployment */
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
+  --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
+  --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
+  --scrim: rgba(0,0,0,.6); --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
+  --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
+  --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
+  --scrim: rgba(0,0,0,.6); --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark }
+* { box-sizing: border-box; }
+@font-face { font-family: "Titillium Web"; font-weight: 400; font-display: swap; src: url(fonts/titillium-web-400.woff2) format("woff2"); }
+@font-face { font-family: "Titillium Web"; font-weight: 600; font-display: swap; src: url(fonts/titillium-web-600.woff2) format("woff2"); }
+@font-face { font-family: "Titillium Web"; font-weight: 700; font-display: swap; src: url(fonts/titillium-web-700.woff2) format("woff2"); }
+button, input, select, textarea { font-family: inherit; line-height: 1.2; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.28; -webkit-tap-highlight-color: transparent; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bar); }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--brand-line); outline-offset: 1px; }
+.app { max-width: 440px; margin: 0 auto; min-height: 100%; background: var(--bg); padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; display: flex; align-items: center; gap: 10px; height: 56px; background: var(--bar); border-bottom: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.top h1 { margin: 0; font-size: 18px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.back { border: 0; background: none; font-size: 24px; line-height: 1; padding: 4px 6px 4px 0; color: var(--brand); cursor: pointer; }
+.iconbtn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+.chip { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
+main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ph { display: flex; align-items: baseline; gap: 8px; padding: 11px 14px 9px; background: var(--surface2); border-bottom: 1px solid var(--line); }
+.ph h2 { margin: 0; font-size: 16px; }
+.ph .meta { margin-left: auto; color: var(--muted); font-size: 13px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.row .t { flex: 1; min-width: 0; }
+.row .s { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.row.tap { cursor: pointer; } .row.tap:active { background: var(--surface2); }
+.lnk { color: var(--brand); }
+.chev { color: var(--muted); }
+.empty { padding: 14px; color: var(--muted); font-size: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 14px; }
+.tile { border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; min-width: 0; }
+.tile .k { font-size: 12px; color: var(--muted); } .tile .v { font-size: 18px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.tile.hl { border-color: var(--brand-line); background: var(--brand-soft); }
+.alert { display: inline-block; border-radius: 10px; padding: 2px 9px; font-size: 12.5px; font-weight: 700; border: 1px solid; }
+.alert.ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+.alert.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
+.alert.info { background: var(--brand-soft); color: var(--brand-ink); border-color: var(--brand-line); }
+.pill { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--surface2); }
+.flag { display: inline-flex; align-items: center; gap: 4px; border-radius: 12px; font-size: 13px; padding: 2px 9px; border: 1px solid; }
+.flag.yes { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.flag.no { background: var(--surface2); border-color: var(--line); color: var(--muted); }
+.flags { display: flex; gap: 6px; flex-wrap: wrap; }
+.hero { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.hero h2 { margin: 0; font-size: 21px; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; border-radius: 12px; font-size: 16px; font-weight: 700; border: 0; cursor: pointer; padding: 0 16px; }
+.btn.blue { background: var(--brand); color: #fff; }
+.btn.out { background: var(--surface); color: var(--brand); border: 1.5px solid var(--brand); }
+.btn.quiet { background: var(--surface2); color: var(--fg); border: 1px solid var(--line); font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btns { display: flex; gap: 8px; } .btns > * { flex: 1; }
+.track { display: flex; gap: 3px; padding: 4px 14px 12px; }
+.track div { flex: 1; text-align: center; font-size: 10.5px; color: var(--muted); padding-top: 7px; border-top: 5px solid var(--line); }
+.track div.done { border-color: var(--brand-line); }
+.track div.on { border-color: var(--brand); color: var(--brand); font-weight: 700; }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; padding: 12px 14px; font-size: 14px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.via { color: var(--brand); font-size: 12px; font-weight: 700; white-space: nowrap; }
+/* say-things list + welcome popup */
+.saylist { list-style: none; margin: 0; padding: 4px 0; }
+.saylist li { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 15px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.saylist li:last-child { border-bottom: 0; }
+.saylist li:active { background: var(--surface2); }
+.saylist li.on { background: var(--brand-soft); } .saylist li.on .sl-line { color: var(--brand-ink); font-weight: 700; }
+.saylist li.done .sl-line { color: var(--muted); }
+.sl-mic { width: 26px; height: 26px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: flex; align-items: center; justify-content: center; flex: none; }
+.saylist li.on .sl-mic { background: var(--brand); color: #fff; }
+.sl-line { flex: 1; min-width: 0; }
+.sl-tag { font-size: 12px; font-weight: 700; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
+.sl-tag.ok { color: var(--ok); background: var(--ok-soft); } .sl-tag.next { color: #fff; background: var(--brand); }
+.ph-help { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-weight: 700; cursor: pointer; }
+.scrim.center { align-items: center; padding: 20px; z-index: 60; }
+.wmodal { width: 100%; max-width: 360px; background: var(--surface); border-radius: 18px; padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
+.wmodal h2 { margin: 2px 0 0; font-size: 21px; line-height: 1.25; color: var(--brand-ink); text-wrap: balance; }
+.wmodal p { margin: 0; font-size: 15px; line-height: 1.45; }
+.wl-mic { width: 44px; height: 44px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.wl-tips { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 14px; color: var(--muted); line-height: 1.4; }
+.wl-tips li { padding-left: 16px; position: relative; } .wl-tips li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-line); }
+.wl-save { border: 1px solid var(--brand-line); background: var(--brand-soft, #eef4fc); border-radius: 12px; padding: 11px 12px; display: flex; flex-direction: column; gap: 7px; }
+.wl-save h3 { margin: 0; font-size: 14px; color: var(--brand-ink); display: flex; align-items: center; gap: 7px; }
+.wl-save ol { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.45; } .wl-save li { padding-left: 2px; }
+.wl-save .ico { display: inline-flex; vertical-align: -3px; width: 18px; height: 18px; border: 1px solid var(--line); border-radius: 5px; align-items: center; justify-content: center; background: var(--surface); }
+.wl-inmic { display: inline-flex; vertical-align: -5px; width: 22px; height: 22px; border-radius: 50%; background: var(--brand); color: #fff; align-items: center; justify-content: center; margin: 0 1px; }
+.wl-role { display: flex; gap: 10px; align-items: center; background: var(--surface-2, #f3f5f8); border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; font-size: 14px; line-height: 1.4; }
+.wl-role b { color: var(--brand-ink); }
+.wl-av { width: 34px; height: 34px; flex: none; border-radius: 50%; background: var(--brand-soft, #e3edf9); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.brand { display: flex; justify-content: center; padding: 2px 0 0; } .brand img { width: 130px; height: auto; display: block; }
+.wl-save small { font-size: 12.5px; color: var(--muted); }
+.wl-tips b { color: var(--fg); font-weight: 600; }
+/* journey card */
+.steps { list-style: none; margin: 0; padding: 4px 0; }
+.steps li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 14px; font-size: 14px; }
+.steps .n { width: 24px; height: 24px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 1.5px solid var(--line); color: var(--muted); }
+.steps li.done .n { background: var(--ok); border-color: var(--ok); color: #fff; }
+.steps li.on { background: var(--brand-soft); }
+.steps li.on .n { background: var(--brand); border-color: var(--brand); color: #fff; }
+.steps li.on b { color: var(--brand-ink); }
+.say { font-size: 13px; color: var(--muted); font-style: italic; margin-top: 3px; line-height: 1.4; }
+/* board */
+.boardwrap { overflow-x: auto; }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: 168px; gap: 8px; padding: 12px 14px; }
+.col { background: var(--surface2); border-radius: 10px; padding: 8px; min-height: 120px; }
+.col h3 { margin: 0 0 8px; font-size: 13px; display: flex; justify-content: space-between; } .col h3 span { color: var(--muted); font-weight: 400; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+.card.me { border: 2px solid var(--brand); }
+.card .amt { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* tab bar */
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.tabbar .in { max-width: 440px; margin: 0 auto; display: flex; justify-content: space-around; align-items: center; height: 64px; }
+.tab { border: 0; background: none; font-size: 11.5px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; min-width: 60px; }
+.tab.on { color: var(--brand); font-weight: 700; }
+.micbtn { width: 58px; height: 58px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); margin-top: -18px; cursor: pointer; }
+.micbtn.pulse { animation: pulse 1.6s ease-out infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(47,116,208,.55); } 100% { box-shadow: 0 0 0 16px rgba(47,116,208,0); } }
+@media (prefers-reduced-motion: reduce) { .micbtn.pulse, .dots i, .wave i { animation: none !important; } }
+/* sheet */
+.scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; align-items: flex-end; justify-content: center; }
+.sheet { width: 100%; max-width: 440px; max-height: calc(100% - 24px - env(safe-area-inset-top, 0px)); overflow-y: auto; background: var(--surface); border-radius: 18px 18px 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: var(--shadow); }
+.grab { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 0; }
+.sh { display: flex; align-items: flex-start; gap: 10px; padding: 10px 16px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 2; }
+.sh h3 { margin: 4px 0 0; font-size: 17px; } .sh .s { font-size: 13px; color: var(--muted); margin-top: 3px; }
+.vh { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--brand); }
+.x { margin-left: auto; border: 0; background: var(--surface2); width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; flex: none; color: var(--muted); }
+.sb { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.listen { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 16px 8px; text-align: center; }
+.bigmic { width: 84px; height: 84px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; animation: pulse 1.6s ease-out infinite; }
+.wave { display: flex; gap: 4px; height: 22px; align-items: center; } .wave i { width: 4px; background: var(--brand); border-radius: 2px; animation: wv 1s ease-in-out infinite; }
+.wave i:nth-child(2) { animation-delay: .15s } .wave i:nth-child(3) { animation-delay: .3s } .wave i:nth-child(4) { animation-delay: .45s } .wave i:nth-child(5) { animation-delay: .6s }
+@keyframes wv { 0%,100% { height: 5px } 50% { height: 22px } }
+.transcript { width: 100%; min-height: 90px; text-align: left; background: var(--surface2); border-radius: 10px; padding: 10px 12px; font-size: 16px; line-height: 1.45; }
+.transcript .interim { color: var(--muted); }
+.hint { width: 100%; text-align: left; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.hint b { color: var(--fg); font-weight: 600; }
+.note { font-size: 13px; color: var(--warn); background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: 9px; padding: 8px 10px; width: 100%; text-align: left; }
+textarea.say-in { width: 100%; min-height: 120px; border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); resize: vertical; }
+.thinking { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; padding: 18px 16px; }
+.dots { display: flex; gap: 4px; } .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); animation: bl 1.2s infinite; }
+.dots i:nth-child(2) { animation-delay: .2s } .dots i:nth-child(3) { animation-delay: .4s }
+@keyframes bl { 0%,80%,100% { opacity: .25 } 40% { opacity: 1 } }
+.said { font-size: 14px; font-style: italic; color: var(--muted); background: var(--surface2); border-left: 4px solid var(--line); border-radius: 6px; padding: 8px 11px; line-height: 1.4; }
+details.said summary { font-style: normal; color: var(--brand); font-weight: 600; cursor: pointer; }
+.fld { display: flex; flex-direction: column; gap: 5px; padding: 8px 0 8px 10px; border-left: 3px solid transparent; }
+.fld.v { border-left-color: var(--brand-line); }
+.fld.miss { border-left-color: var(--bad); }
+.lbl { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.lbl .req { color: var(--bad); } .lbl .via { margin-left: auto; }
+.two .vt { display: none; }
+.fld input[type=text], .fld input[type=date], .fld select, .fld textarea { width: 100%; min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
+.fld textarea { min-height: 64px; resize: vertical; }
+.fld.chk input { border-color: var(--warn-line); background: var(--warn-soft); }
+.cn { font-size: 12.5px; color: var(--warn); }
+.tg { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.tg input { width: 22px; height: 22px; accent-color: var(--brand); flex: none; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.left { font-size: 13px; color: var(--muted); background: var(--surface2); border-radius: 9px; padding: 9px 11px; }
+.savebar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 6px; }
+.savebar small { text-align: center; color: var(--muted); font-size: 12.5px; }
+.err { color: var(--bad); font-size: 14px; }
+/* conversation */
+.callbar { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 50; display: flex; justify-content: center; padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); pointer-events: none; }
+.callbar[hidden] { display: none; }
+.cb-in { pointer-events: auto; width: 100%; max-width: 430px; display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1.5px solid var(--brand-line); border-radius: 14px; padding: 9px 10px 9px 12px; box-shadow: var(--shadow); }
+.cb-t { flex: 1; min-width: 0; font-size: 14px; } .cb-cap { color: var(--muted); font-size: 13px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cb-end { min-height: 36px; padding: 0 14px; font-size: 14px; color: var(--bad); }
+body.incall .app { padding-top: 70px; }
+body.incall .top { top: calc(env(safe-area-inset-top, 0px) + 70px); }
+body.incall::before { height: calc(env(safe-area-inset-top, 0px) + 70px); background: var(--bg); }
+body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px)); }
+.micbtn.oncall { background: var(--bad); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--brand); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); color: var(--brand); padding: 9px 6px; font-weight: 700; font-size: 14.5px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.seg button small { font-weight: 400; font-size: 12px; color: var(--muted); }
+.seg button.on { background: var(--brand); color: #fff; } .seg button.on small { color: #fff; opacity: .85; }
+/* toast */
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 35; background: var(--fg); color: var(--bg); border-radius: 12px; padding: 10px 14px; font-size: 14px; display: flex; gap: 14px; align-items: center; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+.toast button { border: 0; background: none; color: var(--bg); font-weight: 700; text-decoration: underline; cursor: pointer; }
+.next { background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.next b { color: var(--brand-ink); }
+.done-card { background: var(--ok-soft); border: 1px solid var(--ok); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.done-card h2 { margin: 0; font-size: 18px; color: var(--ok); }
+.set label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.set input, .set select { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 15px; background: var(--surface); color: var(--fg); }
+.status-line { font-size: 13.5px; display: flex; gap: 8px; align-items: center; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; } .dot.g { background: var(--ok); } .dot.r { background: var(--bad); } .dot.a { background: var(--warn-line); }
+.flowhero { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.flowhero p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.flowpath { list-style: none; margin: 0; padding: 6px 14px 14px; }
+.fstep { position: relative; display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding-bottom: 12px; }
+.fstep:not(:last-child)::before { content: ""; position: absolute; left: 16px; top: 34px; bottom: 0; width: 3px; background: var(--line); border-radius: 2px; }
+.fstep.past:not(:last-child)::before { background: var(--brand-line); }
+.fdot { width: 34px; height: 34px; border-radius: 50%; background: var(--surface2); border: 2px solid var(--line); color: var(--muted); display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; }
+.fstep.past .fdot { border-color: var(--brand-line); color: var(--brand); }
+.fstep.on .fdot { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 0 0 5px var(--brand-soft); }
+.fcard { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; background: var(--surface); cursor: pointer; transition: border-color .2s, box-shadow .2s; }
+.fstep.on .fcard { border-color: var(--brand); box-shadow: 0 2px 10px rgba(47,116,208,.18); }
+.fcard h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.fcard h3 small { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--muted); }
+.fcard .fm { font-size: 13.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.fmove { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.fmove b { font-size: 12.5px; color: var(--brand-ink); text-transform: uppercase; letter-spacing: .03em; }
+.fmove ul { margin: 5px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.fmove li { font-size: 13.5px; line-height: 1.35; display: grid; grid-template-columns: 18px 1fr; gap: 4px; }
+.fmove li::before { content: "✓"; color: var(--brand); font-weight: 700; }
+.fmove .btn { margin-top: 9px; }
+.fnote { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.flowtile { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+.flowtile .fti { width: 40px; height: 40px; border-radius: 10px; background: var(--brand-soft); color: var(--brand); display: flex; align-items: center; justify-content: center; flex: none; }
+.flowtile .ftt { flex: 1; } .flowtile .ftt b { display: block; font-size: 15px; } .flowtile .ftt span { font-size: 13px; color: var(--muted); }
+.flowlink { display: block; padding: 0 14px 12px; font-size: 13.5px; color: var(--brand); cursor: pointer; font-weight: 600; }
+</style>
+
+<div class="app" id="app"></div>
+<nav class="tabbar" aria-label="Main"><div class="in" id="tabs"></div></nav>
+<div id="overlay"></div>
+<div id="modal"></div>
+<div id="toastHost"></div>
+<div id="callbar" class="callbar" hidden aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+const OFFICER = "Dana Rivera", OFFICER_INITIALS = "DR";
+const STAGES = ["Qualification", "Cultivation", "Ask Planning", "Ask Made", "Commitment", "Closed"];
+const FUNDS = ["C3 - Citizens Alliance", "C4 - Citizens Alliance", "PAC - Citizens Alliance"]; // entities (the guide renamed Fund to Entity)
+const CAMPAIGNS = ["Pennsylvania", "New Hampshire", "North Dakota", "Idaho", "National", "General / no campaign"];
+const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
+const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
+const MIC = '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
+const mic = (s) => MIC.replace(/SZ/g, s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (n) => n == null || n === "" || isNaN(n) ? "$0" : "$" + Math.round(Number(n)).toLocaleString("en-US");
+const toNum = (v) => { if (v == null || v === "") return null; const n = Number(String(v).replace(/[^0-9.]/g, "")); return isNaN(n) ? null : n; };
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const fmtDate = (s) => { if (!s) return ""; const d = new Date(s + "T12:00:00"); return isNaN(d) ? s : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined }); };
+const longToday = () => new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+const uid = () => Math.random().toString(36).slice(2, 9);
+const YEAR = new Date().getFullYear();
+
+/* ---------- actions: what the officer can do by voice, in any order ---------- */
+const ACTIONS = {
+  contact: { title: "New contact", saved: "Contact saved", saveLabel: "Save contact",
+    fields: [
+      { k: "first", label: "First name", req: true }, { k: "last", label: "Last name", req: true },
+      { k: "email", label: "Email", check: "Spoken addresses are easy to mishear. Check the spelling before you save." },
+      { k: "mobile", label: "Mobile" },
+      { k: "permEmail", label: "Email permitted", type: "bool" }, { k: "permCalls", label: "Calls permitted", type: "bool" }, { k: "permText", label: "Texting permitted", type: "bool" },
+      { k: "permSource", label: "Permission source" }, { k: "howMet", label: "How we met", type: "area" } ],
+    pairs: [["first", "last"]],
+    left: "A contact needs an email or a mobile number (at least one). Not filled by voice: capacity rating, Ally - Do Not Solicit and Do Not Contact." },
+  interaction: { title: "Interaction report", saved: "Interaction report saved", saveLabel: "Save",
+    fields: [
+      { k: "forName", label: "Contact", fixed: true },
+      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: MEET_TYPES, req: true },
+      { k: "summary", label: "Summary", type: "area", req: true }, { k: "substantive", label: "Substantive interaction", type: "bool" },
+      { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated" },
+      { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
+    pairs: [["date", "meetingType"]] },
+  task: { title: "New task", saved: "Task added", saveLabel: "Save task",
+    fields: [
+      { k: "forName", label: "Contact", fixed: true },
+      { k: "text", label: "Task", req: true }, { k: "due", label: "Due date", type: "date" },
+      { k: "onOpp", label: "Add to the opportunity", type: "bool" } ],
+    left: "Every task belongs to the contact. Tick Add to the opportunity to file it on their open opportunity too." },
+  opportunity: { title: "New opportunity", saved: "Opportunity created", saveLabel: "Save",
+    fields: [
+      { k: "name", label: "Opportunity name", req: true, fixed: true }, { k: "officer", label: "Gift officer", fixed: true },
+      { k: "fund", label: "Entity of interest", type: "select", opts: ["", ...FUNDS] }, { k: "potential", label: "Potential amount", type: "money" },
+      { k: "moveToCultivation", label: "Then move to Cultivation", type: "bool" }, { k: "notes", label: "Notes", type: "area" } ] },
+  plan: { title: "Add ask", saved: "Ask planned", saveLabel: "Save",
+    fields: [
+      { k: "forName", label: "Opportunity", fixed: true },
+      { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true }, { k: "campaign", label: "Campaign", type: "select", opts: CAMPAIGNS, req: true },
+      { k: "plannedDate", label: "Planned ask date", type: "date", req: true }, { k: "amount", label: "Amount", type: "money", req: true },
+      { k: "askType", label: "Ask type", type: "select", opts: ["Outright", "Pledge", "Planned gift"] },
+      { k: "officer", label: "Gift officer", fixed: true }, { k: "participants", label: "Participants in the ask" } ],
+    pairs: [["plannedDate", "amount"]] },
+  ask: { title: "Interaction report · the ask", saved: "Ask recorded", saveLabel: "Save",
+    fields: [
+      { k: "forName", label: "Opportunity", fixed: true },
+      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: MEET_TYPES, req: true },
+      { k: "amount", label: "Amount asked", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
+      { k: "response", label: "Response", type: "select", opts: ["Yes", "Counter-offer", "Considering", "No"], req: true },
+      { k: "agreedAmount", label: "Agreed amount (verbal)", type: "money" }, { k: "summary", label: "Summary", type: "area", req: true },
+      { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
+    pairs: [["date", "meetingType"], ["amount", "fund"]] },
+  pledge: { title: "Record pledge", saved: "Pledge recorded", saveLabel: "Record pledge",
+    fields: [
+      { k: "forName", label: "Opportunity", fixed: true },
+      { k: "amount", label: "Pledge amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
+      { k: "confirmedBy", label: "Confirmed by", type: "select", opts: ["Email", "Phone", "In person"], req: true }, { k: "confirmedDate", label: "Confirmed on", type: "date", req: true },
+      { k: "installments", label: "Payments", type: "money", num: true }, { k: "frequency", label: "Frequency", type: "select", opts: ["Annual", "Quarterly", "Monthly", "One payment"] },
+      { k: "firstAmount", label: "First payment", type: "money" }, { k: "firstDue", label: "First payment due", type: "date", req: true } ],
+    pairs: [["confirmedBy", "confirmedDate"], ["installments", "frequency"], ["firstAmount", "firstDue"]],
+    left: "No pledge card is needed. The pledge is confirmed by email, phone or in person." }
+};
+
+/* ---------- state ---------- */
+const KEY = "veleer-voice-demo-v1";
+function seed() {
+  const c = (first, last, status, capacity, howMet) => ({ id: uid(), first, last, status, capacity, howMet, permEmail: true, permCalls: true, permText: false, added: "2025-03-14", example: true });
+  const contacts = [c("Ruth", "Abernathy", "Investor", "A", "Long-time supporter of the national program."), c("Ken", "Ito", "Investor", "B", "Board member's referral."),
+    c("James", "Okafor", "Prospect", "C", "Met at the alumni luncheon."), c("Priya", "Sandaruwan", "Prospect", "B", "Met at the Pennsylvania campaign kickoff."), c("Elena", "Vasquez", "Investor", "B", "Assigned by Luis Ortega.")];
+  const [ab, it, ok, sa, va] = contacts;
+  const o = (ct, stage, fund, potential, ask) => ({ id: uid(), contactId: ct.id, name: `${ct.last}, ${ct.first} - ${YEAR}`, stage, fund, potential, asks: ask ? [ask] : [], pledge: null, created: "2026-02-01", example: true });
+  const opps = [o(ab, "Cultivation", "C3 - Citizens Alliance", 75000), o(it, "Ask Made", "C4 - Citizens Alliance", 30000, { fund: "C4 - Citizens Alliance", campaign: "Pennsylvania", amount: 30000, askType: "Pledge", status: "Asked", plannedDate: "2026-09-30" }),
+    o(ok, "Qualification", "PAC - Citizens Alliance", 20000), o(sa, "Cultivation", "C3 - Citizens Alliance", 25000),
+    o(va, "Ask Planning", "C3 - Citizens Alliance", 40000, { fund: "C3 - Citizens Alliance", campaign: "New Hampshire", amount: 40000, askType: "Outright", status: "Planned", plannedDate: "2026-11-05" })];
+  return { contacts, opps };
+}
+const fresh = () => Object.assign({ v: 2, screen: "home", sel: { contact: null, opp: null }, interactions: [], tasks: [], history: [], seenWelcome: false,
+  settings: { xaiKey: "", xaiTokenUrl: "", demoCode: "", voice: "ara", voicePicked: false } }, seed());
+let S = fresh();
+try {
+  const raw = localStorage.getItem(KEY);
+  if (raw) {
+    const old = JSON.parse(raw);
+    if (old.v === 2) { S = Object.assign(fresh(), old); S.settings = Object.assign(fresh().settings, old.settings); }
+    else { // carry over the single contact and opportunity from the earlier one-journey demo
+      S.settings = Object.assign(S.settings, old.settings || {}); S.seenWelcome = !!old.seenWelcome;
+      if (old.contact) {
+        const ct = Object.assign({ id: uid() }, old.contact); S.contacts.push(ct);
+        (old.interactions || []).forEach(i => S.interactions.push(Object.assign({ id: uid(), contactId: ct.id }, i)));
+        (old.tasks || []).forEach(t => S.tasks.push(Object.assign({ id: uid(), contactId: ct.id }, t)));
+        if (old.opp) { const op = Object.assign({ id: uid(), contactId: ct.id, asks: [] }, old.opp); delete op.ask; if (old.opp.ask && !op.asks.length) op.asks = [old.opp.ask]; S.opps.push(op); }
+      }
+    }
+  }
+} catch (e) {}
+(() => { const h = location.hash || ""; const m = /[#&]xai=([^&]+)/.exec(h), c = /[#&]code=([^&]+)/.exec(h);
+  try { if (m) S.settings.xaiKey = decodeURIComponent(m[1]).trim(); if (c) S.settings.demoCode = decodeURIComponent(c[1]).trim(); } catch (e) {} })();
+// earlier versions used funds and campaigns that the guide has since replaced
+(() => { const FIXC = { "Building campaign 2027": "Pennsylvania", "Scholars campaign 2026": "National" };
+  const fx = (x) => { if (!x) return; if (x.fund && !FUNDS.includes(x.fund)) x.fund = "C3 - Citizens Alliance"; if (x.campaign && !CAMPAIGNS.includes(x.campaign)) x.campaign = FIXC[x.campaign] || "General / no campaign"; };
+  S.opps.forEach(o => { fx(o); (o.asks || []).forEach(fx); fx(o.pledge); }); })();
+if (!S.settings.voicePicked) S.settings.voice = "ara"; // Ara is the default until someone picks a voice in Settings
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+const contactById = (id) => S.contacts.find(c => c.id === id);
+const oppById = (id) => S.opps.find(o => o.id === id);
+const nameOf = (c) => c ? `${c.first} ${c.last}` : "";
+const openOpp = (cid) => S.opps.find(o => o.contactId === cid && o.stage !== "Closed");
+const latestAsk = (o) => o && o.asks.length ? o.asks[0] : null;
+const askedOf = (o) => { const a = latestAsk(o); return a && a.status !== "Planned" ? a.amount : 0; };
+const log = (text, ids, via = true) => S.history.unshift(Object.assign({ at: new Date().toISOString(), text, via }, ids));
+
+/* ---------- finding the contact the officer means ---------- */
+const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+function findContacts(spoken) {
+  const q = norm(spoken); if (!q) return [];
+  const words = q.split(" ");
+  const exact = S.contacts.filter(c => norm(nameOf(c)) === q || norm(`${c.last} ${c.first}`) === q);
+  if (exact.length) return exact;
+  return S.contacts.filter(c => { const f = norm(c.first), l = norm(c.last); return words.every(w => f.startsWith(w) || l.startsWith(w) || f === w || l === w); });
+}
+function focusContact() {
+  if (S.screen === "contact" && S.sel.contact) return contactById(S.sel.contact);
+  if (S.screen === "opp" && S.sel.opp) { const o = oppById(S.sel.opp); return o && contactById(o.contactId); }
+  return null;
+}
+// Returns { contact, opp } or { error } for Grok to relay.
+function resolveTarget(action, spoken) {
+  if (action === "contact") return {};
+  let list = spoken ? findContacts(spoken) : [];
+  if (!spoken) { const f = focusContact(); if (f) list = [f]; }
+  if (!list.length) return { error: spoken ? `No contact named "${spoken}". Known contacts: ${S.contacts.map(nameOf).join(", ")}. Ask who they mean, or offer to add them as a new contact.` : "Ask which contact this is for." };
+  if (list.length > 1) return { error: `More than one contact matches: ${list.map(nameOf).join(", ")}. Ask which one.` };
+  const contact = list[0];
+  if (action === "interaction") return { contact, opp: openOpp(contact.id) || null };
+  if (action === "task") return { contact, opp: openOpp(contact.id) || null };
+  const opp = openOpp(contact.id);
+  if (action === "opportunity") return opp ? { error: `${nameOf(contact)} already has an open opportunity (${opp.name}, in ${opp.stage}). Veleer keeps one open opportunity per investor; offer to work on that one instead.` } : { contact };
+  if (!opp) return { error: `${nameOf(contact)} has no open opportunity yet. Offer to create one first.` };
+  if (action === "plan" && ["Ask Made", "Commitment"].includes(opp.stage)) return { error: `${opp.name} is already in ${opp.stage}; an ask has been made. Offer to record the ask's outcome or the pledge instead.` };
+  if (action === "ask" && opp.stage === "Commitment") return { error: `${opp.name} already has a pledge recorded (Commitment).` };
+  if (action === "pledge" && opp.stage === "Commitment") return { error: `${opp.name} already has a pledge recorded.` };
+  return { contact, opp };
+}
+
+/* ---------- drafts ---------- */
+let V = null; // { action, data, fromVoice, target }
+function prefill(action, d, t) {
+  const out = Object.assign({}, d);
+  const c = t.contact, o = t.opp, a = latestAsk(o);
+  if (action === "interaction") out.forName = nameOf(c);
+  if (action === "task") { out.forName = nameOf(c); if (out.onOpp && !o) out.onOpp = false; }
+  if (["plan", "ask", "pledge"].includes(action)) out.forName = o ? o.name : "";
+  if (action === "interaction" || action === "ask") { if (!out.date) out.date = todayISO(); if (!out.meetingType) out.meetingType = "In person"; }
+  if (action === "opportunity") { out.name = `${c.last}, ${c.first} - ${YEAR}`; out.officer = OFFICER; }
+  if (action === "plan") { out.officer = OFFICER; if (!out.fund && o.fund) out.fund = o.fund; }
+  if (action === "ask") { if (out.amount == null && a) out.amount = a.amount; if (!out.fund) out.fund = (a && a.fund) || o.fund || ""; }
+  if (action === "pledge") {
+    if (!out.fund) out.fund = (a && a.fund) || o.fund || "";
+    if (out.amount == null && a) out.amount = a.amount;
+    if (!out.confirmedDate) out.confirmedDate = todayISO(); if (!out.installments) out.installments = 1;
+    if (!out.frequency) out.frequency = out.installments > 1 ? "Annual" : "One payment";
+    if (out.firstAmount == null && out.amount && out.installments) out.firstAmount = Math.round(out.amount / out.installments);
+  }
+  return out;
+}
+function fieldHTML(f, d, fromVoice) {
+  const v = d[f.k];
+  const voiced = fromVoice.has(f.k) && !f.fixed;
+  const missing = f.req && (v === null || v === undefined || v === "");
+  const cls = ["fld", voiced ? "v" : "", missing ? "miss" : "", f.check && v ? "chk" : ""].join(" ");
+  const tag = voiced ? `<span class="via">${mic(12)} <span class="vt">from voice</span></span>` : (f.fixed ? `<span class="via" style="color:var(--muted)">filled in</span>` : "");
+  const lab = `<div class="lbl">${esc(f.label)}${f.req ? '<span class="req">*</span>' : ""}${tag}</div>`;
+  const id = "f_" + f.k;
+  let input;
+  if (f.type === "bool") return `<div class="${cls}"><label class="tg" for="${id}"><input type="checkbox" id="${id}" ${v ? "checked" : ""}> ${esc(f.label)}${voiced ? ` <span class="via" style="margin-left:auto">${mic(12)} from voice</span>` : ""}</label></div>`;
+  if (f.type === "select") input = `<select id="${id}">${(f.opts.includes(v) || !v ? f.opts : [v, ...f.opts]).map(o => `<option value="${esc(o)}" ${o === (v || "") ? "selected" : ""}>${esc(o === "" ? "Not set" : (f.fmt ? f.fmt(o) : o))}</option>`).join("")}</select>`;
+  else if (f.type === "area") input = `<textarea id="${id}">${esc(v)}</textarea>`;
+  else if (f.type === "date") input = `<input type="date" id="${id}" value="${esc(v || "")}">`;
+  else if (f.type === "money") input = `<input type="text" inputmode="decimal" id="${id}" value="${v == null || v === "" ? "" : esc(f.num ? v : money(v))}">`;
+  else input = `<input type="text" id="${id}" value="${esc(v)}" ${f.fixed ? "readonly" : ""}>`;
+  return `<div class="${cls}">${lab}${input}${f.check && v ? `<div class="cn">! Check this. ${esc(f.check)}</div>` : ""}</div>`;
+}
+function draftHTML() {
+  const A = ACTIONS[V.action], d = V.data, fv = V.fromVoice;
+  const paired = new Set((A.pairs || []).flat());
+  let body = "";
+  for (const f of A.fields) {
+    if (paired.has(f.k)) { const pair = A.pairs.find(p => p[0] === f.k); if (pair) body += `<div class="two">${pair.map(k => fieldHTML(A.fields.find(x => x.k === k), d, fv)).join("")}</div>`; continue; }
+    body += fieldHTML(f, d, fv);
+  }
+  const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : V.action === "task" ? `For ${esc(nameOf(V.target.contact))}${V.target.opp ? " · open opportunity " + esc(V.target.opp.name) : ""}` : esc(V.target.opp ? V.target.opp.name : nameOf(V.target.contact));
+  let dupe = "";
+  if (V.action === "contact") { const m = findContacts(`${d.first || ""} ${d.last || ""}`); dupe = m.length ? `<div class="note">Possible match: ${esc(m.map(nameOf).join(", "))} is already a contact. Save only if this is someone new.</div>` : `<div class="left">Checked for duplicates: no existing contact matches ${esc((d.first || "") + " " + (d.last || ""))}.</div>`; }
+  return `<div class="grab"></div>
+  <div class="sh"><div style="min-width:0"><div class="vh">${mic(15)} Draft from voice · check and save</div><h3>${esc(A.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
+  <div class="sb">
+    <div class="left">Drafted from your conversation. Say a correction out loud, or edit here.</div>
+    ${dupe}
+    <form id="draftForm" novalidate>${body}</form>
+    ${A.left ? `<div class="left">${esc(A.left)}</div>` : ""}
+    <div class="err" id="draftErr" hidden></div>
+  </div>
+  <div class="savebar"><button class="btn blue" data-act="save">${A.saveLabel}</button><small>Nothing is saved until you tap ${A.saveLabel}</small></div>`;
+}
+function readDraft() {
+  const out = Object.assign({}, V.data);
+  for (const f of ACTIONS[V.action].fields) {
+    const el = document.getElementById("f_" + f.k); if (!el || f.fixed) continue;
+    if (f.type === "bool") out[f.k] = el.checked;
+    else if (f.type === "money") out[f.k] = toNum(el.value);
+    else out[f.k] = el.value.trim();
+  }
+  return out;
+}
+function renderOverlay() {
+  const host = document.getElementById("overlay");
+  host.innerHTML = V ? `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(ACTIONS[V.action].title)}">${draftHTML()}</div></div>` : "";
+}
+document.getElementById("overlay").addEventListener("click", (e) => {
+  const a = e.target.closest("[data-act]"); if (!a) return;
+  if (a.dataset.act === "close") { V = null; renderOverlay(); }
+  else if (a.dataset.act === "save") saveDraft();
+});
+function saveDraft() {
+  const d = readDraft(), A = ACTIONS[V.action];
+  const miss = A.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));
+  if (!miss.length && V.action === "contact" && !String(d.email || "").trim() && !String(d.mobile || "").trim()) {
+    const msg = "Add an email or a mobile number before saving. A contact needs at least one.";
+    const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
+    const first = document.getElementById("f_email"); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+    toast(msg);
+    if (G.live) notice(`The officer tapped ${A.saveLabel} but the contact has no email or mobile number. Explain that a contact needs at least one, ask for it, then call the draft tool again.`);
+    return;
+  }
+  if (miss.length) {
+    const msg = "Fill in " + miss.map(f => f.label).join(", ") + " before saving.";
+    const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
+    const first = document.getElementById("f_" + miss[0].k); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+    toast(msg);
+    if (G.live) notice(`The officer tapped ${A.saveLabel} but the draft is missing: ${miss.map(f => f.label).join(", ")}. Ask for it in one short question, then call the draft tool again with everything filled in.`);
+    return;
+  }
+  const undo = JSON.stringify(S), action = V.action, t = V.target;
+  const result = APPLY[action](d, t);
+  save(); V = null; renderOverlay(); render(); window.scrollTo(0, 0);
+  toast(A.saved, () => { S = JSON.parse(undo); save(); render(); });
+  grokSaved(action, result);
+}
+
+const APPLY = {
+  contact(d) {
+    const ct = { id: uid(), first: d.first, last: d.last, email: d.email, mobile: d.mobile, permEmail: !!d.permEmail, permCalls: !!d.permCalls, permText: !!d.permText,
+      permSource: d.permSource, howMet: d.howMet, capacity: null, status: "Prospect", added: todayISO() };
+    S.contacts.push(ct); log(`Contact added by ${OFFICER}`, { contactId: ct.id });
+    S.sel.contact = ct.id; S.screen = "contact"; return { contact: ct };
+  },
+  interaction(d, t) {
+    const c = t.contact;
+    S.interactions.unshift({ id: uid(), contactId: c.id, oppId: t.opp ? t.opp.id : null, date: d.date, type: d.meetingType, summary: d.summary, substantive: !!d.substantive, kind: "meeting" });
+    if (d.capacity) { c.capacity = d.capacity; log(`Capacity rated ${d.capacity} (${CAPACITY[d.capacity]})`, { contactId: c.id }); }
+    log(`Interaction report: ${d.meetingType}, ${fmtDate(d.date)}`, { contactId: c.id, oppId: t.opp ? t.opp.id : null });
+    if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, text: d.nextStep, due: d.nextDue, done: false });
+    S.sel.contact = c.id; S.screen = "contact"; return { contact: c };
+  },
+  task(d, t) {
+    const c = t.contact, oppId = d.onOpp && t.opp ? t.opp.id : null;
+    S.tasks.unshift({ id: uid(), contactId: c.id, oppId, text: d.text, due: d.due, done: false });
+    log(`Task added: ${d.text}${d.due ? ", due " + fmtDate(d.due) : ""}`, { contactId: c.id, oppId });
+    if (oppId) { S.sel.opp = oppId; S.screen = "opp"; } else { S.sel.contact = c.id; S.screen = "contact"; }
+    return t;
+  },
+  opportunity(d, t) {
+    const c = t.contact;
+    const op = { id: uid(), contactId: c.id, name: `${c.last}, ${c.first} - ${YEAR}`, stage: "Qualification", fund: d.fund || null, potential: d.potential, notes: d.notes, asks: [], pledge: null, created: todayISO() };
+    S.opps.push(op); log("Opportunity created in Qualification", { contactId: c.id, oppId: op.id });
+    if (d.moveToCultivation) { op.stage = "Cultivation"; log("Moved to Cultivation", { contactId: c.id, oppId: op.id }); }
+    S.sel.opp = op.id; S.screen = "opp"; return { contact: c, opp: op };
+  },
+  plan(d, t) {
+    const o = t.opp;
+    o.asks.unshift({ fund: d.fund, campaign: d.campaign, plannedDate: d.plannedDate, amount: d.amount, askType: d.askType || "Outright", participants: d.participants, status: "Planned" });
+    o.stage = "Ask Planning"; log(`Ask planned: ${money(d.amount)} for ${d.fund}, ${fmtDate(d.plannedDate)}. Moved to Ask Planning`, { contactId: o.contactId, oppId: o.id });
+    S.tasks.unshift({ id: uid(), contactId: o.contactId, text: `Make the ask: ${money(d.amount)} for ${d.fund}`, due: d.plannedDate, done: false });
+    S.sel.opp = o.id; S.screen = "opp"; return t;
+  },
+  ask(d, t) {
+    const o = t.opp, c = t.contact;
+    S.interactions.unshift({ id: uid(), contactId: c.id, oppId: o.id, date: d.date, type: d.meetingType, summary: d.summary, substantive: true, kind: "ask" });
+    S.tasks.forEach(k => { if (k.contactId === c.id && /^Make the ask/.test(k.text)) k.done = true; });
+    let a = latestAsk(o);
+    if (!a || a.status !== "Planned") { a = { fund: d.fund, campaign: "General / no campaign", amount: d.amount, askType: "Outright", plannedDate: d.date }; o.asks.unshift(a); }
+    Object.assign(a, { amount: d.amount, fund: d.fund, status: "Asked", askedOn: d.date, response: d.response });
+    if (d.response === "Yes") { a.status = "Agreed, pledge to follow"; if (d.agreedAmount) a.amount = d.agreedAmount; }
+    if (d.response === "Counter-offer") { a.status = "Countered"; o.asks.unshift({ fund: a.fund, campaign: a.campaign, amount: d.agreedAmount || a.amount, askType: a.askType, status: "Agreed, pledge to follow", plannedDate: d.date }); }
+    if (d.response === "No") a.status = "Declined";
+    o.stage = "Ask Made"; log(`Ask recorded: ${d.response}${d.agreedAmount ? ", " + money(d.agreedAmount) : ""}. Moved to Ask Made`, { contactId: c.id, oppId: o.id });
+    if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, text: d.nextStep, due: d.nextDue, done: false });
+    S.sel.opp = o.id; S.screen = "opp"; return t;
+  },
+  pledge(d, t) {
+    const o = t.opp, c = t.contact;
+    o.pledge = { amount: d.amount, fund: d.fund, confirmedBy: d.confirmedBy, confirmedDate: d.confirmedDate, installments: toNum(d.installments) || 1, frequency: d.frequency, firstAmount: d.firstAmount || d.amount, firstDue: d.firstDue };
+    let a = latestAsk(o);
+    if (!a) { a = { fund: d.fund, campaign: "General / no campaign", amount: d.amount, askType: "Pledge", plannedDate: d.confirmedDate }; o.asks.unshift(a); }
+    a.status = "Pledged";
+    o.stage = "Commitment"; c.status = "Investor";
+    S.tasks.forEach(k => { if (k.contactId === c.id && /pledge/i.test(k.text)) k.done = true; });
+    log(`Pledge recorded: ${money(d.amount)}, confirmed by ${String(d.confirmedBy).toLowerCase()} on ${fmtDate(d.confirmedDate)}. Moved to Commitment`, { contactId: c.id, oppId: o.id });
+    S.sel.opp = o.id; S.screen = "opp"; return t;
+  }
+};
+
+/* ---------- toast ---------- */
+let toastTimer = null;
+function toast(text, undo) {
+  const h = document.getElementById("toastHost");
+  h.innerHTML = `<div class="toast" role="status"><span>${esc(text)}</span>${undo ? '<button id="undoBtn">Undo</button>' : ""}</div>`;
+  if (undo) document.getElementById("undoBtn").onclick = () => { undo(); h.innerHTML = ""; };
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { h.innerHTML = ""; }, 6000);
+}
+
+/* ---------- Grok conversation ---------- */
+const S_DATE = { type: "string", description: "YYYY-MM-DD" };
+const FOR = { contact_name: { type: "string", description: "Full name of the contact this is for, as the officer said it" } };
+const TOOLS = [
+  { action: "contact", name: "show_contact_draft", description: "Show a new Contact draft. A contact needs at least an email or a mobile number.", req: ["first", "last"], props: {
+    first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
+    permEmail: { type: "boolean", description: "Default true" }, permCalls: { type: "boolean", description: "Default true" }, permText: { type: "boolean", description: "Default false" },
+    permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" } } },
+  { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "summary"], props: Object.assign({}, FOR, {
+    date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
+    substantive: { type: "boolean" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") },
+    nextStep: { type: "string" }, nextDue: S_DATE }) },
+  { action: "task", name: "show_task_draft", description: "Show a new Task draft for a contact, optionally filed on their open opportunity.", req: ["contact_name", "text"], props: Object.assign({}, FOR, {
+    text: { type: "string", description: "What to do, as a short imperative, e.g. Send Ruth the annual report" }, due: S_DATE,
+    onOpp: { type: "boolean", description: "True if the officer wants the task on the contact's opportunity (or is looking at it); false for the contact only" } }) },
+  { action: "opportunity", name: "show_opportunity_draft", description: "Show a new Opportunity draft for a contact.", req: ["contact_name"], props: Object.assign({}, FOR, {
+    fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, potential: { type: "number", description: "Dollars" }, moveToCultivation: { type: "boolean", description: "True only if the officer asks to move it to Cultivation" }, notes: { type: "string" } }) },
+  { action: "plan", name: "show_ask_plan_draft", description: "Show a planned Ask draft (Add ask) on the contact's open opportunity.", req: ["contact_name", "fund", "campaign", "plannedDate", "amount"], props: Object.assign({}, FOR, {
+    fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, campaign: { type: "string", enum: CAMPAIGNS }, plannedDate: S_DATE, amount: { type: "number" },
+    askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
+  { action: "ask", name: "show_ask_result_draft", description: "Show the Interaction report for the meeting where an ask was made, with the investor's response.", req: ["contact_name", "response", "summary"], props: Object.assign({}, FOR, {
+    date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, amount: { type: "number", description: "Amount asked; leave out to use the planned ask" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" },
+    response: { type: "string", enum: ["Yes", "Counter-offer", "Considering", "No"] }, agreedAmount: { type: "number", description: "Verbal figure agreed" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: S_DATE }) },
+  { action: "pledge", name: "show_pledge_draft", description: "Show a Record pledge draft on the contact's open opportunity.", req: ["contact_name", "amount", "confirmedBy", "firstDue"], props: Object.assign({}, FOR, {
+    amount: { type: "number" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD; use today if not said" },
+    installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: ["Annual", "Quarterly", "Monthly", "One payment"] }, firstAmount: { type: "number" }, firstDue: S_DATE }) }
+];
+const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, description: t.description + " Call it again with corrections if the officer changes something.", parameters: { type: "object", properties: t.props, required: t.req } }))
+  .concat([{ type: "function", name: "show_screen", description: "Open a screen when the officer asks to see something. For a contact's record or opportunity, pass contact_name.", parameters: { type: "object", properties: Object.assign({ screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record", "how_it_works"] } }, FOR), required: ["screen"] } },
+    { type: "function", name: "highlight_stage", description: "During the process overview, light up one stage on the How it works screen. Call it just before you describe that stage.", parameters: { type: "object", properties: { stage: { type: "string", enum: FLOW.map(f => f.stage) } }, required: ["stage"] } },
+    { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
+
+function crmSnapshot() {
+  return S.contacts.map(c => { const o = openOpp(c.id), a = latestAsk(o);
+    return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") : ": no open opportunity"}`; }).join("; ");
+}
+function grokInstructions() {
+  const f = focusContact();
+  return `You are the voice assistant inside Veleer, the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
+Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
+Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
+The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, plan an ask, record an ask and the response, record a pledge, or see a screen. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
+You never save anything. When you have enough, call the matching draft tool so the draft appears on screen, then ask the officer to check it and tap the button at the bottom of the draft, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
+After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
+${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
+Contacts and opportunities: ${crmSnapshot()}.
+When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one.
+If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works, then give a spoken tour of about a minute, one stage at a time in order. Call highlight_stage just before each stage, then say one or two plain sentences: what the stage means and what has to happen to move on. End by asking if they have questions or want to try a step. If they interrupt with a question, answer it, then offer to carry on. The stages:
+${flowScript()}
+When adding a task, ask for a due date if none was said (they can skip it). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
+When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?"
+Write spoken email addresses as real addresses. Resolve relative dates against today.`;
+}
+
+const G = { live: false, ws: null, ctx: null, stream: null, node: null, sources: [], playHead: 0, bot: "", status: "", handled: new Set(), buf: [] };
+const callbar = () => document.getElementById("callbar");
+function paintCall() {
+  const el = callbar(); if (!el) return;
+  document.body.classList.toggle("incall", G.live);
+  el.hidden = !G.live;
+  if (!G.live) return;
+  el.innerHTML = `<div class="cb-in"><span class="dot ${G.status === "Connecting…" ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b>${G.bot ? `<div class="cb-cap">${esc(G.bot)}</div>` : ""}</div><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
+}
+const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
+const DEMO_CODE = "veleer2026"; // built in at the owner's request so nobody has to type it; change it here and in Cloudflare together
+const tokenUrl = () => S.settings.xaiTokenUrl || TOKEN_URL;
+const canTalk = () => !!(S.settings.xaiKey || tokenUrl());
+async function mintToken() {
+  let j;
+  if (!S.settings.xaiKey && tokenUrl()) {
+    const r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || DEMO_CODE } });
+    if (!r.ok) throw new Error(r.status === 401 ? "bad_code" : "service_" + r.status);
+    j = await r.json();
+  } else {
+    if (!S.settings.xaiKey) throw new Error("no_xai_key");
+    const r = await fetch("https://api.x.ai/v1/realtime/client_secrets", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + S.settings.xaiKey }, body: JSON.stringify({ expires_after: { seconds: 300 } }) });
+    if (!r.ok) throw new Error("token_" + r.status);
+    j = await r.json();
+  }
+  const t = j.value || (j.client_secret && (j.client_secret.value || j.client_secret)) || j.token || j.secret;
+  if (!t || typeof t !== "string") throw new Error("token_shape");
+  return t;
+}
+const callError = (e) => {
+  const m = String(e && e.message || e);
+  if (m === "no_xai_key") return "Add your xAI API key in Settings to start a conversation.";
+  if (m === "bad_code") return "This demo link isn't valid any more. Ask for a new link.";
+  if (m.startsWith("service_")) return "The demo's voice service didn't answer (" + m.slice(8) + "). Try again in a moment.";
+  if (m === "token_401" || m === "token_403") return "xAI refused the API key in Settings. Check it and try again.";
+  if (m.startsWith("token_")) return "xAI couldn't start a voice session (" + m.slice(6) + "). Try again in a moment.";
+  if (e && e.name === "NotAllowedError") return "The microphone is blocked. Allow it for this site in your browser settings.";
+  if (e instanceof TypeError) return "This browser couldn't reach the voice service. Check the connection and try again.";
+  return "The conversation couldn't start (" + m + ").";
+};
+const send = (o) => { if (G.ws && G.ws.readyState === 1) G.ws.send(JSON.stringify(o)); };
+function b64FromInt16(i16) { const u8 = new Uint8Array(i16.buffer); let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+function int16FromB64(b) { const s = atob(b), u8 = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i); return new Int16Array(u8.buffer, 0, u8.length >> 1); }
+function downsample(f32, from) {
+  if (from === 24000) return f32;
+  const ratio = from / 24000, n = Math.floor(f32.length / ratio), out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = f32[Math.floor(i * ratio)];
+  return out;
+}
+function playChunk(b64) {
+  const i16 = int16FromB64(b64); if (!i16.length) return;
+  const buf = G.ctx.createBuffer(1, i16.length, 24000), ch = buf.getChannelData(0);
+  for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 32768;
+  const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.ctx.destination);
+  const at = Math.max(G.ctx.currentTime + 0.02, G.playHead); src.start(at); G.playHead = at + buf.duration;
+  G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
+}
+function stopPlayback() { G.sources.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = []; G.playHead = 0; }
+
+async function startCall(opening) {
+  G.live = true; G.status = "Connecting…"; G.bot = ""; G.handled = new Set(); paintCall(); render();
+  try {
+    G.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    G.ctx.resume();
+    G.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    const token = await mintToken();
+    let worklet = false;
+    try {
+      const url = URL.createObjectURL(new Blob([`class C extends AudioWorkletProcessor{process(i){const c=i[0]&&i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor("cap",C)`], { type: "application/javascript" }));
+      await G.ctx.audioWorklet.addModule(url); worklet = true;
+    } catch (x) { worklet = false; }
+    G.ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
+    G.ws.onopen = () => {
+      send({ type: "session.update", session: { voice: S.settings.voice || "ara", instructions: grokInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
+        audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 } } } } });
+      const srcNode = G.ctx.createMediaStreamSource(G.stream);
+      const onPcm = (f32) => {
+        if (!G.ctx) return;
+        G.buf.push(downsample(f32, G.ctx.sampleRate));
+        const total = G.buf.reduce((n, a) => n + a.length, 0);
+        if (total < 2400) return; // ~100 ms
+        const i16 = new Int16Array(total); let o = 0;
+        G.buf.forEach(a => { for (let i = 0; i < a.length; i++) { const v = Math.max(-1, Math.min(1, a[i])); i16[o++] = v < 0 ? v * 0x8000 : v * 0x7fff; } }); G.buf = [];
+        send({ type: "input_audio_buffer.append", audio: b64FromInt16(i16) });
+      };
+      if (worklet) { G.node = new AudioWorkletNode(G.ctx, "cap"); G.node.port.onmessage = (ev) => onPcm(ev.data); }
+      else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
+      srcNode.connect(G.node);
+      const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
+      notice(opening || "The officer just opened the conversation. Greet them in one short sentence and ask what they'd like to do.");
+      G.status = "Listening"; paintCall();
+    };
+    G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
+    G.ws.onclose = () => { if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Try again in a moment."); } };
+    G.ws.onerror = () => {};
+  } catch (e) { endCall(); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); }
+}
+function endCall() {
+  G.live = false; stopPlayback();
+  try { G.ws && G.ws.close(); } catch (e) {}
+  try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  try { G.ctx && G.ctx.close(); } catch (e) {}
+  G.ws = G.stream = G.ctx = G.node = null; G.buf = [];
+  paintCall(); render();
+}
+function tellPicked(kind) {
+  if (!G.live) return;
+  send({ type: "session.update", session: { instructions: grokInstructions() } });
+  const c = focusContact(); if (!c) return;
+  const o = kind === "opp" ? oppById(S.sel.opp) : openOpp(c.id);
+  const what = kind === "opp" ? `the opportunity ${o.name} (${o.stage}) for ${nameOf(c)}` : `the contact record for ${nameOf(c)}${o ? ` (open opportunity in ${o.stage})` : " (no open opportunity)"}`;
+  notice(`The officer tapped on screen and opened ${what}. Treat ${nameOf(c)} as the contact they mean from now on. In one short sentence, say you see they picked ${nameOf(c)} and ask what they'd like to do.`);
+}
+function notice(text) {
+  send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(App notice, not spoken by the officer) " + text }] } });
+  send({ type: "response.create" });
+}
+// Voice entry points: a request from a button or list line either opens the call with it or passes it to the live call.
+function ask(request) {
+  if (!G.live) { startCall(request ? `The officer opened the conversation from the app: ${request}` : null); return; }
+  if (request) notice(`The officer tapped: ${request}`);
+}
+function onEvent(e) {
+  const t = e.type || "";
+  if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; paintCall(); }
+  else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
+  else if (t === "response.created") { G.bot = ""; }
+  else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); if (G.status !== "Speaking") { G.status = "Speaking"; paintCall(); } }
+  else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; paintCall(); }
+  else if (t === "response.done") { setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
+  else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
+  else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
+  else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message) toast("Grok: " + e.error.message); }
+}
+function toolReply(callId, out, speak = true) {
+  send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(out) } });
+  if (speak) send({ type: "response.create" });
+}
+function onTool(callId, name, args) {
+  if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
+  let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
+  if (name === "stop_conversation") {
+    toolReply(callId, { ok: true }, false);
+    G.status = "Ending…"; paintCall();
+    const waitEnd = Date.now() + 8000;
+    const tick = () => { if (!G.live) return; const playing = G.ctx && G.playHead > G.ctx.currentTime; if (playing && Date.now() < waitEnd) setTimeout(tick, 300); else { endCall(); toast("Conversation ended. Tap the mic any time to carry on."); } };
+    setTimeout(tick, 1200); return;
+  }
+  if (name === "highlight_stage") {
+    const i = flowIndex(data.stage); if (i < 0) { toolReply(callId, { ok: false, error: "Unknown stage." }); return; }
+    highlightStage(i); toolReply(callId, { ok: true, summary: `${FLOW[i].stage} is lit up on screen.` }); return;
+  }
+  if (name === "show_screen") {
+    const map = { home: "home", contacts: "contacts", opportunities: "board", tasks: "tasks", contact_record: "contact", opportunity_record: "opp", how_it_works: "flow" };
+    const target = map[data.screen] || "home";
+    let summary = "Screen shown.";
+    if (target === "contact" || target === "opp") {
+      const r = resolveTarget("interaction", data.contact_name);
+      if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
+      if (target === "opp" && !r.opp) { toolReply(callId, { ok: false, error: `${nameOf(r.contact)} has no open opportunity.` }); return; }
+      if (target === "contact") S.sel.contact = r.contact.id; else S.sel.opp = r.opp.id;
+      summary = target === "contact" ? `Showing ${nameOf(r.contact)}.` : `Showing ${r.opp.name}, in ${r.opp.stage}.`;
+    } else if (target === "contacts") summary = `Contacts shown: ${S.contacts.map(nameOf).join(", ")}.`;
+    else if (target === "board") summary = `Opportunities board shown: ${S.opps.filter(o => o.stage !== "Closed").map(o => o.name + " in " + o.stage).join("; ")}.`;
+    go(target); G.handled.size && send({ type: "session.update", session: { instructions: grokInstructions() } });
+    toolReply(callId, { ok: true, summary }); return;
+  }
+  const tool = TOOLS.find(t => t.name === name);
+  if (!tool) { toolReply(callId, { ok: false, error: "Unknown tool." }); return; }
+  const target = resolveTarget(tool.action, data.contact_name);
+  if (target.error) { toolReply(callId, { ok: false, error: target.error }); return; }
+  delete data.contact_name;
+  const fromVoice = new Set(Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined));
+  V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice };
+  renderOverlay();
+  toolReply(callId, { ok: true, button: ACTIONS[tool.action].saveLabel, status: `The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${ACTIONS[tool.action].saveLabel}" button (say that exact label).` });
+}
+function grokSaved(action, r) {
+  if (!G.live) return;
+  send({ type: "session.update", session: { instructions: grokInstructions() } });
+  const who = r && r.contact ? nameOf(r.contact) : "";
+  const hasOpp = r && r.contact && openOpp(r.contact.id);
+  const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? "for example plan an ask or log another meeting" : "for example create an opportunity or log another meeting") : "";
+  notice(`The officer tapped ${ACTIONS[action].saveLabel}: ${ACTIONS[action].saved}${who ? " for " + who : ""}. Confirm in a few words, then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
+}
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
+
+/* ---------- screens ---------- */
+const go = (s) => { S.screen = s; save(); render(); window.scrollTo(0, 0); };
+function topbar(title, back) {
+  return `<header class="top">${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}<h1>${esc(title)}</h1>
+  <button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+  <div class="chip">${OFFICER_INITIALS}</div></header>`;
+}
+const SAY_LIST = ["Let's add a contact", "Log a meeting", "Create an opportunity", "Plan an ask", "Record an ask", "Record a pledge", "Add a task", "Walk me through the process", "Show me a list of contacts", "Show me my opportunities"];
+function sayList() {
+  return `<ul class="saylist">${SAY_LIST.map(line => `<li data-say="${esc(line)}" role="button" tabindex="0"><span class="sl-mic">${mic(14)}</span><span class="sl-line">“${esc(line)}”</span></li>`).join("")}</ul>`;
+}
+function saveTip() {
+  const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
+  if (standalone) return "";
+  const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
+  const share = `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg></span>`;
+  const dots = `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span>`;
+  const steps = ios ? [`Tap ${share} Share at the bottom of Safari.`, `Scroll down and tap <b>Add to Home Screen</b>.`, `Tap <b>Add</b>.`]
+    : android ? [`Tap ${dots} at the top right of Chrome.`, `Tap <b>Add to home screen</b> (or <b>Install app</b>).`, `Tap <b>Add</b> or <b>Install</b>.`]
+    : [`Open this link on your phone.`, `iPhone: tap ${share} Share, then <b>Add to Home Screen</b>.`, `Android: tap ${dots}, then <b>Add to home screen</b>.`];
+  return `<div class="wl-save"><h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Keep Veleer on your phone</h3>
+    <ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol><small>Then open it from the Veleer icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small></div>`;
+}
+// a phone that opens the demo without its #code (for example from the home-screen icon) asks for the code word once
+function codeModal(opening) {
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="cmTitle">
+    <h2 id="cmTitle">Enter the demo code word</h2>
+    <p>${S.settings.demoCode ? "That code word didn't work." : "This copy of the demo doesn't have its code word yet."} It's the word after <b>#code=</b> in the demo link you were sent.</p>
+    <input id="codeIn" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Code word" style="font:inherit;font-size:16px;padding:11px 12px;border:1px solid var(--line);border-radius:10px">
+    <button class="btn blue" id="codeGo">Save and start</button><button class="btn quiet" id="codeX">Cancel</button></div></div>`;
+  const inp = document.getElementById("codeIn"); inp.focus();
+  const go = () => { const v = inp.value.trim(); if (!v) return; S.settings.demoCode = v; save(); h.innerHTML = ""; startCall(opening); };
+  document.getElementById("codeGo").onclick = go; inp.onkeydown = (e) => { if (e.key === "Enter") go(); };
+  document.getElementById("codeX").onclick = () => { h.innerHTML = ""; };
+}
+function welcomeModal() {
+  const h = document.getElementById("modal");
+  if (S.seenWelcome) { h.innerHTML = ""; return; }
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
+    <div class="wl-role"><span class="wl-av">DR</span><div><b>You're Dana Rivera</b>, a gift officer at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
+    <span class="wl-mic">${mic(24)}</span>
+    <h2 id="wmTitle">Talk to Veleer like a colleague</h2>
+    <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span>, say what happened, and Veleer drafts the record. You check it and tap Save.</p>
+    <ul class="wl-tips"><li><b>Interrupt any time,</b> just like a phone call.</li><li><b>Fix things out loud:</b> “Change the email to…”</li><li><b>Say “that’s it for now”</b> to stop. Pick up any time.</li></ul>
+    ${saveTip()}
+    <button class="btn blue" data-act4="welcome-ok">Got it</button></div></div>`;
+}
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a) { S.seenWelcome = true; save(); welcomeModal(); } });
+
+const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
+function needsAttention() {
+  const rows = [];
+  myOpen().forEach(o => {
+    const c = contactById(o.contactId);
+    if (o.stage === "Qualification" && c && c.capacity && S.interactions.some(i => i.contactId === c.id && i.substantive))
+      rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t"><span class="alert ok">Ready for Cultivation</span><div class="s" style="margin-top:5px">${esc(o.name)}</div></div><span class="chev">›</span></div>`);
+    const a = latestAsk(o);
+    if (o.stage === "Ask Made" && a && /Agreed/.test(a.status)) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t"><span class="alert warn">Pledge to record</span><div class="s" style="margin-top:5px">${esc(o.name)} · agreed ${money(a.amount)}</div></div><span class="chev">›</span></div>`);
+  });
+  S.tasks.filter(t => !t.done).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">›</span></div>`));
+  return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
+}
+function homeScreen() {
+  const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
+  return topbar("Home") + `<main>
+  <div class="brand"><img src="logo-v2.png" alt="Citizens Alliance" width="130" height="133"></div>
+  <section class="panel"><div class="flowtile" data-go="flow"><div class="fti">${FI('<circle cx="5" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M14 14l3 3"/>')}</div><div class="ftt"><b>How it works</b><span>From contact to Closed Won, with a spoken overview</span></div><span style="color:var(--muted);font-size:20px">›</span></div></section>
+  <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
+  <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
+  <section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">this fiscal year</span></div>
+    <div class="tiles"><div class="tile"><div class="k">Open opps</div><div class="v">${open.length}</div></div>
+    <div class="tile"><div class="k">Asked</div><div class="v">${money(asked)}</div></div>
+    <div class="tile ${pledged ? "hl" : ""}"><div class="k">Pledged</div><div class="v">${money(pledged)}</div></div></div>
+  </section>
+  ${canTalk() ? "" : `<section class="note" style="border-radius:12px">Voice needs an xAI API key on this phone. <button class="btn quiet" data-go="settings" style="margin-top:8px;width:100%">Open Settings</button></section>`}
+  </main>`;
+}
+function contactsScreen() {
+  const rows = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
+  return topbar("Contacts") + `<main><section class="panel"><div class="ph"><h2>My contacts</h2><span class="meta">${rows.length}</span></div>
+  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">›</span></div>`; }).join("")}
+  </section><button class="btn out" data-say="Let's add a contact">${mic(16)} Add a contact by voice</button></main>`;
+}
+function historyPanel(filter) {
+  const h = S.history.filter(filter); if (!h.length) return "";
+  return `<section class="panel"><div class="ph"><h2>History</h2></div>${h.slice(0, 8).map(x => `<div class="row"><div class="t" style="font-size:14px">${esc(x.text)}<div class="s">${new Date(x.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${OFFICER}${x.via ? " · via voice" : ""}</div></div></div>`).join("")}</section>`;
+}
+function contactScreen() {
+  const c = contactById(S.sel.contact);
+  if (!c) return contactsScreen();
+  const flag = (on, label) => `<span class="flag ${on ? "yes" : "no"}">${on ? "✓" : "✕"} ${label}</span>`;
+  const o = openOpp(c.id), ints = S.interactions.filter(i => i.contactId === c.id), who = nameOf(c);
+  return topbar("Contact", "contacts") + `<main>
+  <section class="panel"><div class="hero"><h2>${esc(who)}</h2>
+    <div class="flags"><span class="pill">${esc(c.status)}</span><span class="pill">${c.capacity ? "Capacity " + c.capacity + " · " + CAPACITY[c.capacity] : "Capacity not rated"}</span></div>
+    <div class="flags">${flag(c.permEmail, "Email")}${flag(c.permCalls, "Calls")}${flag(c.permText, c.permText ? "Texts" : "Texts not permitted")}</div>
+    ${c.permSource ? `<div style="font-size:12.5px;color:var(--muted)">Permission source: ${esc(c.permSource)} · recorded by voice</div>` : ""}
+  </div>
+  <dl class="kv"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
+  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button><button class="btn out" data-say="Add a task for ${esc(who)}">Add a task</button>${o ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div></section>
+  ${o ? `<section class="panel"><div class="ph"><h2>Opportunity</h2></div><div class="row tap" data-opp="${o.id}"><div class="t"><span class="lnk">${esc(o.name)}</span><div class="s">${esc(o.stage)}${o.pledge ? " · pledged " + money(o.pledge.amount) : ""}</div></div><span class="chev">›</span></div></section>` : ""}
+  <section class="panel"><div class="ph"><h2>Interactions</h2><span class="meta">${ints.length}</span></div>
+  ${ints.length ? ints.map(i => `<div class="row"><div class="t">${esc(i.type)} · ${fmtDate(i.date)} ${i.kind === "ask" ? '<span class="alert info">Ask made</span>' : ""} <span class="via">${mic(11)} via voice</span><div class="s">${esc(i.summary)}</div></div></div>`).join("") : `<div class="empty">No interactions yet.</div>`}</section>
+  ${tasksPanel(S.tasks.filter(t => t.contactId === c.id), "Tasks")}
+  ${historyPanel(x => x.contactId === c.id)}
+  </main>`;
+}
+const STAGE_BTN = { Qualification: "Log interaction", Cultivation: "+ Add ask", "Ask Planning": "Record the ask", "Ask Made": "Record pledge", Commitment: "Record payment" };
+const STAGE_SAY = { Qualification: "Log a meeting", Cultivation: "Plan an ask", "Ask Planning": "Record the ask", "Ask Made": "Record a pledge" };
+function oppScreen() {
+  const o = oppById(S.sel.opp);
+  if (!o) return boardScreen();
+  const c = contactById(o.contactId), idx = STAGES.indexOf(o.stage), a = latestAsk(o), asked = askedOf(o);
+  let alert = "";
+  if (o.stage === "Qualification" && c.capacity && S.interactions.some(i => i.contactId === c.id && i.substantive)) alert = `<span class="alert ok">Ready for Cultivation</span>`;
+  if (o.stage === "Ask Planning" && a) alert = `<span class="alert info">Ask planned for ${fmtDate(a.plannedDate)}</span>`;
+  if (o.stage === "Ask Made" && a && /Agreed/.test(a.status)) alert = `<span class="alert warn">Pledge to record</span>`;
+  if (o.stage === "Commitment" && o.pledge) alert = `<span class="alert ok">First payment of ${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</span>`;
+  const label = STAGE_BTN[o.stage];
+  const btn = !label ? "" : o.stage === "Commitment" ? `<button class="btn out" disabled title="Outside this demo">${label}</button>`
+    : `<button class="btn blue" data-say="${esc(STAGE_SAY[o.stage])} for ${esc(nameOf(c))}">${mic(18)} ${label}</button>`;
+  return topbar("Opportunity", "board") + `<main>
+  <section class="panel"><div class="hero"><h2>${esc(o.name)}</h2><div style="color:var(--muted);font-size:13px"><span class="lnk" data-contact="${c.id}" role="button" tabindex="0">${esc(nameOf(c))}</span> · ${OFFICER}${o.fund ? " · " + esc(o.fund) : ""}</div>${alert ? `<div>${alert}</div>` : ""}</div>
+    <div class="track">${STAGES.map((s, i) => `<div class="${i < idx ? "done" : i === idx ? "on" : ""}">${s.replace("Qualification", "Qualif.").replace("Cultivation", "Cultiv.")}</div>`).join("")}</div>
+    <span class="flowlink" data-act2="flowat" data-stage="${esc(o.stage)}">What it takes to move on from ${esc(o.stage)} ›</span>
+    <div class="tiles"><div class="tile"><div class="k">Potential</div><div class="v">${money(o.potential)}</div></div><div class="tile ${asked ? "hl" : ""}"><div class="k">Asked</div><div class="v">${money(asked)}</div></div><div class="tile ${o.pledge ? "hl" : ""}"><div class="k">Pledged</div><div class="v">${money(o.pledge ? o.pledge.amount : 0)}</div></div></div>
+    <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:8px">${o.stage === "Qualification" && alert ? `<button class="btn out" data-act2="cultivate">Move to Cultivation</button>` : ""}${btn}</div>
+  </section>
+  ${o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd></dl></section>` : ""}
+  ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : esc(x.status)}</div></div></div>`).join("")}</section>` : ""}
+  ${tasksPanel(S.tasks.filter(t => t.oppId === o.id), "Tasks on this opportunity")}
+  ${historyPanel(x => x.oppId === o.id)}
+  </main>`;
+}
+function boardScreen() {
+  return topbar("Opportunities") + `<main>
+  <section class="panel"><div class="ph"><h2>My open opportunities</h2><span class="meta">Board</span></div>
+  <div class="boardwrap"><div class="board">${STAGES.slice(0, 5).map(s => {
+    const os = S.opps.filter(o => o.stage === s);
+    return `<div class="col"><h3>${s} <span>${os.length}</span></h3><div style="display:flex;flex-direction:column;gap:6px">${os.map(o => { const a = latestAsk(o);
+      const amt = o.pledge ? "Pledged " + money(o.pledge.amount) : a ? (a.status === "Planned" ? "Ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
+      return `<div class="card ${o.example ? "" : "me"}" data-opp="${o.id}"><b>${esc(o.name)}</b><span class="amt">${amt}</span>${o.example ? "" : `<span class="via">${mic(11)} added by voice</span>`}</div>`; }).join("")}</div></div>`;
+  }).join("")}</div></div>
+  <div class="empty" style="font-size:12.5px">Cards move only when something is recorded. Swipe sideways to see every stage.</div></section></main>`;
+}
+const taskWhere = (t) => { const o = t.oppId && oppById(t.oppId); return o ? o.name : nameOf(contactById(t.contactId)); };
+function tasksPanel(list, label) {
+  const open = list.filter(t => !t.done);
+  return `<section class="panel"><div class="ph"><h2>${label}</h2><span class="meta">${open.length} open</span></div>${open.length ? open.map(t => `<div class="row"><div class="t">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"}${t.oppId ? " · on the opportunity" : ""}</div></div></div>`).join("") : `<div class="empty">No open tasks.</div>`}</section>`;
+}
+/* ---------- how it works: contact to Closed Won ---------- */
+const FI = (p) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const FLOW = [
+  { stage: "Contact", icon: FI('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>'), means: "A person we know: a prospect, an investor or an ally.",
+    move: ["Add the contact: a name plus an email or a mobile number.", "Create an opportunity for them. It starts in Qualification."], tryLine: "Let's add a contact" },
+  { stage: "Qualification", icon: FI('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'), means: "Is this person a real prospect for us?",
+    move: ["Accepted: an officer owns the opportunity.", "Rated: a capacity rating, A to D, is on the contact.", "Talked to: a substantive call or meeting is logged.", "Confirmed: the officer taps Move to Cultivation."], tryLine: "Log a meeting" },
+  { stage: "Cultivation", icon: FI('<path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z"/>'), means: "Building the relationship until the investor is ready to be asked.",
+    move: ["Plan the ask with Add ask: entity, campaign, planned date and amount."], tryLine: "Plan an ask" },
+  { stage: "Ask Planning", icon: FI('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'), means: "The ask is planned, with an amount and a date.",
+    move: ["Make the ask, then record it with the investor's response: yes, counter-offer, considering or no."], tryLine: "Record an ask" },
+  { stage: "Ask Made", icon: FI('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/>'), means: "The investor has been asked. We wait for their answer or the pledge details.",
+    move: ["Record the pledge once the investor confirms it by email, phone or in person."], note: "An outright gift skips Commitment and closes the opportunity as Closed Won.", tryLine: "Record a pledge" },
+  { stage: "Commitment", icon: FI('<path d="M4 20h16M6 16l9.5-9.5a2.1 2.1 0 0 1 3 3L9 19H6z"/>'), means: "The pledge is recorded. We wait for the first payment.",
+    move: ["The first payment comes in and is recorded."], note: "Recording payments is outside this demo." },
+  { stage: "Closed Won", icon: FI('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>'), means: "The money is in. Later installments are tracked on the pledge.", move: [] }
+];
+const flowIndex = (name) => FLOW.findIndex(f => f.stage.toLowerCase() === String(name || "").toLowerCase().replace(/^closed$/, "closed won"));
+function flowScreen() {
+  const at = S.flowAt == null ? -1 : S.flowAt;
+  return topbar("How it works", "home") + `<main>
+  <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">From contact to Closed Won</h2>
+    <p>Every opportunity moves through the same stages. Tap a stage to see what has to happen before it can move on.</p>
+    <button class="btn blue" data-say="Walk me through the process">${mic(18)} Hear the overview</button></div></section>
+  <section class="panel"><ol class="flowpath">${FLOW.map((f, i) => {
+    const on = i === at, past = at > -1 && i < at;
+    return `<li class="fstep ${on ? "on" : ""} ${past ? "past" : ""}" id="fstep${i}"><div class="fdot">${f.icon}</div>
+    <div class="fcard" data-act2="flowstep" data-i="${i}"><h3>${esc(f.stage)}<small>${i === 0 ? "Start" : i === FLOW.length - 1 ? "Done" : "Stage " + i}</small></h3><div class="fm">${esc(f.means)}</div>
+    ${on && (f.move.length || f.note) ? `<div class="fmove">${f.move.length ? `<b>To move on</b><ul>${f.move.map(m => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}${f.note ? `<div class="fnote">${esc(f.note)}</div>` : ""}
+      ${f.tryLine ? `<button class="btn out" data-say="${esc(f.tryLine)}">${mic(16)} Try it: “${esc(f.tryLine)}”</button>` : ""}</div>` : ""}</div></li>`; }).join("")}</ol></section>
+  </main>`;
+}
+function highlightStage(i) {
+  S.flowAt = i; if (S.screen !== "flow") S.screen = "flow"; save(); render();
+  const el = document.getElementById("fstep" + i); if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+const flowScript = () => FLOW.map(f => `${f.stage}: ${f.means}${f.move.length ? " To move on: " + f.move.join(" ") : ""}${f.note ? " " + f.note : ""}`).join("\n");
+
+function tasksScreen() {
+  return topbar("Tasks") + `<main><section class="panel"><div class="ph"><h2>My tasks</h2><span class="meta">${S.tasks.filter(t => !t.done).length} open</span></div>
+  ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(taskWhere(t))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. Say “Add a task”, or mention a next step when you log a meeting.</div>`}</section></main>`;
+}
+function settingsScreen() {
+  return topbar("Settings", "home") + `<main>
+  <section class="panel"><div class="ph"><h2>Grok voice</h2></div><div class="sb set">
+    <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. Grok asks for anything missing and puts the draft on screen; you still tap Save.</div>
+    ${S.settings.xaiKey ? `<div class="status-line"><span class="dot g"></span> Your xAI key is saved on this phone.</div>` : tokenUrl() ? `<div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>` : ""}
+    <label for="xaiKey">xAI API key${tokenUrl() ? " (optional)" : ""} (kept only on this phone)<input id="xaiKey" type="password" autocomplete="off" value="${esc(S.settings.xaiKey)}" placeholder="xai-…"></label>
+    <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option ${v === S.settings.voice ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <button class="btn blue" data-act2="savexai">Save</button>
+  </div></section>
+  <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
+  </main>`;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  const s = S.screen;
+  app.innerHTML = s === "contacts" ? contactsScreen() : s === "contact" ? contactScreen() : s === "opp" ? oppScreen() : s === "board" ? boardScreen() : s === "tasks" ? tasksScreen() : s === "settings" ? settingsScreen() : s === "flow" ? flowScreen() : homeScreen();
+  const tab = (id, label, icon, also) => `<button class="tab ${s === id || s === also ? "on" : ""}" data-go="${id}">${icon}<span>${label}</span></button>`;
+  const I = (p) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  document.getElementById("tabs").innerHTML =
+    tab("home", "Home", I('<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>')) +
+    tab("contacts", "Contacts", I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>'), "contact") +
+    `<button class="micbtn ${G.live ? "oncall" : "pulse"}" data-act2="mic" aria-label="${G.live ? "End conversation" : "Start conversation"}">${G.live ? '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>' : mic(28)}</button>` +
+    tab("board", "Opportunities", I('<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/>'), "opp") +
+    tab("tasks", "Tasks", I('<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'));
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#overlay") || e.target.closest("#modal")) return;
+  const say = e.target.closest("[data-say]");
+  if (say) { const line = say.dataset.say;
+    if (/^Show me a list of contacts/.test(line)) { go("contacts"); return; }
+    if (/^Show me my opportunities/.test(line)) { go("board"); return; }
+    ask(`"${line}"`); return; }
+  const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); tellPicked("contact"); return; }
+  const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); tellPicked("opp"); return; }
+  const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
+  const a = e.target.closest("[data-act2]"); if (!a) return;
+  const act = a.dataset.act2;
+  if (act === "mic") { if (G.live) endCall(); else ask(null); }
+  else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { o.stage = "Cultivation"; log("Moved to Cultivation (criteria met: capacity rating and a substantive interaction)", { contactId: o.contactId, oppId: o.id }, false); save(); render(); toast("Moved to Cultivation"); } }
+  else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); S.settings = keep; save(); render(); welcomeModal(); toast("Demo restarted"); }
+  else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
+  else if (act === "flowat") { highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
+  else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
+  else if (act === "savexai") { S.settings.xaiKey = document.getElementById("xaiKey").value.trim(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; save(); render(); toast("Saved"); }
+});
+document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
+
+render(); save(); welcomeModal();
+window.__demo = { get state() { return S; }, resolveTarget };
+})();
+</script>
+
+</body></html>
