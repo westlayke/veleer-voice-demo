@@ -143,6 +143,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wl-name { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .wl-name input { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
 .wl-start { align-items: center; text-align: center; } .wl-start .wl-logo { height: 54px; width: auto; } .wl-mic.big { width: 96px; height: 96px; margin: 6px auto 0; } .wl-tap { font-weight: 700; color: var(--brand-ink); margin-top: -4px; } .wl-start .btn { align-self: stretch; }
+.hmodal { position: relative; } .hm-x { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surface2); color: var(--fg); font-size: 24px; line-height: 1; cursor: pointer; } .hmodal h2 { padding-right: 40px; } .hm-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.4; }
 .wmodal p.wl-hint { font-size: 13px; color: var(--muted); margin-top: -6px; }
 .wl-err { color: var(--danger, #b42318); font-size: 13.5px; font-weight: 600; margin-top: -6px; }
 .wl-priv { font-size: 12.5px; color: var(--muted); line-height: 1.4; margin: 0; }
@@ -1419,6 +1420,21 @@ function showQR(copyFailed) {
   const sc = document.createElement("script"); sc.src = "qrcode.js"; sc.onload = draw;
   sc.onerror = () => toast("Couldn't load the QR code. Check the connection."); document.head.appendChild(sc);
 }
+// the ? next to "Say things like…": a short how-to with a clear way out (× at the top, Close at the bottom, tap outside, or Esc)
+function helpModal() {
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="hmTitle">
+    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    <h2 id="hmTitle">How to talk to ${esc(botName())}</h2>
+    <ol class="hm-steps"><li>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> at the bottom of the screen.</li>
+      <li>Say what you want, like <b>“Log a meeting with Ruth”</b> or <b>“What are my open tasks?”</b> You can interrupt at any time.</li>
+      <li>${esc(botName())} fills in the form on screen. Check it, then tap <b>Save</b>.</li>
+      <li>Tap the mic again to hang up. After ${IDLE_MS / 1000} seconds of quiet, the call ends by itself.</li></ol>
+    <p class="wl-hint">Tap any option under “Say things like…” to get started with that request.</p>
+    <button type="button" class="btn blue" data-helpx="1">Close</button></div></div>`;
+}
+document.addEventListener("click", (e) => { const x = e.target.closest("[data-helpx]"); if (!x) return; if (x.classList.contains("scrim") && e.target !== x) return; document.getElementById("modal").innerHTML = ""; });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.querySelector(".hmodal")) document.getElementById("modal").innerHTML = ""; });
 let WELCOME_FULL = false; // set when the officer chooses to type their name on the first screen
 function welcomeModal() {
   const h = document.getElementById("modal");
@@ -1808,7 +1824,7 @@ document.addEventListener("click", (e) => {
   else if (act === "copylog") { const txt = VLOG.join("\n"); const done = () => toast("Log copied. Paste it to Claude.");
     (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("vlogTxt"); el.value = txt; el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the text and copy it."); } }); }
   else if (act === "clearlog") { VLOG = []; try { localStorage.removeItem(LOGKEY); } catch (e) {} render(); toast("Log cleared"); }
-  else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
+  else if (act === "help") helpModal();
   else if (act === "share") shareDemo();
   else if (act === "qr") showQR();
   else if (act === "addbtnx") { S.settings.hideAddBtn = true; save(); render(); toast("Hidden. The steps are in Settings."); }
@@ -1822,7 +1838,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T19:56:20Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T23:30:24Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
