@@ -6,7 +6,16 @@
 <link rel="manifest" href="manifest.webmanifest?v=2">
 <link rel="icon" href="icon-192-v2.png">
 <title>Citizens VCRM (preview)</title>
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}
+.hintcard .hc-off { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; }
+.hintcard .hc-off input { width: 18px; height: 18px; margin: 0; }
+.hintcard .hc-ex { font-size: 17px; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: 12px; padding: 12px 14px; line-height: 1.35; }
+.saypills .ex, .exlist .ex { display: inline-flex; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 999px; border: 1px dashed var(--line); color: var(--fg); background: var(--surface2); cursor: default; }
+.exlist { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.actgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; } .actgrid .btn { font-size: 15px; padding: 0 10px; }
+.exhead { font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+.exlead { font-size: 13px; color: var(--muted); padding: 12px 12px 0; }
+</style>
 </head><body>
 <style>
 /* Layout: one phone-width app column (max 440px, centred on wider screens), sticky top bar, fixed tab bar with a centre mic, bottom sheet for voice drafts. */
@@ -1079,6 +1088,40 @@ function notice(text) {
   whenIdle("create");
 }
 // Voice entry points: a request from a button or list line either opens the call with it or passes it to the live call.
+
+const EX_NAME = "Ruth Abernathy";
+function exampleFor(line) {
+  let m;
+  const who = (s) => s || EX_NAME;
+  if (/add a contact/i.test(line)) return "Add a contact: Sam Lee, sam.lee@example.org, mobile (555) 010-0142";
+  if ((m = line.match(/^Log a meeting(?: with (.+))?$/i))) return `Log a meeting with ${who(m[1])}. We met for coffee and talked about the Pennsylvania campaign`;
+  if ((m = line.match(/^Add a task(?: for (.+))?$/i))) return `Add a task for ${who(m[1])} to send the Pennsylvania update by Friday`;
+  if ((m = line.match(/^Schedule a meeting(?: with (.+))?$/i))) return `Schedule a meeting with ${who(m[1])} next Tuesday at 10 at Blue Door Cafe`;
+  if ((m = line.match(/^Create an opportunity(?: for (.+))?$/i))) return `Create an opportunity for ${who(m[1])}`;
+  if ((m = line.match(/^Plan an ask(?: for (.+))?$/i))) return `Plan an ask for ${who(m[1])}: $25,000 to C3, Pennsylvania campaign, on December 1`;
+  if ((m = line.match(/^Record (?:an|the) ask(?: for (.+))?$/i))) return `Record the ask for ${who(m[1])}. They said yes to $25,000`;
+  if ((m = line.match(/^Record a pledge(?: for (.+))?$/i))) return `Record a pledge from ${who(m[1])} for $25,000, confirmed by email`;
+  if ((m = line.match(/^Record a gift(?: for (.+))?$/i))) return `Record a $5,000 gift from ${who(m[1])} by check`;
+  if ((m = line.match(/^Record a payment(?: for (.+))?$/i))) return `Record a $5,000 payment from ${who(m[1])}`;
+  return line.replace(/^Let's /, "");
+}
+
+function hintCard(el) {
+  const line = el.dataset.say;
+  if (S.settings.noHints) { ask(`"${line}"`); return; }
+  const title = (el.textContent || line).trim().replace(/^Try it:\s*/, "").replace(/[“”]/g, "");
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center"><div class="wmodal hintcard" role="dialog" aria-modal="true" aria-labelledby="hcTitle">
+    <span class="wl-mic">${mic(22)}</span>
+    <h2 id="hcTitle">${esc(title)}</h2>
+    <p>You can do this by voice. Tap the mic and say something like:</p>
+    <div class="hc-ex">“${esc(exampleFor(line))}”</div>
+    <label class="hc-off" for="hcOff"><input type="checkbox" id="hcOff"> Don't show these hints again</label>
+    <button class="btn blue" id="hcGo">${mic(16)} Start talking</button><button class="btn quiet" id="hcX">Not now</button></div></div>`;
+  const off = () => { if (document.getElementById("hcOff").checked) { S.settings.noHints = true; save(); toast("Hints are off. Turn them back on in Settings."); } };
+  document.getElementById("hcGo").onclick = () => { off(); h.innerHTML = ""; ask(`"${line}"`); };
+  document.getElementById("hcX").onclick = () => { off(); h.innerHTML = ""; };
+}
 function ask(request) {
   if (!G.live) { startCall(request ? `The officer opened the conversation from the app: ${request}` : null); return; }
   if (request) notice(`The officer tapped: ${request}`);
@@ -1606,6 +1649,7 @@ function settingsScreen() {
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
     <button class="btn blue" data-act2="savename">Save</button>
   </div></section>
+  ${S.settings.noHints ? `<section class="panel"><div class="ph"><h2>Hints</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Hints are off, so tapping an option like Add a task starts the assistant straight away.</div><button class="btn out" data-act2="hintson">Show hints again</button></div></section>` : ""}
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. The assistant asks for anything missing and puts the draft on screen; you still tap Save.</div>
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
@@ -1647,7 +1691,7 @@ document.addEventListener("click", (e) => {
   if (say) { const line = say.dataset.say;
     if (/^Show me a list of contacts/.test(line)) { go("contacts"); return; }
     if (/^(Show me )?my opportunities/i.test(line)) { go("board"); return; }
-    ask(`"${line}"`); return; }
+    hintCard(say); return; }
   const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); tellPicked("contact"); return; }
   const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); tellPicked("opp"); return; }
   const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
@@ -1667,13 +1711,14 @@ document.addEventListener("click", (e) => {
   else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
   else if (act === "share") shareDemo();
   else if (act === "qr") showQR();
+  else if (act === "hintson") { delete S.settings.noHints; save(); render(); toast("Hints are back on"); }
   else if (act === "savename") { const v = document.getElementById("userName").value.trim().replace(/\s+/g, " ").slice(0, 60); if (!v) { toast("Please enter your first name."); return; } S.settings.userName = v; save(); render(); toast(`The assistant will call you ${v.split(" ")[0]}`); }
   else if (act === "savexai") { S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; save(); render(); toast("Saved"); }
 });
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T13:27:51Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T13:49:56Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

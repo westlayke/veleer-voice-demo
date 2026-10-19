@@ -6,7 +6,16 @@
 <link rel="manifest" href="manifest.webmanifest?v=2">
 <link rel="icon" href="icon-192-v2.png">
 <title>Citizens VCRM</title>
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}
+.hintcard .hc-off { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; }
+.hintcard .hc-off input { width: 18px; height: 18px; margin: 0; }
+.hintcard .hc-ex { font-size: 17px; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: 12px; padding: 12px 14px; line-height: 1.35; }
+.saypills .ex, .exlist .ex { display: inline-flex; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 999px; border: 1px dashed var(--line); color: var(--fg); background: var(--surface2); cursor: default; }
+.exlist { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.actgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; } .actgrid .btn { font-size: 15px; padding: 0 10px; }
+.exhead { font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+.exlead { font-size: 13px; color: var(--muted); padding: 12px 12px 0; }
+</style>
 </head><body>
 <style>
 /* Layout: one phone-width app column (max 440px, centred on wider screens), sticky top bar, fixed tab bar with a centre mic, bottom sheet for voice drafts. */
@@ -121,7 +130,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wmodal { width: 100%; max-width: 360px; background: var(--surface); border-radius: 18px; padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
 .wmodal h2 { margin: 2px 0 0; font-size: 21px; line-height: 1.25; color: var(--brand-ink); text-wrap: balance; }
 .wmodal p { margin: 0; font-size: 15px; line-height: 1.45; }
-.wl-mic { width: 44px; height: 44px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.wl-mic { border: 0; cursor: pointer; padding: 0; width: 44px; height: 44px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
 .wl-tips { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 14px; color: var(--muted); line-height: 1.4; }
 .wl-tips li { padding-left: 16px; position: relative; } .wl-tips li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-line); }
 .wl-save { border: 1px solid var(--brand-line); background: var(--brand-soft, #eef4fc); border-radius: 12px; padding: 11px 12px; display: flex; flex-direction: column; gap: 7px; }
@@ -131,6 +140,11 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wl-inmic { display: inline-flex; vertical-align: -5px; width: 22px; height: 22px; border-radius: 50%; background: var(--brand); color: #fff; align-items: center; justify-content: center; margin: 0 1px; }
 .wl-role { display: flex; gap: 10px; align-items: center; background: var(--surface-2, #f3f5f8); border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; font-size: 14px; line-height: 1.4; }
 .wl-role b { color: var(--brand-ink); }
+.wl-name { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.wl-name input { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
+.wmodal p.wl-hint { font-size: 13px; color: var(--muted); margin-top: -6px; }
+.wl-err { color: var(--danger, #b42318); font-size: 13.5px; font-weight: 600; margin-top: -6px; }
+.wl-priv { font-size: 12.5px; color: var(--muted); line-height: 1.4; margin: 0; }
 .wl-av { width: 34px; height: 34px; flex: none; border-radius: 50%; background: var(--brand-soft, #e3edf9); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
 .top.withlogo { height: 64px; position: sticky; }
 .top .who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
@@ -282,7 +296,12 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 <script>
 (() => {
 "use strict";
-const OFFICER = "Dana Rivera", OFFICER_INITIALS = "DR";
+let OFFICER = "Dana Rivera", OFFICER_INITIALS = "DR"; // the demo user's own name replaces Dana's when they give one
+function applyName() {
+  const n = String((S && S.settings && S.settings.userName) || "").trim().replace(/\s+/g, " ").slice(0, 60);
+  OFFICER = n || "Dana Rivera";
+  OFFICER_INITIALS = OFFICER.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "DR";
+}
 const STAGES = ["Qualification", "Cultivation", "Ask Planning", "Ask Made", "Commitment", "Closed"];
 const FUNDS = ["C3 - Citizens Alliance", "C4 - Citizens Alliance", "PAC - Citizens Alliance"]; // entities (the guide renamed Fund to Entity)
 const CAMPAIGNS = ["Pennsylvania", "New Hampshire", "North Dakota", "Idaho", "National", "General / no campaign"];
@@ -498,7 +517,7 @@ const cultMissing = (c) => [!c.capacity && "a capacity rating", !subCount(c) && 
 // Qualification -> Cultivation: criteria met and not deferred (a defer lasts until its Reconsider on date or the next substantive interaction)
 const deferActive = (o) => { const f = o.defer, c = contactById(o.contactId); return !!f && (!f.until || f.until > todayISO()) && subCount(c) <= f.subs; };
 const readyForCultivation = (o) => { const c = contactById(o.contactId); return o.stage === "Qualification" && !!c && !cultMissing(c).length && !deferActive(o); };
-const log = (text, ids, via = true) => S.history.unshift(Object.assign({ at: new Date().toISOString(), text, via }, ids));
+const log = (text, ids, via = true) => { try { if (G.session) act("saved", text); } catch (e) {} return S.history.unshift(Object.assign({ at: new Date().toISOString(), text, via }, ids)); };
 
 /* ---------- finding the contact the officer means ---------- */
 const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
@@ -849,6 +868,7 @@ const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, descrip
     { type: "function", name: "get_my_tasks", description: "Read the officer's open tasks (not done), soonest due first, with any overdue ones marked. Also opens the Tasks screen. Use it when the officer asks what's on their list, what's due, or what's overdue.", parameters: { type: "object", properties: { which: { type: "string", enum: ["all", "overdue", "due_today", "this_week"], description: "Which open tasks: all (default), overdue only, due today or earlier, or due in the next seven days" } }, required: [] } },
     { type: "function", name: "get_contact_history", description: "Read a contact's interaction history (meetings, calls and asks, newest first) and their open tasks, including tasks on their opportunity. Also opens their contact record. Use it when the officer asks about past interactions with a contact, what happened last time, or what's outstanding for a contact.", parameters: { type: "object", properties: Object.assign({ focus: { type: "string", enum: ["history_and_tasks", "history", "tasks"], description: "What the officer asked for; default both" } }, FOR), required: ["contact_name"] } },
     { type: "function", name: "highlight_stage", description: "During the process overview, light up one stage on the How it works screen. Call it just before you describe that stage.", parameters: { type: "object", properties: { stage: { type: "string", enum: FLOW.map(f => f.stage) } }, required: ["stage"] } },
+    { type: "function", name: "set_user_name", description: "Save the first name of the person using the app, once they tell you. Call it as soon as they say it.", parameters: { type: "object", properties: { first_name: { type: "string" } }, required: ["first_name"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
 function crmSnapshot() {
@@ -857,7 +877,7 @@ function crmSnapshot() {
 }
 function grokInstructions() {
   const f = focusContact();
-  return `You are the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone. Today is ${longToday()} (${todayISO()}).
+  return `You are the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say a short hello and ask for their first name. When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
@@ -915,6 +935,31 @@ const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-hol
 const DEMO_CODE = "veleer2026"; // built in at the owner's request so nobody has to type it; change it here and in Cloudflare together
 const tokenUrl = () => S.settings.xaiTokenUrl || TOKEN_URL;
 const canTalk = () => !!tokenUrl();
+/* Activity log: each conversation's words (what the officer said, Grok's replies, the steps Grok took) go to the Worker,
+   which saves them with this phone's random ID, the name given, and the rough location Cloudflare sees. Told to the user in the welcome popup and Settings. */
+const ACT = { ready: null, q: [], timer: null };
+function deviceId() {
+  if (!S.settings.deviceId) { S.settings.deviceId = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + "-" + uid() + uid()); save(); }
+  return S.settings.deviceId;
+}
+async function logReady() {
+  if (ACT.ready !== null) return ACT.ready;
+  try { const r = await fetch(tokenUrl().replace(/\/$/, "") + "/log"); ACT.ready = r.ok && !!(await r.json()).logging; } catch (e) { ACT.ready = false; }
+  vlog("activity log " + (ACT.ready ? "on" : "off")); return ACT.ready;
+}
+function act(role, text) {
+  if (!text || !G.session) return;
+  ACT.q.push({ at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session: G.session });
+  clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, role === "end" ? 0 : 4000);
+}
+async function flushAct() {
+  if (!ACT.q.length || !(await logReady())) { if (ACT.ready === false) ACT.q = []; return; }
+  const bySession = {}; ACT.q.splice(0).forEach(e => (bySession[e.session] = bySession[e.session] || []).push(e));
+  Object.entries(bySession).forEach(([session, events]) => {
+    fetch(tokenUrl().replace(/\/$/, "") + "/log", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE },
+      body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, ...e }) => e) }) }).catch(() => {});
+  });
+}
 async function mintToken() {
   const r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || DEMO_CODE } });
   if (!r.ok) throw new Error(r.status === 401 ? "bad_code" : "service_" + r.status);
@@ -977,6 +1022,7 @@ document.addEventListener("visibilitychange", () => {
 });
 async function startCall(opening) {
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
+  G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
   G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); paintCall(); render(); keepAwake();
   try {
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1013,7 +1059,7 @@ async function startCall(opening) {
       else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
       srcNode.connect(G.node);
       const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
-      notice(opening || "The officer just opened the conversation. Greet them in one short sentence and ask what they'd like to do.");
+      notice(S.settings.userName ? (opening || "The officer just opened the conversation. Greet them in one short sentence and ask what they'd like to do.") : (opening ? opening + " But you don't know their name yet: first say a short hello and ask for their first name, then call set_user_name, then help with that." : "The officer just opened the conversation and you don't know their name yet. Say a short hello and ask for their first name."));
       G.status = "Listening"; paintCall();
     };
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
@@ -1026,7 +1072,7 @@ function endCall() {
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = false; clearTimeout(G.qTimer);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended"); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = false; clearTimeout(G.qTimer);
   paintCall(); render();
 }
 function tellPicked(kind) {
@@ -1042,6 +1088,40 @@ function notice(text) {
   whenIdle("create");
 }
 // Voice entry points: a request from a button or list line either opens the call with it or passes it to the live call.
+
+const EX_NAME = "Ruth Abernathy";
+function exampleFor(line) {
+  let m;
+  const who = (s) => s || EX_NAME;
+  if (/add a contact/i.test(line)) return "Add a contact: Sam Lee, sam.lee@example.org, mobile (555) 010-0142";
+  if ((m = line.match(/^Log a meeting(?: with (.+))?$/i))) return `Log a meeting with ${who(m[1])}. We met for coffee and talked about the Pennsylvania campaign`;
+  if ((m = line.match(/^Add a task(?: for (.+))?$/i))) return `Add a task for ${who(m[1])} to send the Pennsylvania update by Friday`;
+  if ((m = line.match(/^Schedule a meeting(?: with (.+))?$/i))) return `Schedule a meeting with ${who(m[1])} next Tuesday at 10 at Blue Door Cafe`;
+  if ((m = line.match(/^Create an opportunity(?: for (.+))?$/i))) return `Create an opportunity for ${who(m[1])}`;
+  if ((m = line.match(/^Plan an ask(?: for (.+))?$/i))) return `Plan an ask for ${who(m[1])}: $25,000 to C3, Pennsylvania campaign, on December 1`;
+  if ((m = line.match(/^Record (?:an|the) ask(?: for (.+))?$/i))) return `Record the ask for ${who(m[1])}. They said yes to $25,000`;
+  if ((m = line.match(/^Record a pledge(?: for (.+))?$/i))) return `Record a pledge from ${who(m[1])} for $25,000, confirmed by email`;
+  if ((m = line.match(/^Record a gift(?: for (.+))?$/i))) return `Record a $5,000 gift from ${who(m[1])} by check`;
+  if ((m = line.match(/^Record a payment(?: for (.+))?$/i))) return `Record a $5,000 payment from ${who(m[1])}`;
+  return line.replace(/^Let's /, "");
+}
+
+function hintCard(el) {
+  const line = el.dataset.say;
+  if (S.settings.noHints) { ask(`"${line}"`); return; }
+  const title = (el.textContent || line).trim().replace(/^Try it:\s*/, "").replace(/[“”]/g, "");
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center"><div class="wmodal hintcard" role="dialog" aria-modal="true" aria-labelledby="hcTitle">
+    <span class="wl-mic">${mic(22)}</span>
+    <h2 id="hcTitle">${esc(title)}</h2>
+    <p>You can do this by voice. Tap the mic and say something like:</p>
+    <div class="hc-ex">“${esc(exampleFor(line))}”</div>
+    <label class="hc-off" for="hcOff"><input type="checkbox" id="hcOff"> Don't show these hints again</label>
+    <button class="btn blue" id="hcGo">${mic(16)} Start talking</button><button class="btn quiet" id="hcX">Not now</button></div></div>`;
+  const off = () => { if (document.getElementById("hcOff").checked) { S.settings.noHints = true; save(); toast("Hints are off. Turn them back on in Settings."); } };
+  document.getElementById("hcGo").onclick = () => { off(); h.innerHTML = ""; ask(`"${line}"`); };
+  document.getElementById("hcX").onclick = () => { off(); h.innerHTML = ""; };
+}
 function ask(request) {
   if (!G.live) { startCall(request ? `The officer opened the conversation from the app: ${request}` : null); return; }
   if (request) notice(`The officer tapped: ${request}`);
@@ -1054,6 +1134,8 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) act("user", e.transcript);
+  if (t === "response.done" && G.bot) act("grok", G.bot);
   if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
   else if (t === "response.created") { G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
@@ -1084,6 +1166,13 @@ function toolReply(callId, out, speak = true) {
 function onTool(callId, name, args) {
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
+  act("step", name + " " + JSON.stringify(data));
+  if (name === "set_user_name") {
+    const v = String(data.first_name || "").trim().split(/\s+/)[0].replace(/\s+/g, " ").slice(0, 60);
+    if (!v) { toolReply(callId, { ok: false, error: "No name given." }); return; }
+    S.settings.userName = v; S.settings.seenPrivacy = true; S.seenWelcome = true; save(); applyName(); welcomeModal(); render(); whenIdle("instr");
+    toolReply(callId, { ok: true, status: `Saved. If they haven't asked for anything yet, say exactly: "Hi ${v}, I am the Citizens Alliance VCRM voice assistant, what would you like to do today?" If they already asked for something, say "Hi ${v}, I am the Citizens Alliance VCRM voice assistant" and carry on with it.` }); return;
+  }
   if (name === "stop_conversation") {
     toolReply(callId, { ok: true }, false);
     G.status = "Ending…"; paintCall();
@@ -1264,17 +1353,29 @@ function showQR(copyFailed) {
 }
 function welcomeModal() {
   const h = document.getElementById("modal");
-  if (S.seenWelcome) { h.innerHTML = ""; return; }
+  if (S.seenWelcome && S.settings.seenPrivacy && S.settings.userName) { h.innerHTML = ""; return; } // phones that saw the welcome before activity logging see it once more, for the notice
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
-    <div class="wl-role"><span class="wl-av">DR</span><div><b>You're Dana Rivera</b>, a gift officer at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
-    <span class="wl-mic">${mic(24)}</span>
+    <div class="wl-role"><span class="wl-av">${S.settings.userName ? esc(OFFICER_INITIALS) : mic(16)}</span><div><b>You're ${S.settings.userName ? esc(OFFICER) : "the gift officer"}</b>${S.settings.userName ? ", a gift officer" : ""} at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
+    <label class="wl-name">Your first name (the assistant will use it)<input id="wlName" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
+    <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
+    <div class="wl-hint">Or tap the blue mic below and just tell the assistant your first name.</div>
+    <button type="button" class="wl-mic" data-act4="voice" aria-label="Tap to start talking">${mic(24)}</button>
     <h2 id="wmTitle">Talk to Citizens VCRM like a colleague</h2>
     <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> and try: <b>“Log a meeting with Ruth.”</b> The assistant fills in the form as you talk; you check it and tap Save.</p>
     ${saveTip()}
+    <p class="wl-priv">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
     <button class="btn blue" data-act4="welcome-ok">Got it</button>
     <button class="btn quiet" data-act2="share">Share this demo</button></div></div>`;
+  setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
-document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a) { S.seenWelcome = true; save(); welcomeModal(); } });
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a && a.dataset.act4 === "voice") { const el = document.getElementById("wlName"), v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : "";
+    if (v) S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; save(); document.getElementById("modal").innerHTML = ""; render(); ask(null); return; }
+  if (a) { const el = document.getElementById("wlName"); const v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : (S.settings.userName || "");
+    if (!v) { const er = document.getElementById("wlErr"); if (er) er.hidden = false; if (el) el.focus(); return; }
+    const isNew = v !== (S.settings.userName || "");
+    S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; save(); welcomeModal(); render();
+    if (isNew && !G.live) startCall(greetLine(v)); } }); // a newly entered name starts the conversation with the standard greeting
+const greetLine = (name) => `The officer just entered their first name and tapped Got it. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I am the Citizens Alliance VCRM voice assistant, what would you like to do today?"`;
 
 const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
 const AWAIT_WARN_DAYS = 14; // tenant setting in the guide; demo default
@@ -1355,11 +1456,33 @@ function meetingsPanel(c) {
   if (!m.length) return "";
   return `<section class="panel"><div class="ph"><h2>Upcoming meetings</h2><span class="meta">${m.length}</span></div>${m.map(x => `<div class="row"><div class="t">${esc(x.title)}<div class="s">${fmtDate(x.date)} · ${fmtTime(x.time)} · ${esc(x.duration || "")} · ${esc(x.type || "")}${x.location ? " · " + esc(x.location) : ""}</div></div><a class="chev" href="${esc(gcalLink(Object.assign({}, x, { meetingType: x.type }), c))}" target="_blank" aria-label="Open in Google Calendar">›</a></div>`).join("")}</section>`;
 }
+const onPhone = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 function placeCall(id) {
   const c = contactById(id); if (!c) return;
-  if (G.live) endCall(); // the call takes the microphone
   document.getElementById("modal").innerHTML = "";
   S.pendingCall = { contactId: id, at: Date.now() }; log(`Phone call to ${nameOf(c)} started from the app`, { contactId: id }, false); save();
+  // A phone hides this page when the call starts (the visibility handler ends the conversation and offers the call report on return).
+  // A computer may open FaceTime (the window loses focus) or do nothing at all; in that case say so instead of silently dropping the conversation.
+  const w = G.callWatch = { id, blurred: false };
+  const onBlur = () => { if (G.callWatch !== w) return; w.blurred = true; if (G.live) endCall(); };
+  window.addEventListener("blur", onBlur, { once: true });
+  setTimeout(() => { if (G.callWatch === w && !w.blurred && document.visibilityState === "visible") { window.removeEventListener("blur", onBlur); noCallModal(c); } }, 5000);
+}
+window.addEventListener("focus", () => {
+  const w = G.callWatch; if (!w || !w.blurred || !S.pendingCall || document.visibilityState !== "visible") return;
+  G.callWatch = null; setTimeout(callDoneModal, 400);
+});
+function noCallModal(c) {
+  G.callWatch = null;
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="ncTitle">
+    <span class="wl-mic">${PHONE_SVG}</span>
+    <h2 id="ncTitle">This ${onPhone() ? "device" : "computer"} didn't start the call</h2>
+    <p>Calls start from a phone${onPhone() ? "" : ", or from a Mac set up to make iPhone calls through FaceTime"}. Dial ${esc(nameOf(c))} on your phone at <b>${esc(c.mobile)}</b>, then log it here.</p>
+    <button class="btn blue" id="ncLog">${mic(16)} Log the call</button><button class="btn quiet" id="ncX">Cancel</button></div></div>`;
+  document.getElementById("ncLog").onclick = () => { if (G.live) endCall(); h.innerHTML = ""; callDoneModal(); setTimeout(() => { const b = document.getElementById("cdLog"); if (b) b.click(); }, 0); };
+  document.getElementById("ncX").onclick = () => { delete S.pendingCall; save(); h.innerHTML = ""; };
+  if (G.live) notice(`The computer couldn't place the call to ${nameOf(c)}. In one short sentence, say they can dial ${c.first} from their phone at the number on screen and tap Log the call afterwards.`);
 }
 function callDoneModal() {
   const pc = S.pendingCall, c = pc && contactById(pc.contactId);
@@ -1384,7 +1507,7 @@ function callPromptModal(c) {
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="cpTitle">
     <span class="wl-mic">${PHONE_SVG}</span>
     <h2 id="cpTitle">Call ${esc(nameOf(c))}?</h2>
-    <p>${esc(c.mobile)}. Your phone places the call. When you come back, the app opens the call report.</p>
+    <p>${esc(c.mobile)}. ${onPhone() ? "Your phone places the call. When you come back, the app opens the call report." : "On a computer, the call goes through FaceTime if your Mac is set up for iPhone calls; otherwise dial it on your phone."}</p>
     <a class="btn blue" href="${telOf(c)}" data-call="${c.id}">${PHONE_SVG} Call</a><button class="btn quiet" id="cpX">Cancel</button></div></div>`;
   document.getElementById("cpX").onclick = () => { h.innerHTML = ""; };
 }
@@ -1521,6 +1644,12 @@ function tasksScreen() {
 }
 function settingsScreen() {
   return topbar("Settings", "home") + `<main>
+  <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
+    <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
+    <button class="btn blue" data-act2="savename">Save</button>
+  </div></section>
+  ${S.settings.noHints ? `<section class="panel"><div class="ph"><h2>Hints</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Hints are off, so tapping an option like Add a task starts the assistant straight away.</div><button class="btn out" data-act2="hintson">Show hints again</button></div></section>` : ""}
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. The assistant asks for anything missing and puts the draft on screen; you still tap Save.</div>
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
@@ -1533,12 +1662,13 @@ function settingsScreen() {
   <details class="panel trouble"><summary class="ph"><h2>Troubleshooting</h2><span class="meta">voice log</span></summary><div class="sb set"><div style="font-size:14px;color:var(--muted)">If the voice misbehaves, tap Copy log and send it to your demo contact.</div>
     <textarea id="vlogTxt" readonly style="font:12px/1.35 ui-monospace,Menlo,monospace;height:160px;white-space:pre">${esc(VLOG.slice(-150).join("\n"))}</textarea>
     <button class="btn out" data-act2="copylog">Copy log</button><button class="btn quiet" data-act2="clearlog">Clear log</button></div></details>
-  <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
+  <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and your first name, and puts back the example contacts and opportunities. You'll be asked for a first name again.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
   </main>`;
 }
 
 setTimeout(() => { if (S.pendingCall) callDoneModal(); }, 600);
 function render() {
+  applyName();
   const app = document.getElementById("app");
   const s = S.screen;
   app.innerHTML = s === "contacts" ? contactsScreen() : s === "contact" ? contactScreen() : s === "opp" ? oppScreen() : s === "board" ? boardScreen() : s === "tasks" ? tasksScreen() : s === "settings" ? settingsScreen() : s === "flow" ? flowScreen() : homeScreen();
@@ -1561,7 +1691,7 @@ document.addEventListener("click", (e) => {
   if (say) { const line = say.dataset.say;
     if (/^Show me a list of contacts/.test(line)) { go("contacts"); return; }
     if (/^(Show me )?my opportunities/i.test(line)) { go("board"); return; }
-    ask(`"${line}"`); return; }
+    hintCard(say); return; }
   const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); tellPicked("contact"); return; }
   const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); tellPicked("opp"); return; }
   const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
@@ -1570,7 +1700,8 @@ document.addEventListener("click", (e) => {
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
-  else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.settings = keep; save(); render(); welcomeModal(); toast("Demo restarted"); }
+  else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.settings = keep; delete keep.userName; // a restart is a new person: ask for the first name again (phone ID kept)
+    save(); render(); welcomeModal(); toast("Demo restarted"); }
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
   else if (act === "flowat") { S.flowBack = "opp"; highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
@@ -1580,12 +1711,14 @@ document.addEventListener("click", (e) => {
   else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
   else if (act === "share") shareDemo();
   else if (act === "qr") showQR();
+  else if (act === "hintson") { delete S.settings.noHints; save(); render(); toast("Hints are back on"); }
+  else if (act === "savename") { const v = document.getElementById("userName").value.trim().replace(/\s+/g, " ").slice(0, 60); if (!v) { toast("Please enter your first name."); return; } S.settings.userName = v; save(); render(); toast(`The assistant will call you ${v.split(" ")[0]}`); }
   else if (act === "savexai") { S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; save(); render(); toast("Saved"); }
 });
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T12:34:52Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T13:49:56Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
