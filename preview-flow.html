@@ -126,7 +126,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .sl-tag { font-size: 12px; font-weight: 700; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
 .sl-tag.ok { color: var(--ok); background: var(--ok-soft); } .sl-tag.next { color: #fff; background: var(--brand); }
 .ph-help { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-weight: 700; cursor: pointer; }
-.scrim.center { align-items: center; padding: 20px; z-index: 60; }
+.scrim.center { align-items: flex-start; padding: 20px; z-index: 60; overflow-y: auto; -webkit-overflow-scrolling: touch; } .scrim.center > .wmodal { margin: auto 0; } /* a tall popup scrolls instead of being cut off top and bottom */
 .wmodal { width: 100%; max-width: 360px; background: var(--surface); border-radius: 18px; padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
 .wmodal h2 { margin: 2px 0 0; font-size: 21px; line-height: 1.25; color: var(--brand-ink); text-wrap: balance; }
 .wmodal p { margin: 0; font-size: 15px; line-height: 1.45; }
@@ -1319,15 +1319,15 @@ const SAY_GROUPS = [
 function sayList() {
   return `<div class="saypills">${SAY_GROUPS.map(g => g.lines.map(line => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`).join("")).join("")}</div>`;
 }
-function saveTip() {
+function saveTip(inSettings) {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
-  if (standalone) return "";
+  if (standalone) return inSettings ? `<div style="font-size:14px;color:var(--muted)">Citizens VCRM is already on your home screen. You're using it from there now.</div>` : "";
   const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
   // iPhone: a section for Safari and a separate one for Chrome, the browser in use first; Android: Chrome only
   const order = android ? ["android"] : ios && /CriOS/.test(ua) ? ["chrome", "safari"] : ["safari", "chrome"];
   const title = { safari: "iPhone, in Safari", chrome: "iPhone, in Chrome", android: "Android, in Chrome" };
   const head = (t) => `<h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>${t}</h3>`;
-  return order.map((k, i) => `<div class="wl-save">${head(`Keep Citizens VCRM on your phone: ${title[k]}`)}
+  return order.map((k, i) => `<div class="wl-save">${head(inSettings ? title[k] : `Keep Citizens VCRM on your phone: ${title[k]}`)}
     ${!ios && !android && i === 0 ? `<p class="wl-note">Open this link on your phone, then:</p>` : ""}${saveSteps(k)}
     ${i === order.length - 1 ? `<small>Then open it from the Citizens VCRM icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small>` : ""}</div>`).join("");
 }
@@ -1715,6 +1715,7 @@ function settingsScreen() {
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
     <button class="btn blue" data-act2="savename">Save</button>
   </div></section>
+  <section class="panel" id="setSave"><div class="ph"><h2>Keep Citizens VCRM on your phone</h2></div><div class="sb set">${saveTip(true)}</div></section>
   ${S.settings.noHints ? `<section class="panel"><div class="ph"><h2>Hints</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Hints are off, so tapping an option like Add a task starts the assistant straight away.</div><button class="btn out" data-act2="hintson">Show hints again</button></div></section>` : ""}
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. The assistant asks for anything missing and puts the draft on screen; you still tap Save.</div>
@@ -1788,7 +1789,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T18:50:19Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T18:53:23Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
