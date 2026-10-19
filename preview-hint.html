@@ -10,6 +10,8 @@
 .hintcard .hc-ex { font-size: 17px; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: 12px; padding: 12px 14px; line-height: 1.35; }
 .saypills .ex, .exlist .ex { display: inline-flex; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 999px; border: 1px dashed var(--line); color: var(--fg); background: var(--surface2); cursor: default; }
 .exlist { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.actgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; } .actgrid .btn { font-size: 15px; padding: 0 10px; }
+.exhead { font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
 .exlead { font-size: 13px; color: var(--muted); padding: 12px 12px 0; }
 </style>
 </head><body>
@@ -1708,7 +1710,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T13:38:20Z", VERSION_FILE = "preview-hint-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T13:44:34Z", VERSION_FILE = "preview-hint-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

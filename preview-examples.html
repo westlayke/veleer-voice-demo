@@ -10,6 +10,8 @@
 .hintcard .hc-ex { font-size: 17px; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: 12px; padding: 12px 14px; line-height: 1.35; }
 .saypills .ex, .exlist .ex { display: inline-flex; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 999px; border: 1px dashed var(--line); color: var(--fg); background: var(--surface2); cursor: default; }
 .exlist { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.actgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; } .actgrid .btn { font-size: 15px; padding: 0 10px; }
+.exhead { font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
 .exlead { font-size: 13px; color: var(--muted); padding: 12px 12px 0; }
 </style>
 </head><body>
@@ -1102,13 +1104,36 @@ function exampleFor(line) {
   return line.replace(/^Let's /, "");
 }
 
+function hintCard(el) {
+  const line = el.dataset.say, title = (el.textContent || line).trim().replace(/^Try it:\s*/, "").replace(/[“”]/g, "");
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center"><div class="wmodal hintcard" role="dialog" aria-modal="true" aria-labelledby="hcTitle">
+    <span class="wl-mic">${mic(22)}</span>
+    <h2 id="hcTitle">${esc(title)}</h2>
+    <p>You can do this by voice. Tap the mic and say something like:</p>
+    <div class="hc-ex">“${esc(exampleFor(line))}”</div>
+    <button class="btn blue" id="hcGo">${mic(16)} Start talking</button><button class="btn quiet" id="hcX">Not now</button></div></div>`;
+  document.getElementById("hcGo").onclick = () => { h.innerHTML = ""; ask(`"${line}"`); };
+  document.getElementById("hcX").onclick = () => { h.innerHTML = ""; };
+}
+
 function examplesOnly() {
-  document.querySelectorAll("#app [data-say]").forEach(el => {
+  const nx = document.querySelector("#app section.next");
+  if (nx && !nx.dataset.ex) { nx.dataset.ex = "1";
+    const acts = [...nx.querySelectorAll("[data-say], [data-call]")];
+    const grid = document.createElement("div"); grid.className = "actgrid";
+    acts.forEach(a => { a.className = "btn out"; a.dataset.hint = "1"; grid.appendChild(a); });
+    const lead = document.createElement("div"); lead.className = "exhead"; lead.textContent = "Or tap the mic and say:";
+    const list = document.createElement("div"); list.className = "exlist";
+    acts.filter(a => a.dataset.say).forEach(a => { const s = document.createElement("span"); s.className = "ex"; s.textContent = `“${exampleFor(a.dataset.say)}”`; list.appendChild(s); });
+    [...nx.children].forEach(ch => { if (ch.tagName !== "B") ch.remove(); });
+    nx.append(grid, lead, list);
+  }
+  document.querySelectorAll("#app [data-say]:not([data-hint])").forEach(el => {
     const s = document.createElement("span"); s.className = "ex"; s.textContent = `“${el.closest(".saypills") ? el.dataset.say : exampleFor(el.dataset.say)}”`;
     if (el.closest(".btns")) el.closest(".btns").classList.add("exlist");
     el.replaceWith(s);
   });
-  const nb = document.querySelector("#app section.next > b"); if (nb && !/mic/.test(nb.textContent)) nb.textContent = nb.textContent + ": tap the mic and say";
   const sp = document.querySelector("#app .saypills"); if (sp && !sp.previousElementSibling?.classList.contains("exlead")) { const p = document.createElement("div"); p.className = "exlead"; p.textContent = "Tap the mic below, then say one of these, or anything else."; sp.before(p); }
 }
 function ask(request) {
@@ -1680,7 +1705,7 @@ document.addEventListener("click", (e) => {
   if (say) { const line = say.dataset.say;
     if (/^Show me a list of contacts/.test(line)) { go("contacts"); return; }
     if (/^(Show me )?my opportunities/i.test(line)) { go("board"); return; }
-    return; }
+    if (say.dataset.hint) hintCard(say); return; }
   const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); tellPicked("contact"); return; }
   const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); tellPicked("opp"); return; }
   const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
@@ -1706,7 +1731,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T13:38:20Z", VERSION_FILE = "preview-examples-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T13:44:34Z", VERSION_FILE = "preview-examples-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
