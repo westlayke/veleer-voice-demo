@@ -142,6 +142,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wl-role b { color: var(--brand-ink); }
 .wl-name { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .wl-name input { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
+.wl-start { align-items: center; text-align: center; } .wl-start .wl-logo { height: 54px; width: auto; } .wl-mic.big { width: 96px; height: 96px; margin: 6px auto 0; } .wl-tap { font-weight: 700; color: var(--brand-ink); margin-top: -4px; } .wl-start .btn { align-self: stretch; }
 .wmodal p.wl-hint { font-size: 13px; color: var(--muted); margin-top: -6px; }
 .wl-err { color: var(--danger, #b42318); font-size: 13.5px; font-weight: 600; margin-top: -6px; }
 .wl-priv { font-size: 12.5px; color: var(--muted); line-height: 1.4; margin: 0; }
@@ -1412,9 +1413,22 @@ function showQR(copyFailed) {
   const sc = document.createElement("script"); sc.src = "qrcode.js"; sc.onload = draw;
   sc.onerror = () => toast("Couldn't load the QR code. Check the connection."); document.head.appendChild(sc);
 }
+let WELCOME_FULL = false; // set when the officer chooses to type their name on the first screen
 function welcomeModal() {
   const h = document.getElementById("modal");
   if (S.seenWelcome && S.settings.seenPrivacy && S.settings.userName) { h.innerHTML = ""; return; } // phones that saw the welcome before activity logging see it once more, for the notice
+  // first visit: one big mic, so the first tap starts the assistant, which asks for the first name (phones need a tap before sound or the mic)
+  if (!S.settings.userName && !WELCOME_FULL) {
+    h.innerHTML = `<div class="scrim center"><div class="wmodal wl-start" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
+      <img src="logo-v2.png" alt="Citizens Alliance" class="wl-logo">
+      <h2 id="wmTitle">Meet your voice assistant</h2>
+      <p>You're a gift officer at Citizens Alliance. Tap the mic and ${esc(botName())} will introduce itself and ask your first name.</p>
+      <button type="button" class="wl-mic big" data-act4="voice" aria-label="Tap to start talking">${mic(40)}</button>
+      <div class="wl-tap">Tap to start</div>
+      <p class="wl-priv">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
+      <button type="button" class="btn quiet" data-act5="typename">I'd rather type my name</button></div></div>`;
+    return;
+  }
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
     <div class="wl-role"><span class="wl-av">${S.settings.userName ? esc(OFFICER_INITIALS) : mic(16)}</span><div><b>You're ${S.settings.userName ? esc(OFFICER) : "the gift officer"}</b>${S.settings.userName ? ", a gift officer" : ""} at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
     <label class="wl-name">Your first name (the assistant will use it)<input id="wlName" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
@@ -1436,6 +1450,7 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
     const isNew = v !== (S.settings.userName || "");
     S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.screen = "home"; save(); welcomeModal(); render(); window.scrollTo(0, 0);
     if (isNew && !G.live) startCall(greetLine(v)); } }); // a newly entered name starts the conversation with the standard greeting
+document.addEventListener("click", (e) => { if (e.target.closest("[data-act5=typename]")) { WELCOME_FULL = true; welcomeModal(); setTimeout(() => { const el = document.getElementById("wlName"); if (el) el.focus(); }, 50); } });
 const botName = () => (S.settings.botName || "").trim() || ((S.settings.voice || "ara")[0].toUpperCase() + (S.settings.voice || "ara").slice(1)); // the assistant's name: set in Settings, else its voice's name
 const CAN_DO = "I can do things related to managing your contacts and opportunities, like reviewing your open tasks, creating a contact, hearing a contact's giving history, reviewing your open opportunities, or review our fundraising process, and much more. What would you like to do today?";
 const greetLine = (name) => `The officer just entered their first name and tapped Got it. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I am ${botName()}, the Citizens Alliance VCRM voice assistant. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process".`;
@@ -1789,7 +1804,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T18:53:23Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T18:57:14Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
