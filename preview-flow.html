@@ -1740,12 +1740,14 @@ document.addEventListener("click", (e) => {
   else if (act === "qr") showQR();
   else if (act === "hintson") { delete S.settings.noHints; save(); render(); toast("Hints are back on"); }
   else if (act === "savename") { const v = document.getElementById("userName").value.trim().replace(/\s+/g, " ").slice(0, 60); if (!v) { toast("Please enter your first name."); return; } S.settings.userName = v; save(); render(); toast(`The assistant will call you ${v.split(" ")[0]}`); }
-  else if (act === "savexai") { S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; const bn = document.getElementById("botName").value.trim().replace(/\s+/g, " ").slice(0, 30); if (bn) S.settings.botName = bn; else delete S.settings.botName; save(); render(); if (G.live) whenIdle("instr"); toast(`Saved. The assistant's name is ${botName()}.`); }
+  else if (act === "savexai") { const was = S.settings.voice + "|" + botName(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; const bn = document.getElementById("botName").value.trim().replace(/\s+/g, " ").slice(0, 30); if (bn) S.settings.botName = bn; else delete S.settings.botName; save();
+    // a new voice or name only takes hold in a new conversation (Grok keeps the voice, and what it already said, for the whole call)
+    if (G.live && was !== S.settings.voice + "|" + botName()) { endCall(); render(); toast(`Saved. Tap the mic to talk to ${botName()}.`); } else { render(); toast(`Saved. The assistant's name is ${botName()}.`); } }
 });
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T15:26:06Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T15:59:16Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
