@@ -1198,6 +1198,7 @@ function topbar(title, back, logo) {
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
 const SAY_GROUPS = [
+  { tone: "look", lines: ["What are my open tasks?"] },
   { tone: "people", lines: ["Add a contact", "Log a meeting"] },
   { tone: "pipe", lines: ["Plan an ask", "Record an ask"] },
   { tone: "money", lines: ["Record a pledge", "Record a gift"] },
@@ -1583,7 +1584,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T12:11:59Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T12:15:18Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
