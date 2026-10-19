@@ -11,12 +11,12 @@ Every change to the demo is a commit here, so any earlier version can be seen or
 Each commit message ends with these lines (template in `.gitmessage`):
 
 ```
-Requested by: <name of the person who asked, from their message in the project>
+Requested-by: <name of the person who asked, from their message in the project>
 Reason: <why they want it, in their words>
-Approved for live by: <name, on Go live commits only>
+Approved-for-live-by: <name, on Go live commits only>
 Conversation: <link to the project conversation>
 ```
 
-GitHub shows the repository owner as the author of every commit; the person who asked is the "Requested by" line. The same who, when and why also goes in the Voice demo change log document.
+GitHub shows the repository owner as the author of every commit; the person who asked is the "Requested-by" line. The same who, when and why also goes in the Voice demo change log document.
 
-To list the history with who asked and why: `git log --format='%ad %s%n%(trailers:key=Requested by,key=Reason,key=Approved for live by)' --date=format:'%Y-%m-%d %H:%M'`
+To list the history with who asked and why: `git log --format='%ad %s%n%(trailers:key=Requested-by,key=Reason,key=Approved-for-live-by)' --date=format:'%Y-%m-%d %H:%M'`
