@@ -1171,7 +1171,8 @@ function onTool(callId, name, args) {
   if (name === "set_user_name") {
     const v = String(data.first_name || "").trim().split(/\s+/)[0].replace(/\s+/g, " ").slice(0, 60);
     if (!v) { toolReply(callId, { ok: false, error: "No name given." }); return; }
-    S.settings.userName = v; S.settings.seenPrivacy = true; S.seenWelcome = true; save(); applyName(); welcomeModal(); render(); whenIdle("instr");
+    const wasAsking = !!document.getElementById("wlName"); // the name screen was open
+    S.settings.userName = v; S.settings.seenPrivacy = true; S.seenWelcome = true; if (wasAsking) S.screen = "home"; save(); applyName(); welcomeModal(); render(); if (wasAsking) window.scrollTo(0, 0); whenIdle("instr");
     toolReply(callId, { ok: true, status: `Saved. If they haven't asked for anything yet, say exactly: "Hi ${v}, I am the Citizens Alliance VCRM voice assistant. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Hi ${v}, I am the Citizens Alliance VCRM voice assistant" and carry on with it.` }); return;
   }
   if (name === "stop_conversation") {
@@ -1370,11 +1371,11 @@ function welcomeModal() {
   setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a && a.dataset.act4 === "voice") { const el = document.getElementById("wlName"), v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : "";
-    if (v) S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; save(); document.getElementById("modal").innerHTML = ""; render(); ask(null); return; }
+    if (v) S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.screen = "home"; save(); document.getElementById("modal").innerHTML = ""; render(); window.scrollTo(0, 0); ask(null); return; }
   if (a) { const el = document.getElementById("wlName"); const v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : (S.settings.userName || "");
     if (!v) { const er = document.getElementById("wlErr"); if (er) er.hidden = false; if (el) el.focus(); return; }
     const isNew = v !== (S.settings.userName || "");
-    S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; save(); welcomeModal(); render();
+    S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.screen = "home"; save(); welcomeModal(); render(); window.scrollTo(0, 0);
     if (isNew && !G.live) startCall(greetLine(v)); } }); // a newly entered name starts the conversation with the standard greeting
 const CAN_DO = "I can do things related to managing your contacts and opportunities, like reviewing your open tasks, creating a contact, hearing a contact's giving history, reviewing your open opportunities, or review our fundraising process, and much more. What would you like to do today?";
 const greetLine = (name) => `The officer just entered their first name and tapped Got it. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I am the Citizens Alliance VCRM voice assistant. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process".`;
@@ -1720,7 +1721,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T14:09:21Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T14:14:21Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
