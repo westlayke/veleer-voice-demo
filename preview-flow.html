@@ -1753,7 +1753,7 @@ function settingsScreen() {
   <details class="panel trouble"><summary class="ph"><h2>Troubleshooting</h2><span class="meta">voice log</span></summary><div class="sb set"><div style="font-size:14px;color:var(--muted)">If the voice misbehaves, tap Copy log and send it to your demo contact.</div>
     <textarea id="vlogTxt" readonly style="font:12px/1.35 ui-monospace,Menlo,monospace;height:160px;white-space:pre">${esc(VLOG.slice(-150).join("\n"))}</textarea>
     <button class="btn out" data-act2="copylog">Copy log</button><button class="btn quiet" data-act2="clearlog">Clear log</button></div></details>
-  <section class="panel"><div class="ph"><h2>Restart</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and your first name, and puts back the example contacts and opportunities. You'll be asked for a first name again.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
+  <section class="panel"><div class="ph"><h2>Restart the demo and reset all settings</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities. All settings go back to how they started: your first name, the voice, the assistant's name and hints. You'll be asked for a first name again.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
   </main>`;
 }
 
@@ -1791,7 +1791,7 @@ document.addEventListener("click", (e) => {
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
-  else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.settings = keep; delete keep.userName; // a restart is a new person: ask for the first name again (phone ID kept)
+  else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.settings.deviceId = keep.deviceId; S.settings.demoCode = keep.demoCode || ""; // a restart puts every setting back to its default (voice, assistant name, hints, first name); only the phone ID and code word stay
     save(); render(); welcomeModal(); toast("Demo restarted"); }
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
@@ -1811,7 +1811,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T19:12:14Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T19:14:39Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
