@@ -20,7 +20,7 @@
 <style>
 /* Layout: one phone-width app column (max 440px, centred on wider screens), sticky top bar, fixed tab bar with a centre mic, bottom sheet for voice drafts. */
 :root {
-  --bg: #f4f6f9; --surface: #ffffff; --surface2: #eef1f5; --line: #d5dae2;
+  --bg: #f4f6f9; --surface: #ffffff; --surface2: #eef1f5; --line: #d5dae2; --line-strong: #a7b0bd;
   --fg: #1c1f24; --muted: #4b525d; --brand: #2f74d0; --brand-soft: #e8f0fb; --brand-line: #9dbbe4; --brand-ink: #1f4f8f;
   --bar: #e6edf7; --ok: #1f7a37; --ok-soft: #e3f3e7; --warn: #8a5a00; --warn-soft: #fff4dc; --warn-line: #e0a020;
   --bad: #c2333b; --scrim: rgba(20,26,36,.55); --shadow: 0 6px 24px rgba(20,30,50,.18);
@@ -28,13 +28,13 @@
   --font: "Titillium Web", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif; /* matches the SpiceCRM deployment */
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
+  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --line-strong: #566274; --fg: #e8ecf1; --muted: #a2abb8;
   --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
   --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
   --pv: #c9a8f5; --pv-soft: #2a2140; --pv-line: #5d4a86; --sl: #c3cbd6; --sl-soft: #252c36; --sl-line: #4a5565;
   --scrim: rgba(0,0,0,.6); --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark } }
 :root[data-theme="dark"] {
-  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
+  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --line-strong: #566274; --fg: #e8ecf1; --muted: #a2abb8;
   --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
   --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
   --pv: #c9a8f5; --pv-soft: #2a2140; --pv-line: #5d4a86; --sl: #c3cbd6; --sl-soft: #252c36; --sl-line: #4a5565;
@@ -58,6 +58,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .chip { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
 main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+/* Settings: stronger section edges so the sections don't blend together */
+main.setmain { gap: 18px; } .setmain .panel { border: 1.5px solid var(--line-strong); box-shadow: 0 2px 6px rgba(16, 24, 40, .10); } .setmain .ph { border-bottom-color: var(--line-strong); }
 .ph { display: flex; align-items: baseline; gap: 8px; padding: 11px 14px 9px; background: var(--surface2); border-bottom: 1px solid var(--line); }
 .ph h2 { margin: 0; font-size: 16px; }
 .ph .meta { margin-left: auto; color: var(--muted); font-size: 13px; }
@@ -143,6 +145,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wl-name { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .wl-name input { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
 .wl-start { align-items: center; text-align: center; } .wl-start .wl-logo { height: 54px; width: auto; } .wl-mic.big { width: 96px; height: 96px; margin: 6px auto 0; } .wl-tap { font-weight: 700; color: var(--brand-ink); margin-top: -4px; } .wl-start .btn { align-self: stretch; }
+.hmodal { position: relative; } .hm-x { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surface2); color: var(--fg); font-size: 24px; line-height: 1; cursor: pointer; } .hmodal h2 { padding-right: 40px; } .hm-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.4; }
 .wmodal p.wl-hint { font-size: 13px; color: var(--muted); margin-top: -6px; }
 .wl-err { color: var(--danger, #b42318); font-size: 13.5px; font-weight: 600; margin-top: -6px; }
 .wl-priv { font-size: 12.5px; color: var(--muted); line-height: 1.4; margin: 0; }
@@ -156,6 +159,10 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wl-save small { font-size: 12.5px; color: var(--muted); }
 .appbtn { border-radius: 22%; vertical-align: -6px; box-shadow: 0 0 0 1px var(--line); } .wl-savetitle { margin: 0; font-size: 15px; color: var(--brand-ink); line-height: 1.35; } #setSave h2 .appbtn { vertical-align: -5px; }
 .addbtn-card { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--brand-line); border-radius: 12px; padding: 9px 8px 9px 10px; margin-bottom: 12px; margin-top: 4px; cursor: pointer; position: relative; } .addbtn-card .appbtn { vertical-align: 0; flex: none; } .addbtn-card .t { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.3; } .addbtn-card .t b { color: var(--brand-ink); } .addbtn-card .t span { color: var(--muted); font-size: 12.5px; } .addbtn-card .chev { color: var(--muted); font-size: 20px; } .addbtn-card .x { border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 4px; cursor: pointer; align-self: flex-start; }
+details.othbr > summary { cursor: pointer; color: var(--brand); font-weight: 700; font-size: 14px; padding: 4px 0; } details.othbr[open] > summary { margin-bottom: 8px; }
+.set .hint-tgl { flex-direction: row; display: flex; font-weight: 400; align-items: center; gap: 10px; font-size: 14px; color: var(--fg); cursor: pointer; line-height: 1.35; } .set .hint-tgl input { width: 20px; height: 20px; min-height: 0; padding: 0; margin: 0; flex: none; }
+.btn.danger { background: var(--surface); color: #c62828; border: 1.5px solid #c62828; } .btn.red { background: #c62828; color: #fff; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--brand); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; text-align: left; }
 #setSave.flash { animation: flashsave 1.6s ease-out; } @keyframes flashsave { 0%, 40% { box-shadow: 0 0 0 3px var(--brand); } 100% { box-shadow: none; } }
 .appbtn-tile { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; } .appbtn-tile .appbtn { vertical-align: 0; }
 .wl-bar { margin: 2px 0 4px; } .wl-bar figcaption { font-size: 11.5px; color: var(--muted); margin-top: 2px; } .wl-note { margin: 0; font-size: 13.5px; }
@@ -1027,19 +1034,19 @@ document.addEventListener("visibilitychange", () => {
   else if (document.visibilityState === "visible" && S.pendingCall) { G.endedByLock = false; callDoneModal(); }
   else if (document.visibilityState === "visible" && G.endedByLock) { G.endedByLock = false; toast("The conversation ended when the phone locked. Tap the mic to carry on."); }
 });
-// Grok bills for every minute a conversation is open, so hang up after 15 seconds with no talking and no taps
-const IDLE_MS = 15000;
+// Grok bills for every minute a conversation is open, so hang up after 12 seconds with no talking and no taps
+const IDLE_MS = 12000;
 const busy = () => { G.lastAct = Date.now(); };
 function idleCheck() {
   if (!G.live || G.idleEnding || G.status === "Connecting…") return;
   const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
   if (Date.now() - (G.lastAct || Date.now()) < IDLE_MS) return;
-  G.idleEnding = true; vlog("15 seconds quiet: hanging up");
-  notice(`Nobody has spoken or tapped anything for 15 seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
+  G.idleEnding = true; vlog("12 seconds quiet: hanging up");
+  notice(`Nobody has spoken or tapped anything for 12 seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
   G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
 }
-function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall(); toast("Hung up after 15 seconds of quiet. Tap the mic when you need me."); }
+function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall(); toast("Hung up after 12 seconds of quiet. Tap the mic when you need me."); }
 document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
 document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
@@ -1310,7 +1317,7 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
 const go = (s) => { S.screen = s; save(); render(); window.scrollTo(0, 0); };
 function topbar(title, back, logo) {
   return `<header class="top${logo ? " withlogo" : ""}">${logo ? '<img class="top-logo" src="logo-v2.png" alt="Citizens Alliance" width="57" height="58">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}${logo ? `<div class="who"><b>${OFFICER}</b><span>You're the gift officer</span></div>` : `<h1>${esc(title)}</h1>`}
-  <button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+  ${title === "Settings" ? "" : `<button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>`}
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
 const SAY_GROUPS = [
@@ -1325,18 +1332,21 @@ function sayList() {
   return `<div class="saypills">${SAY_GROUPS.map(g => g.lines.map(line => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`).join("")).join("")}</div>`;
 }
 const APP_BTN = (px) => `<img src="apple-touch-icon-v2.png" alt="" class="appbtn" style="width:${px}px;height:${px}px">`;
-const SAVE_TITLE = `Add the ${APP_BTN(22)} Citizens VCRM button to your home screen`;
+const SAVE_TITLE = `Add Citizens VCRM to your Home Screen`;
 function saveTip(inSettings) {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
   if (standalone) return inSettings ? `<div style="font-size:14px;color:var(--muted)">Citizens VCRM is already on your home screen. You're using it from there now.</div>` : "";
   const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
   // iPhone: a section for Safari and a separate one for Chrome, the browser in use first; Android: Chrome only
-  const order = android ? ["android"] : ios && /CriOS/.test(ua) && !inSettings ? ["chrome", "safari"] : ["safari", "chrome"]; // Settings always lists Safari first
+  const order = android ? ["android"] : ios && /CriOS/.test(ua) ? ["chrome", "safari"] : ["safari", "chrome"]; // the browser in use first
   const title = { safari: "iPhone, in Safari", chrome: "iPhone, in Chrome", android: "Android, in Chrome" };
   const head = (t) => `<h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>${t}</h3>`;
-  return (inSettings ? "" : `<h3 class="wl-savetitle">${SAVE_TITLE}</h3>`) + order.map((k, i) => `<div class="wl-save">${head(title[k])}
+  const sec = (k, i) => `<div class="wl-save">${head(title[k])}
     ${!ios && !android && i === 0 ? `<p class="wl-note">Open this link on your phone, then:</p>` : ""}${saveSteps(k)}
-    ${inSettings || i === order.length - 1 ? `<small>Then open it from the Citizens VCRM icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small>` : ""}</div>`).join("");
+    ${inSettings || i === order.length - 1 ? `<small>Then open it from the Citizens VCRM icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small>` : ""}</div>`;
+  // in Settings only the steps for the browser in use are open; the other browser's steps sit behind "Using a different browser?"
+  if (inSettings) return sec(order[0], 0) + (order.length > 1 ? `<details class="othbr"><summary>Using a different browser?</summary>${order.slice(1).map((k, i) => sec(k, i + 1)).join("")}</details>` : "");
+  return `<h3 class="wl-savetitle">${SAVE_TITLE}</h3>` + order.map(sec).join("");
 }
 // drawings of the browser bar each phone shows, with the button to tap ringed in red
 const SAVE_ICO = {
@@ -1419,6 +1429,21 @@ function showQR(copyFailed) {
   const sc = document.createElement("script"); sc.src = "qrcode.js"; sc.onload = draw;
   sc.onerror = () => toast("Couldn't load the QR code. Check the connection."); document.head.appendChild(sc);
 }
+// the ? next to "Say things like…": a short how-to with a clear way out (× at the top, Close at the bottom, tap outside, or Esc)
+function helpModal() {
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="hmTitle">
+    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    <h2 id="hmTitle">How to talk to ${esc(botName())}</h2>
+    <ol class="hm-steps"><li>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> at the bottom of the screen.</li>
+      <li>Say what you want, like <b>“Log a meeting with Ruth”</b> or <b>“What are my open tasks?”</b> You can interrupt at any time.</li>
+      <li>${esc(botName())} fills in the form on screen. Check it, then tap <b>Save</b>.</li>
+      <li>Tap the mic again to hang up. After ${IDLE_MS / 1000} seconds of quiet, the call ends by itself.</li></ol>
+    <p class="wl-hint">Tap any option under “Say things like…” to get started with that request.</p>
+    <button type="button" class="btn blue" data-helpx="1">Close</button></div></div>`;
+}
+document.addEventListener("click", (e) => { const x = e.target.closest("[data-helpx]"); if (!x) return; if (x.classList.contains("scrim") && e.target !== x) return; document.getElementById("modal").innerHTML = ""; });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.querySelector(".hmodal")) document.getElementById("modal").innerHTML = ""; });
 let WELCOME_FULL = false; // set when the officer chooses to type their name on the first screen
 function welcomeModal() {
   const h = document.getElementById("modal");
@@ -1501,7 +1526,7 @@ function goalsPanel() {
 function addBtnCard() {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
   if (standalone || S.settings.hideAddBtn) return "";
-  return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add the Citizens VCRM button to your home screen</b><span>Open the demo like an app. Show me how</span></div><span class="chev">›</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
+  return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add Citizens VCRM to your Home Screen</b><span>Open the demo like an app. Show me how</span></div><span class="chev">›</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
 }
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
@@ -1737,32 +1762,31 @@ function tasksScreen() {
   ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(taskWhere(t))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. Say “Add a task”, or mention a next step when you log a meeting.</div>`}</section></main>`;
 }
 function settingsScreen() {
-  return topbar("Settings", "home") + `<main>
+  return topbar("Settings", "home") + `<main class="setmain">
   <section class="panel" id="setSave"><div class="ph"><h2>${SAVE_TITLE}</h2></div><div class="sb set">
     <div class="appbtn-tile">${APP_BTN(60)}<span>Citizens VCRM</span></div>
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45;text-align:center">This is the button you'll get. Tap it to open the demo like an app, with the mic ready.</div>
     ${saveTip(true)}</div></section>
   <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
-    <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
+    <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" enterkeyhint="done" value="${esc(S.settings.userName || "")}"></label>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
-    <button class="btn blue" data-act2="savename">Save</button>
   </div></section>
-  ${S.settings.noHints ? `<section class="panel"><div class="ph"><h2>Hints</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Hints are off, so tapping an option like Add a task starts the assistant straight away.</div><button class="btn out" data-act2="hintson">Show hints again</button></div></section>` : ""}
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
-    <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. The assistant asks for anything missing and puts the draft on screen; you still tap Save.</div>
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
+    <button type="button" class="linkbtn" data-act2="help">How to talk to ${esc(botName())} ›</button>
     <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option value="${v}" ${v === S.settings.voice ? "selected" : ""}>${v[0].toUpperCase() + v.slice(1)}</option>`).join("")}</select></label>
-    <label for="botName">Assistant's name<input id="botName" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="${esc(botName())}" value="${esc(S.settings.botName || "")}"></label>
+    <label for="botName">Assistant's name<input id="botName" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="${esc(botName())}" value="${esc(S.settings.botName || "")}"></label>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4;margin-top:-4px">The assistant introduces itself by this name. Leave it blank to use the voice's name.</div>
-    <button class="btn blue" data-act2="savexai">Save</button>
+    <label class="hint-tgl" for="hintsTgl"><input type="checkbox" id="hintsTgl" ${S.settings.noHints ? "" : "checked"}> Show a hint when I tap an option under “Say things like…”</label>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">Changes on this screen save as soon as you make them.</div>
   </div></section>
   <section class="panel"><div class="ph"><h2>Share this demo</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Send the demo to someone, or show a QR code they can scan with their phone camera. Anyone with the link can use the voice assistant.</div>
     <button class="btn blue" data-act2="share">Share link</button><button class="btn out" data-act2="qr">Show QR code</button></div></section>
-  <section class="panel"><div class="ph"><h2>Version</h2><span class="meta">${esc(buildLabel())}</span></div><div class="sb"><div style="font-size:14px;color:var(--muted)">The demo checks for a newer version each time you open it and offers to update.</div></div></section>
-  <details class="panel trouble"><summary class="ph"><h2>Troubleshooting</h2><span class="meta">voice log</span></summary><div class="sb set"><div style="font-size:14px;color:var(--muted)">If the voice misbehaves, tap Copy log and send it to your demo contact.</div>
+  <section class="panel"><div class="ph"><h2>Version</h2><span class="meta">${esc(buildLabel())}</span></div><div class="sb"><div style="font-size:14px;color:var(--muted)">The demo updates itself to the newest version when you open it.</div></div></section>
+  <section class="panel"><div class="ph"><h2>Restart the demo and reset all settings</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities. All settings go back to how they started: your first name, the voice, the assistant's name and hints. You'll be asked for a first name again.</div><button class="btn danger" data-act2="restartask">Restart the demo</button></div></section>
+  <details class="panel trouble"><summary class="ph"><h2>For support</h2><span class="meta">voice log</span></summary><div class="sb set"><div style="font-size:14px;color:var(--muted)">If the voice misbehaves, tap Copy log and send it to your demo contact.</div>
     <textarea id="vlogTxt" readonly style="font:12px/1.35 ui-monospace,Menlo,monospace;height:160px;white-space:pre">${esc(VLOG.slice(-150).join("\n"))}</textarea>
     <button class="btn out" data-act2="copylog">Copy log</button><button class="btn quiet" data-act2="clearlog">Clear log</button></div></details>
-  <section class="panel"><div class="ph"><h2>Restart the demo and reset all settings</h2></div><div class="sb"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities. All settings go back to how they started: your first name, the voice, the assistant's name and hints. You'll be asked for a first name again.</div><button class="btn out" data-act2="restart">Restart the demo</button></div></section>
   </main>`;
 }
 
@@ -1800,29 +1824,47 @@ document.addEventListener("click", (e) => {
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
-  else if (act === "restart") { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.settings.deviceId = keep.deviceId; S.settings.demoCode = keep.demoCode || ""; // a restart puts every setting back to its default (voice, assistant name, hints, first name); only the phone ID and code word stay
-    save(); render(); welcomeModal(); toast("Demo restarted"); }
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
   else if (act === "flowat") { S.flowBack = "opp"; highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
   else if (act === "copylog") { const txt = VLOG.join("\n"); const done = () => toast("Log copied. Paste it to Claude.");
     (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("vlogTxt"); el.value = txt; el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the text and copy it."); } }); }
   else if (act === "clearlog") { VLOG = []; try { localStorage.removeItem(LOGKEY); } catch (e) {} render(); toast("Log cleared"); }
-  else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
+  else if (act === "help") helpModal();
+  else if (act === "restartask") restartConfirm();
   else if (act === "share") shareDemo();
   else if (act === "qr") showQR();
   else if (act === "addbtnx") { S.settings.hideAddBtn = true; save(); render(); toast("Hidden. The steps are in Settings."); }
   else if (act === "addbtn") { go("settings"); setTimeout(() => { const el = document.getElementById("setSave"); if (el) { el.scrollIntoView({ block: "start" }); el.classList.add("flash"); } }, 50); }
   else if (act === "hintson") { delete S.settings.noHints; save(); render(); toast("Hints are back on"); }
-  else if (act === "savename") { const v = document.getElementById("userName").value.trim().replace(/\s+/g, " ").slice(0, 60); if (!v) { toast("Please enter your first name."); return; } S.settings.userName = v; save(); render(); toast(`The assistant will call you ${v.split(" ")[0]}`); }
-  else if (act === "savexai") { const was = S.settings.voice + "|" + botName(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; const bn = document.getElementById("botName").value.trim().replace(/\s+/g, " ").slice(0, 30); if (bn) S.settings.botName = bn; else delete S.settings.botName; save();
-    // a new voice or name only takes hold in a new conversation (Grok keeps the voice, and what it already said, for the whole call)
-    if (G.live && was !== S.settings.voice + "|" + botName()) { endCall(); render(); toast(`Saved. Tap the mic to talk to ${botName()}.`); } else { render(); toast(`Saved. The assistant's name is ${botName()}.`); } }
 });
+// Settings save as soon as a field changes (no Save buttons)
+function saveName() { const el = document.getElementById("userName"); const v = el.value.trim().replace(/\s+/g, " ").slice(0, 60);
+  if (!v) { el.value = S.settings.userName || ""; toast("Please enter your first name."); return; }
+  if (v === S.settings.userName) return; S.settings.userName = v; save(); toast(`Saved. The assistant will call you ${v.split(" ")[0]}.`); }
+function saveVoice() { const was = S.settings.voice + "|" + botName(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; const bn = document.getElementById("botName").value.trim().replace(/\s+/g, " ").slice(0, 30); if (bn) S.settings.botName = bn; else delete S.settings.botName; save();
+  if (was === S.settings.voice + "|" + botName()) return;
+  // a new voice or name only takes hold in a new conversation (Grok keeps the voice, and what it already said, for the whole call)
+  if (G.live) { endCall(); render(); toast(`Saved. Tap the mic to talk to ${botName()}.`); } else { const hl = document.querySelector('[data-act2="help"].linkbtn'); if (hl) hl.textContent = `How to talk to ${botName()} ›`; document.getElementById("botName").placeholder = botName(); toast(`Saved. The assistant's name is ${botName()}.`); } }
+document.addEventListener("change", (e) => { const id = e.target.id;
+  if (id === "userName") saveName();
+  else if (id === "voiceSel" || id === "botName") saveVoice();
+  else if (id === "hintsTgl") { if (e.target.checked) delete S.settings.noHints; else S.settings.noHints = true; save(); toast(e.target.checked ? "Hints are on" : "Hints are off"); } });
+document.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.target.id === "userName" || e.target.id === "botName")) e.target.blur(); });
+function doRestart() { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.settings.deviceId = keep.deviceId; S.settings.demoCode = keep.demoCode || ""; // a restart puts every setting back to its default (voice, assistant name, hints, first name); only the phone ID and code word stay
+  save(); render(); welcomeModal(); toast("Demo restarted"); }
+function restartConfirm() {
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="rsTitle">
+    <h2 id="rsTitle">Restart the demo?</h2>
+    <p class="wl-hint">Everything you've added is removed and all settings go back to how they started. This can't be undone.</p>
+    <button type="button" class="btn red" id="rsGo">Yes, restart</button><button type="button" class="btn quiet" data-helpx="1">Cancel</button></div></div>`;
+  document.getElementById("rsGo").onclick = () => { h.innerHTML = ""; doRestart(); };
+}
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T19:33:51Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T23:56:32Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
