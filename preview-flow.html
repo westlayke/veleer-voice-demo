@@ -121,7 +121,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wmodal { width: 100%; max-width: 360px; background: var(--surface); border-radius: 18px; padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
 .wmodal h2 { margin: 2px 0 0; font-size: 21px; line-height: 1.25; color: var(--brand-ink); text-wrap: balance; }
 .wmodal p { margin: 0; font-size: 15px; line-height: 1.45; }
-.wl-mic { width: 44px; height: 44px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.wl-mic { border: 0; cursor: pointer; padding: 0; width: 44px; height: 44px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
 .wl-tips { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 14px; color: var(--muted); line-height: 1.4; }
 .wl-tips li { padding-left: 16px; position: relative; } .wl-tips li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-line); }
 .wl-save { border: 1px solid var(--brand-line); background: var(--brand-soft, #eef4fc); border-radius: 12px; padding: 11px 12px; display: flex; flex-direction: column; gap: 7px; }
@@ -133,7 +133,9 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wl-role b { color: var(--brand-ink); }
 .wl-name { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .wl-name input { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
-.wmodal p.wl-priv { font-size: 12.5px; color: var(--muted); line-height: 1.4; margin: 0; }
+.wmodal p.wl-hint { font-size: 13px; color: var(--muted); margin-top: -6px; }
+.wl-err { color: var(--danger, #b42318); font-size: 13.5px; font-weight: 600; margin-top: -6px; }
+.wl-priv { font-size: 12.5px; color: var(--muted); line-height: 1.4; margin: 0; }
 .wl-av { width: 34px; height: 34px; flex: none; border-radius: 50%; background: var(--brand-soft, #e3edf9); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
 .top.withlogo { height: 64px; position: sticky; }
 .top .who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
@@ -857,6 +859,7 @@ const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, descrip
     { type: "function", name: "get_my_tasks", description: "Read the officer's open tasks (not done), soonest due first, with any overdue ones marked. Also opens the Tasks screen. Use it when the officer asks what's on their list, what's due, or what's overdue.", parameters: { type: "object", properties: { which: { type: "string", enum: ["all", "overdue", "due_today", "this_week"], description: "Which open tasks: all (default), overdue only, due today or earlier, or due in the next seven days" } }, required: [] } },
     { type: "function", name: "get_contact_history", description: "Read a contact's interaction history (meetings, calls and asks, newest first) and their open tasks, including tasks on their opportunity. Also opens their contact record. Use it when the officer asks about past interactions with a contact, what happened last time, or what's outstanding for a contact.", parameters: { type: "object", properties: Object.assign({ focus: { type: "string", enum: ["history_and_tasks", "history", "tasks"], description: "What the officer asked for; default both" } }, FOR), required: ["contact_name"] } },
     { type: "function", name: "highlight_stage", description: "During the process overview, light up one stage on the How it works screen. Call it just before you describe that stage.", parameters: { type: "object", properties: { stage: { type: "string", enum: FLOW.map(f => f.stage) } }, required: ["stage"] } },
+    { type: "function", name: "set_user_name", description: "Save the name of the person using the app, once they tell you. Call it as soon as they say their name.", parameters: { type: "object", properties: { first_name: { type: "string" }, last_name: { type: "string", description: "Only if they said it" } }, required: ["first_name"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
 function crmSnapshot() {
@@ -865,7 +868,7 @@ function crmSnapshot() {
 }
 function grokInstructions() {
   const f = focusContact();
-  return `You are the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}. Today is ${longToday()} (${todayISO()}).
+  return `You are the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say a short hello and ask for their first name. When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
@@ -1047,7 +1050,7 @@ async function startCall(opening) {
       else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
       srcNode.connect(G.node);
       const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
-      notice(opening || "The officer just opened the conversation. Greet them in one short sentence and ask what they'd like to do.");
+      notice(S.settings.userName ? (opening || "The officer just opened the conversation. Greet them in one short sentence and ask what they'd like to do.") : (opening ? opening + " But you don't know their name yet: first say a short hello and ask for their first name, then call set_user_name, then help with that." : "The officer just opened the conversation and you don't know their name yet. Say a short hello and ask for their first name."));
       G.status = "Listening"; paintCall();
     };
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
@@ -1121,6 +1124,12 @@ function onTool(callId, name, args) {
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
+  if (name === "set_user_name") {
+    const v = [data.first_name, data.last_name].map(x => String(x || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 60);
+    if (!v) { toolReply(callId, { ok: false, error: "No name given." }); return; }
+    S.settings.userName = v; S.settings.seenPrivacy = true; S.seenWelcome = true; save(); applyName(); welcomeModal(); render(); whenIdle("instr");
+    toolReply(callId, { ok: true, status: `Saved. Greet ${v.split(" ")[0]} by name in one short sentence, then carry on with what they asked for, or ask what they'd like to do.` }); return;
+  }
   if (name === "stop_conversation") {
     toolReply(callId, { ok: true }, false);
     G.status = "Ending…"; paintCall();
@@ -1301,19 +1310,25 @@ function showQR(copyFailed) {
 }
 function welcomeModal() {
   const h = document.getElementById("modal");
-  if (S.seenWelcome && S.settings.seenPrivacy) { h.innerHTML = ""; return; } // phones that saw the welcome before activity logging see it once more, for the notice
+  if (S.seenWelcome && S.settings.seenPrivacy && S.settings.userName) { h.innerHTML = ""; return; } // phones that saw the welcome before activity logging see it once more, for the notice
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
-    <div class="wl-role"><span class="wl-av">${esc(OFFICER_INITIALS)}</span><div><b>You're ${esc(OFFICER)}</b>, a gift officer at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
-    <label class="wl-name">Your name (optional; the assistant will use it)<input id="wlName" autocomplete="name" placeholder="Leave blank to be Dana Rivera" value="${esc(S.settings.userName || "")}"></label>
-    <span class="wl-mic">${mic(24)}</span>
+    <div class="wl-role"><span class="wl-av">${S.settings.userName ? esc(OFFICER_INITIALS) : mic(16)}</span><div><b>You're ${S.settings.userName ? esc(OFFICER) : "the gift officer"}</b>${S.settings.userName ? ", a gift officer" : ""} at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
+    <label class="wl-name">Your name (first name needed; the assistant will use it)<input id="wlName" autocomplete="name" placeholder="For example, Sam Lee" value="${esc(S.settings.userName || "")}"></label>
+    <div class="wl-err" id="wlErr" hidden>Please enter at least your first name.</div>
+    <div class="wl-hint">Or tap the blue mic below and just tell the assistant your name.</div>
+    <button type="button" class="wl-mic" data-act4="voice" aria-label="Tap to start talking">${mic(24)}</button>
     <h2 id="wmTitle">Talk to Citizens VCRM like a colleague</h2>
     <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> and try: <b>“Log a meeting with Ruth.”</b> The assistant fills in the form as you talk; you check it and tap Save.</p>
     ${saveTip()}
-    <p class="wl-priv">This demo saves what you say to the assistant and its replies, with your name if you give one, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
+    <p class="wl-priv">This demo saves what you say to the assistant and its replies, with your name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
     <button class="btn blue" data-act4="welcome-ok">Got it</button>
     <button class="btn quiet" data-act2="share">Share this demo</button></div></div>`;
 }
-document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a) { const el = document.getElementById("wlName"); if (el) S.settings.userName = el.value.trim().slice(0, 60); S.seenWelcome = true; S.settings.seenPrivacy = true; save(); welcomeModal(); render(); } });
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a && a.dataset.act4 === "voice") { const el = document.getElementById("wlName"), v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : "";
+    if (v) S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; save(); document.getElementById("modal").innerHTML = ""; render(); ask(null); return; }
+  if (a) { const el = document.getElementById("wlName"); const v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : (S.settings.userName || "");
+    if (!v) { const er = document.getElementById("wlErr"); if (er) er.hidden = false; if (el) el.focus(); return; }
+    S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; save(); welcomeModal(); render(); } });
 
 const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
 const AWAIT_WARN_DAYS = 14; // tenant setting in the guide; demo default
@@ -1561,8 +1576,8 @@ function tasksScreen() {
 function settingsScreen() {
   return topbar("Settings", "home") + `<main>
   <section class="panel"><div class="ph"><h2>Your name</h2></div><div class="sb set">
-    <label for="userName">Name the assistant uses for you<input id="userName" autocomplete="name" placeholder="Leave blank to be Dana Rivera" value="${esc(S.settings.userName || "")}"></label>
-    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your name if you give one, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
+    <label for="userName">Name the assistant uses for you (first name needed)<input id="userName" autocomplete="name" placeholder="For example, Sam Lee" value="${esc(S.settings.userName || "")}"></label>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
     <button class="btn blue" data-act2="savename">Save</button>
   </div></section>
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
@@ -1625,13 +1640,13 @@ document.addEventListener("click", (e) => {
   else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
   else if (act === "share") shareDemo();
   else if (act === "qr") showQR();
-  else if (act === "savename") { S.settings.userName = document.getElementById("userName").value.trim().slice(0, 60); save(); render(); toast(S.settings.userName ? `The assistant will call you ${S.settings.userName.split(" ")[0]}` : "You're Dana Rivera again"); }
+  else if (act === "savename") { const v = document.getElementById("userName").value.trim().replace(/\s+/g, " ").slice(0, 60); if (!v) { toast("Please enter at least your first name."); return; } S.settings.userName = v; save(); render(); toast(`The assistant will call you ${v.split(" ")[0]}`); }
   else if (act === "savexai") { S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; save(); render(); toast("Saved"); }
 });
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T12:45:04Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T13:11:41Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
