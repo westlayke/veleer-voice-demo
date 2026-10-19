@@ -1109,7 +1109,7 @@ function exampleFor(line) {
 
 function hintCard(el) {
   const line = el.dataset.say;
-  if (S.settings.noHints) { ask(`"${line}"`); return; }
+  if (S.settings.noHints || el.dataset.nohint) { ask(`"${line}"`); return; }
   const title = (el.textContent || line).trim().replace(/^Try it:\s*/, "").replace(/[“”]/g, "");
   const h = document.getElementById("modal");
   h.innerHTML = `<div class="scrim center"><div class="wmodal hintcard" role="dialog" aria-modal="true" aria-labelledby="hcTitle">
@@ -1419,7 +1419,9 @@ function goalsPanel() {
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
   return topbar("Home", null, true) + `<main>
-  <section class="panel"><div class="flowtile" data-act2="flowhome"><div class="fti">${FI('<circle cx="5" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M14 14l3 3"/>')}</div><div class="ftt"><b>Hear how it works</b><span>Spoken overview, contact to Closed Won</span></div><span style="color:var(--muted);font-size:20px">›</span></div></section>
+  <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">From first contact to Closed Won</h2>
+    <p>Every opportunity moves through the same stages. <button type="button" data-act2="flowhome" style="background:none;border:0;padding:0;font:inherit;color:var(--brand);font-weight:600;cursor:pointer;text-decoration:underline">See the stages</button> to find out what has to happen before each can move on.</p>
+    <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(18)} Hear the overview</button></div></section>
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
   ${upcomingPanel()}
@@ -1625,7 +1627,7 @@ function flowScreen() {
   return topbar("How it works", S.flowBack || "home") + `<main>
   <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">From first contact to Closed Won</h2>
     <p>Every opportunity moves through the same stages. Tap a stage to see what has to happen before it can move on.</p>
-    <button class="btn blue" data-say="Walk me through the process">${mic(18)} Hear the overview</button></div></section>
+    <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(18)} Hear the overview</button></div></section>
   <section class="panel"><ol class="flowpath">${FLOW.map((f, i) => {
     const on = i === at, past = at > -1 && i < at;
     return `<li class="fstep ${on ? "on" : ""} ${past ? "past" : ""}" id="fstep${i}"><div class="fdot">${f.icon}</div>
@@ -1722,7 +1724,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T14:23:44Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T14:28:18Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
