@@ -879,6 +879,7 @@ function grokInstructions() {
   const f = focusContact();
   return `You are the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say a short hello and ask for their first name. When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
+If the officer asks what you can do, say exactly: "${CAN_DO}"
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
 Stage rules the app enforces: an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
@@ -1171,7 +1172,7 @@ function onTool(callId, name, args) {
     const v = String(data.first_name || "").trim().split(/\s+/)[0].replace(/\s+/g, " ").slice(0, 60);
     if (!v) { toolReply(callId, { ok: false, error: "No name given." }); return; }
     S.settings.userName = v; S.settings.seenPrivacy = true; S.seenWelcome = true; save(); applyName(); welcomeModal(); render(); whenIdle("instr");
-    toolReply(callId, { ok: true, status: `Saved. If they haven't asked for anything yet, say exactly: "Hi ${v}, I am the Citizens Alliance VCRM voice assistant, what would you like to do today?" If they already asked for something, say "Hi ${v}, I am the Citizens Alliance VCRM voice assistant" and carry on with it.` }); return;
+    toolReply(callId, { ok: true, status: `Saved. If they haven't asked for anything yet, say exactly: "Hi ${v}, I am the Citizens Alliance VCRM voice assistant. Would you like me to tell you what all I can do?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Hi ${v}, I am the Citizens Alliance VCRM voice assistant" and carry on with it.` }); return;
   }
   if (name === "stop_conversation") {
     toolReply(callId, { ok: true }, false);
@@ -1375,7 +1376,8 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
     const isNew = v !== (S.settings.userName || "");
     S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; save(); welcomeModal(); render();
     if (isNew && !G.live) startCall(greetLine(v)); } }); // a newly entered name starts the conversation with the standard greeting
-const greetLine = (name) => `The officer just entered their first name and tapped Got it. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I am the Citizens Alliance VCRM voice assistant, what would you like to do today?"`;
+const CAN_DO = "I can add a new contact, log a meeting or a phone call, add a task, schedule a meeting in your calendar, call a contact, create an opportunity, plan an ask, record an ask and the investor's answer, record a pledge, a gift or a payment, read you your open tasks, tell you a contact's history and giving, and answer questions from the FAQ. Or I can also explain our process for working with investors.";
+const greetLine = (name) => `The officer just entered their first name and tapped Got it. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I am the Citizens Alliance VCRM voice assistant. Would you like me to tell you what all I can do?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process".`;
 
 const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
 const AWAIT_WARN_DAYS = 14; // tenant setting in the guide; demo default
@@ -1718,7 +1720,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T13:49:56Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T14:00:44Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
