@@ -153,6 +153,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .top-logo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 58px; width: auto; display: block; pointer-events: none; }
 .brand { display: flex; justify-content: center; padding: 2px 0 0; } .brand img { width: 130px; height: auto; display: block; }
 .wl-save small { font-size: 12.5px; color: var(--muted); }
+.wl-bar { margin: 2px 0 4px; } .wl-bar figcaption { font-size: 11.5px; color: var(--muted); margin-top: 2px; } .wl-note { margin: 0; font-size: 13.5px; }
 .wl-tips b { color: var(--fg); font-weight: 600; }
 /* journey card */
 .steps { list-style: none; margin: 0; padding: 4px 0; }
@@ -1322,13 +1323,53 @@ function saveTip() {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
   if (standalone) return "";
   const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
-  const share = `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg></span>`;
-  const dots = `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span>`;
-  const steps = ios ? [`Tap ${share} Share at the bottom of Safari.`, `Scroll down and tap <b>Add to Home Screen</b>.`, `Tap <b>Add</b>.`]
-    : android ? [`Tap ${dots} at the top right of Chrome.`, `Tap <b>Add to home screen</b> (or <b>Install app</b>).`, `Tap <b>Add</b> or <b>Install</b>.`]
-    : [`Open this link on your phone.`, `iPhone: tap ${share} Share, then <b>Add to Home Screen</b>.`, `Android: tap ${dots}, then <b>Add to home screen</b>.`];
-  return `<div class="wl-save"><h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Keep Citizens VCRM on your phone</h3>
-    <ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol><small>Then open it from the Citizens VCRM icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small></div>`;
+  // iPhone: a section for Safari and a separate one for Chrome, the browser in use first; Android: Chrome only
+  const order = android ? ["android"] : ios && /CriOS/.test(ua) ? ["chrome", "safari"] : ["safari", "chrome"];
+  const title = { safari: "iPhone, in Safari", chrome: "iPhone, in Chrome", android: "Android, in Chrome" };
+  const head = (t) => `<h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>${t}</h3>`;
+  return order.map((k, i) => `<div class="wl-save">${head(`Keep Citizens VCRM on your phone: ${title[k]}`)}
+    ${!ios && !android && i === 0 ? `<p class="wl-note">Open this link on your phone, then:</p>` : ""}${saveSteps(k)}
+    ${i === order.length - 1 ? `<small>Then open it from the Citizens VCRM icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small>` : ""}</div>`).join("");
+}
+// drawings of the browser bar each phone shows, with the button to tap ringed in red
+const SAVE_ICO = {
+  share: `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg></span>`,
+  hdots: `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span>`,
+  vdots: `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span>`
+};
+function saveBar(kind) {
+  const ring = (x, y) => `<circle cx="${x}" cy="${y}" r="15" fill="none" stroke="#d62b2b" stroke-width="2.5"/>`;
+  const shareG = (x, y) => `<g transform="translate(${x - 8},${y - 9})" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v10M4.5 4.5 8 1l3.5 3.5"/><path d="M2.5 8v8.5h11V8"/></g>`;
+  const url = (x, w, y) => `<rect x="${x}" y="${y - 13}" width="${w}" height="26" rx="13" fill="var(--surface)" stroke="var(--line)"/><text x="${x + w / 2}" y="${y + 4}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">westlayke.github.io</text>`;
+  let inner, cap;
+  if (kind === "safari") {
+    inner = `<rect x="1" y="1" width="258" height="46" rx="23" fill="var(--bg, #f4f6f9)" stroke="var(--line)"/>
+      <path d="M26 16l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>${url(46, 156, 24)}
+      <g fill="currentColor"><circle cx="223" cy="24" r="2.2"/><circle cx="230" cy="24" r="2.2"/><circle cx="237" cy="24" r="2.2"/></g>${ring(230, 24)}`;
+    cap = "Bottom of Safari";
+  } else if (kind === "safari-old") {
+    inner = `<rect x="1" y="1" width="258" height="46" rx="10" fill="var(--bg, #f4f6f9)" stroke="var(--line)"/>
+      <path d="M30 16l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/><path d="M68 16l8 8-8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/>
+      ${shareG(130, 24)}${ring(130, 24)}<path d="M178 18h12v14h-12zM183 18v-2h12v14h-2" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".5"/><rect x="220" y="17" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".5"/>`;
+    cap = "Bottom of Safari";
+  } else if (kind === "chrome") {
+    inner = `<rect x="1" y="1" width="258" height="46" rx="10" fill="var(--bg, #f4f6f9)" stroke="var(--line)"/>${url(12, 196, 24)}${shareG(232, 24)}${ring(232, 24)}`;
+    cap = "Top of Chrome";
+  } else {
+    inner = `<rect x="1" y="1" width="258" height="46" rx="10" fill="var(--bg, #f4f6f9)" stroke="var(--line)"/>${url(12, 196, 24)}
+      <g fill="currentColor"><circle cx="236" cy="17" r="2.2"/><circle cx="236" cy="24" r="2.2"/><circle cx="236" cy="31" r="2.2"/></g>${ring(236, 24)}`;
+    cap = "Top of Chrome";
+  }
+  return `<figure class="wl-bar"><svg viewBox="0 0 260 48" width="100%" style="max-width:260px" role="img" aria-label="${cap}, with the button to tap circled">${inner}</svg><figcaption>${cap}</figcaption></figure>`;
+}
+function saveSteps(kind) {
+  const v = +((navigator.userAgent.match(/Version\/(\d+)/) || [])[1] || 0);
+  const oldSafari = kind === "safari" && v && v < 26; // Safari before iOS 26 has Share right in the bottom bar
+  const steps = kind === "chrome" ? [`Tap ${SAVE_ICO.share} Share at the top right, next to the address.`, `Tap <b>Add to Home Screen</b>. If you don't see it, tap <b>More</b> first.`, `Tap <b>Add</b>.`]
+    : kind === "android" ? [`Tap ${SAVE_ICO.vdots} at the top right of Chrome.`, `Tap <b>Add to home screen</b> (or <b>Install app</b>).`, `Tap <b>Add</b> or <b>Install</b>.`]
+    : oldSafari ? [`Tap ${SAVE_ICO.share} Share at the bottom of Safari.`, `Scroll down and tap <b>Add to Home Screen</b>.`, `Tap <b>Add</b>.`]
+    : [`Tap ${SAVE_ICO.hdots} at the bottom right of Safari.`, `Tap ${SAVE_ICO.share} <b>Share</b>.`, `Scroll down and tap <b>Add to Home Screen</b>. If you don't see it, tap <b>View More</b> first.`, `Tap <b>Add</b>.`];
+  return `${saveBar(oldSafari ? "safari-old" : kind)}<ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol>`;
 }
 // a phone that opens the demo without its #code (for example from the home-screen icon) asks for the code word once
 function codeModal(opening) {
@@ -1747,7 +1788,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T18:26:41Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T18:50:19Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
