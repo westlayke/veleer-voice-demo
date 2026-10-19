@@ -1328,7 +1328,7 @@ function saveTip(inSettings) {
   const order = android ? ["android"] : ios && /CriOS/.test(ua) && !inSettings ? ["chrome", "safari"] : ["safari", "chrome"]; // Settings always lists Safari first
   const title = { safari: "iPhone, in Safari", chrome: "iPhone, in Chrome", android: "Android, in Chrome" };
   const head = (t) => `<h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>${t}</h3>`;
-  return order.map((k, i) => `<div class="wl-save">${head(inSettings ? title[k] : `Keep Citizens VCRM on your phone: ${title[k]}`)}
+  return order.map((k, i) => `<div class="wl-save">${head(inSettings ? title[k] : `Keep Citizens Alliance VCRM on your phone: ${title[k]}`)}
     ${!ios && !android && i === 0 ? `<p class="wl-note">Open this link on your phone, then:</p>` : ""}${saveSteps(k)}
     ${inSettings || i === order.length - 1 ? `<small>Then open it from the Citizens VCRM icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small>` : ""}</div>`).join("");
 }
@@ -1804,7 +1804,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T19:07:44Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T19:08:54Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
