@@ -846,6 +846,8 @@ const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, descrip
   .concat([{ type: "function", name: "show_screen", description: "Open a screen when the officer asks to see something. For a contact's record or opportunity, pass contact_name.", parameters: { type: "object", properties: Object.assign({ screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record", "how_it_works"] } }, FOR), required: ["screen"] } },
     { type: "function", name: "call_contact", description: "Put a Call button for a contact on screen when the officer wants to phone them. The officer taps it; the phone places the call.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
     { type: "function", name: "get_giving", description: "Look up a contact's giving: lifetime total, this year's total, the last gift with its date, and any open pledge balance. Also opens their contact record.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
+    { type: "function", name: "get_my_tasks", description: "Read the officer's open tasks (not done), soonest due first, with any overdue ones marked. Also opens the Tasks screen. Use it when the officer asks what's on their list, what's due, or what's overdue.", parameters: { type: "object", properties: { which: { type: "string", enum: ["all", "overdue", "due_today", "this_week"], description: "Which open tasks: all (default), overdue only, due today or earlier, or due in the next seven days" } }, required: [] } },
+    { type: "function", name: "get_contact_history", description: "Read a contact's interaction history (meetings, calls and asks, newest first) and their open tasks, including tasks on their opportunity. Also opens their contact record. Use it when the officer asks about past interactions with a contact, what happened last time, or what's outstanding for a contact.", parameters: { type: "object", properties: Object.assign({ focus: { type: "string", enum: ["history_and_tasks", "history", "tasks"], description: "What the officer asked for; default both" } }, FOR), required: ["contact_name"] } },
     { type: "function", name: "highlight_stage", description: "During the process overview, light up one stage on the How it works screen. Call it just before you describe that stage.", parameters: { type: "object", properties: { stage: { type: "string", enum: FLOW.map(f => f.stage) } }, required: ["stage"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
@@ -867,10 +869,12 @@ Contacts and opportunities: ${crmSnapshot()}.
 When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one.
 If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first (no "Opening the overview"), then give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait for the answer. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
 ${flowScript()}
+If the officer says "Review FAQ" or asks what they can ask about the process, name four or five topics the Process FAQ covers (for example who can do what, stage rules, Ally and Do Not Contact flags, alerts, pledges and payments) in one or two sentences, give one example question, and ask what they would like to know. Then answer as below.
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
 When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before asking them to save. Recording an ask needs the same unless the investor declined.
 To book a future meeting, use show_meeting_draft (ask for the day and start time if not said); logging a meeting that already happened is show_interaction_draft. After they tap Add to Google Calendar, Google Calendar opens and our conversation ends.
 When the officer wants to phone a contact, call call_contact. Only offer calls the app allows (the contact needs a phone number and Calls permitted on).
+When the officer asks what tasks they have, what's due or overdue, call get_my_tasks and read what it returns. When they ask about past interactions with a contact, what happened last time, or what's outstanding for a contact, call get_contact_history (focus history, tasks, or both) and read what it returns. Never read tasks or history from memory; always call the tool, since the records may have changed.
 When the officer asks about a contact's giving (lifetime, this year, year to date, last gift or donation), call get_giving and speak the figures it returns; never estimate them.
 When adding a task, ask for a due date if none was said (they can skip it). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
 When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?" Always pass date and meetingType in show_interaction_draft and show_ask_result_draft: the date resolved from what the officer said (for example yesterday), and the type they said. Leaving them out puts today and In person on the draft.
@@ -1106,6 +1110,28 @@ function onTool(callId, name, args) {
       open_pledge_balance: v.pledgeLeft ? money(v.pledgeLeft) : "none",
       say: "Say these figures in one or two sentences, e.g. lifetime, then this year, then the last gift and its date. 'This year' means since January 1." }); return;
   }
+  if (name === "get_my_tasks") {
+    const T = todayISO(), which = data.which || "all";
+    const open = S.tasks.filter(t => !t.done).sort((x, y) => (x.due || "9999").localeCompare(y.due || "9999"));
+    const pick = open.filter(t => which === "overdue" ? t.due && t.due < T : which === "due_today" ? t.due && t.due <= T : which === "this_week" ? t.due && t.due <= addDays(T, 7) : true);
+    go("tasks"); whenIdle("instr");
+    toolReply(callId, { ok: true, open_tasks_total: open.length, overdue_total: open.filter(t => t.due && t.due < T).length, showing: which, count: pick.length,
+      tasks: pick.map(t => ({ task: t.text, for: taskWhere(t), due: t.due ? fmtDate(t.due) + (t.due.slice(0, 4) !== T.slice(0, 4) ? " " + t.due.slice(0, 4) : "") : "no due date", overdue: !!(t.due && t.due < T), due_today: t.due === T })),
+      say: pick.length ? "Say how many there are, overdue ones first, then read each task briefly with who it's for and when it's due (say overdue, today, or the day). If there are more than five, read the first five and ask whether to go on. Then ask if they'd like to act on one, for example log the follow-up." : "Say there are no open tasks of that kind." }); return;
+  }
+  if (name === "get_contact_history") {
+    const r = resolveTarget("interaction", data.contact_name);
+    if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
+    const c = r.contact, T = todayISO(), focus = data.focus || "history_and_tasks"; S.sel.contact = c.id; go("contact"); whenIdle("instr");
+    const ints = S.interactions.filter(i => i.contactId === c.id).sort((x, y) => (y.date || "").localeCompare(x.date || ""));
+    const tasks = S.tasks.filter(t => t.contactId === c.id && !t.done).sort((x, y) => (x.due || "9999").localeCompare(y.due || "9999"));
+    const o = openOpp(c.id);
+    toolReply(callId, { ok: true, contact: nameOf(c), status: c.status, opportunity: o ? `${o.name}, in ${o.stage}` : "none open",
+      interactions_total: ints.length, last_substantive: (ints.find(i => i.substantive) || {}).date ? fmtDate(ints.find(i => i.substantive).date) : "none",
+      interactions: focus === "tasks" ? undefined : ints.slice(0, 6).map(i => ({ date: fmtDate(i.date) + (i.date && i.date.slice(0, 4) !== T.slice(0, 4) ? " " + i.date.slice(0, 4) : ""), how: i.type, what: i.kind === "ask" ? "ask" : "interaction", substantive: !!i.substantive, outcome: i.outcome || undefined, summary: i.summary || "" })),
+      open_tasks: focus === "history" ? undefined : tasks.map(t => ({ task: t.text, on: t.oppId ? "opportunity" : "contact", due: t.due ? fmtDate(t.due) : "no due date", overdue: !!(t.due && t.due < T) })),
+      say: `Speak only what was asked. History: newest first, one short sentence each (when, how, and the gist of the summary); if there are more than three, give the latest three and offer the rest. ${focus === "history" ? "" : "Then the open tasks for this contact, overdue first, each with its due date; if none, say there are no open tasks for them."} Never add details that aren't in the records.` }); return;
+  }
   if (name === "highlight_stage") {
     const i = flowIndex(data.stage); if (i < 0) { toolReply(callId, { ok: false, error: "Unknown stage." }); return; }
     if (i === 0) { // a new walkthrough: drop the earlier one from the conversation so Grok doesn't carry on from its old words
@@ -1173,11 +1199,12 @@ function topbar(title, back, logo) {
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
 const SAY_GROUPS = [
+  { tone: "look", lines: ["What are my open tasks?"] },
   { tone: "people", lines: ["Add a contact", "Log a meeting"] },
   { tone: "pipe", lines: ["Plan an ask", "Record an ask"] },
   { tone: "money", lines: ["Record a pledge", "Record a gift"] },
   { tone: "giving", lines: ["What has Ruth given?", "Elena's last gift?"] },
-  { tone: "look", lines: ["Explain the process", "My opportunities"] }
+  { tone: "look", lines: ["Explain the process", "Review FAQ", "My opportunities"] }
 ];
 function sayList() {
   return `<div class="saypills">${SAY_GROUPS.map(g => g.lines.map(line => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`).join("")).join("")}</div>`;
@@ -1558,7 +1585,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T02:43:04Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T12:34:52Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
