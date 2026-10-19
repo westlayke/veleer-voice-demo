@@ -869,6 +869,7 @@ Contacts and opportunities: ${crmSnapshot()}.
 When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one.
 If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first (no "Opening the overview"), then give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait for the answer. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
 ${flowScript()}
+If the officer says "Review FAQ" or asks what they can ask about the process, name four or five topics the Process FAQ covers (for example who can do what, stage rules, Ally and Do Not Contact flags, alerts, pledges and payments) in one or two sentences, give one example question, and ask what they would like to know. Then answer as below.
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
 When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before asking them to save. Recording an ask needs the same unless the investor declined.
 To book a future meeting, use show_meeting_draft (ask for the day and start time if not said); logging a meeting that already happened is show_interaction_draft. After they tap Add to Google Calendar, Google Calendar opens and our conversation ends.
@@ -1203,7 +1204,7 @@ const SAY_GROUPS = [
   { tone: "pipe", lines: ["Plan an ask", "Record an ask"] },
   { tone: "money", lines: ["Record a pledge", "Record a gift"] },
   { tone: "giving", lines: ["What has Ruth given?", "Elena's last gift?"] },
-  { tone: "look", lines: ["Explain the process", "My opportunities"] }
+  { tone: "look", lines: ["Explain the process", "Review FAQ", "My opportunities"] }
 ];
 function sayList() {
   return `<div class="saypills">${SAY_GROUPS.map(g => g.lines.map(line => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`).join("")).join("")}</div>`;
@@ -1584,7 +1585,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T12:15:18Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T12:18:17Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
