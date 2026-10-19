@@ -1747,7 +1747,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T16:05:37Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T16:22:19Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
@@ -1755,6 +1755,9 @@ async function checkUpdate() {
   try {
     const r = await fetch(VERSION_FILE + "?t=" + Date.now(), { cache: "no-store" }); if (!r.ok) return;
     const j = await r.json(); if (!j.build || j.build === BUILD || document.getElementById("updbar")) return;
+    // nothing in progress (no conversation, no open draft): load the new version straight away, once per version
+    let tried = ""; try { tried = sessionStorage.getItem("vcrm-auto-update") || ""; } catch (e) {}
+    if (!G.live && !V && tried !== j.build) { try { sessionStorage.setItem("vcrm-auto-update", j.build); } catch (e) {} location.replace(location.pathname + "?v=" + encodeURIComponent(j.build) + location.hash); return; }
     const bar = document.createElement("div"); bar.id = "updbar"; bar.className = "updbar";
     bar.innerHTML = `<b>A new version of the demo is ready.</b><button type="button" class="upd-go">Update</button><button type="button" class="upd-x" aria-label="Not now" style="background:none;color:#fff;padding:8px 4px">×</button>`;
     bar.querySelector(".upd-x").onclick = () => bar.remove();
@@ -1764,6 +1767,7 @@ async function checkUpdate() {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
 window.addEventListener("pageshow", checkUpdate);
+setInterval(() => { if (document.visibilityState === "visible") checkUpdate(); }, 5 * 60000); // pages left open pick up new versions too
 if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
 render(); save(); welcomeModal(); checkUpdate();
 window.__demo = { get state() { return S; }, resolveTarget };
