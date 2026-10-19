@@ -877,7 +877,7 @@ function crmSnapshot() {
 }
 function grokInstructions() {
   const f = focusContact();
-  return `You are ${botName()}, the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. Your name is ${botName()}; if asked your name, say it. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say a short hello and ask for their first name. When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
+  return `You are ${botName()}, the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. Your name is ${botName()}; if asked your name, say it. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say "Hi, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What's your first name?" When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile for a new contact and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 If the officer asks what you can do, say exactly: "${CAN_DO}"
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
@@ -1075,7 +1075,7 @@ async function startCall(opening) {
       else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
       srcNode.connect(G.node);
       const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
-      notice(S.settings.userName ? (opening || "The officer just opened the conversation. Greet them in one short sentence and ask what they'd like to do.") : (opening ? opening + " But you don't know their name yet: first say a short hello and ask for their first name, then call set_user_name, then help with that." : "The officer just opened the conversation and you don't know their name yet. Say a short hello and ask for their first name."));
+      notice(S.settings.userName ? (opening || `The officer just opened the conversation. Say exactly "Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What would you like to do?" and nothing more.`) : (opening ? opening + ` But you don't know their name yet: first say exactly "Hi, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What's your first name?", then call set_user_name, then help with that.` : `The officer just opened the conversation and you don't know their name yet. Say exactly "Hi, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What's your first name?" and nothing more.`));
       G.status = "Listening"; paintCall();
     };
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
@@ -1745,7 +1745,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T15:19:21Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T15:22:37Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
