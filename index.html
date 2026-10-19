@@ -888,7 +888,7 @@ After a save, briefly confirm and ask what they'd like to do next, or whether to
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
 When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one.
-If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first (no "Opening the overview"), then give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait for the answer. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
+If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first (no "Opening the overview"), then open with the short introduction the tool reply gives you, then give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait for the answer. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
 ${flowScript()}
 If the officer says "Review FAQ" or asks what they can ask about the process, name four or five topics the Process FAQ covers (for example who can do what, stage rules, Ally and Do Not Contact flags, alerts, pledges and payments) in one or two sentences, give one example question, and ask what they would like to know. Then answer as below.
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
@@ -1021,10 +1021,25 @@ document.addEventListener("visibilitychange", () => {
   else if (document.visibilityState === "visible" && S.pendingCall) { G.endedByLock = false; callDoneModal(); }
   else if (document.visibilityState === "visible" && G.endedByLock) { G.endedByLock = false; toast("The conversation ended when the phone locked. Tap the mic to carry on."); }
 });
+// Grok bills for every minute a conversation is open, so hang up after 30 seconds with no talking and no taps
+const IDLE_MS = 30000;
+const busy = () => { G.lastAct = Date.now(); };
+function idleCheck() {
+  if (!G.live || G.idleEnding || G.status === "Connecting…") return;
+  const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
+  if (playing) { busy(); return; }
+  if (Date.now() - (G.lastAct || Date.now()) < IDLE_MS) return;
+  G.idleEnding = true; vlog("30 seconds quiet: hanging up");
+  notice(`Nobody has spoken or tapped anything for 30 seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
+  G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
+}
+function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall(); toast("Hung up after 30 seconds of quiet. Tap the mic when you need me."); }
+document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
+document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
-  G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); paintCall(); render(); keepAwake();
+  G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
     G.ctx.resume();
@@ -1069,6 +1084,7 @@ async function startCall(opening) {
   } catch (e) { endCall(); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); }
 }
 function endCall() {
+  clearInterval(G.idleTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; stopPlayback(); letSleep();
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
@@ -1109,7 +1125,7 @@ function exampleFor(line) {
 
 function hintCard(el) {
   const line = el.dataset.say;
-  if (S.settings.noHints) { ask(`"${line}"`); return; }
+  if (S.settings.noHints || el.dataset.nohint) { ask(`"${line}"`); return; }
   const title = (el.textContent || line).trim().replace(/^Try it:\s*/, "").replace(/[“”]/g, "");
   const h = document.getElementById("modal");
   h.innerHTML = `<div class="scrim center"><div class="wmodal hintcard" role="dialog" aria-modal="true" aria-labelledby="hcTitle">
@@ -1131,13 +1147,14 @@ function onEvent(e) {
   const t = e.type || "";
   if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
   else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
+    if (t === "response.done" && G.idleEnding) { clearTimeout(G.idleTimer); const left = G.ctx ? Math.max(0, G.playHead - G.ctx.currentTime) : 0; G.idleTimer = setTimeout(idleHangUp, left * 1000 + 500); }
     if (t === "response.done") { if (G.tourEnding) { G.tour = false; G.tourEnding = false; } G.audioOn = false; setTimeout(() => { G.audioSamples = 0; }, 0); if (G.echoPeak) vlog(`mic while Grok spoke: peak ${G.echoPeak.toFixed(3)}, ${G.barge || 0} loud frames passed (interrupt level ${BARGE_RMS})`); G.echoPeak = 0; G.barge = 0; }
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
   if (/input_audio_transcription\.completed/.test(t) && e.transcript) act("user", e.transcript);
   if (t === "response.done" && G.bot) act("grok", G.bot);
-  if (t === "input_audio_buffer.speech_started") { stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
+  if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
   else if (t === "response.created") { G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
   else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); if (G.status !== "Speaking") { G.status = "Speaking"; paintCall(); } }
@@ -1165,6 +1182,7 @@ function toolReply(callId, out, speak = true) {
   if (speak) whenIdle("create");
 }
 function onTool(callId, name, args) {
+  busy();
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
@@ -1234,7 +1252,7 @@ function onTool(callId, name, args) {
     if (i === FLOW.length - 1) G.tourEnding = true;
     highlightStage(i); const f = FLOW[i], nx = FLOW[i + 1];
     const facts = `${f.means}${f.move.length ? " To move on: " + f.move.join(" ") : ""}${f.note ? " " + f.note : ""}`;
-    toolReply(callId, { ok: true, summary: `${f.stage} is lit up on screen. Your next words are about ${f.stage} only: start with "${f.stage}" and say one or two sentences based on this: ${facts} Say nothing about earlier stages and don't finish or repeat anything you said before. Then ${nx ? `ask "Shall I go on to ${nx.stage}?" and wait for the answer (unless they asked you to go straight through). When they say yes, call highlight_stage for ${nx.stage} before saying anything.` : "ask if they have questions or want to try a step."}` }); return;
+    toolReply(callId, { ok: true, summary: `${f.stage} is lit up on screen. ${i === 0 ? `First say exactly: "${PROCESS_INTRO}" Then talk` : "Your next words are"} about ${f.stage} only: start with "${f.stage}" and say one or two sentences based on this: ${facts} Say nothing about earlier stages and don't finish or repeat anything you said before. Then ${nx ? `ask "Shall I go on to ${nx.stage}?" and wait for the answer (unless they asked you to go straight through). When they say yes, call highlight_stage for ${nx.stage} before saying anything.` : "ask if they have questions or want to try a step."}` }); return;
   }
   if (name === "show_screen") {
     const map = { home: "home", contacts: "contacts", opportunities: "board", tasks: "tasks", contact_record: "contact", opportunity_record: "opp", how_it_works: "flow" };
@@ -1419,7 +1437,9 @@ function goalsPanel() {
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
   return topbar("Home", null, true) + `<main>
-  <section class="panel"><div class="flowtile" data-act2="flowhome"><div class="fti">${FI('<circle cx="5" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M14 14l3 3"/>')}</div><div class="ftt"><b>Hear how it works</b><span>Spoken overview, contact to Closed Won</span></div><span style="color:var(--muted);font-size:20px">›</span></div></section>
+  <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">From first contact to Closed Won</h2>
+    <p>Every opportunity moves through the same stages. <button type="button" data-act2="flowhome" style="background:none;border:0;padding:0;font:inherit;color:var(--brand);font-weight:600;cursor:pointer;text-decoration:underline">See the stages</button> to find out what has to happen before each can move on.</p>
+    <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(18)} Hear the overview</button></div></section>
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
   ${upcomingPanel()}
@@ -1603,6 +1623,7 @@ function tasksPanel(list, label) {
 }
 /* ---------- how it works: contact to Closed Won ---------- */
 const FI = (p) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const PROCESS_INTRO = "We have a six stage process for taking a Contact, that's a person who may want to invest in our work, from the qualification stage through receiving their investment.";
 const FLOW = [
   { stage: "Contact", icon: FI('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>'), means: "A person we know: a prospect, an investor or an ally.",
     move: ["Add the contact: a name plus an email or a mobile number.", "Create an opportunity for them. It starts in Qualification."], tryLine: "Let's add a contact" },
@@ -1624,7 +1645,7 @@ function flowScreen() {
   return topbar("How it works", S.flowBack || "home") + `<main>
   <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">From first contact to Closed Won</h2>
     <p>Every opportunity moves through the same stages. Tap a stage to see what has to happen before it can move on.</p>
-    <button class="btn blue" data-say="Walk me through the process">${mic(18)} Hear the overview</button></div></section>
+    <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(18)} Hear the overview</button></div></section>
   <section class="panel"><ol class="flowpath">${FLOW.map((f, i) => {
     const on = i === at, past = at > -1 && i < at;
     return `<li class="fstep ${on ? "on" : ""} ${past ? "past" : ""}" id="fstep${i}"><div class="fdot">${f.icon}</div>
@@ -1721,7 +1742,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T14:17:00Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T14:40:48Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
