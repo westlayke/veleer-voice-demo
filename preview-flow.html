@@ -1330,7 +1330,7 @@ function sayList() {
   return `<div class="saypills">${SAY_GROUPS.map(g => g.lines.map(line => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`).join("")).join("")}</div>`;
 }
 const APP_BTN = (px) => `<img src="apple-touch-icon-v2.png" alt="" class="appbtn" style="width:${px}px;height:${px}px">`;
-const SAVE_TITLE = `Add the ${APP_BTN(22)} Citizens VCRM button to your home screen`;
+const SAVE_TITLE = `Add Citizens VCRM to your Home Screen`;
 function saveTip(inSettings) {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
   if (standalone) return inSettings ? `<div style="font-size:14px;color:var(--muted)">Citizens VCRM is already on your home screen. You're using it from there now.</div>` : "";
@@ -1524,7 +1524,7 @@ function goalsPanel() {
 function addBtnCard() {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
   if (standalone || S.settings.hideAddBtn) return "";
-  return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add the Citizens VCRM button to your home screen</b><span>Open the demo like an app. Show me how</span></div><span class="chev">›</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
+  return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add Citizens VCRM to your Home Screen</b><span>Open the demo like an app. Show me how</span></div><span class="chev">›</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
 }
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
@@ -1862,7 +1862,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T23:44:36Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T23:50:14Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
