@@ -126,7 +126,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .sl-tag { font-size: 12px; font-weight: 700; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
 .sl-tag.ok { color: var(--ok); background: var(--ok-soft); } .sl-tag.next { color: #fff; background: var(--brand); }
 .ph-help { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-weight: 700; cursor: pointer; }
-.scrim.center { align-items: center; padding: 20px; z-index: 60; }
+.scrim.center { align-items: flex-start; padding: 20px; z-index: 60; overflow-y: auto; -webkit-overflow-scrolling: touch; } .scrim.center > .wmodal { margin: auto 0; } /* a tall popup scrolls instead of being cut off top and bottom */
 .wmodal { width: 100%; max-width: 360px; background: var(--surface); border-radius: 18px; padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
 .wmodal h2 { margin: 2px 0 0; font-size: 21px; line-height: 1.25; color: var(--brand-ink); text-wrap: balance; }
 .wmodal p { margin: 0; font-size: 15px; line-height: 1.45; }
@@ -142,6 +142,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wl-role b { color: var(--brand-ink); }
 .wl-name { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .wl-name input { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
+.wl-start { align-items: center; text-align: center; } .wl-start .wl-logo { height: 54px; width: auto; } .wl-mic.big { width: 96px; height: 96px; margin: 6px auto 0; } .wl-tap { font-weight: 700; color: var(--brand-ink); margin-top: -4px; } .wl-start .btn { align-self: stretch; }
 .wmodal p.wl-hint { font-size: 13px; color: var(--muted); margin-top: -6px; }
 .wl-err { color: var(--danger, #b42318); font-size: 13.5px; font-weight: 600; margin-top: -6px; }
 .wl-priv { font-size: 12.5px; color: var(--muted); line-height: 1.4; margin: 0; }
@@ -153,6 +154,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .top-logo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 58px; width: auto; display: block; pointer-events: none; }
 .brand { display: flex; justify-content: center; padding: 2px 0 0; } .brand img { width: 130px; height: auto; display: block; }
 .wl-save small { font-size: 12.5px; color: var(--muted); }
+.wl-bar { margin: 2px 0 4px; } .wl-bar figcaption { font-size: 11.5px; color: var(--muted); margin-top: 2px; } .wl-note { margin: 0; font-size: 13.5px; }
 .wl-tips b { color: var(--fg); font-weight: 600; }
 /* journey card */
 .steps { list-style: none; margin: 0; padding: 4px 0; }
@@ -1318,17 +1320,57 @@ const SAY_GROUPS = [
 function sayList() {
   return `<div class="saypills">${SAY_GROUPS.map(g => g.lines.map(line => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`).join("")).join("")}</div>`;
 }
-function saveTip() {
+function saveTip(inSettings) {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
-  if (standalone) return "";
+  if (standalone) return inSettings ? `<div style="font-size:14px;color:var(--muted)">Citizens VCRM is already on your home screen. You're using it from there now.</div>` : "";
   const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
-  const share = `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg></span>`;
-  const dots = `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span>`;
-  const steps = ios ? [`Tap ${share} Share at the bottom of Safari.`, `Scroll down and tap <b>Add to Home Screen</b>.`, `Tap <b>Add</b>.`]
-    : android ? [`Tap ${dots} at the top right of Chrome.`, `Tap <b>Add to home screen</b> (or <b>Install app</b>).`, `Tap <b>Add</b> or <b>Install</b>.`]
-    : [`Open this link on your phone.`, `iPhone: tap ${share} Share, then <b>Add to Home Screen</b>.`, `Android: tap ${dots}, then <b>Add to home screen</b>.`];
-  return `<div class="wl-save"><h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Keep Citizens VCRM on your phone</h3>
-    <ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol><small>Then open it from the Citizens VCRM icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small></div>`;
+  // iPhone: a section for Safari and a separate one for Chrome, the browser in use first; Android: Chrome only
+  const order = android ? ["android"] : ios && /CriOS/.test(ua) ? ["chrome", "safari"] : ["safari", "chrome"];
+  const title = { safari: "iPhone, in Safari", chrome: "iPhone, in Chrome", android: "Android, in Chrome" };
+  const head = (t) => `<h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>${t}</h3>`;
+  return order.map((k, i) => `<div class="wl-save">${head(inSettings ? title[k] : `Keep Citizens VCRM on your phone: ${title[k]}`)}
+    ${!ios && !android && i === 0 ? `<p class="wl-note">Open this link on your phone, then:</p>` : ""}${saveSteps(k)}
+    ${i === order.length - 1 ? `<small>Then open it from the Citizens VCRM icon. It works like an app, with <span class="wl-inmic" role="img" aria-label="microphone" style="width:18px;height:18px;vertical-align:-4px">${mic(11)}</span> ready.</small>` : ""}</div>`).join("");
+}
+// drawings of the browser bar each phone shows, with the button to tap ringed in red
+const SAVE_ICO = {
+  share: `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg></span>`,
+  hdots: `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span>`,
+  vdots: `<span class="ico"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span>`
+};
+function saveBar(kind) {
+  const ring = (x, y) => `<circle cx="${x}" cy="${y}" r="15" fill="none" stroke="#d62b2b" stroke-width="2.5"/>`;
+  const shareG = (x, y) => `<g transform="translate(${x - 8},${y - 9})" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v10M4.5 4.5 8 1l3.5 3.5"/><path d="M2.5 8v8.5h11V8"/></g>`;
+  const url = (x, w, y) => `<rect x="${x}" y="${y - 13}" width="${w}" height="26" rx="13" fill="var(--surface)" stroke="var(--line)"/><text x="${x + w / 2}" y="${y + 4}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">westlayke.github.io</text>`;
+  let inner, cap;
+  if (kind === "safari") {
+    inner = `<rect x="1" y="1" width="258" height="46" rx="23" fill="var(--bg, #f4f6f9)" stroke="var(--line)"/>
+      <path d="M26 16l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>${url(46, 156, 24)}
+      <g fill="currentColor"><circle cx="223" cy="24" r="2.2"/><circle cx="230" cy="24" r="2.2"/><circle cx="237" cy="24" r="2.2"/></g>${ring(230, 24)}`;
+    cap = "Bottom of Safari";
+  } else if (kind === "safari-old") {
+    inner = `<rect x="1" y="1" width="258" height="46" rx="10" fill="var(--bg, #f4f6f9)" stroke="var(--line)"/>
+      <path d="M30 16l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/><path d="M68 16l8 8-8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/>
+      ${shareG(130, 24)}${ring(130, 24)}<path d="M178 18h12v14h-12zM183 18v-2h12v14h-2" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".5"/><rect x="220" y="17" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".5"/>`;
+    cap = "Bottom of Safari";
+  } else if (kind === "chrome") {
+    inner = `<rect x="1" y="1" width="258" height="46" rx="10" fill="var(--bg, #f4f6f9)" stroke="var(--line)"/>${url(12, 196, 24)}${shareG(232, 24)}${ring(232, 24)}`;
+    cap = "Top of Chrome";
+  } else {
+    inner = `<rect x="1" y="1" width="258" height="46" rx="10" fill="var(--bg, #f4f6f9)" stroke="var(--line)"/>${url(12, 196, 24)}
+      <g fill="currentColor"><circle cx="236" cy="17" r="2.2"/><circle cx="236" cy="24" r="2.2"/><circle cx="236" cy="31" r="2.2"/></g>${ring(236, 24)}`;
+    cap = "Top of Chrome";
+  }
+  return `<figure class="wl-bar"><svg viewBox="0 0 260 48" width="100%" style="max-width:260px" role="img" aria-label="${cap}, with the button to tap circled">${inner}</svg><figcaption>${cap}</figcaption></figure>`;
+}
+function saveSteps(kind) {
+  const v = +((navigator.userAgent.match(/Version\/(\d+)/) || [])[1] || 0);
+  const oldSafari = kind === "safari" && v && v < 26; // Safari before iOS 26 has Share right in the bottom bar
+  const steps = kind === "chrome" ? [`Tap ${SAVE_ICO.share} Share at the top right, next to the address.`, `Tap <b>Add to Home Screen</b>. If you don't see it, tap <b>More</b> first.`, `Tap <b>Add</b>.`]
+    : kind === "android" ? [`Tap ${SAVE_ICO.vdots} at the top right of Chrome.`, `Tap <b>Add to home screen</b> (or <b>Install app</b>).`, `Tap <b>Add</b> or <b>Install</b>.`]
+    : oldSafari ? [`Tap ${SAVE_ICO.share} Share at the bottom of Safari.`, `Scroll down and tap <b>Add to Home Screen</b>.`, `Tap <b>Add</b>.`]
+    : [`Tap ${SAVE_ICO.hdots} at the bottom right of Safari.`, `Tap ${SAVE_ICO.share} <b>Share</b>.`, `Scroll down and tap <b>Add to Home Screen</b>. If you don't see it, tap <b>View More</b> first.`, `Tap <b>Add</b>.`];
+  return `${saveBar(oldSafari ? "safari-old" : kind)}<ol>${steps.map(x => `<li>${x}</li>`).join("")}</ol>`;
 }
 // a phone that opens the demo without its #code (for example from the home-screen icon) asks for the code word once
 function codeModal(opening) {
@@ -1371,9 +1413,22 @@ function showQR(copyFailed) {
   const sc = document.createElement("script"); sc.src = "qrcode.js"; sc.onload = draw;
   sc.onerror = () => toast("Couldn't load the QR code. Check the connection."); document.head.appendChild(sc);
 }
+let WELCOME_FULL = false; // set when the officer chooses to type their name on the first screen
 function welcomeModal() {
   const h = document.getElementById("modal");
   if (S.seenWelcome && S.settings.seenPrivacy && S.settings.userName) { h.innerHTML = ""; return; } // phones that saw the welcome before activity logging see it once more, for the notice
+  // first visit: one big mic, so the first tap starts the assistant, which asks for the first name (phones need a tap before sound or the mic)
+  if (!S.settings.userName && !WELCOME_FULL) {
+    h.innerHTML = `<div class="scrim center"><div class="wmodal wl-start" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
+      <img src="logo-v2.png" alt="Citizens Alliance" class="wl-logo">
+      <h2 id="wmTitle">Meet your new voice assistant!</h2>
+      <p>You're a gift officer at Citizens Alliance. Tap the mic and ${esc(botName())} will introduce itself and ask your first name.</p>
+      <button type="button" class="wl-mic big" data-act4="voice" aria-label="Tap to start talking">${mic(40)}</button>
+      <div class="wl-tap">Tap to start</div>
+      <p class="wl-priv">Conversations are saved to improve the demo. Details in Settings.</p>
+      <button type="button" class="btn quiet" data-act5="typename">I'd rather type my name</button></div></div>`;
+    return;
+  }
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
     <div class="wl-role"><span class="wl-av">${S.settings.userName ? esc(OFFICER_INITIALS) : mic(16)}</span><div><b>You're ${S.settings.userName ? esc(OFFICER) : "the gift officer"}</b>${S.settings.userName ? ", a gift officer" : ""} at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
     <label class="wl-name">Your first name (the assistant will use it)<input id="wlName" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
@@ -1395,6 +1450,7 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
     const isNew = v !== (S.settings.userName || "");
     S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.screen = "home"; save(); welcomeModal(); render(); window.scrollTo(0, 0);
     if (isNew && !G.live) startCall(greetLine(v)); } }); // a newly entered name starts the conversation with the standard greeting
+document.addEventListener("click", (e) => { if (e.target.closest("[data-act5=typename]")) { WELCOME_FULL = true; welcomeModal(); setTimeout(() => { const el = document.getElementById("wlName"); if (el) el.focus(); }, 50); } });
 const botName = () => (S.settings.botName || "").trim() || ((S.settings.voice || "ara")[0].toUpperCase() + (S.settings.voice || "ara").slice(1)); // the assistant's name: set in Settings, else its voice's name
 const CAN_DO = "I can do things related to managing your contacts and opportunities, like reviewing your open tasks, creating a contact, hearing a contact's giving history, reviewing your open opportunities, or review our fundraising process, and much more. What would you like to do today?";
 const greetLine = (name) => `The officer just entered their first name and tapped Got it. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I am ${botName()}, the Citizens Alliance VCRM voice assistant. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process".`;
@@ -1674,6 +1730,7 @@ function settingsScreen() {
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
     <button class="btn blue" data-act2="savename">Save</button>
   </div></section>
+  <section class="panel" id="setSave"><div class="ph"><h2>Keep Citizens VCRM on your phone</h2></div><div class="sb set">${saveTip(true)}</div></section>
   ${S.settings.noHints ? `<section class="panel"><div class="ph"><h2>Hints</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Hints are off, so tapping an option like Add a task starts the assistant straight away.</div><button class="btn out" data-act2="hintson">Show hints again</button></div></section>` : ""}
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Tap the mic once to start a two-way conversation and again to end it. You can interrupt at any time. The assistant asks for anything missing and puts the draft on screen; you still tap Save.</div>
@@ -1747,7 +1804,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T18:33:03Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T19:01:55Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
