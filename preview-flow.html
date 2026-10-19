@@ -1413,11 +1413,33 @@ function meetingsPanel(c) {
   if (!m.length) return "";
   return `<section class="panel"><div class="ph"><h2>Upcoming meetings</h2><span class="meta">${m.length}</span></div>${m.map(x => `<div class="row"><div class="t">${esc(x.title)}<div class="s">${fmtDate(x.date)} · ${fmtTime(x.time)} · ${esc(x.duration || "")} · ${esc(x.type || "")}${x.location ? " · " + esc(x.location) : ""}</div></div><a class="chev" href="${esc(gcalLink(Object.assign({}, x, { meetingType: x.type }), c))}" target="_blank" aria-label="Open in Google Calendar">›</a></div>`).join("")}</section>`;
 }
+const onPhone = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 function placeCall(id) {
   const c = contactById(id); if (!c) return;
-  if (G.live) endCall(); // the call takes the microphone
   document.getElementById("modal").innerHTML = "";
   S.pendingCall = { contactId: id, at: Date.now() }; log(`Phone call to ${nameOf(c)} started from the app`, { contactId: id }, false); save();
+  // A phone hides this page when the call starts (the visibility handler ends the conversation and offers the call report on return).
+  // A computer may open FaceTime (the window loses focus) or do nothing at all; in that case say so instead of silently dropping the conversation.
+  const w = G.callWatch = { id, blurred: false };
+  const onBlur = () => { if (G.callWatch !== w) return; w.blurred = true; if (G.live) endCall(); };
+  window.addEventListener("blur", onBlur, { once: true });
+  setTimeout(() => { if (G.callWatch === w && !w.blurred && document.visibilityState === "visible") { window.removeEventListener("blur", onBlur); noCallModal(c); } }, 5000);
+}
+window.addEventListener("focus", () => {
+  const w = G.callWatch; if (!w || !w.blurred || !S.pendingCall || document.visibilityState !== "visible") return;
+  G.callWatch = null; setTimeout(callDoneModal, 400);
+});
+function noCallModal(c) {
+  G.callWatch = null;
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="ncTitle">
+    <span class="wl-mic">${PHONE_SVG}</span>
+    <h2 id="ncTitle">This ${onPhone() ? "device" : "computer"} didn't start the call</h2>
+    <p>Calls start from a phone${onPhone() ? "" : ", or from a Mac set up to make iPhone calls through FaceTime"}. Dial ${esc(nameOf(c))} on your phone at <b>${esc(c.mobile)}</b>, then log it here.</p>
+    <button class="btn blue" id="ncLog">${mic(16)} Log the call</button><button class="btn quiet" id="ncX">Cancel</button></div></div>`;
+  document.getElementById("ncLog").onclick = () => { if (G.live) endCall(); h.innerHTML = ""; callDoneModal(); setTimeout(() => { const b = document.getElementById("cdLog"); if (b) b.click(); }, 0); };
+  document.getElementById("ncX").onclick = () => { delete S.pendingCall; save(); h.innerHTML = ""; };
+  if (G.live) notice(`The computer couldn't place the call to ${nameOf(c)}. In one short sentence, say they can dial ${c.first} from their phone at the number on screen and tap Log the call afterwards.`);
 }
 function callDoneModal() {
   const pc = S.pendingCall, c = pc && contactById(pc.contactId);
@@ -1442,7 +1464,7 @@ function callPromptModal(c) {
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="cpTitle">
     <span class="wl-mic">${PHONE_SVG}</span>
     <h2 id="cpTitle">Call ${esc(nameOf(c))}?</h2>
-    <p>${esc(c.mobile)}. Your phone places the call. When you come back, the app opens the call report.</p>
+    <p>${esc(c.mobile)}. ${onPhone() ? "Your phone places the call. When you come back, the app opens the call report." : "On a computer, the call goes through FaceTime if your Mac is set up for iPhone calls; otherwise dial it on your phone."}</p>
     <a class="btn blue" href="${telOf(c)}" data-call="${c.id}">${PHONE_SVG} Call</a><button class="btn quiet" id="cpX">Cancel</button></div></div>`;
   document.getElementById("cpX").onclick = () => { h.innerHTML = ""; };
 }
@@ -1651,7 +1673,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T13:21:30Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T13:27:51Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
