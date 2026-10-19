@@ -155,7 +155,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .brand { display: flex; justify-content: center; padding: 2px 0 0; } .brand img { width: 130px; height: auto; display: block; }
 .wl-save small { font-size: 12.5px; color: var(--muted); }
 .appbtn { border-radius: 22%; vertical-align: -6px; box-shadow: 0 0 0 1px var(--line); } .wl-savetitle { margin: 0; font-size: 15px; color: var(--brand-ink); line-height: 1.35; } #setSave h2 .appbtn { vertical-align: -5px; }
-.addbtn-card { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--brand-line); border-radius: 12px; padding: 9px 8px 9px 10px; margin-bottom: 12px; cursor: pointer; position: relative; } .addbtn-card .appbtn { vertical-align: 0; flex: none; } .addbtn-card .t { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.3; } .addbtn-card .t b { color: var(--brand-ink); } .addbtn-card .t span { color: var(--muted); font-size: 12.5px; } .addbtn-card .chev { color: var(--muted); font-size: 20px; } .addbtn-card .x { border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 4px; cursor: pointer; align-self: flex-start; }
+.addbtn-card { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--brand-line); border-radius: 12px; padding: 9px 8px 9px 10px; margin-bottom: 12px; margin-top: 4px; cursor: pointer; position: relative; } .addbtn-card .appbtn { vertical-align: 0; flex: none; } .addbtn-card .t { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.3; } .addbtn-card .t b { color: var(--brand-ink); } .addbtn-card .t span { color: var(--muted); font-size: 12.5px; } .addbtn-card .chev { color: var(--muted); font-size: 20px; } .addbtn-card .x { border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 4px; cursor: pointer; align-self: flex-start; }
 #setSave.flash { animation: flashsave 1.6s ease-out; } @keyframes flashsave { 0%, 40% { box-shadow: 0 0 0 3px var(--brand); } 100% { box-shadow: none; } }
 .appbtn-tile { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; } .appbtn-tile .appbtn { vertical-align: 0; }
 .wl-bar { margin: 2px 0 4px; } .wl-bar figcaption { font-size: 11.5px; color: var(--muted); margin-top: 2px; } .wl-note { margin: 0; font-size: 13.5px; }
@@ -1497,7 +1497,7 @@ function goalsPanel() {
     <div class="goals"><div><div class="k">Raised</div><div class="v">${money(raised)} <small>of ${money(GOALS.raised)}</small></div>${bar(raised, GOALS.raised)}</div>
     <div><div class="k">Asks made</div><div class="v">${asks} <small>of ${GOALS.asks}</small></div>${bar(asks, GOALS.asks)}</div></div></section>`;
 }
-// Home: a slim card pointing to the add-to-home-screen steps in Settings; gone once the app is opened from the home screen, or when closed with ×
+// Home (last on the page): a slim card pointing to the add-to-home-screen steps in Settings; gone once the app is opened from the home screen, or when closed with ×
 function addBtnCard() {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
   if (standalone || S.settings.hideAddBtn) return "";
@@ -1506,7 +1506,6 @@ function addBtnCard() {
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
   return topbar("Home", null, true) + `<main>
-  ${addBtnCard()}
   <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">From first contact to Closed Won</h2>
     <p>Every opportunity moves through the same stages. <button type="button" data-act2="flowhome" style="background:none;border:0;padding:0;font:inherit;color:var(--brand);font-weight:600;cursor:pointer;text-decoration:underline">See the stages</button> to find out what has to happen before each can move on.</p>
     <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(18)} Hear the overview</button></div></section>
@@ -1520,6 +1519,7 @@ function homeScreen() {
   </section>
   ${goalsPanel()}
   ${canTalk() ? "" : `<section class="note" style="border-radius:12px">Voice needs an xAI API key on this phone. <button class="btn quiet" data-go="settings" style="margin-top:8px;width:100%">Open Settings</button></section>`}
+  ${addBtnCard()}
   </main>`;
 }
 function contactsScreen() {
@@ -1822,7 +1822,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T19:29:48Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T19:32:23Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
