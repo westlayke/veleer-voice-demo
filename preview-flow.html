@@ -1021,19 +1021,19 @@ document.addEventListener("visibilitychange", () => {
   else if (document.visibilityState === "visible" && S.pendingCall) { G.endedByLock = false; callDoneModal(); }
   else if (document.visibilityState === "visible" && G.endedByLock) { G.endedByLock = false; toast("The conversation ended when the phone locked. Tap the mic to carry on."); }
 });
-// Grok bills for every minute a conversation is open, so hang up after 30 seconds with no talking and no taps
-const IDLE_MS = 30000;
+// Grok bills for every minute a conversation is open, so hang up after 23 seconds with no talking and no taps
+const IDLE_MS = 23000;
 const busy = () => { G.lastAct = Date.now(); };
 function idleCheck() {
   if (!G.live || G.idleEnding || G.status === "Connecting…") return;
   const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
   if (Date.now() - (G.lastAct || Date.now()) < IDLE_MS) return;
-  G.idleEnding = true; vlog("30 seconds quiet: hanging up");
-  notice(`Nobody has spoken or tapped anything for 30 seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
+  G.idleEnding = true; vlog("23 seconds quiet: hanging up");
+  notice(`Nobody has spoken or tapped anything for 23 seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
   G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
 }
-function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall(); toast("Hung up after 30 seconds of quiet. Tap the mic when you need me."); }
+function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall(); toast("Hung up after 23 seconds of quiet. Tap the mic when you need me."); }
 document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
 document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
@@ -1742,7 +1742,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T14:35:52Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T14:49:37Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
