@@ -20,7 +20,7 @@
 <style>
 /* Layout: one phone-width app column (max 440px, centred on wider screens), sticky top bar, fixed tab bar with a centre mic, bottom sheet for voice drafts. */
 :root {
-  --bg: #f4f6f9; --surface: #ffffff; --surface2: #eef1f5; --line: #d5dae2;
+  --bg: #f4f6f9; --surface: #ffffff; --surface2: #eef1f5; --line: #d5dae2; --line-strong: #a7b0bd;
   --fg: #1c1f24; --muted: #4b525d; --brand: #2f74d0; --brand-soft: #e8f0fb; --brand-line: #9dbbe4; --brand-ink: #1f4f8f;
   --bar: #e6edf7; --ok: #1f7a37; --ok-soft: #e3f3e7; --warn: #8a5a00; --warn-soft: #fff4dc; --warn-line: #e0a020;
   --bad: #c2333b; --scrim: rgba(20,26,36,.55); --shadow: 0 6px 24px rgba(20,30,50,.18);
@@ -28,13 +28,13 @@
   --font: "Titillium Web", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif; /* matches the SpiceCRM deployment */
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
+  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --line-strong: #566274; --fg: #e8ecf1; --muted: #a2abb8;
   --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
   --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
   --pv: #c9a8f5; --pv-soft: #2a2140; --pv-line: #5d4a86; --sl: #c3cbd6; --sl-soft: #252c36; --sl-line: #4a5565;
   --scrim: rgba(0,0,0,.6); --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark } }
 :root[data-theme="dark"] {
-  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --fg: #e8ecf1; --muted: #a2abb8;
+  --bg: #12161c; --surface: #1b2129; --surface2: #232a34; --line: #343d4a; --line-strong: #566274; --fg: #e8ecf1; --muted: #a2abb8;
   --brand: #5a9aec; --brand-soft: #1d2b3e; --brand-line: #3d5f8c; --brand-ink: #b7d2f6; --bar: #1a2433;
   --ok: #6fcf8a; --ok-soft: #173023; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
   --pv: #c9a8f5; --pv-soft: #2a2140; --pv-line: #5d4a86; --sl: #c3cbd6; --sl-soft: #252c36; --sl-line: #4a5565;
@@ -58,6 +58,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .chip { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
 main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+/* Settings: stronger section edges so the sections don't blend together */
+main.setmain { gap: 18px; } .setmain .panel { border: 1.5px solid var(--line-strong); box-shadow: 0 2px 6px rgba(16, 24, 40, .10); } .setmain .ph { border-bottom-color: var(--line-strong); }
 .ph { display: flex; align-items: baseline; gap: 8px; padding: 11px 14px 9px; background: var(--surface2); border-bottom: 1px solid var(--line); }
 .ph h2 { margin: 0; font-size: 16px; }
 .ph .meta { margin-left: auto; color: var(--muted); font-size: 13px; }
@@ -1760,7 +1762,7 @@ function tasksScreen() {
   ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(taskWhere(t))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. Say “Add a task”, or mention a next step when you log a meeting.</div>`}</section></main>`;
 }
 function settingsScreen() {
-  return topbar("Settings", "home") + `<main>
+  return topbar("Settings", "home") + `<main class="setmain">
   <section class="panel" id="setSave"><div class="ph"><h2>${SAVE_TITLE}</h2></div><div class="sb set">
     <div class="appbtn-tile">${APP_BTN(60)}<span>Citizens VCRM</span></div>
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45;text-align:center">This is the button you'll get. Tap it to open the demo like an app, with the mic ready.</div>
@@ -1862,7 +1864,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T23:50:14Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T23:54:27Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
