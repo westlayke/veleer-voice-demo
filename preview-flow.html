@@ -5,7 +5,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon-v2.png">
 <link rel="manifest" href="manifest.webmanifest?v=2">
 <link rel="icon" href="icon-192-v2.png">
-<title>Veleer Voice Demo (preview)</title>
+<title>Citizens VCRM (preview)</title>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
 </head><body>
 <style>
@@ -1207,6 +1207,34 @@ function codeModal(opening) {
   document.getElementById("codeGo").onclick = go; inp.onkeydown = (e) => { if (e.key === "Enter") go(); };
   document.getElementById("codeX").onclick = () => { h.innerHTML = ""; };
 }
+const SHARE_URL = "https://westlayke.github.io/veleer-voice-demo/";
+function copyShareLink() {
+  const done = () => toast("Link copied");
+  (navigator.clipboard ? navigator.clipboard.writeText(SHARE_URL).then(done) : Promise.reject()).catch(() => showQR(true));
+}
+function shareDemo() {
+  if (navigator.share) {
+    navigator.share({ title: "Citizens VCRM voice demo", text: "Try the Citizens VCRM voice demo: talk to the CRM like a colleague.", url: SHARE_URL })
+      .catch((e) => { if (!e || e.name !== "AbortError") copyShareLink(); });
+  } else copyShareLink();
+}
+function showQR(copyFailed) {
+  const h = document.getElementById("modal");
+  const draw = () => {
+    const q = qrcode(0, "M"); q.addData(SHARE_URL); q.make();
+    h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="qrTitle" style="align-items:center;text-align:center">
+      <h2 id="qrTitle">Scan to open the demo</h2>
+      <p style="color:var(--muted)">Point a phone camera at the code.</p>
+      <div style="background:#fff;padding:10px;border-radius:12px;line-height:0">${q.createSvgTag({ cellSize: 6, margin: 2, scalable: true }).replace("<svg ", '<svg style="width:240px;height:240px" ')}</div>
+      <input readonly value="${SHARE_URL}" onclick="this.select()" aria-label="Demo link" style="width:100%;font:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;text-align:center">
+      ${copyFailed ? `<p style="font-size:13px;color:var(--muted)">Copying isn't available here. Tap the link above to select it, then copy it.</p>` : ""}
+      <button class="btn blue" id="qrClose" style="width:100%">Done</button></div></div>`;
+    document.getElementById("qrClose").onclick = () => { h.innerHTML = ""; welcomeModal(); };
+  };
+  if (window.qrcode) return draw();
+  const sc = document.createElement("script"); sc.src = "qrcode.js"; sc.onload = draw;
+  sc.onerror = () => toast("Couldn't load the QR code. Check the connection."); document.head.appendChild(sc);
+}
 function welcomeModal() {
   const h = document.getElementById("modal");
   if (S.seenWelcome) { h.innerHTML = ""; return; }
@@ -1216,7 +1244,8 @@ function welcomeModal() {
     <h2 id="wmTitle">Talk to Citizens VCRM like a colleague</h2>
     <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> and try: <b>“Log a meeting with Ruth.”</b> The assistant fills in the form as you talk; you check it and tap Save.</p>
     ${saveTip()}
-    <button class="btn blue" data-act4="welcome-ok">Got it</button></div></div>`;
+    <button class="btn blue" data-act4="welcome-ok">Got it</button>
+    <button class="btn quiet" data-act2="share">Share this demo</button></div></div>`;
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a) { S.seenWelcome = true; save(); welcomeModal(); } });
 
@@ -1471,6 +1500,8 @@ function settingsScreen() {
     <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option value="${v}" ${v === S.settings.voice ? "selected" : ""}>${v[0].toUpperCase() + v.slice(1)}</option>`).join("")}</select></label>
     <button class="btn blue" data-act2="savexai">Save</button>
   </div></section>
+  <section class="panel"><div class="ph"><h2>Share this demo</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Send the demo to someone, or show a QR code they can scan with their phone camera. Anyone with the link can use the voice assistant.</div>
+    <button class="btn blue" data-act2="share">Share link</button><button class="btn out" data-act2="qr">Show QR code</button></div></section>
   <section class="panel"><div class="ph"><h2>Version</h2><span class="meta">${esc(buildLabel())}</span></div><div class="sb"><div style="font-size:14px;color:var(--muted)">The demo checks for a newer version each time you open it and offers to update.</div></div></section>
   <details class="panel trouble"><summary class="ph"><h2>Troubleshooting</h2><span class="meta">voice log</span></summary><div class="sb set"><div style="font-size:14px;color:var(--muted)">If the voice misbehaves, tap Copy log and send it to your demo contact.</div>
     <textarea id="vlogTxt" readonly style="font:12px/1.35 ui-monospace,Menlo,monospace;height:160px;white-space:pre">${esc(VLOG.slice(-150).join("\n"))}</textarea>
@@ -1520,12 +1551,14 @@ document.addEventListener("click", (e) => {
     (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("vlogTxt"); el.value = txt; el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the text and copy it."); } }); }
   else if (act === "clearlog") { VLOG = []; try { localStorage.removeItem(LOGKEY); } catch (e) {} render(); toast("Log cleared"); }
   else if (act === "help") { S.seenWelcome = false; welcomeModal(); }
+  else if (act === "share") shareDemo();
+  else if (act === "qr") showQR();
   else if (act === "savexai") { S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; save(); render(); toast("Saved"); }
 });
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-18T21:54:57Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T02:40:06Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
