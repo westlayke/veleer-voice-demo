@@ -1313,7 +1313,7 @@ function welcomeModal() {
   if (S.seenWelcome && S.settings.seenPrivacy && S.settings.userName) { h.innerHTML = ""; return; } // phones that saw the welcome before activity logging see it once more, for the notice
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
     <div class="wl-role"><span class="wl-av">${S.settings.userName ? esc(OFFICER_INITIALS) : mic(16)}</span><div><b>You're ${S.settings.userName ? esc(OFFICER) : "the gift officer"}</b>${S.settings.userName ? ", a gift officer" : ""} at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
-    <label class="wl-name">Your first name (the assistant will use it)<input id="wlName" autocomplete="given-name" placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
+    <label class="wl-name">Your first name (the assistant will use it)<input id="wlName" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
     <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
     <div class="wl-hint">Or tap the blue mic below and just tell the assistant your first name.</div>
     <button type="button" class="wl-mic" data-act4="voice" aria-label="Tap to start talking">${mic(24)}</button>
@@ -1323,6 +1323,7 @@ function welcomeModal() {
     <p class="wl-priv">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
     <button class="btn blue" data-act4="welcome-ok">Got it</button>
     <button class="btn quiet" data-act2="share">Share this demo</button></div></div>`;
+  setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a && a.dataset.act4 === "voice") { const el = document.getElementById("wlName"), v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : "";
     if (v) S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; save(); document.getElementById("modal").innerHTML = ""; render(); ask(null); return; }
@@ -1576,7 +1577,7 @@ function tasksScreen() {
 function settingsScreen() {
   return topbar("Settings", "home") + `<main>
   <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
-    <label for="userName">Your first name (the assistant uses it)<input id="userName" autocomplete="given-name" placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
+    <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
     <button class="btn blue" data-act2="savename">Save</button>
   </div></section>
@@ -1647,7 +1648,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T13:14:33Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-19T13:16:34Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
