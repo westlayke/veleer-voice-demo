@@ -1025,6 +1025,20 @@ async function flushAct() {
       body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, ...e }) => e) }) }).catch(() => {});
   });
 }
+// the audio code that hands mic sound to the app, made once when the page opens
+const WORKLET_URL = URL.createObjectURL(new Blob([`class C extends AudioWorkletProcessor{process(i){const c=i[0]&&i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor("cap",C)`], { type: "application/javascript" }));
+// a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
+const TOK = { p: null, at: 0 };
+function prefetchToken() {
+  if (G.live || document.visibilityState !== "visible" || (TOK.p && Date.now() - TOK.at < 180000)) return;
+  TOK.at = Date.now(); TOK.p = mintToken(); TOK.p.catch(() => { TOK.p = null; TOK.at = 0; });
+}
+function getToken() { // each pass is used once; an old or failed one is replaced by a fresh fetch
+  const p = TOK.p, fresh = p && Date.now() - TOK.at < 240000; TOK.p = null; TOK.at = 0;
+  return fresh ? p.catch(() => mintToken()) : mintToken();
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") prefetchToken(); });
+setInterval(prefetchToken, 60000); // keeps a pass ready while the app sits open
 async function mintToken() {
   const r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || DEMO_CODE } });
   if (!r.ok) throw new Error(r.status === 401 ? "bad_code" : "service_" + r.status);
@@ -1114,18 +1128,18 @@ async function startCall(opening) {
   if (!G.keepRecent) G.recent = []; G.keepRecent = false;
   G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
+    G.t0 = Date.now(); G.passReady = !!TOK.p;
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
     G.ctx.resume();
-    G.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    // the mic, the voice pass and the audio code all at once, not one after another
+    const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(st => (G.stream = st));
+    const tokP = getToken(), wkP = G.ctx.audioWorklet ? G.ctx.audioWorklet.addModule(WORKLET_URL).then(() => true, () => false) : Promise.resolve(false);
+    tokP.catch(() => {}); micP.catch(() => {});
+    const [, token, worklet] = await Promise.all([micP, tokP, wkP]);
+    if (!G.live) { try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (x) {} G.stream = null; return; } // hung up while connecting
     // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
     const ctx = G.ctx; ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") interrupted("audio " + ctx.state); };
     G.stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && G.status !== "Connecting…") interrupted("mic muted"); }; tr.onended = () => { if (G.live) interrupted("mic ended"); }; });
-    const token = await mintToken();
-    let worklet = false;
-    try {
-      const url = URL.createObjectURL(new Blob([`class C extends AudioWorkletProcessor{process(i){const c=i[0]&&i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor("cap",C)`], { type: "application/javascript" }));
-      await G.ctx.audioWorklet.addModule(url); worklet = true;
-    } catch (x) { worklet = false; }
     G.ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
     G.ws.onopen = () => {
       send({ type: "session.update", session: sessionCfg() });
@@ -1151,7 +1165,7 @@ async function startCall(opening) {
       srcNode.connect(G.node);
       const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
       notice(S.settings.userName ? (opening || `The officer just opened the conversation. Say exactly "Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What would you like to do?" and nothing more.`) : (opening ? opening + ` But you don't know their name yet: first say exactly "Hi, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What's your first name?", then call set_user_name, then help with that.` : `The officer just opened the conversation and you don't know their name yet. Say exactly "Hi, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What's your first name?" and nothing more.`));
-      G.status = "Listening"; paintCall();
+      G.status = "Listening"; paintCall(); vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     };
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
     G.ws.onclose = (ev) => { vlog("connection closed " + (ev && ev.code)); if (G.live && document.visibilityState === "hidden") { interrupted("connection closed while away"); return; } if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Try again in a moment."); } };
@@ -1195,7 +1209,7 @@ function endCall() {
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
   vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended"); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = false; clearTimeout(G.qTimer);
-  paintCall(); render();
+  paintCall(); render(); setTimeout(prefetchToken, 1000);
 }
 function tellPicked(kind) {
   if (!G.live) return;
@@ -1992,7 +2006,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T01:27:28Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T01:44:49Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
@@ -2014,7 +2028,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 window.addEventListener("pageshow", checkUpdate);
 setInterval(() => { if (document.visibilityState === "visible") checkUpdate(); }, 5 * 60000); // pages left open pick up new versions too
 if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
-render(); save(); welcomeModal(); checkUpdate();
+render(); save(); welcomeModal(); checkUpdate(); setTimeout(prefetchToken, 300);
 window.__demo = { get state() { return S; }, resolveTarget };
 })();
 </script>
