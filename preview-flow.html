@@ -271,7 +271,6 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 .status-line { font-size: 13.5px; display: flex; gap: 8px; align-items: center; }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; } .dot.g { background: var(--ok); } .dot.r { background: var(--bad); } .dot.a { background: var(--warn-line); }
 .flowhero { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-.greet { font-size: 19px; font-weight: 700; color: var(--fg); margin: 2px 2px -4px; } .greet span { font-size: 14px; font-weight: 400; color: var(--muted); }
 .ovrow { display: flex; align-items: center; gap: 10px; padding: 11px 12px 11px 14px; } .ovrow .t { flex: 1; min-width: 0; } .ovrow b { display: block; font-size: 15px; } .ovrow .linkbtn { font-size: 13.5px; font-weight: 600; text-decoration: underline; }
 .ovrow .btn { min-height: 38px; font-size: 14px; padding: 0 12px; flex: none; border-radius: 10px; }
 .sp.more { border-style: dashed; color: var(--brand); background: var(--surface); padding-left: 10px; }
@@ -1555,15 +1554,12 @@ function addBtnCard() {
   if (standalone || S.settings.hideAddBtn) return "";
   return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add Citizens VCRM to your Home Screen</b><span>Open the demo like an app. Show me how</span></div><span class="chev">›</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
 }
-const greeting = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
-const firstName = () => (S.settings.userName || OFFICER).split(" ")[0];
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
   // the overview row sits at the top until it has been heard once, then moves to the bottom of Home
   const ov = `<section class="panel"><div class="ovrow"><div class="t"><b>From first contact to Closed Won</b><button type="button" class="linkbtn" data-act2="flowhome">See the stages</button></div>
     <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(15)} Hear the overview</button></div></section>`;
   return topbar("Home", null, true) + `<main>
-  <div class="greet">${greeting()}, ${esc(firstName())} <span>· ${new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span></div>
   ${S.heardOverview ? "" : ov}
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
@@ -1899,7 +1895,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T00:04:49Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T00:07:29Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
