@@ -198,6 +198,9 @@ details.othbr > summary { cursor: pointer; color: var(--brand); font-weight: 700
 .grab { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 0; }
 .sh { display: flex; align-items: flex-start; gap: 10px; padding: 10px 16px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 2; }
 .sh h3 { margin: 4px 0 0; font-size: 17px; } .sh .s { font-size: 13px; color: var(--muted); margin-top: 3px; }
+.vfill { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 42px; border-radius: 10px; border: 1.5px dashed var(--brand); background: var(--brand-soft); color: var(--brand-ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+details.more { border-top: 1px solid var(--line); padding-top: 4px; } details.more > summary { cursor: pointer; color: var(--brand); font-weight: 700; font-size: 14px; padding: 8px 0; } details.more[open] > summary { margin-bottom: 4px; }
+.pick { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; } .pick .btn { justify-content: flex-start; text-align: left; } .pick .btn small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; }
 .vh { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--brand); }
 .x { margin-left: auto; border: 0; background: var(--surface2); width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; flex: none; color: var(--muted); }
 .sb { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
@@ -625,18 +628,26 @@ function fieldHTML(f, d, fromVoice) {
 function draftHTML() {
   const A = ACTIONS[V.action], d = V.data, fv = V.fromVoice;
   const paired = new Set((A.pairs || []).flat());
-  let body = "";
+  // required fields (and anything already filled in) first; the rest under "More details"
+  const has = (f) => f.type === "bool" ? false : !(d[f.k] === null || d[f.k] === undefined || d[f.k] === "");
+  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k);
+  let body = "", more = "", nMore = 0;
   for (const f of A.fields) {
-    if (paired.has(f.k)) { const pair = A.pairs.find(p => p[0] === f.k); if (pair) body += `<div class="two">${pair.map(k => fieldHTML(A.fields.find(x => x.k === k), d, fv)).join("")}</div>`; continue; }
-    body += fieldHTML(f, d, fv);
+    let unit = [f];
+    if (paired.has(f.k)) { const pair = A.pairs.find(p => p[0] === f.k); if (!pair) continue; unit = pair.map(k => A.fields.find(x => x.k === k)); }
+    const html = unit.length > 1 ? `<div class="two">${unit.map(x => fieldHTML(x, d, fv)).join("")}</div>` : fieldHTML(f, d, fv);
+    if (unit.some(main)) body += html; else { more += html; nMore += unit.length; }
   }
+  if (more) body += `<details class="more" ${V.moreOpen ? "open" : ""}><summary>More details (${nMore} optional)</summary>${more}</details>`;
+  const typed = V.typed && !fv.size;
   const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : V.action === "task" ? `For ${esc(nameOf(V.target.contact))}${V.target.opp ? " · open opportunity " + esc(V.target.opp.name) : ""}` : (V.target.contact ? esc(nameOf(V.target.contact)) + (V.target.opp ? " · " + esc(V.target.opp.name) : "") : esc(V.target.opp ? V.target.opp.name : ""));
   let dupe = "";
   if (V.action === "contact") { const m = findContacts(`${d.first || ""} ${d.last || ""}`); dupe = m.length ? `<div class="note">Possible match: ${esc(m.map(nameOf).join(", "))} is already a contact. Save only if this is someone new.</div>` : `<div class="left">Checked for duplicates: no existing contact matches ${esc((d.first || "") + " " + (d.last || ""))}.</div>`; }
   return `<div class="grab"></div>
-  <div class="sh"><div style="min-width:0"><div class="vh">${mic(15)} Draft from voice · check and save</div><h3>${esc(A.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
+  <div class="sh"><div style="min-width:0">${typed ? `<div class="vh">Fill in and save</div>` : `<div class="vh">${mic(15)} Draft from voice · check and save</div>`}<h3>${esc(A.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
   <div class="sb">
-    <div class="left">Drafted from your conversation. Say a correction out loud, or edit here.</div>
+    ${G.live ? "" : `<button type="button" class="vfill" data-act="voicefill">${mic(16)} Fill this in by voice</button>`}
+    <div class="left">${typed ? `Type the details, or let ${esc(botName())} fill them in by voice. Fields marked * are required.` : "Drafted from your conversation. Say a correction out loud, or edit here."}</div>
     ${dupe}
     <form id="draftForm" novalidate>${body}</form>
     ${A.left ? `<div class="left">${esc(A.left)}</div>` : ""}
@@ -654,6 +665,39 @@ function readDraft() {
   }
   return out;
 }
+// fields that become required by a rule (a substantive meeting needs a next step; a declined ask or a defer needs a reason)
+const COND_REQ = ["nextStep", "nextDue", "lostReason", "reason", "substantive", "outcome"]; // plus two that decide those rules
+document.getElementById("overlay").addEventListener("toggle", (e) => { if (V && e.target.matches && e.target.matches("details.more")) V.moreOpen = e.target.open; }, true);
+// a form opened by tapping: the officer types, or hands it to the assistant
+function openForm(action, cid) {
+  let target = {};
+  if (action !== "contact") { const c = contactById(cid); target = resolveTarget(action, c ? nameOf(c) : ""); }
+  if (target.error) { toast(plainErr(target.error)); return; }
+  V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true }; renderOverlay();
+  if (G.live) notice(`The officer opened the ${ACTIONS[action].title} form${target.contact ? " for " + nameOf(target.contact) : ""} by tapping. If they ask for help with it, fill it in with ${toolFor(action)}.`);
+}
+const toolFor = (action) => (TOOLS.find(t => t.action === action) || {}).name || "the draft tool";
+// rule messages are written for the assistant ("Offer to..."); on screen keep only the facts
+const plainErr = (m) => m.split(/(?<=\.)\s+/).filter(x => !/^(Offer|Ask|Explain)\b/.test(x)).join(" ") || m;
+function voiceFill() {
+  V.data = readDraft();
+  const A = ACTIONS[V.action], c = V.target.contact;
+  startCall(`The officer opened the ${A.title} form${c ? " for " + nameOf(c) : ""} on screen and tapped Fill this in by voice. ${draftSummary()} Help them finish it: ask only for what is still needed, one short question at a time, and call ${toolFor(V.action)}${c ? ` with contact_name "${nameOf(c)}"` : ""} as you go. Don't ask about anything already filled in.`);
+}
+// Home options typed instead of spoken: pick who it's for, then the form opens
+const FORM_FOR = { "Add a contact": "contact", "Let's add a contact": "contact", "Log a meeting": "interaction", "Plan an ask": "plan", "Record an ask": "ask", "Record the ask": "ask", "Record a pledge": "pledge", "Record a gift": "gift", "Record a payment": "payment", "Add a task": "task", "Schedule a meeting": "meeting" };
+function pickFor(action) {
+  if (action === "contact") { openForm("contact"); return; }
+  const ok = S.contacts.map(c => ({ c, t: resolveTarget(action, nameOf(c)) })).filter(x => !x.t.error);
+  const h = document.getElementById("modal"), A = ACTIONS[action], oppFirst = ["plan", "ask", "pledge", "gift", "payment"].includes(action);
+  h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="pkTitle">
+    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    <h2 id="pkTitle">${esc(A.title)}: ${oppFirst ? "which opportunity?" : "who is it for?"}</h2>
+    ${ok.length ? `<div class="pick">${ok.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : nameOf(x.c))}${oppFirst && x.t.opp ? `<small>${esc(x.t.opp.stage)}</small>` : ""}</button>`).join("")}</div>`
+      : `<p class="wl-hint">None of your ${oppFirst ? "opportunities is at the right stage" : "contacts can take this"} yet.</p>`}
+    <button type="button" class="btn quiet" data-helpx="1">Cancel</button></div></div>`;
+  h.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { h.innerHTML = ""; openForm(action, b.dataset.pick); });
+}
 function renderOverlay() {
   const host = document.getElementById("overlay");
   host.innerHTML = V ? `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(ACTIONS[V.action].title)}">${draftHTML()}</div></div>` : "";
@@ -661,6 +705,7 @@ function renderOverlay() {
 document.getElementById("overlay").addEventListener("click", (e) => {
   const a = e.target.closest("[data-act]"); if (!a) return;
   if (a.dataset.act === "close") { V = null; renderOverlay(); }
+  else if (a.dataset.act === "voicefill") voiceFill();
   else if (a.dataset.act === "save") saveDraft();
 });
 function saveDraft() {
@@ -1185,10 +1230,11 @@ function hintCard(el) {
     <p>You can do this by voice. Tap the mic and say something like:</p>
     <div class="hc-ex">“${esc(exampleFor(line))}”</div>
     <label class="hc-off" for="hcOff"><input type="checkbox" id="hcOff"> Don't show these hints again</label>
-    <button class="btn blue" id="hcGo">${mic(16)} Start talking</button><button class="btn quiet" id="hcX">Not now</button></div></div>`;
+    <button class="btn blue" id="hcGo">${mic(16)} Start talking</button>${FORM_FOR[line] ? `<button class="btn out" id="hcType">Type it instead</button>` : ""}<button class="btn quiet" id="hcX">Not now</button></div></div>`;
   const off = () => { if (document.getElementById("hcOff").checked) { S.settings.noHints = true; save(); toast("Hints are off. Turn them back on in Settings."); } };
   document.getElementById("hcGo").onclick = () => { off(); h.innerHTML = ""; ask(`"${line}"`); };
   document.getElementById("hcX").onclick = () => { off(); h.innerHTML = ""; };
+  const ty = document.getElementById("hcType"); if (ty) ty.onclick = () => { off(); h.innerHTML = ""; pickFor(FORM_FOR[line]); };
 }
 function ask(request) {
   if (!G.live) { startCall(request ? `The officer opened the conversation from the app: ${request}` : null); return; }
@@ -1329,7 +1375,7 @@ function onTool(callId, name, args) {
   delete data.contact_name;
   const said = Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined);
   const same = V && V.action === tool.action && (V.target.contact || null) === (target.contact || null);
-  if (same) { const cur = readDraft(); said.forEach(k => { cur[k] = data[k]; }); said.forEach(k => V.fromVoice.add(k)); V = { action: tool.action, target, data: prefill(tool.action, cur, target), fromVoice: V.fromVoice }; }
+  if (same) { const cur = readDraft(); said.forEach(k => { cur[k] = data[k]; }); said.forEach(k => V.fromVoice.add(k)); V = Object.assign({}, V, { action: tool.action, target, data: prefill(tool.action, cur, target), fromVoice: V.fromVoice }); }
   else V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice: new Set(said) };
   renderOverlay();
   const A = ACTIONS[tool.action], d = V.data, empty = (v) => v === null || v === undefined || String(v).trim() === "";
@@ -1612,7 +1658,7 @@ function contactsScreen() {
   const rows = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
   return topbar("Contacts") + `<main><input id="cSearch" class="search" type="search" placeholder="Search contacts" autocomplete="off"><section class="panel"><div class="ph"><h2>My contacts</h2><span class="meta">${rows.length}</span></div>
   ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">›</span></div>`; }).join("")}
-  </section><button class="btn out" data-say="Let's add a contact">${mic(16)} Add a contact by voice</button></main>`;
+  </section><button class="btn out" data-form="contact">Add a contact</button></main>`;
 }
 function historyPanel(filter) {
   const h = S.history.filter(filter); if (!h.length) return "";
@@ -1629,7 +1675,7 @@ function givingPanel(c) {
 const PHONE_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>';
 const telOf = (c) => "tel:" + String(c.mobile || "").replace(/[^0-9+]/g, "");
 const CAL_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
-const callBtn = (c) => c.dnc ? "" : `<div class="btns" style="margin-top:8px">${c.mobile && c.permCalls ? `<a class="btn out" href="${telOf(c)}" data-call="${c.id}">${PHONE_SVG} Call ${esc(c.first)}</a>` : ""}<button class="btn out" data-say="Schedule a meeting with ${esc(nameOf(c))}">${CAL_SVG} Schedule</button></div>`;
+const callBtn = (c) => c.dnc ? "" : `<div class="btns" style="margin-top:8px">${c.mobile && c.permCalls ? `<a class="btn out" href="${telOf(c)}" data-call="${c.id}">${PHONE_SVG} Call ${esc(c.first)}</a>` : ""}<button class="btn out" data-form="meeting" data-cid="${c.id}">${CAL_SVG} Schedule</button></div>`;
 function meetingsPanel(c) {
   const m = (S.meetings || []).filter(x => x.contactId === c.id && x.date >= todayISO()).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   if (!m.length) return "";
@@ -1709,7 +1755,7 @@ function contactScreen() {
     ${c.permSource ? `<div style="font-size:12.5px;color:var(--muted)">Permission source: ${esc(c.permSource)} · recorded by voice</div>` : ""}
   </div>
   <dl class="kv" style="padding-top:0"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
-  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-say="Log a meeting with ${esc(who)}">${mic(16)} Log a meeting</button><button class="btn out" data-say="Add a task for ${esc(who)}">Add a task</button>${o || c.ally ? "" : `<button class="btn out" data-say="Create an opportunity for ${esc(who)}">Create opportunity</button>`}</div>${callBtn(c)}</section>
+  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-form="interaction" data-cid="${c.id}">Log a meeting</button><button class="btn out" data-form="task" data-cid="${c.id}">Add a task</button>${o || c.ally ? "" : `<button class="btn out" data-form="opportunity" data-cid="${c.id}">Create opportunity</button>`}</div>${callBtn(c)}</section>
   ${givingPanel(c)}
   ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">›</span></div>`).join("")}</section>` : ""}
   ${interactionsPanel(ints, true)}
@@ -1736,7 +1782,7 @@ function oppScreen() {
   if (o.stage === "Commitment" && o.pledge) alert = `<span class="alert ok">First payment of ${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</span>`;
   const outright = o.stage === "Ask Made" && a && a.askType === "Outright";
   const label = outright ? "Record gift" : STAGE_BTN[o.stage], sayIt = outright ? "Record a gift" : STAGE_SAY[o.stage];
-  const btn = !label ? "" : `<button class="btn blue" data-say="${esc(sayIt)} for ${esc(nameOf(c))}">${mic(18)} ${label}</button>`;
+  const btn = !label ? "" : `<button class="btn blue" data-form="${FORM_FOR[sayIt] || (outright ? "gift" : "")}" data-cid="${c.id}">${label}</button>`;
   return topbar("Opportunity", "board") + `<main>
   <section class="panel"><div class="hero"><h2>${esc(o.name)}</h2><div style="color:var(--muted);font-size:13px"><span class="lnk" data-contact="${c.id}" role="button" tabindex="0">${esc(nameOf(c))}</span> · ${OFFICER}${o.fund ? " · " + esc(o.fund) : ""}</div>${alert ? `<div>${alert}</div>` : ""}</div>
     <div class="track">${STAGES.map((s, i) => `<div class="${i < idx ? "done" : i === idx ? "on" : ""}">${s === "Closed" && o.closed ? (o.closed === "Lost" ? "Lost" : "Won") : s.replace("Qualification", "Qualif.").replace("Cultivation", "Cultiv.")}</div>`).join("")}</div>
@@ -1872,6 +1918,7 @@ document.addEventListener("input", (e) => { if (e.target.id !== "cSearch") retur
 document.addEventListener("click", (e) => {
   const cl = e.target.closest("[data-call]"); if (cl) { placeCall(cl.dataset.call); return; }
   if (e.target.closest("#overlay") || e.target.closest("#modal")) return;
+  const fm = e.target.closest("[data-form]"); if (fm && fm.dataset.form) { openForm(fm.dataset.form, fm.dataset.cid); return; }
   const say = e.target.closest("[data-say]");
   if (say) { const line = say.dataset.say;
     if (line === "Walk me through the process" && !S.heardOverview) { S.heardOverview = true; save(); }
@@ -1928,7 +1975,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T01:00:37Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T01:18:04Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
