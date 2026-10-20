@@ -259,6 +259,17 @@ test("Ask planning: the campaign choices follow the entity (touch and voice)", a
   const ents = await p.$$eval("#f_fund option", os => os.map(o => o.value).filter(Boolean));
   ok(ents.length === 11 && !ents.some(e => / - Citizens Alliance$/.test(e)), "the entity list is not the new 11");
 });
+test("Ara: an interaction report keeps the spoken summary (new contact)", async (p) => {
+  await signIn(p);
+  await ara(p, "show_contact_draft", { first: "Jenny", last: "Arena", email: "jenny@example.org", mobile: "(555) 010-0123" });
+  for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  let r = await ara(p, "show_interaction_draft", { contact_name: "Jenny Arena", date: "2026-10-20", meetingType: "In person" });
+  ok(/summary parameter/.test(r.status), "Ara was not told where the summary goes");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Jenny Arena", date: "2026-10-20", meetingType: "In person", notes: "Met Jenny for coffee; she is keen on the Pennsylvania program.", substantive: true });
+  const v = await p.inputValue("#f_summary");
+  ok(/coffee/.test(v), "the spoken summary is not in the Summary field");
+});
 test("Ara: giving history and screens", async (p) => {
   await signIn(p);
   const g = await ara(p, "get_giving", { contact_name: "Ruth Abernathy" }); ok(g.ok !== false, "giving lookup failed: " + JSON.stringify(g).slice(0, 120));
