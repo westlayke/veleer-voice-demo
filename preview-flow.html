@@ -376,7 +376,7 @@ const ACTIONS = {
       { k: "permEmail", label: "Email permitted", type: "bool" }, { k: "permCalls", label: "Calls permitted", type: "bool" }, { k: "permText", label: "Texting permitted", type: "bool" },
       { k: "ally", label: "Ally - Do Not Solicit", type: "bool", oppOff: true }, { k: "dnc", label: "Do Not Contact", type: "bool", oppOff: true },
       { k: "permSource", label: "Permission source" }, { k: "howMet", label: "How we met", type: "area" },
-      { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated", opp: true } ],
+      { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "No rating set", opp: true } ],
     pairs: [["first", "last"]],
     left: "A contact needs an email or a mobile number (at least one). A capacity rating is needed before you can create an opportunity. Voice ticks Ally - Do Not Solicit or Do Not Contact only when you say so." },
   interaction: { title: "Interaction report", saved: "Interaction report saved", saveLabel: "Save",
@@ -659,7 +659,7 @@ function fieldHTML(f, d, fromVoice) {
   const id = "f_" + f.k;
   let input;
   if (f.type === "bool") return `<div class="${cls}"><label class="tg" for="${id}"><input type="checkbox" id="${id}" ${v ? "checked" : ""}> ${esc(f.label)}${f.oppOff ? `<span class="opptag off">${OPP_MARK} Must be off</span>` : ""}${voiced ? ` <span class="via" style="margin-left:auto">${mic(12)} from voice</span>` : ""}</label></div>`;
-  if (f.type === "select") input = `<select id="${id}">${(f.opts.includes(v) || !v ? f.opts : [v, ...f.opts]).map(o => `<option value="${esc(o)}" ${o === (v || "") ? "selected" : ""}>${esc(o === "" ? "Not set" : (f.fmt ? f.fmt(o) : o))}</option>`).join("")}</select>`;
+  if (f.type === "select") input = `<select id="${id}">${(f.opts.includes(v) || !v ? f.opts : [v, ...f.opts]).map(o => `<option value="${esc(o)}" ${o === (v || "") ? "selected" : ""}>${esc(o === "" ? (f.fmt ? f.fmt("") : "Not set") : (f.fmt ? f.fmt(o) : o))}</option>`).join("")}</select>`;
   else if (f.type === "area") input = `<textarea id="${id}">${esc(v)}</textarea>`;
   else if (f.type === "time") input = `<input type="time" id="${id}" value="${esc(v || "")}">`;
   else if (f.type === "date") input = `<input type="date" id="${id}" value="${esc(v || "")}">`;
@@ -936,7 +936,7 @@ const TOOLS = [
     permEmail: { type: "boolean", description: "Default true" }, permCalls: { type: "boolean", description: "Default true" }, permText: { type: "boolean", description: "Default false" },
     ally: { type: "boolean", description: "Ally - Do Not Solicit: true only if the officer says this person must not be asked for a gift" }, dnc: { type: "boolean", description: "Do Not Contact: true only if the officer says the person asked not to be contacted" },
     permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" },
-    capacity: { type: "string", enum: Object.keys(CAPACITY), description: "Only if the officer gives one: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") } } },
+    capacity: { type: "string", enum: Object.keys(CAPACITY), description: "Only when the officer names a rating in answer to the optional-details question; leave out if they say no or don't name one. Never guess: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") } } },
   { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "date", "meetingType", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
     substantive: { type: "boolean", description: "True when it was a real conversation with the person about the relationship or the gift; emails and research notes are not substantive" },
@@ -1477,6 +1477,8 @@ function onTool(callId, name, args) {
   const target = resolveTarget(tool.action, data.contact_name);
   if (target.error) { toolReply(callId, { ok: false, error: target.error }); return; }
   delete data.contact_name;
+  // a new contact's rating comes only from the officer's answer to the optional-details question, so the assistant can't fill one in by guessing
+  if (tool.action === "contact" && data.capacity && !(V && V.action === "contact" && V.askedOptional)) delete data.capacity;
   const said = Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined);
   const same = V && V.action === tool.action && (V.target.contact || null) === (target.contact || null);
   if (same) { const cur = readDraft(); said.forEach(k => { cur[k] = data[k]; }); said.forEach(k => V.fromVoice.add(k)); V = Object.assign({}, V, { action: tool.action, target, data: prefill(tool.action, cur, target), fromVoice: V.fromVoice }); }
@@ -1489,8 +1491,7 @@ function onTool(callId, name, args) {
   // a new contact: ask once for the other of email/mobile, then once about the optional fields (the app drives this so it never gets skipped)
   if (tool.action === "contact" && !missing.length) {
     if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true; toolReply(callId, { ok: true, button: A.saveLabel, status: `The draft is open on screen. Now ask in one short question for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.` }); return; }
-    if (empty(d.capacity) && !V.askedRating) { V.askedRating = true; toolReply(callId, { ok: true, button: A.saveLabel, ratings: CAPACITY, status: `Now ask exactly this: "Would you like to set a capacity rating for how much they could give? A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000. They'll need one before you can create an opportunity." If they pick one, call this tool again with capacity; if not, call this tool again without it.` }); return; }
-    if (!V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, optional_fields: ["How you met them", "Texting permitted", "Ally - Do Not Solicit", "Do Not Contact", "Where their contact permission came from"], status: `The required details are in. Before anything else, ask exactly this: "Would you like to add any optional details? You can add how you met them, whether texting is permitted, whether they're an ally we shouldn't ask for a gift, Do Not Contact, and where their contact permission came from. Email and calls are already allowed." Fill in only the ones they choose, one question at a time, calling this tool after each answer. If they say no, ask them to check the form and tap "${A.saveLabel}".` }); return; }
+    if (!V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, optional_fields: ["Capacity rating (needed before an opportunity)", "How you met them", "Texting permitted", "Ally - Do Not Solicit", "Do Not Contact", "Where their contact permission came from"], ratings: CAPACITY, status: `The required details are in. Before anything else, ask exactly this: "Would you like to add any optional details? You can add a capacity rating for how much they could give, which you'll need before they can move on to an opportunity. You can also add how you met them, whether texting is permitted, whether they're an ally we shouldn't ask for a gift, Do Not Contact, and where their contact permission came from. Email and calls are already allowed." If they want a capacity rating and don't name one, read the bands: A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, E is under $5,000. Fill in only what they choose, one question at a time, calling this tool after each answer; never pick a rating for them. If they say no, ask them to check the form and tap "${A.saveLabel}".` }); return; }
   }
   toolReply(callId, missing.length
     ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}. Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
@@ -2170,7 +2171,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T17:30:59Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T17:43:46Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

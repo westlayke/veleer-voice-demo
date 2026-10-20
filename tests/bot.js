@@ -189,18 +189,18 @@ test("Ara: a task draft opens on screen and nothing saves until Save", async (p)
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).tasks.length === n + 1, "task not saved after Save");
 });
-test("Ara: a new contact gets the other contact detail, a capacity rating, then the optional-fields question", async (p) => {
+test("Ara: a new contact gets the other contact detail, then the optional fields with the capacity rating", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin" });
   ok(r.still_needed && r.still_needed.some(x => /Email or mobile/.test(x)), "Ara was not asked for an email or mobile");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(/mobile number/.test(r.status), "Ara was not asked for the mobile too");
-  r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
-  ok(/capacity rating/.test(r.status) && r.ratings, "Ara was not told to offer a capacity rating");
-  r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C" });
-  ok(/optional details/.test(r.status) && r.optional_fields && r.optional_fields.length >= 5, "Ara was not told to offer the optional fields");
+  r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "E" });
+  ok(/optional details/.test(r.status) && r.optional_fields && r.optional_fields.length >= 6 && /Capacity rating/.test(r.optional_fields[0]) && /opportunity/.test(r.status), "Ara was not told to offer the optional fields with the capacity rating first");
+  ok(!(await p.inputValue("#f_capacity")), "a rating Ara guessed before asking was kept");
+  ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
-  ok(/tap/.test(r.status) && !/optional details|capacity rating/.test(r.status), "a question repeated");
+  ok(/tap/.test(r.status) && !/optional details/.test(r.status), "a question repeated");
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Maya").capacity === "C", "the rating was not saved with the contact");
 });
