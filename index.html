@@ -93,6 +93,8 @@ main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-sh
 .alert.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
 .cfilt { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 12px; padding-bottom: 2px; scrollbar-width: none; } .cfilt::-webkit-scrollbar { display: none; }
 .cfilt button { flex: none; font: inherit; font-size: 14px; font-weight: 600; min-height: 36px; padding: 6px 13px; border-radius: 18px; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--fg); cursor: pointer; } .cfilt button.on { background: var(--brand); border-color: var(--brand); color: #fff; } .cfilt b { font-weight: 700; opacity: .8; margin-left: 2px; }
+.gate .gnext .gk { background: var(--brand-soft); color: var(--brand); border: 1.5px solid var(--brand-line); } .gate .gwait .gk { background: var(--surface2); color: var(--muted); border: 1.5px solid var(--line-strong); } .gate .gwait { color: var(--muted); }
+.nextp .flowlink { padding: 2px 14px 12px 46px; } .nextline { font-size: 13.5px; color: var(--brand-ink); font-weight: 600; margin-top: 3px; } .nextline.warn { color: var(--warn); }
 .alert.mute { background: var(--surface2); color: var(--muted); border-color: var(--line-strong); }
 .opptag { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; padding: 1px 7px; border-radius: 9px; font-size: 11.5px; font-weight: 700; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid var(--brand-line); white-space: nowrap; vertical-align: 1px; }
 .opptag.off { color: var(--muted); background: var(--surface2); border-color: var(--line-strong); }
@@ -982,7 +984,7 @@ const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, descrip
 
 function crmSnapshot() {
   return S.contacts.map(c => { const o = openOpp(c.id), a = latestAsk(o);
-    return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") : oppReady(c) ? ": no open opportunity, ready for one" : ": no open opportunity"}`; }).join("; ");
+    return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") + (nextStep(o) ? `, next step: ${nextStep(o).line}` : "") : oppReady(c) ? ": no open opportunity, ready for one" : ": no open opportunity"}`; }).join("; ");
 }
 function grokInstructions() {
   const f = focusContact();
@@ -991,7 +993,7 @@ Speak warmly and briefly: one or two short sentences per turn. Ask at most one q
 If the officer asks what you can do, say exactly: "${CAN_DO}"
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
-Stage rules the app enforces: an opportunity can be created only when the contact has a capacity rating, isn't Do Not Contact or an Ally - Do Not Solicit, and has no other open opportunity; if the app says they aren't ready, explain what's already true and what's still to do, and offer set_capacity_rating when the rating is missing. an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
+When the officer asks what's next for an opportunity, read its next step from the summary of contacts below. Stage rules the app enforces: an opportunity can be created only when the contact has a capacity rating, isn't Do Not Contact or an Ally - Do Not Solicit, and has no other open opportunity; if the app says they aren't ready, explain what's already true and what's still to do, and offer set_capacity_rating when the rating is missing. an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen from the start, before asking anything. Then ask for what is still needed one question at a time, and after each answer call the tool again so the form fills in as they talk. When the tool says nothing more is needed, ask the officer to check the draft and tap the button at the bottom of it, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
@@ -1697,6 +1699,38 @@ function oppAlert(o) {
   if (o.stage === "Ask Planning" && a) { const days = Math.round((new Date(a.plannedDate) - new Date(todayISO())) / 864e5); return { tone: days <= 7 ? "warn" : "info", text: days < 0 ? `Ask date passed ${fmtDate(a.plannedDate)}` : `Ask planned for ${fmtDate(a.plannedDate)}`, act: days <= 7 }; }
   return null;
 }
+// what moves an opportunity to its next stage: a checklist on the record, one "Next:" line in the list, and the assistant's summary
+function nextStep(o) {
+  if (!o || o.stage === "Closed") return null;
+  const c = contactById(o.contactId), a = latestAsk(o), first = c ? c.first : "them", today = todayISO();
+  const days = (iso) => Math.round((new Date(iso) - new Date(today)) / 864e5);
+  if (o.stage === "Qualification") {
+    const rated = !!(c && c.capacity), talked = !!(c && subCount(c)), d = o.defer && deferActive(o);
+    const items = [
+      { st: rated ? "yes" : "no", need: "A capacity rating", sub: rated ? `Rated ${c.capacity} · ${CAPACITY[c.capacity]}` : `To do: rate ${first} on their record, or when you log a meeting.` },
+      { st: talked ? "yes" : "no", need: "A substantive interaction", sub: talked ? `${subCount(c)} logged` : "To do: log a real conversation with them about the relationship or the gift." },
+      { st: rated && talked ? (d ? "no" : "next") : "wait", need: "You confirm the move", sub: !(rated && talked) ? "Once the two above are done." : d ? `Deferred${o.defer.until ? " until " + fmtDate(o.defer.until) : ""}: ${o.defer.reason}` : "Tap Move to Cultivation, or defer with a reason." } ];
+    const line = !rated ? `rate ${first}` : !talked ? "log a substantive interaction" : d ? `deferred${o.defer.until ? " until " + fmtDate(o.defer.until) : ""}` : "confirm the move to Cultivation";
+    return { to: "Cultivation", items, line, warn: false };
+  }
+  if (o.stage === "Cultivation") return { to: "Ask Planning", items: [{ st: "next", need: "Plan the ask", sub: "Tap + Add ask: entity, campaign, planned date and amount." }], line: "plan the ask" };
+  if (o.stage === "Ask Planning" && a) { const n = days(a.plannedDate), late = n < 0;
+    return { to: "Ask Made", warn: late, items: [{ st: late ? "no" : "next", need: `Make the ${money(a.amount)} ask, then record it`, sub: late ? `The planned date, ${fmtDate(a.plannedDate)}, has passed. Make the ask or set a new date.` : `Planned for ${fmtDate(a.plannedDate)}${n === 0 ? " (today)" : n === 1 ? " (tomorrow)" : ` (in ${n} days)`}.` }], line: `record the ask (${late ? "date passed " : ""}${fmtDate(a.plannedDate)})` }; }
+  if (o.stage === "Ask Made" && a) {
+    if (agreed(a)) return { to: "Commitment", items: [{ st: "next", need: "Record the pledge", sub: `${first} said yes to ${money(a.amount)}. Record the pledge once it's confirmed by email, phone or in person, or Record gift if they give outright.` }], line: "record the pledge" };
+    const n = Math.max(0, -days(a.askedOn || today)), late = n >= AWAIT_WARN_DAYS;
+    return { to: a.askType === "Outright" ? "Closed Won" : "Commitment", warn: late, items: [{ st: "yes", need: `Ask made: ${money(a.amount)}`, sub: a.askedOn ? `On ${fmtDate(a.askedOn)}` : "" }, { st: late ? "no" : "next", need: `Record ${first}'s answer`, sub: `Waiting ${n} day${n === 1 ? "" : "s"}${late ? ". Time to follow up." : "."} Then record the ${a.askType === "Outright" ? "gift" : "pledge"}, or a counter or decline.` }], line: `record ${first}'s answer (${n} day${n === 1 ? "" : "s"})` };
+  }
+  if (o.stage === "Commitment" && o.pledge) { const due = o.pledge.firstDue, late = due && due < today;
+    return { to: "Closed Won", warn: late, items: [{ st: "yes", need: `Pledge recorded: ${money(o.pledge.amount)}`, sub: `Confirmed by ${o.pledge.confirmedBy || "the investor"}` }, { st: late ? "no" : "next", need: "Record the first payment", sub: `${money(o.pledge.firstAmount)} due ${fmtDate(due)}${late ? ", now overdue" : ""}. It closes the opportunity as Closed Won.` }], line: `record the first payment (due ${fmtDate(due)})` }; }
+  return null;
+}
+function nextPanel(o) {
+  const n = nextStep(o); if (!n) return "";
+  const mark = { yes: "✓", no: "!", next: "→", wait: "·" };
+  return `<section class="panel nextp"><div class="ph"><h2>Next step</h2><span class="meta">to ${esc(n.to)}</span></div><ul class="gate inpanel">${n.items.map(x => `<li class="${{ next: "gnext", wait: "gwait" }[x.st] || x.st}"><span class="gk" aria-hidden="true">${mark[x.st]}</span><span>${esc(x.need)}${x.sub ? `<small>${esc(x.sub)}</small>` : ""}</span></li>`).join("")}</ul>
+    <span class="flowlink" data-act2="flowat" data-stage="${esc(o.stage)}">How ${esc(o.stage)} works ›</span></section>`;
+}
 // Needs attention: one plain line saying what to do about each alert
 function alertTodo(o, al) {
   const a = latestAsk(o), c = contactById(o.contactId), first = c ? c.first : "them", amt = a ? money(a.amount) + " " : "";
@@ -1904,10 +1938,10 @@ function oppScreen() {
   return topbar("Opportunity", "board") + `<main>
   <section class="panel"><div class="hero"><h2>${esc(o.name)}</h2><div style="color:var(--muted);font-size:13px"><span class="lnk" data-contact="${c.id}" role="button" tabindex="0">${esc(nameOf(c))}</span> · ${OFFICER}${o.fund ? " · " + esc(o.fund) : ""}</div>${alert ? `<div>${alert}</div>` : ""}</div>
     <div class="track">${STAGES.map((s, i) => `<div class="${i < idx ? "done" : i === idx ? "on" : ""}">${s === "Closed" && o.closed ? (o.closed === "Lost" ? "Lost" : "Won") : s.replace("Qualification", "Qualif.").replace("Cultivation", "Cultiv.")}</div>`).join("")}</div>
-    ${o.stage === "Closed" ? "" : `<span class="flowlink" data-act2="flowat" data-stage="${esc(o.stage)}">What it takes to move on from ${esc(o.stage)} ›</span>`}
     <div class="tiles"><div class="tile"><div class="k">Potential</div><div class="v">${money(o.potential)}</div></div><div class="tile ${asked ? "hl" : ""}"><div class="k">Asked</div><div class="v">${money(asked)}</div></div>${o.gift ? `<div class="tile hl"><div class="k">Received</div><div class="v">${money(o.gift.amount)}</div></div>` : `<div class="tile ${o.pledge ? "hl" : ""}"><div class="k">Pledged</div><div class="v">${money(o.pledge ? o.pledge.amount : 0)}</div></div>`}</div>
     <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:8px">${met ? `<button class="btn ${readyForCultivation(o) ? "blue" : "out"}" data-act2="cultivate">Move to Cultivation?</button>` : ""}${btn}</div>
   </section>
+  ${nextPanel(o)}
   ${o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd>${o.pledge.payments ? `<dt>Received</dt><dd>${o.pledge.payments.map(x => `${money(x.amount)} on ${fmtDate(x.date)} (${esc(String(x.method).toLowerCase())})`).join("<br>")}</dd><dt>Status</dt><dd>${esc(o.pledge.status)}</dd>` : ""}</dl></section>` : ""}
   ${o.gift ? `<section class="panel"><div class="ph"><h2>Gift</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.gift.amount)}</dd><dt>Entity</dt><dd>${esc(o.gift.fund)}</dd><dt>Received</dt><dd>${fmtDate(o.gift.date)} · ${esc(o.gift.method)}</dd></dl></section>` : ""}
   ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : x.status === "Made" ? "awaiting response" : esc(x.status)}${x.reason ? ": " + esc(x.reason) : ""}</div></div></div>`).join("")}</section>` : ""}
@@ -1920,7 +1954,7 @@ function oppListHTML() {
   return STAGES.slice(0, 5).map(st => { const os = S.opps.filter(o => o.stage === st); if (!os.length) return "";
     return `<div class="lgroup">${st} <span>${os.length}</span></div>` + os.map(o => { const a = latestAsk(o), c = contactById(o.contactId);
       const amt = o.pledge ? "Pledged " + money(o.pledge.amount) : a ? (a.status === "Planned" ? "Ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
-      return `<div class="row tap" data-opp="${o.id}"><div class="t"><span class="lnk">${esc(nameOf(c))}</span><div class="s">${amt} · ${esc(o.fund || "")}</div>${oppAlert(o) ? `<div style="margin-top:5px">${alertPill(oppAlert(o))}</div>` : ""}</div><span class="chev">${CHEV}</span></div>`; }).join(""); }).join("");
+      return `<div class="row tap" data-opp="${o.id}"><div class="t"><span class="lnk">${esc(nameOf(c))}</span><div class="s">${amt} · ${esc(o.fund || "")}</div>${nextStep(o) ? `<div class="nextline${nextStep(o).warn ? " warn" : ""}">Next: ${esc(nextStep(o).line)}</div>` : ""}${oppAlert(o) ? `<div style="margin-top:5px">${alertPill(oppAlert(o))}</div>` : ""}</div><span class="chev">${CHEV}</span></div>`; }).join(""); }).join("");
 }
 function boardScreen() {
   const view = S.oppView || "list";
@@ -2171,7 +2205,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T17:44:47Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T18:16:54Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
