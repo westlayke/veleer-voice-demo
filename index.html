@@ -1494,6 +1494,11 @@ function onTool(callId, name, args) {
   const target = resolveTarget(tool.action, data.contact_name);
   if (target.error) { toolReply(callId, { ok: false, error: target.error }); return; }
   delete data.contact_name;
+  // the voice model sometimes files the officer's words under a name the tool doesn't have (notes, description...); put them where they belong, and note any other stray field in the Voice log
+  const known = new Set(Object.keys(tool.props || {})), area = (ACTIONS[tool.action].fields.find(f => f.type === "area" && f.req) || {}).k;
+  Object.keys(data).forEach(k => { if (known.has(k)) return; vlog(`${name}: unknown field "${k}"`);
+    if (area && !data[area] && typeof data[k] === "string" && data[k].trim().length > 8 && /summ|note|desc|detail|text|what|content|recap/i.test(k)) { data[area] = data[k]; vlog(`  used "${k}" as ${area}`); }
+    delete data[k]; });
   // a new contact's rating comes only from the officer's answer to the optional-details question, so the assistant can't fill one in by guessing
   if (tool.action === "contact" && data.capacity && !(V && V.action === "contact" && V.askedOptional)) delete data.capacity;
   const said = Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined);
@@ -1512,7 +1517,7 @@ function onTool(callId, name, args) {
     if (!V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, optional_fields: ["Capacity rating (needed before an opportunity)", "How you met them", "Texting permitted", "Ally - Do Not Solicit", "Do Not Contact", "Where their contact permission came from"], ratings: CAPACITY, status: `The required details are in. Before anything else, ask exactly this: "Would you like to add any optional details? You can add a capacity rating for how much they could give, which you'll need before they can move on to an opportunity. You can also add how you met them, whether texting is permitted, whether they're an ally we shouldn't ask for a gift, Do Not Contact, and where their contact permission came from. Email and calls are already allowed." If they want a capacity rating and don't name one, read the bands: A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, E is under $5,000. Fill in only what they choose, one question at a time, calling this tool after each answer; never pick a rating for them. If they say no, ask them to check the form and tap "${A.saveLabel}".` }); return; }
   }
   toolReply(callId, missing.length
-    ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}. Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
+    ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}.${missing.includes("Summary") ? " When the officer describes what happened, put it in the summary parameter (1 to 3 sentences, past tense, in their words) and call this tool again with it." : ""} Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
     : { ok: true, button: A.saveLabel, status: `The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${A.saveLabel}" button (say that exact label).` });
 }
 function grokSaved(action, r) {
@@ -2222,7 +2227,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T18:33:31Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T18:46:54Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
