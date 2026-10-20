@@ -588,7 +588,7 @@ const cultMissing = (c) => [!c.capacity && "a capacity rating", !subCount(c) && 
 // Qualification -> Cultivation: criteria met and not deferred (a defer lasts until its Reconsider on date or the next substantive interaction)
 const deferActive = (o) => { const f = o.defer, c = contactById(o.contactId); return !!f && (!f.until || f.until > todayISO()) && subCount(c) <= f.subs; };
 const readyForCultivation = (o) => { const c = contactById(o.contactId); return o.stage === "Qualification" && !!c && !cultMissing(c).length && !deferActive(o); };
-const log = (text, ids, via = true) => { try { if (G.session) act("saved", text); } catch (e) {} return S.history.unshift(Object.assign({ at: new Date().toISOString(), text, via }, ids)); };
+const log = (text, ids, via = true) => { try { act("saved", text); } catch (e) {} return S.history.unshift(Object.assign({ at: new Date().toISOString(), text, via }, ids)); };
 
 /* ---------- finding the contact the officer means ---------- */
 const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
@@ -1104,9 +1104,11 @@ async function logReady() {
   try { const r = await fetch(tokenUrl().replace(/\/$/, "") + "/log"); ACT.ready = r.ok && !!(await r.json()).logging; } catch (e) { ACT.ready = false; }
   vlog("activity log " + (ACT.ready ? "on" : "off")); return ACT.ready;
 }
+// outside a conversation, taps are grouped into a visit (a new one after 30 quiet minutes)
+function visitId() { const now = Date.now(); if (!G.visit || now - G.visit.last > 30 * 60000) G.visit = { id: deviceId().slice(0, 8) + "-v" + now.toString(36) }; G.visit.last = now; return G.visit.id; }
 function act(role, text) {
-  if (!text || !G.session) return;
-  ACT.q.push({ at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session: G.session });
+  if (!text) return; const session = G.session || visitId();
+  ACT.q.push({ at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session });
   clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, role === "end" ? 0 : 4000);
 }
 async function flushAct() {
@@ -1117,6 +1119,27 @@ async function flushAct() {
       body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, ...e }) => e) }) }).catch(() => {});
   });
 }
+// taps for the activity log: what was tapped and on which screen (never what was typed into a field)
+const SCREEN_NAMES = { home: "Home", contacts: "Contacts", contact: "Contact", board: "Opportunities", opp: "Opportunity", tasks: "Tasks", settings: "Settings", flow: "Stages" };
+function tapLabel(el) {
+  const t = (x) => String(x || "").replace(/\s+/g, " ").trim();
+  let w = t(el.getAttribute("aria-label")) || t(el.innerText || el.textContent) || t(el.getAttribute("title")) || t(el.getAttribute("placeholder"));
+  if (!w && el.dataset) w = Object.entries(el.dataset).map(([k, v]) => k + "=" + v).join(" ");
+  return w.slice(0, 80);
+}
+document.addEventListener("click", (e) => {
+  try {
+    const el = e.target.closest("button, a, [role=button], [data-go], [data-contact], [data-opp], [data-form], [data-act], [data-act2], [data-act4], [data-pick], [data-rate], [data-ts], [data-rt], .tap, label, summary");
+    if (!el || el.matches("input[type=text], textarea")) return;
+    const where = V ? `${ACTIONS[V.action].title} form` : document.querySelector("#modal .scrim") ? "pop-up" : (SCREEN_NAMES[S.screen] || S.screen);
+    act("tap", `${tapLabel(el) || el.tagName.toLowerCase()} (${where})`);
+  } catch (err) {}
+}, true);
+document.addEventListener("change", (e) => {
+  try { const el = e.target; if (el.tagName !== "SELECT" && el.type !== "checkbox" && el.type !== "date") return;
+    const lab = el.closest("label, .fld") ? tapLabel(el.closest("label, .fld").querySelector(".lbl") || el.closest("label")) : el.id;
+    act("tap", `${lab || el.id}: ${el.type === "checkbox" ? (el.checked ? "on" : "off") : el.tagName === "SELECT" ? (el.options[el.selectedIndex] || {}).text : el.value}`); } catch (err) {}
+}, true);
 // the audio code that hands mic sound to the app, made once when the page opens
 const WORKLET_URL = URL.createObjectURL(new Blob([`class C extends AudioWorkletProcessor{process(i){const c=i[0]&&i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor("cap",C)`], { type: "application/javascript" }));
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
@@ -1723,7 +1746,7 @@ function welcomeModal() {
       <p>You're a gift officer at Citizens Alliance. Tap the mic and ${esc(botName())} will introduce itself and ask your first name.</p>
       <button type="button" class="wl-mic big" data-act4="voice" aria-label="Tap to start talking">${mic(40)}</button>
       <div class="wl-tap">Tap to start</div>
-      <p class="wl-priv">Conversations are saved to improve the demo. Details in Settings.</p>
+      <p class="wl-priv">Conversations and taps are saved to improve the demo. Details in Settings.</p>
       <button type="button" class="btn quiet" data-act5="typename">I'd rather type my name</button></div></div>`;
     return;
   }
@@ -1734,7 +1757,7 @@ function welcomeModal() {
     <input id="wlName" class="wl-input" aria-label="Your first name" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}">
     <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
     <button class="btn blue" data-act4="welcome-ok">Start</button>
-    <p class="wl-priv">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
+    <p class="wl-priv">This demo saves what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
     <div class="wl-links"><button type="button" class="linkbtn" data-act4="voice">${mic(14)} Say it instead</button><button type="button" class="linkbtn" data-act2="share">Share this demo</button></div></div></div>`;
   setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
@@ -2165,7 +2188,7 @@ function settingsScreen() {
     ${saveTip(true)}</div></section>
   <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
     <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" enterkeyhint="done" value="${esc(S.settings.userName || "")}"></label>
-    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
   </div></section>
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
@@ -2269,7 +2292,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T19:27:18Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T20:12:58Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

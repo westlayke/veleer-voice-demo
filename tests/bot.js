@@ -18,7 +18,9 @@ const server = http.createServer((req, res) => {
 const FAKES = () => {
   window.__sent = [];
   window.WebSocket = class { constructor() { window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); } close() { this.readyState = 3; } };
-  const f = window.fetch; window.fetch = (u, o) => /workers\.dev/.test(String(u)) ? Promise.resolve(new Response('{"value":"test-pass"}', { status: 200 })) : f(u, o);
+  window.__logs = [];
+  const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/log/.test(String(u))) { if (o && o.body) window.__logs.push(JSON.parse(o.body)); return Promise.resolve(new Response('{"logging":true}', { status: 200 })); }
+    return /workers\.dev/.test(String(u)) ? Promise.resolve(new Response('{"value":"test-pass"}', { status: 200 })) : f(u, o); };
 };
 
 const tests = []; const test = (name, fn, opts = {}) => tests.push({ name, fn, opts });
@@ -58,7 +60,7 @@ const titleOf = (p) => p.evaluate(() => { const h = document.querySelector("head
 test("First visit shows the big mic and the short privacy line", async (p) => {
   ok(await p.isVisible("text=Meet your new voice assistant!"), "welcome heading missing");
   ok(await p.isVisible(".wl-mic.big"), "big mic missing");
-  ok(await p.isVisible("text=Conversations are saved to improve the demo"), "short privacy line missing");
+  ok(await p.isVisible("text=Conversations and taps are saved to improve the demo"), "short privacy line missing");
 });
 test("Typing a name saves it, shows the full privacy notice, and starts Ara", async (p) => {
   await p.tap("text=I'd rather type my name");
@@ -298,6 +300,11 @@ test("Ara: sets a capacity rating on a new contact (in the draft, any wording, o
   ok(r.on_draft && (await p.inputValue("#f_capacity")) === "A", "set_capacity_rating did not reach the open New contact form");
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Lou").capacity === "A", "the rating was not saved with the contact");
+});
+test("Activity log records taps outside a conversation", async (p) => {
+  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(4600);
+  const ev = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
+  ok(ev.some(x => /^tap: .*Contacts/.test(x)) && ev.some(x => /^tap: .*Abernathy/.test(x)), "taps were not sent to the activity log: " + ev.slice(0, 6).join(" | "));
 });
 test("Ara: giving history and screens", async (p) => {
   await signIn(p);

@@ -88,7 +88,7 @@ a{color:#1f5fbf}</style></head><body>${body}</body></html>`, { headers: { "Conte
     FROM events ${device ? "WHERE device = ?" : ""} GROUP BY session ORDER BY start DESC LIMIT ${device ? 200 : 50}`).bind(...(device ? [device] : [])).all()).results;
   const ids = sessions.map(s => s.session);
   const rows = ids.length ? (await env.DB.prepare(`SELECT session, at, role, text FROM events WHERE session IN (${ids.map(() => "?").join(",")}) ORDER BY id`).bind(...ids).all()).results : [];
-  const label = { user: "They said", grok: "Grok", step: "Step", saved: "Saved", start: "Started", end: "Ended" };
+  const label = { user: "They said", grok: "Grok", step: "Step", saved: "Saved", start: "Started", end: "Ended", tap: "Tapped" };
   let h = `<h1>Citizens VCRM activity</h1><div class="meta">Times are US Eastern. Location is approximate, from the phone's internet connection. Kept ${KEEP_DAYS} days.</div>`;
   h += `<h2>Phones (${phones.length})</h2><table><tr><th>Name</th><th>Last seen</th><th>Conversations</th><th>Location</th><th>Phone ID</th></tr>`
     + phones.map(p => `<tr><td>${esc(p.name || "no name")}</td><td>${when(p.last)}</td><td>${p.convs}</td><td>${esc(place(p))}</td><td><a href="?device=${encodeURIComponent(p.device)}">${esc(String(p.device).slice(0, 8))}</a></td></tr>`).join("") + "</table>";
