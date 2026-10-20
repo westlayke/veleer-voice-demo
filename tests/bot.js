@@ -306,6 +306,24 @@ test("Activity log records taps outside a conversation", async (p) => {
   const ev = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
   ok(ev.some(x => /^tap: .*Contacts/.test(x)) && ev.some(x => /^tap: .*Abernathy/.test(x)), "taps were not sent to the activity log: " + ev.slice(0, 6).join(" | "));
 });
+test("Contacts can be edited by touch and voice; changes go to History; Do Not Contact stays locked on", async (p) => {
+  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
+  await p.tap(".editbtn"); await p.waitForTimeout(300);
+  ok((await p.inputValue("#f_email")) === "ruth.abernathy@example.org", "the edit form is not filled in from the record");
+  await p.fill("#f_mobile", "(555) 010-0199"); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  const st = await state(p), ruth = st.contacts.find(c => c.first === "Ruth");
+  ok(ruth.mobile === "(555) 010-0199", "the new mobile was not saved");
+  ok(st.history.some(h => /Mobile changed from .* to \(555\) 010-0199/.test(h.text)), "the change is not in History");
+  await p.tap(".editbtn"); await p.waitForTimeout(300); await p.fill("#f_email", ""); await p.fill("#f_mobile", ""); await p.tap("[data-act=save]"); await p.waitForTimeout(300);
+  ok(await p.isVisible("text=A contact needs at least one"), "clearing both email and mobile was allowed");
+  await p.tap("[data-act=close]"); await p.waitForTimeout(250);
+  await ara(p, "show_contact_edit_draft", { contact_name: "Ruth Abernathy", dnc: true });
+  ok(await p.isChecked("#f_dnc"), "voice edit did not tick Do Not Contact");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  ok((await state(p)).contacts.find(c => c.first === "Ruth").dnc, "Do Not Contact not saved");
+  await p.tap(".editbtn"); await p.waitForTimeout(300);
+  ok(await p.isDisabled("#f_dnc"), "a gift officer could turn Do Not Contact off");
+});
 test("Ara: giving history and screens", async (p) => {
   await signIn(p);
   const g = await ara(p, "get_giving", { contact_name: "Ruth Abernathy" }); ok(g.ok !== false, "giving lookup failed: " + JSON.stringify(g).slice(0, 120));
