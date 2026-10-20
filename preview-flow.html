@@ -142,6 +142,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wl-name { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .wl-name input { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
 .wl-start { align-items: center; text-align: center; } .wl-start .wl-logo { height: 54px; width: auto; } .wl-mic.big { width: 96px; height: 96px; margin: 6px auto 0; } .wl-tap { font-weight: 700; color: var(--brand-ink); margin-top: -4px; } .wl-start .btn { align-self: stretch; }
+.wl-mic.mid { align-self: center; margin-left: auto; margin-right: auto; }
 .hmodal { position: relative; } .hm-x { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surface2); color: var(--fg); font-size: 24px; line-height: 1; cursor: pointer; } .hmodal h2 { padding-right: 40px; } .hm-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.4; }
 .wmodal p.wl-hint { font-size: 13px; color: var(--muted); margin-top: -6px; }
 .wl-err { color: var(--danger, #b42318); font-size: 13.5px; font-weight: 600; margin-top: -6px; }
@@ -1582,7 +1583,7 @@ function welcomeModal() {
     <label class="wl-name">Your first name (the assistant will use it)<input id="wlName" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
     <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
     <div class="wl-hint">Or tap the blue mic below and just tell the assistant your first name.</div>
-    <button type="button" class="wl-mic" data-act4="voice" aria-label="Tap to start talking">${mic(24)}</button>
+    <button type="button" class="wl-mic mid" data-act4="voice" aria-label="Tap to start talking">${mic(24)}</button>
     <h2 id="wmTitle">Talk to Citizens VCRM like a colleague</h2>
     <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> and try: <b>“Log a meeting with Ruth.”</b> The assistant fills in the form as you talk; you check it and tap Save.</p>
     ${saveTip()}
@@ -2006,7 +2007,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T02:12:29Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T02:29:24Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
