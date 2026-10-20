@@ -71,6 +71,9 @@ main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-sh
 .trow.isdone .ttext { text-decoration: line-through; color: var(--muted); }
 .tstat { flex: none; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line-strong); background: var(--surface); border-radius: 999px; padding: 5px 9px; min-height: 32px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--fg); cursor: pointer; white-space: nowrap; }
 .tstat.s-doing { color: var(--brand-ink); border-color: var(--brand-line); background: var(--brand-soft); } .tstat.s-waiting { color: #8a5300; border-color: #e3c08a; background: #fff6e8; } .tstat.s-done { color: #1f6b3e; border-color: #a9d8bb; background: #edf8f1; }
+.pill.rate { font: inherit; font-size: 13px; font-weight: 600; color: var(--fg); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; min-height: 28px; border-color: var(--line-strong); }
+.gate { list-style: none; margin: 4px 0 14px; padding: 0; display: flex; flex-direction: column; gap: 10px; text-align: left; } .gate li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; font-weight: 600; } .gate li small { display: block; font-weight: 400; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.gate .gk { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; } .gate .yes .gk { background: var(--ok-soft); color: var(--ok); } .gate .no .gk { background: var(--warn-soft); color: var(--warn); border: 1.5px solid var(--warn-line); } .gate .no small { color: var(--warn); }
 .tsopts { display: flex; flex-direction: column; gap: 8px; } .tsopt { display: flex; align-items: center; gap: 10px; min-height: 46px; border: 1.5px solid var(--line-strong); border-radius: 12px; background: var(--surface); padding: 8px 12px; font: inherit; font-size: 16px; font-weight: 600; color: var(--fg); cursor: pointer; text-align: left; } .trow.tflash .tmain { animation: tflash 1.6s ease 2; } @keyframes tflash { 50% { background: var(--brand-soft); } } .tsopt.cur { border-color: var(--brand); background: var(--brand-soft); } .tscur { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 600; }
 .tdot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-strong); flex: none; } .tdot.s-doing { background: var(--brand); border-color: var(--brand); } .tdot.s-waiting { background: #d08a1c; border-color: #d08a1c; } .tdot.s-done { background: #1f8a4c; border-color: #1f8a4c; }
 .tswait { display: flex; flex-direction: column; gap: 10px; } .tswait input { min-height: 44px; border: 1.5px solid var(--line-strong); border-radius: 9px; padding: 6px 10px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
@@ -88,6 +91,13 @@ main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-sh
 .alert { display: inline-block; border-radius: 10px; padding: 2px 9px; font-size: 12.5px; font-weight: 700; border: 1px solid; }
 .alert.ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
 .alert.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
+.cfilt { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 12px; padding-bottom: 2px; scrollbar-width: none; } .cfilt::-webkit-scrollbar { display: none; }
+.cfilt button { flex: none; font: inherit; font-size: 14px; font-weight: 600; min-height: 36px; padding: 6px 13px; border-radius: 18px; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--fg); cursor: pointer; } .cfilt button.on { background: var(--brand); border-color: var(--brand); color: #fff; } .cfilt b { font-weight: 700; opacity: .8; margin-left: 2px; }
+.alert.mute { background: var(--surface2); color: var(--muted); border-color: var(--line-strong); }
+.opptag { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; padding: 1px 7px; border-radius: 9px; font-size: 11.5px; font-weight: 700; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid var(--brand-line); white-space: nowrap; vertical-align: 1px; }
+.opptag.off { color: var(--muted); background: var(--surface2); border-color: var(--line-strong); }
+.oppready { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: var(--ok-soft); border-color: var(--ok); } .oppready b { color: var(--ok); } .oppready .gk { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--ok); color: #fff; font-weight: 700; }
+.gate.inpanel { padding: 12px 14px 4px; margin: 0; } .gatebtn { padding: 0 14px 14px 46px; }
 .alert.info { background: var(--brand-soft); color: var(--brand-ink); border-color: var(--brand-line); }
 .pill { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--surface2); }
 .flag { display: inline-flex; align-items: center; gap: 4px; border-radius: 12px; font-size: 13px; padding: 2px 9px; border: 1px solid; }
@@ -364,10 +374,11 @@ const ACTIONS = {
       { k: "email", label: "Email", check: "Spoken addresses are easy to mishear. Check the spelling before you save." },
       { k: "mobile", label: "Mobile" },
       { k: "permEmail", label: "Email permitted", type: "bool" }, { k: "permCalls", label: "Calls permitted", type: "bool" }, { k: "permText", label: "Texting permitted", type: "bool" },
-      { k: "ally", label: "Ally - Do Not Solicit", type: "bool" }, { k: "dnc", label: "Do Not Contact", type: "bool" },
-      { k: "permSource", label: "Permission source" }, { k: "howMet", label: "How we met", type: "area" } ],
+      { k: "ally", label: "Ally - Do Not Solicit", type: "bool", oppOff: true }, { k: "dnc", label: "Do Not Contact", type: "bool", oppOff: true },
+      { k: "permSource", label: "Permission source" }, { k: "howMet", label: "How we met", type: "area" },
+      { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated", opp: true } ],
     pairs: [["first", "last"]],
-    left: "A contact needs an email or a mobile number (at least one). Not filled by voice: capacity rating. Voice ticks Ally - Do Not Solicit or Do Not Contact only when you say so." },
+    left: "A contact needs an email or a mobile number (at least one). A capacity rating is needed before you can create an opportunity. Voice ticks Ally - Do Not Solicit or Do Not Contact only when you say so." },
   interaction: { title: "Interaction report", saved: "Interaction report saved", saveLabel: "Save",
     fields: [
       { k: "forName", label: "Contact", fixed: true },
@@ -544,6 +555,22 @@ const latestAsk = (o) => o && o.asks.length ? o.asks[0] : null;
 const askedOf = (o) => { const a = latestAsk(o); return a && a.status !== "Planned" ? a.amount : 0; };
 const agreed = (a) => !!a && (a.status === "Accepted" || /Agreed/.test(a.status));
 const subCount = (c) => S.interactions.filter(i => i.contactId === c.id && i.substantive).length;
+// one alert on a contact with no open opportunity: ready, the step that's missing, or the flag that stops it
+const oppReady = (c) => !openOpp(c.id) && oppChecks(c).every(x => x.ok);
+const needsRating = (c) => !openOpp(c.id) && !c.dnc && !c.ally && !c.capacity;
+function oppPill(c) {
+  if (openOpp(c.id)) return "";
+  if (c.dnc) return ' <span class="alert mute">Do Not Contact</span>';
+  if (c.ally) return ' <span class="alert mute">Ally</span>';
+  const miss = oppChecks(c).filter(x => !x.ok);
+  return miss.length ? ` <span class="alert warn">${miss.length === 1 && !c.capacity ? "Needs rating" : miss.length + " steps to opportunity"}</span>` : ' <span class="alert ok">Ready for opportunity</span>';
+}
+// what must be true before a contact can have an opportunity: shown as a checklist on screen, read out by the assistant
+const oppChecks = (c) => { const o = openOpp(c.id); return [
+  { ok: !!c.capacity, need: "They have a capacity rating", now: c.capacity ? `Rated ${c.capacity} · ${CAPACITY[c.capacity]}` : "Not rated yet", todo: "Set a capacity rating, or pick one when you log a meeting." },
+  { ok: !c.dnc, need: "They aren't marked Do Not Contact", now: c.dnc ? "Marked Do Not Contact" : "Contact allowed", todo: "Only a Chief Gift Officer can clear Do Not Contact." },
+  { ok: !c.ally, need: "They aren't an Ally - Do Not Solicit", now: c.ally ? "Marked Ally - Do Not Solicit" : "Can be asked for a gift", todo: "The officer who set Ally - Do Not Solicit, or the Chief Gift Officer, can turn it off." },
+  { ok: !o, need: "They have no other open opportunity", now: o ? `${o.name} is open (${o.stage})` : "None open", todo: o ? `Work on ${o.name} instead; Veleer keeps one open opportunity per investor.` : "" } ]; };
 const cultMissing = (c) => [!c.capacity && "a capacity rating", !subCount(c) && "a substantive interaction"].filter(Boolean);
 // Qualification -> Cultivation: criteria met and not deferred (a defer lasts until its Reconsider on date or the next substantive interaction)
 const deferActive = (o) => { const f = o.defer, c = contactById(o.contactId); return !!f && (!f.until || f.until > todayISO()) && subCount(c) <= f.subs; };
@@ -572,12 +599,13 @@ function resolveTarget(action, spoken) {
   if (!list.length) return { error: spoken ? `No contact named "${spoken}". Known contacts: ${S.contacts.map(nameOf).join(", ")}. Ask who they mean, or offer to add them as a new contact.` : "Ask which contact this is for." };
   if (list.length > 1) return { error: `More than one contact matches: ${list.map(nameOf).join(", ")}. Ask which one.` };
   const contact = list[0];
+  if (action === "opportunity") { const ch = oppChecks(contact), miss = ch.filter(x => !x.ok);
+    return miss.length ? { gate: contact, error: `An opportunity can be created for ${nameOf(contact)} only when all of these are true: ${ch.map(x => `${x.need.replace(/^They/, nameOf(contact).split(" ")[0])} (${x.ok ? "done" : "not yet"}: ${x.now})`).join("; ")}. Still to do: ${miss.map(x => x.todo).join(" ")} Explain this briefly: what is already true and what still needs doing.${!contact.capacity && !contact.dnc && !contact.ally ? " Then offer to set their capacity rating now (set_capacity_rating)." : ""}` } : { contact }; }
   if (contact.dnc && ["meeting", "plan", "ask", "opportunity"].includes(action)) return { error: `${nameOf(contact)} is marked Do Not Contact, so no outreach can be planned. Only a Chief Gift Officer can clear it.` };
   if (contact.ally && ["opportunity", "plan", "ask", "pledge", "gift"].includes(action)) return { error: `${nameOf(contact)} is an Ally - Do Not Solicit, so they can't be asked for a gift. The officer who set the flag or the Chief Gift Officer can turn it off.` };
   if (action === "interaction") return { contact, opp: openOpp(contact.id) || null };
   if (action === "task" || action === "meeting") return { contact, opp: openOpp(contact.id) || null };
   const opp = openOpp(contact.id);
-  if (action === "opportunity") return opp ? { error: `${nameOf(contact)} already has an open opportunity (${opp.name}, in ${opp.stage}). Veleer keeps one open opportunity per investor; offer to work on that one instead.` } : { contact };
   if (!opp) return { error: `${nameOf(contact)} has no open opportunity yet. Offer to create one first.` };
   const qual = `${opp.name} is still in Qualification. An ask can be planned only once it is in Cultivation, which needs a capacity rating, a substantive interaction and the officer's confirmation${cultMissing(contact).length ? "; it still needs " + cultMissing(contact).join(" and ") : "; the criteria are met, so offer to move it to Cultivation"}.`;
   if (action === "cultivate") {
@@ -619,16 +647,18 @@ function prefill(action, d, t) {
   if (action === "contact") { if (out.permEmail == null) out.permEmail = true; if (out.permCalls == null) out.permCalls = true; if (out.permText == null) out.permText = false; } // guide defaults
   return out;
 }
+const OPP_MARK = '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h7M6.5 3 9.5 6l-3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function fieldHTML(f, d, fromVoice) {
   const v = d[f.k];
   const voiced = fromVoice.has(f.k) && !f.fixed;
   const missing = f.req && (v === null || v === undefined || v === "");
   const cls = ["fld", voiced ? "v" : "", missing ? "miss" : "", f.check && v ? "chk" : ""].join(" ");
   const tag = voiced ? `<span class="via">${mic(12)} <span class="vt">from voice</span></span>` : (f.fixed ? `<span class="via" style="color:var(--muted)">filled in</span>` : "");
-  const lab = `<div class="lbl">${esc(f.label)}${f.req ? '<span class="req">*</span>' : ""}${tag}</div>`;
+  const oppTag = f.opp ? `<span class="opptag" title="Optional now, needed before you can create an opportunity">${OPP_MARK} For opportunity</span>` : "";
+  const lab = `<div class="lbl">${esc(f.label)}${f.req ? '<span class="req">*</span>' : ""}${oppTag}${tag}</div>`;
   const id = "f_" + f.k;
   let input;
-  if (f.type === "bool") return `<div class="${cls}"><label class="tg" for="${id}"><input type="checkbox" id="${id}" ${v ? "checked" : ""}> ${esc(f.label)}${voiced ? ` <span class="via" style="margin-left:auto">${mic(12)} from voice</span>` : ""}</label></div>`;
+  if (f.type === "bool") return `<div class="${cls}"><label class="tg" for="${id}"><input type="checkbox" id="${id}" ${v ? "checked" : ""}> ${esc(f.label)}${f.oppOff ? `<span class="opptag off">${OPP_MARK} Must be off</span>` : ""}${voiced ? ` <span class="via" style="margin-left:auto">${mic(12)} from voice</span>` : ""}</label></div>`;
   if (f.type === "select") input = `<select id="${id}">${(f.opts.includes(v) || !v ? f.opts : [v, ...f.opts]).map(o => `<option value="${esc(o)}" ${o === (v || "") ? "selected" : ""}>${esc(o === "" ? "Not set" : (f.fmt ? f.fmt(o) : o))}</option>`).join("")}</select>`;
   else if (f.type === "area") input = `<textarea id="${id}">${esc(v)}</textarea>`;
   else if (f.type === "time") input = `<input type="time" id="${id}" value="${esc(v || "")}">`;
@@ -642,7 +672,7 @@ function draftHTML() {
   const paired = new Set((A.pairs || []).flat());
   // required fields (and anything already filled in) first; the rest under "More details"
   const has = (f) => f.type === "bool" ? false : !(d[f.k] === null || d[f.k] === undefined || d[f.k] === "");
-  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k) || (V.action === "contact" && (f.k === "email" || f.k === "mobile")); // a contact needs one of these, so they never hide under More details
+  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k) || (V.action === "contact" && (f.k === "email" || f.k === "mobile" || f.opp)); // a contact needs one of these, so they never hide under More details
   let body = "", more = "", nMore = 0;
   for (const f of A.fields) {
     let unit = [f];
@@ -659,7 +689,7 @@ function draftHTML() {
   <div class="sh"><div style="min-width:0">${typed ? `<div class="vh">Fill in and save</div>` : `<div class="vh">${mic(15)} Draft from voice · check and save</div>`}<h3>${esc(A.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
   <div class="sb">
     ${G.live ? "" : `<button type="button" class="vfill" data-act="voicefill">${mic(16)} Fill this in by voice</button>`}
-    <div class="left">${typed ? `Type the details, or let ${esc(botName())} fill them in by voice. Fields marked * are required.` : "Drafted from your conversation. Say a correction out loud, or edit here."}</div>
+    <div class="left">${typed ? `Type the details, or let ${esc(botName())} fill them in by voice. Fields marked * are required.` : "Drafted from your conversation. Say a correction out loud, or edit here."}${V.action === "contact" ? ` Fields marked <span class="opptag">${OPP_MARK} For opportunity</span> are optional now but needed before you can create an opportunity.` : ""}</div>
     ${dupe}
     <form id="draftForm" novalidate>${body}</form>
     ${A.left ? `<div class="left">${esc(A.left)}</div>` : ""}
@@ -684,6 +714,7 @@ document.getElementById("overlay").addEventListener("toggle", (e) => { if (V && 
 function openForm(action, cid) {
   let target = {};
   if (action !== "contact") { const c = contactById(cid); target = resolveTarget(action, c ? nameOf(c) : ""); }
+  if (target.gate) { oppGate(target.gate); return; }
   if (target.error) { toast(plainErr(target.error)); return; }
   V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true }; renderOverlay();
   if (G.live) notice(`The officer opened the ${ACTIONS[action].title} form${target.contact ? " for " + nameOf(target.contact) : ""} by tapping. If they ask for help with it, fill it in with ${toolFor(action)}.`);
@@ -700,12 +731,12 @@ function voiceFill() {
 const FORM_FOR = { "Add a contact": "contact", "Let's add a contact": "contact", "Log a meeting": "interaction", "Plan an ask": "plan", "Record an ask": "ask", "Record the ask": "ask", "Record a pledge": "pledge", "Record a gift": "gift", "Record a payment": "payment", "Add a task": "task", "Schedule a meeting": "meeting" };
 function pickFor(action) {
   if (action === "contact") { openForm("contact"); return; }
-  const ok = S.contacts.map(c => ({ c, t: resolveTarget(action, nameOf(c)) })).filter(x => !x.t.error);
+  const ok = S.contacts.map(c => ({ c, t: resolveTarget(action, nameOf(c)) })).filter(x => !x.t.error || (action === "opportunity" && !openOpp(x.c.id))); // not ready yet: tapping shows what's missing
   const h = document.getElementById("modal"), A = ACTIONS[action], oppFirst = ["plan", "ask", "pledge", "gift", "payment"].includes(action);
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="pkTitle">
     <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
     <h2 id="pkTitle">${esc(A.title)}: ${oppFirst ? "which opportunity?" : "who is it for?"}</h2>
-    ${ok.length ? `<div class="pick">${ok.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : nameOf(x.c))}${oppFirst && x.t.opp ? `<small>${esc(x.t.opp.stage)}</small>` : ""}</button>`).join("")}</div>`
+    ${ok.length ? `<div class="pick">${ok.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : nameOf(x.c))}${oppFirst && x.t.opp ? `<small>${esc(x.t.opp.stage)}</small>` : x.t.gate ? "<small>Not ready yet</small>" : ""}</button>`).join("")}</div>`
       : `<p class="wl-hint">None of your ${oppFirst ? "opportunities is at the right stage" : "contacts can take this"} yet.</p>`}
     <button type="button" class="btn quiet" data-helpx="1">Cancel</button></div></div>`;
   h.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { h.innerHTML = ""; openForm(action, b.dataset.pick); });
@@ -789,11 +820,12 @@ const APPLY = {
   },
   contact(d) {
     const ct = { id: uid(), first: d.first, last: d.last, email: d.email, mobile: d.mobile, permEmail: !!d.permEmail, permCalls: !!d.permCalls, permText: !!d.permText,
-      permSource: d.permSource, howMet: d.howMet, capacity: null, status: "Prospect", added: todayISO(), gifts: [] };
+      permSource: d.permSource, howMet: d.howMet, capacity: d.capacity || null, status: "Prospect", added: todayISO(), gifts: [] };
     ct.ally = !!d.ally; ct.dnc = !!d.dnc;
     S.contacts.push(ct); log(`Contact added by ${OFFICER}`, { contactId: ct.id });
     if (ct.ally) log(`Ally - Do Not Solicit set by ${OFFICER}`, { contactId: ct.id });
     if (ct.dnc) log(`Do Not Contact set by ${OFFICER}`, { contactId: ct.id });
+    if (ct.capacity) log(`Capacity rated ${ct.capacity} (${CAPACITY[ct.capacity]})`, { contactId: ct.id });
     S.sel.contact = ct.id; S.screen = "contact"; return { contact: ct };
   },
   interaction(d, t) {
@@ -903,7 +935,8 @@ const TOOLS = [
     first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
     permEmail: { type: "boolean", description: "Default true" }, permCalls: { type: "boolean", description: "Default true" }, permText: { type: "boolean", description: "Default false" },
     ally: { type: "boolean", description: "Ally - Do Not Solicit: true only if the officer says this person must not be asked for a gift" }, dnc: { type: "boolean", description: "Do Not Contact: true only if the officer says the person asked not to be contacted" },
-    permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" } } },
+    permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" },
+    capacity: { type: "string", enum: Object.keys(CAPACITY), description: "Only if the officer gives one: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") } } },
   { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "date", "meetingType", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
     substantive: { type: "boolean", description: "True when it was a real conversation with the person about the relationship or the gift; emails and research notes are not substantive" },
@@ -942,13 +975,14 @@ const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, descrip
     { type: "function", name: "get_contact_history", description: "Read a contact's interaction history (meetings, calls and asks, newest first) and their open tasks, including tasks on their opportunity. Also opens their contact record. Use it when the officer asks about past interactions with a contact, what happened last time, or what's outstanding for a contact.", parameters: { type: "object", properties: Object.assign({ focus: { type: "string", enum: ["history_and_tasks", "history", "tasks"], description: "What the officer asked for; default both" } }, FOR), required: ["contact_name"] } },
     { type: "function", name: "highlight_stage", description: "During the process overview, light up one stage on the How it works screen. Call it just before you describe that stage.", parameters: { type: "object", properties: { stage: { type: "string", enum: FLOW.map(f => f.stage) } }, required: ["stage"] } },
     { type: "function", name: "set_user_name", description: "Save the first name of the person using the app, once they tell you. Call it as soon as they say it.", parameters: { type: "object", properties: { first_name: { type: "string" } }, required: ["first_name"] } },
+    { type: "function", name: "set_capacity_rating", description: "Set or change an existing contact's capacity rating (how much they could give). First call it with confirmed false and read back the change; only after the officer says yes, call again with confirmed true.", parameters: { type: "object", properties: Object.assign({ rating: { type: "string", enum: Object.keys(CAPACITY), description: Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") }, confirmed: { type: "boolean" } }, FOR), required: ["contact_name", "rating", "confirmed"] } },
     { type: "function", name: "set_task_status", description: "Change a task's status: to do, in progress, waiting (on someone, with a check-back date) or done. First call it with confirmed false: the app finds the task and shows it; read back what will change and ask the officer to confirm. Only after they say yes, call again with confirmed true.", parameters: { type: "object", properties: Object.assign({ task: { type: "string", description: "Words from the task as the officer said them, e.g. 'pledge decision' or 'Pennsylvania update'" }, status: { type: "string", enum: ["to_do", "in_progress", "waiting", "done"] }, check_back_on: { type: "string", description: "YYYY-MM-DD to check back, for waiting; leave out if not said" }, confirmed: { type: "boolean" } }, FOR), required: ["task", "status", "confirmed"] } },
     { type: "function", name: "set_speaking_speed", description: "Change how fast you talk when the officer asks you to speak faster or slower (or normally). The choice is remembered on this phone.", parameters: { type: "object", properties: { change: { type: "string", enum: ["faster", "slower", "normal"] } }, required: ["change"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
 function crmSnapshot() {
   return S.contacts.map(c => { const o = openOpp(c.id), a = latestAsk(o);
-    return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") : ": no open opportunity"}`; }).join("; ");
+    return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") : oppReady(c) ? ": no open opportunity, ready for one" : ": no open opportunity"}`; }).join("; ");
 }
 function grokInstructions() {
   const f = focusContact();
@@ -957,7 +991,7 @@ Speak warmly and briefly: one or two short sentences per turn. Ask at most one q
 If the officer asks what you can do, say exactly: "${CAN_DO}"
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
-Stage rules the app enforces: an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
+Stage rules the app enforces: an opportunity can be created only when the contact has a capacity rating, isn't Do Not Contact or an Ally - Do Not Solicit, and has no other open opportunity; if the app says they aren't ready, explain what's already true and what's still to do, and offer set_capacity_rating when the rating is missing. an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen from the start, before asking anything. Then ask for what is still needed one question at a time, and after each answer call the tool again so the form fills in as they talk. When the tool says nothing more is needed, ask the officer to check the draft and tap the button at the bottom of it, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
@@ -1326,6 +1360,17 @@ function onTool(callId, name, args) {
     S.settings.userName = v; S.settings.seenPrivacy = true; S.seenWelcome = true; if (wasAsking) S.screen = "home"; save(); applyName(); welcomeModal(); render(); if (wasAsking) window.scrollTo(0, 0); whenIdle("instr");
     toolReply(callId, { ok: true, status: `Saved. You already introduced yourself, so don't say your name or role again. If they haven't asked for anything yet, say exactly: "Nice to meet you, ${v}. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Thanks, ${v}" and carry on with it.` }); return;
   }
+  if (name === "set_capacity_rating") {
+    const t = resolveTarget("interaction", data.contact_name || ""), r = CAPACITY[data.rating] ? data.rating : null;
+    if (t.error) { toolReply(callId, { ok: false, error: t.error }); return; }
+    if (!r) { toolReply(callId, { ok: false, error: "Ask which rating: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") }); return; }
+    const c = t.contact, was = c.capacity;
+    S.sel.contact = c.id; if (S.screen !== "contact") go("contact"); else render();
+    if (!data.confirmed) { toolReply(callId, { ok: true, contact: nameOf(c), now: was ? `${was} (${CAPACITY[was]})` : "not rated", will_become: `${r} (${CAPACITY[r]})`, say: `Ask in one short sentence: "Rate ${c.first} ${r}, ${CAPACITY[r]}?" Wait for yes before calling again with confirmed true.` }); return; }
+    c.capacity = r; log(`Capacity rated ${r} (${CAPACITY[r]})`, { contactId: c.id }); save(); render(); toast(`${nameOf(c)}: capacity ${r} · ${CAPACITY[r]}`);
+    const g = resolveTarget("opportunity", nameOf(c));
+    toolReply(callId, { ok: true, saved: true, say: `Confirm in one short sentence that it's saved.${!g.error ? " They can now have an opportunity: offer to create one if the officer was trying to." : ""}` }); return;
+  }
   if (name === "set_task_status") {
     const words = (data.task || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 2 && !["the", "and", "for", "task", "with", "about"].includes(w));
     const who = data.contact_name ? resolveTarget("interaction", data.contact_name) : null;
@@ -1444,6 +1489,7 @@ function onTool(callId, name, args) {
   // a new contact: ask once for the other of email/mobile, then once about the optional fields (the app drives this so it never gets skipped)
   if (tool.action === "contact" && !missing.length) {
     if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true; toolReply(callId, { ok: true, button: A.saveLabel, status: `The draft is open on screen. Now ask in one short question for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.` }); return; }
+    if (empty(d.capacity) && !V.askedRating) { V.askedRating = true; toolReply(callId, { ok: true, button: A.saveLabel, ratings: CAPACITY, status: `Now ask exactly this: "Would you like to set a capacity rating for how much they could give? A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000. They'll need one before you can create an opportunity." If they pick one, call this tool again with capacity; if not, call this tool again without it.` }); return; }
     if (!V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, optional_fields: ["How you met them", "Texting permitted", "Ally - Do Not Solicit", "Do Not Contact", "Where their contact permission came from"], status: `The required details are in. Before anything else, ask exactly this: "Would you like to add any optional details? You can add how you met them, whether texting is permitted, whether they're an ally we shouldn't ask for a gift, Do Not Contact, and where their contact permission came from. Email and calls are already allowed." Fill in only the ones they choose, one question at a time, calling this tool after each answer. If they say no, ask them to check the form and tap "${A.saveLabel}".` }); return; }
   }
   toolReply(callId, missing.length
@@ -1670,6 +1716,7 @@ function needsAttention() {
     const al = oppAlert(o);
     if (al && al.act) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">${CHEV}</span></div>`);
   });
+  S.contacts.filter(oppReady).forEach(c => rows.push(`<div class="row tap" data-contact="${c.id}"><div class="t"><span class="alert ok">Ready for opportunity</span><div class="na-do">${esc(c.first)} meets every requirement. Create an opportunity?</div><div class="s">${esc(nameOf(c))} · capacity ${c.capacity}</div></div><span class="chev">${CHEV}</span></div>`));
   S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).sort((x, y) => x.due.localeCompare(y.due)).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">${CHEV}</span></div>`));
   return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
 }
@@ -1719,9 +1766,12 @@ function homeScreen() {
   </main>`;
 }
 function contactsScreen() {
-  const rows = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
-  return topbar("Contacts") + `<main><input id="cSearch" class="search" type="search" placeholder="Search contacts" autocomplete="off"><section class="panel"><div class="ph"><h2>My contacts</h2><span class="meta">${rows.length}</span></div>
-  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">${CHEV}</span></div>`; }).join("")}
+  const all = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
+  const F = { all: ["All", () => true, "My contacts"], ready: ["Ready for opportunity", oppReady, "Ready for opportunity"], rating: ["Needs rating", needsRating, "Need a capacity rating"] };
+  const fk = F[S.cFilter] ? S.cFilter : "all", rows = all.filter(F[fk][1]);
+  const chips = `<div class="cfilt" role="tablist" aria-label="Show">${Object.entries(F).map(([k, f]) => `<button type="button" role="tab" aria-selected="${k === fk}" class="${k === fk ? "on" : ""}" data-act2="cfilt" data-v="${k}">${f[0]}${k === "all" ? "" : ` <b>${all.filter(f[1]).length}</b>`}</button>`).join("")}</div>`;
+  return topbar("Contacts") + `<main><input id="cSearch" class="search" type="search" placeholder="Search contacts" autocomplete="off">${chips}<section class="panel"><div class="ph"><h2>${F[fk][2]}</h2><span class="meta">${rows.length}</span></div>${rows.length ? "" : `<div class="empty">${fk === "ready" ? "Nobody is ready yet. Contacts need a capacity rating and no open opportunity." : "Everyone is rated."}</div>`}
+  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}${oppPill(c)}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">${CHEV}</span></div>`; }).join("")}
   </section><button class="btn out" data-form="contact">Add a contact</button></main>`;
 }
 function historyPanel(filter) {
@@ -1811,15 +1861,18 @@ function contactScreen() {
   if (!c) return contactsScreen();
   const flag = (on, label) => `<span class="flag ${on ? "yes" : "no"}">${on ? "✓" : "✕"} ${label}</span>`;
   const o = openOpp(c.id), ints = S.interactions.filter(i => i.contactId === c.id), who = nameOf(c);
+  const checks = oppChecks(c), ready = !o && checks.every(x => x.ok);
   const cOpps = S.opps.filter(x => x.contactId === c.id).sort((x, y) => (x.stage === "Closed") - (y.stage === "Closed"));
   return topbar("Contact", "contacts") + `<main>
   <section class="panel"><div class="hero"><h2>${esc(who)}</h2>
-    <div class="flags"><span class="pill">${c.ally ? "Ally" : esc(c.status)}</span><span class="pill">${c.capacity ? "Capacity " + c.capacity + " · " + CAPACITY[c.capacity] : "Capacity not rated"}</span></div>
+    <div class="flags"><span class="pill">${c.ally ? "Ally" : esc(c.status)}</span><button type="button" class="pill rate" data-rate="${c.id}" aria-label="Capacity rating: ${c.capacity ? c.capacity : "not rated"}. Change">${c.capacity ? "Capacity " + c.capacity + " · " + CAPACITY[c.capacity] : "Capacity not rated"}<svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="flags">${c.dnc ? '<span class="flag no dnc">✕ Do Not Contact</span>' : flag(c.permEmail, "Email") + flag(c.permCalls, "Calls") + flag(c.permText, "Texts")}${c.ally ? '<span class="flag no">✕ Do not solicit</span>' : ""}</div>
     ${c.permSource ? `<div style="font-size:12.5px;color:var(--muted)">Permission source: ${esc(c.permSource)} · recorded by voice</div>` : ""}
   </div>
   <dl class="kv" style="padding-top:0"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
-  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-form="interaction" data-cid="${c.id}">Log a meeting</button><button class="btn out" data-form="task" data-cid="${c.id}">Add a task</button>${o || c.ally ? "" : `<button class="btn out" data-form="opportunity" data-cid="${c.id}">Create opportunity</button>`}</div>${callBtn(c)}</section>
+  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn ${ready ? "out" : "blue"}" data-form="interaction" data-cid="${c.id}">Log a meeting</button><button class="btn out" data-form="task" data-cid="${c.id}">Add a task</button>${o ? "" : `<button class="btn ${ready ? "blue" : "out"}" data-form="opportunity" data-cid="${c.id}">Create opportunity</button>`}</div>${callBtn(c)}</section>
+  ${o ? "" : ready ? `<section class="panel oppready"><span class="gk" aria-hidden="true">✓</span><div><b>Ready for opportunity</b><div class="s">Rated ${c.capacity} · ${esc(CAPACITY[c.capacity])}. Everything needed is in place.</div></div></section>`
+    : `<section class="panel"><div class="ph"><h2>Path to opportunity</h2><span class="alert warn">${checks.filter(x => !x.ok).length} to do</span></div><ul class="gate inpanel">${checks.map(x => `<li class="${x.ok ? "yes" : "no"}"><span class="gk" aria-hidden="true">${x.ok ? "✓" : "!"}</span><span>${esc(x.need)}<small>${x.ok ? esc(x.now) : "To do: " + esc(x.todo)}</small></span></li>`).join("")}</ul>${!c.capacity ? `<div class="gatebtn"><button type="button" class="btn out" data-rate="${c.id}">Set capacity rating</button></div>` : ""}</section>`}
   ${givingPanel(c)}
   ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">${CHEV}</span></div>`).join("")}</section>` : ""}
   ${interactionsPanel(ints, true)}
@@ -1900,6 +1953,33 @@ function taskRow(t, showWhere) {
     <div class="t">${alertPill(al)}<div class="ttext${al ? " na-do" : ""}">${esc(t.text)}</div><div class="s">${st === "done" ? "Done" + (t.doneOn ? " " + fmtDate(t.doneOn) : "") : st === "waiting" ? (t.due ? "Check back " + fmtDate(t.due) : "Waiting") : t.due ? "Due " + fmtDate(t.due) : "No due date"}${showWhere ? " · " + esc(taskWhere(t)) : t.oppId ? " · on the opportunity" : ""}</div></div>
     <button type="button" class="tstat s-${st}" data-tk-stat="${t.id}" aria-label="Status: ${TSTAT[st]}. Change">${TSTAT[st]}<svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div></div>`;
 }
+// Create opportunity tapped for a contact who isn't ready: list what must be true, ticked or not, and what's left to do
+function oppGate(c) {
+  const h = document.getElementById("modal"), ch = oppChecks(c), canRate = !c.capacity;
+  h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="ogTitle">
+    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    <h2 id="ogTitle">${esc(c.first)} isn't ready for an opportunity yet</h2>
+    <p class="wl-hint">You can create an opportunity for a contact only when all of these are true:</p>
+    <ul class="gate">${ch.map(x => `<li class="${x.ok ? "yes" : "no"}"><span class="gk" aria-hidden="true">${x.ok ? "✓" : "!"}</span><span>${esc(x.need)}<small>${x.ok ? esc(x.now) : "To do: " + esc(x.todo)}</small></span></li>`).join("")}</ul>
+    ${canRate ? `<button type="button" class="btn blue" id="ogRate">Set capacity rating</button>` : ""}
+    <button type="button" class="btn quiet" data-helpx="1">${canRate ? "Not now" : "Close"}</button></div></div>`;
+  const b = document.getElementById("ogRate"); if (b) b.onclick = () => ratingPicker(c, true);
+  if (G.live) notice(`The officer tapped Create opportunity for ${nameOf(c)}, but they aren't ready: ${ch.filter(x => !x.ok).map(x => x.todo).join(" ")} The screen lists what's needed. If they ask, explain it, and offer set_capacity_rating if the rating is what's missing.`);
+}
+function ratingPicker(c, thenOpp) {
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="rtTitle">
+    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    <h2 id="rtTitle">Capacity rating</h2><p class="wl-hint">How much could ${esc(nameOf(c))} give?</p>
+    <div class="tsopts">${Object.entries(CAPACITY).map(([k, v]) => `<button type="button" class="tsopt${k === c.capacity ? " cur" : ""}" data-rt="${k}">${k} · ${esc(v)}${k === c.capacity ? '<span class="tscur">Current</span>' : ""}</button>`).join("")}</div></div></div>`;
+  h.querySelectorAll("[data-rt]").forEach(b => b.onclick = () => {
+    const k = b.dataset.rt; h.innerHTML = "";
+    if (k !== c.capacity) { c.capacity = k; log(`Capacity rated ${k} (${CAPACITY[k]})`, { contactId: c.id }, false); save(); render(); }
+    toast(`${nameOf(c)}: capacity ${k} · ${CAPACITY[k]}`);
+    if (thenOpp) openForm("opportunity", c.id);
+  });
+}
+document.addEventListener("click", (e) => { const r = e.target.closest("[data-rate]"); if (!r) return; const c = contactById(r.dataset.rate); if (c) ratingPicker(c, false); });
 function statusPicker(t, pickWaiting) {
   const h = document.getElementById("modal"), st = taskStatus(t), dflt = t.due && t.due > todayISO() && st === "waiting" ? t.due : addDays(todayISO(), 7);
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="tsTitle">
@@ -2047,6 +2127,7 @@ document.addEventListener("click", (e) => {
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
+  else if (act === "cfilt") { S.cFilter = a.dataset.v; save(); render(); }
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
   else if (act === "flowat") { S.flowBack = "opp"; highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
@@ -2089,7 +2170,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T17:01:32Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T17:35:56Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
