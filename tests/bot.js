@@ -270,6 +270,17 @@ test("Ara: an interaction report keeps the spoken summary (new contact)", async 
   const v = await p.inputValue("#f_summary");
   ok(/coffee/.test(v), "the spoken summary is not in the Summary field");
 });
+test("Ara: a planned ask takes a spoken date in any common form", async (p) => {
+  await signIn(p);
+  const y = new Date().getFullYear(), want = (m, d) => { let iso = `${y}-${m}-${d}`; if (iso < new Date().toISOString().slice(0, 10)) iso = `${y + 1}-${m}-${d}`; return iso; };
+  for (const [said, iso] of [["December 1", want("12", "01")], ["12/15/2026", "2026-12-15"], ["2026-11-3", "2026-11-03"]]) {
+    await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "National", plannedDate: said, amount: 50000 });
+    ok((await p.inputValue("#f_plannedDate")) === iso, `"${said}" did not become ${iso}: got ${await p.inputValue("#f_plannedDate")}`);
+    await p.tap("[data-act=close]"); await p.waitForTimeout(250);
+  }
+  await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "National", planned_ask_date: "2026-12-20", amount: 50000 });
+  ok((await p.inputValue("#f_plannedDate")) === "2026-12-20", "a date sent under another name was dropped");
+});
 test("Ara: giving history and screens", async (p) => {
   await signIn(p);
   const g = await ara(p, "get_giving", { contact_name: "Ruth Abernathy" }); ok(g.ok !== false, "giving lookup failed: " + JSON.stringify(g).slice(0, 120));
