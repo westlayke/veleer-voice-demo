@@ -53,7 +53,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; display: flex; align-items: center; gap: 10px; height: 56px; background: var(--bar); border-bottom: 1px solid var(--line);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .top h1 { margin: 0; font-size: 18px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.back { border: 0; background: none; font-size: 24px; line-height: 1; padding: 4px 6px 4px 0; color: var(--brand); cursor: pointer; }
+.back { border: 0; background: none; display: inline-flex; align-items: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 0 6px 0 4px; margin-left: -4px; font: inherit; font-size: 16px; font-weight: 600; color: var(--brand); cursor: pointer; flex: none; } .back svg { flex: none; }
 .iconbtn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
 .chip { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
 main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
@@ -1429,8 +1429,9 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
 
 /* ---------- screens ---------- */
 const go = (s) => { S.screen = s; save(); render(); window.scrollTo(0, 0); };
+const BACK_NAMES = { home: "Home", opp: "Opportunity", contact: "Contact", contacts: "Contacts", board: "Opportunities", opps: "Opportunities", tasks: "Tasks", settings: "Settings" }; // iPhone-style back button shows where it goes
 function topbar(title, back, logo) {
-  return `<header class="top${logo ? " withlogo" : ""}">${logo ? '<img class="top-logo" src="logo-v5.png" alt="Citizens Alliance" width="82" height="50">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}${logo ? `<div class="who"><b>${OFFICER}</b><span>You're the gift officer</span></div>` : `<h1>${esc(title)}</h1>`}
+  return `<header class="top${logo ? " withlogo" : ""}">${logo ? '<img class="top-logo" src="logo-v5.png" alt="Citizens Alliance" width="82" height="50">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back to ${BACK_NAMES[back] || "previous screen"}"><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2 2 10l8 8"/></svg><span>${BACK_NAMES[back] || "Back"}</span></button>` : ""}${logo ? `<div class="who"><b>${OFFICER}</b><span>You're the gift officer</span></div>` : `<h1>${esc(title)}</h1>`}
   ${title === "Settings" ? "" : `<button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>`}
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
@@ -2006,7 +2007,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T02:42:32Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T11:46:30Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
