@@ -2,9 +2,9 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#e6edf7">
 <meta name="apple-mobile-web-app-title" content="Citizens VCRM">
-<link rel="apple-touch-icon" href="apple-touch-icon-v2.png">
+<link rel="apple-touch-icon" href="apple-touch-icon-v5.png">
 <link rel="manifest" href="manifest.webmanifest?v=2">
-<link rel="icon" href="icon-192-v2.png">
+<link rel="icon" href="icon-192-v5.png">
 <title>Citizens VCRM</title>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}
 .hintcard .hc-off { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; }
@@ -151,7 +151,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .top .who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
 .top .who b { font-size: 17px; white-space: nowrap; }
 .top .who span { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
-.top-logo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 58px; width: auto; display: block; pointer-events: none; }
+.top-logo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 50px; width: auto; display: block; pointer-events: none; }
 .brand { display: flex; justify-content: center; padding: 2px 0 0; } .brand img { width: 130px; height: auto; display: block; }
 .wl-save small { font-size: 12.5px; color: var(--muted); }
 .appbtn { border-radius: 22%; vertical-align: -6px; box-shadow: 0 0 0 1px var(--line); } .wl-savetitle { margin: 0; font-size: 15px; color: var(--brand-ink); line-height: 1.35; } #setSave h2 .appbtn { vertical-align: -5px; }
@@ -1428,7 +1428,7 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
 /* ---------- screens ---------- */
 const go = (s) => { S.screen = s; save(); render(); window.scrollTo(0, 0); };
 function topbar(title, back, logo) {
-  return `<header class="top${logo ? " withlogo" : ""}">${logo ? '<img class="top-logo" src="logo-v2.png" alt="Citizens Alliance" width="57" height="58">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}${logo ? `<div class="who"><b>${OFFICER}</b><span>You're the gift officer</span></div>` : `<h1>${esc(title)}</h1>`}
+  return `<header class="top${logo ? " withlogo" : ""}">${logo ? '<img class="top-logo" src="logo-v5.png" alt="Citizens Alliance" width="82" height="50">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back">‹</button>` : ""}${logo ? `<div class="who"><b>${OFFICER}</b><span>You're the gift officer</span></div>` : `<h1>${esc(title)}</h1>`}
   ${title === "Settings" ? "" : `<button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>`}
   <div class="chip">${OFFICER_INITIALS}</div></header>`;
 }
@@ -1448,7 +1448,7 @@ function sayList() {
   const first = SAY_FIRST.map(l => all.find(x => x.line === l)).filter(Boolean), rest = all.filter(x => !SAY_FIRST.includes(x.line));
   return `<div class="saypills">${first.map(x => pill(x.g, x.line)).join("")}${S.sayMore ? rest.map(x => pill(x.g, x.line)).join("") : ""}<button type="button" class="sp more" data-act2="saymore" aria-expanded="${S.sayMore ? "true" : "false"}">${S.sayMore ? "Fewer ideas" : `More ideas (${rest.length})`}</button></div>`;
 }
-const APP_BTN = (px) => `<img src="apple-touch-icon-v2.png" alt="" class="appbtn" style="width:${px}px;height:${px}px">`;
+const APP_BTN = (px) => `<img src="apple-touch-icon-v5.png" alt="" class="appbtn" style="width:${px}px;height:${px}px">`;
 const SAVE_TITLE = `Add Citizens VCRM to your Home Screen`;
 function saveTip(inSettings) {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
@@ -1568,7 +1568,7 @@ function welcomeModal() {
   // first visit: one big mic, so the first tap starts the assistant, which asks for the first name (phones need a tap before sound or the mic)
   if (!S.settings.userName && !WELCOME_FULL) {
     h.innerHTML = `<div class="scrim center"><div class="wmodal wl-start" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
-      <img src="logo-v2.png" alt="Citizens Alliance" class="wl-logo">
+      <img src="logo-v5.png" alt="Citizens Alliance" class="wl-logo">
       <h2 id="wmTitle">Meet your new voice assistant!</h2>
       <p>You're a gift officer at Citizens Alliance. Tap the mic and ${esc(botName())} will introduce itself and ask your first name.</p>
       <button type="button" class="wl-mic big" data-act4="voice" aria-label="Tap to start talking">${mic(40)}</button>
@@ -2006,7 +2006,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T01:57:00Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T02:15:25Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
