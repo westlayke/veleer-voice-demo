@@ -945,7 +945,21 @@ function toast(text, undo) {
 }
 
 /* ---------- Grok conversation ---------- */
-const S_DATE = { type: "string", description: "YYYY-MM-DD" };
+const S_DATE = { type: "string", description: "YYYY-MM-DD, e.g. 2026-12-01. Work it out from what the officer says, using today's date" };
+// spoken dates can arrive as "December 1", "12/1/2026" or "2026-12-1"; turn them into YYYY-MM-DD (a date with no year is the next one to come)
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+function normDate(v) {
+  if (v == null || v === "") return null; const t = String(v).trim().toLowerCase().replace(/(\d)(st|nd|rd|th)\b/g, "$1").replace(/,/g, " ").replace(/\s+/g, " ");
+  const iso = (y, m, d) => { if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null; if (!y) { y = +todayISO().slice(0, 4); if (`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}` < todayISO()) y++; } if (y < 100) y += 2000;
+    const out = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; return isNaN(new Date(out + "T12:00:00")) ? null : out; };
+  let m;
+  if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return iso(+m[1], +m[2], +m[3]);
+  if ((m = t.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/))) return iso(m[3] ? +m[3] : 0, +m[1], +m[2]);
+  if ((m = t.match(/^(?:[a-z]+ )?([a-z]{3})[a-z]*\.? (\d{1,2})(?: (\d{4}))?$/)) && MONTHS.includes(m[1])) return iso(m[3] ? +m[3] : 0, MONTHS.indexOf(m[1]) + 1, +m[2]);
+  if ((m = t.match(/^(\d{1,2}) ([a-z]{3})[a-z]*(?: (\d{4}))?$/)) && MONTHS.includes(m[2])) return iso(m[3] ? +m[3] : 0, MONTHS.indexOf(m[2]) + 1, +m[1]);
+  if (t === "today") return todayISO(); if (t === "tomorrow") return addDays(todayISO(), 1);
+  return null;
+}
 const FOR = { contact_name: { type: "string", description: "Full name of the contact this is for, as the officer said it" } };
 const TOOLS = [
   { action: "contact", name: "show_contact_draft", description: "Show a new Contact draft. A contact needs at least an email or a mobile number.", req: ["first", "last"], props: {
@@ -1496,9 +1510,13 @@ function onTool(callId, name, args) {
   delete data.contact_name;
   // the voice model sometimes files the officer's words under a name the tool doesn't have (notes, description...); put them where they belong, and note any other stray field in the Voice log
   const known = new Set(Object.keys(tool.props || {})), area = (ACTIONS[tool.action].fields.find(f => f.type === "area" && f.req) || {}).k;
+  const dates = ACTIONS[tool.action].fields.filter(f => f.type === "date").map(f => f.k);
   Object.keys(data).forEach(k => { if (known.has(k)) return; vlog(`${name}: unknown field "${k}"`);
+    if (dates.length === 1 && !data[dates[0]] && /date|day|when/i.test(k)) { data[dates[0]] = data[k]; vlog(`  used "${k}" as ${dates[0]}`); }
     if (area && !data[area] && typeof data[k] === "string" && data[k].trim().length > 8 && /summ|note|desc|detail|text|what|content|recap/i.test(k)) { data[area] = data[k]; vlog(`  used "${k}" as ${area}`); }
     delete data[k]; });
+  const badDates = [];
+  dates.forEach(k => { if (data[k] == null || data[k] === "") return; const d = normDate(data[k]); if (d) { if (d !== data[k]) vlog(`${name}: ${k} "${data[k]}" read as ${d}`); data[k] = d; } else { vlog(`${name}: couldn't read ${k} "${data[k]}"`); badDates.push(`${k} "${data[k]}"`); delete data[k]; } });
   // a new contact's rating comes only from the officer's answer to the optional-details question, so the assistant can't fill one in by guessing
   if (tool.action === "contact" && data.capacity && !(V && V.action === "contact" && V.askedOptional)) delete data.capacity;
   const said = Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined);
@@ -1517,7 +1535,7 @@ function onTool(callId, name, args) {
     if (!V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, optional_fields: ["Capacity rating (needed before an opportunity)", "How you met them", "Texting permitted", "Ally - Do Not Solicit", "Do Not Contact", "Where their contact permission came from"], ratings: CAPACITY, status: `The required details are in. Before anything else, ask exactly this: "Would you like to add any optional details? You can add a capacity rating for how much they could give, which you'll need before they can move on to an opportunity. You can also add how you met them, whether texting is permitted, whether they're an ally we shouldn't ask for a gift, Do Not Contact, and where their contact permission came from. Email and calls are already allowed." If they want a capacity rating and don't name one, read the bands: A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, E is under $5,000. Fill in only what they choose, one question at a time, calling this tool after each answer; never pick a rating for them. If they say no, ask them to check the form and tap "${A.saveLabel}".` }); return; }
   }
   toolReply(callId, missing.length
-    ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}.${missing.includes("Summary") ? " When the officer describes what happened, put it in the summary parameter (1 to 3 sentences, past tense, in their words) and call this tool again with it." : ""} Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
+    ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}.${badDates.length ? ` The app couldn't read ${badDates.join(", ")} as a date: send dates as YYYY-MM-DD (today is ${todayISO()}).` : ""}${missing.includes("Summary") ? " When the officer describes what happened, put it in the summary parameter (1 to 3 sentences, past tense, in their words) and call this tool again with it." : ""} Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
     : { ok: true, button: A.saveLabel, status: `The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${A.saveLabel}" button (say that exact label).` });
 }
 function grokSaved(action, r) {
@@ -2227,7 +2245,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T18:46:54Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T18:58:49Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
