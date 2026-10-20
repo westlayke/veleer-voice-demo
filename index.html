@@ -642,7 +642,7 @@ function draftHTML() {
   const paired = new Set((A.pairs || []).flat());
   // required fields (and anything already filled in) first; the rest under "More details"
   const has = (f) => f.type === "bool" ? false : !(d[f.k] === null || d[f.k] === undefined || d[f.k] === "");
-  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k);
+  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k) || (V.action === "contact" && (f.k === "email" || f.k === "mobile")); // a contact needs one of these, so they never hide under More details
   let body = "", more = "", nMore = 0;
   for (const f of A.fields) {
     let unit = [f];
@@ -1441,6 +1441,11 @@ function onTool(callId, name, args) {
   const missing = A.fields.filter(f => f.req && !f.fixed && empty(d[f.k])).map(f => f.label);
   if (tool.action === "contact" && empty(d.email) && empty(d.mobile)) missing.push("Email or mobile");
   if (((tool.action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) || (tool.action === "ask" && d.response && d.response !== "Declined")) && (empty(d.nextStep) || empty(d.nextDue))) missing.push("Next step and its due date");
+  // a new contact: ask once for the other of email/mobile, then once about the optional fields (the app drives this so it never gets skipped)
+  if (tool.action === "contact" && !missing.length) {
+    if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true; toolReply(callId, { ok: true, button: A.saveLabel, status: `The draft is open on screen. Now ask in one short question for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.` }); return; }
+    if (!V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, optional_fields: ["How you met them", "Texting permitted", "Ally - Do Not Solicit", "Do Not Contact", "Where their contact permission came from"], status: `The required details are in. Before anything else, ask exactly this: "Would you like to add any optional details? You can add how you met them, whether texting is permitted, whether they're an ally we shouldn't ask for a gift, Do Not Contact, and where their contact permission came from. Email and calls are already allowed." Fill in only the ones they choose, one question at a time, calling this tool after each answer. If they say no, ask them to check the form and tap "${A.saveLabel}".` }); return; }
+  }
   toolReply(callId, missing.length
     ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}. Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
     : { ok: true, button: A.saveLabel, status: `The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${A.saveLabel}" button (say that exact label).` });
@@ -2084,7 +2089,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T13:12:26Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T17:01:32Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
