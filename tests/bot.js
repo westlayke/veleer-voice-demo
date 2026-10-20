@@ -50,6 +50,8 @@ async function ara(p, name, args) {
   const out = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "function_call_output").map(e => JSON.parse(e.item.output)), n);
   ok(out.length, `the app gave Ara no answer to ${name}`); return out.at(-1);
 }
+// the officer says something (as Grok's transcript of their speech)
+const said = (p, text) => p.evaluate((text) => __ws.onmessage({ data: JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: text }) }), text);
 const titleOf = (p) => p.evaluate(() => { const h = document.querySelector("header.top h1"); return h ? h.textContent : null; });
 
 // ---------- first visit ----------
@@ -198,6 +200,7 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(/optional details/.test(r.status) && r.optional_fields && r.optional_fields.length >= 6 && /Capacity rating/.test(r.optional_fields[0]) && /opportunity/.test(r.status), "Ara was not told to offer the optional fields with the capacity rating first");
   ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
+  await said(p, "C.");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
   ok(/tap/.test(r.status) && !/optional details/.test(r.status), "a question repeated");
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
@@ -282,8 +285,13 @@ test("Ara: a planned ask takes a spoken date in any common form", async (p) => {
 });
 test("Ara: sets a capacity rating on a new contact (in the draft, any wording, or with set_capacity_rating)", async (p) => {
   await signIn(p);
-  await ara(p, "show_contact_draft", { first: "Lou", last: "Ng", email: "lou@example.org", mobile: "(555) 010-0111", capacity: "c · $25k to $100k" });
+  await said(p, "Add Lou Ng, lou@example.org, 555 010 0111.");
+  await ara(p, "show_contact_draft", { first: "Lou", last: "Ng", email: "lou@example.org", mobile: "(555) 010-0111", capacity: "E" });
+  ok(!(await p.inputValue("#f_capacity")), "a rating the officer never gave was kept");
+  await said(p, "Give him a capacity of C.");
+  await ara(p, "show_contact_draft", { first: "Lou", last: "Ng", capacity: "c · $25k to $100k" });
   ok((await p.inputValue("#f_capacity")) === "C", "a rating in other words was not set: " + await p.inputValue("#f_capacity"));
+  await said(p, "Actually about 150 thousand.");
   await ara(p, "show_contact_draft", { first: "Lou", last: "Ng", capacity: "$150,000" });
   ok((await p.inputValue("#f_capacity")) === "B", "a dollar amount did not become B");
   const r = await ara(p, "set_capacity_rating", { contact_name: "Lou Ng", rating: "A", confirmed: true });
