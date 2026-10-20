@@ -115,6 +115,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .flags { display: flex; gap: 6px; flex-wrap: wrap; }
 .hero { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .hero h2 { margin: 0; font-size: 21px; }
+.herotop { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; } .editbtn { flex: none; font: inherit; font-size: 16px; font-weight: 600; color: var(--brand); background: none; border: 0; min-height: 44px; min-width: 44px; padding: 0 4px; margin: -10px -4px 0 0; cursor: pointer; }
 .btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; border-radius: 12px; font-size: 16px; font-weight: 700; border: 0; cursor: pointer; padding: 0 16px; }
 .btn.blue { background: var(--brand); color: #fff; }
 .btn.out { background: var(--surface); color: var(--brand); border: 1.5px solid var(--brand); }
@@ -588,7 +589,7 @@ const cultMissing = (c) => [!c.capacity && "a capacity rating", !subCount(c) && 
 // Qualification -> Cultivation: criteria met and not deferred (a defer lasts until its Reconsider on date or the next substantive interaction)
 const deferActive = (o) => { const f = o.defer, c = contactById(o.contactId); return !!f && (!f.until || f.until > todayISO()) && subCount(c) <= f.subs; };
 const readyForCultivation = (o) => { const c = contactById(o.contactId); return o.stage === "Qualification" && !!c && !cultMissing(c).length && !deferActive(o); };
-const log = (text, ids, via = true) => { try { if (G.session) act("saved", text); } catch (e) {} return S.history.unshift(Object.assign({ at: new Date().toISOString(), text, via }, ids)); };
+const log = (text, ids, via = true) => { try { act("saved", text); } catch (e) {} return S.history.unshift(Object.assign({ at: new Date().toISOString(), text, via }, ids)); };
 
 /* ---------- finding the contact the officer means ---------- */
 const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
@@ -604,6 +605,12 @@ function focusContact() {
   if (S.screen === "opp" && S.sel.opp) { const o = oppById(S.sel.opp); return o && contactById(o.contactId); }
   return null;
 }
+// editing a contact uses the New contact fields, filled in from the record
+ACTIONS.editContact = { title: "Edit contact", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.contact.fields, pairs: ACTIONS.contact.pairs,
+  left: "A contact needs an email or a mobile number. Every change is recorded in History. Only the Chief Gift Officer can turn off Do Not Contact; Ally - Do Not Solicit can be turned off by whoever set it or the Chief Gift Officer." };
+const EDIT_KEYS = ["first", "last", "email", "mobile", "permEmail", "permCalls", "permText", "ally", "dnc", "permSource", "howMet", "capacity"];
+// flags this officer may not turn off (the demo officer is a gift officer, not the Chief Gift Officer)
+const lockedOff = (c, k) => k === "dnc" ? !!c.dnc : k === "ally" ? !!c.ally && (c.allySetBy || "") !== OFFICER : false;
 // Returns { contact, opp } or { error } for Grok to relay.
 function resolveTarget(action, spoken) {
   if (action === "contact") return {};
@@ -612,6 +619,7 @@ function resolveTarget(action, spoken) {
   if (!list.length) return { error: spoken ? `No contact named "${spoken}". Known contacts: ${S.contacts.map(nameOf).join(", ")}. Ask who they mean, or offer to add them as a new contact.` : "Ask which contact this is for." };
   if (list.length > 1) return { error: `More than one contact matches: ${list.map(nameOf).join(", ")}. Ask which one.` };
   const contact = list[0];
+  if (action === "editContact") return { contact };
   if (action === "opportunity") { const ch = oppChecks(contact), miss = ch.filter(x => !x.ok);
     return miss.length ? { gate: contact, error: `An opportunity can be created for ${nameOf(contact)} only when all of these are true: ${ch.map(x => `${x.need.replace(/^They/, nameOf(contact).split(" ")[0])} (${x.ok ? "done" : "not yet"}: ${x.now})`).join("; ")}. Still to do: ${miss.map(x => x.todo).join(" ")} Explain this briefly: what is already true and what still needs doing.${!contact.capacity && !contact.dnc && !contact.ally ? " Then offer to set their capacity rating now (set_capacity_rating)." : ""}` } : { contact }; }
   if (contact.dnc && ["meeting", "plan", "ask", "opportunity"].includes(action)) return { error: `${nameOf(contact)} is marked Do Not Contact, so no outreach can be planned. Only a Chief Gift Officer can clear it.` };
@@ -657,6 +665,7 @@ function prefill(action, d, t) {
     if (out.firstAmount == null && out.amount && out.installments) out.firstAmount = Math.round(out.amount / out.installments);
   }
   if (action === "meeting") { out.forName = nameOf(c); if (!out.title) out.title = `Meeting with ${nameOf(c)}`; if (!out.duration) out.duration = "1 hour"; if (!out.meetingType) out.meetingType = "In person"; }
+  if (action === "editContact" && c) EDIT_KEYS.forEach(k => { if (out[k] === undefined || out[k] === null) out[k] = c[k] == null ? (typeof c[k] === "boolean" ? false : "") : c[k]; });
   if (action === "contact") { if (out.permEmail == null) out.permEmail = true; if (out.permCalls == null) out.permCalls = true; if (out.permText == null) out.permText = false; } // guide defaults
   if (ACTIONS[action].fields.some(f => f.k === "campaign") && out.fund) { const ok = campaignsFor(out.fund); // the campaign must suit the entity; National-only entities fill it in
     if (out.campaign && !ok.includes(out.campaign)) { out.badCampaign = out.campaign; out.campaign = ""; } else delete out.badCampaign;
@@ -668,13 +677,15 @@ function fieldHTML(f, d, fromVoice) {
   const v = d[f.k];
   const voiced = fromVoice.has(f.k) && !f.fixed;
   const missing = f.req && (v === null || v === undefined || v === "");
-  const cls = ["fld", voiced ? "v" : "", missing ? "miss" : "", f.check && v ? "chk" : ""].join(" ");
+  const same = V && V.action === "editContact" && V.target.contact && (V.target.contact[f.k] || "") === (v || ""); // unchanged on an edit: nothing to check
+  const cls = ["fld", voiced ? "v" : "", missing ? "miss" : "", f.check && v && !same ? "chk" : ""].join(" ");
   const tag = voiced ? `<span class="via">${mic(12)} <span class="vt">from voice</span></span>` : (f.fixed ? `<span class="via" style="color:var(--muted)">filled in</span>` : "");
   const oppTag = f.opp ? `<span class="opptag" title="Optional now, needed before you can create an opportunity">${OPP_MARK} For opportunity</span>` : "";
   const lab = `<div class="lbl">${esc(f.label)}${f.req ? '<span class="req">*</span>' : ""}${oppTag}${tag}</div>`;
   const id = "f_" + f.k;
   let input;
-  if (f.type === "bool") return `<div class="${cls}"><label class="tg" for="${id}"><input type="checkbox" id="${id}" ${v ? "checked" : ""}> ${esc(f.label)}${f.oppOff ? `<span class="opptag off">${OPP_MARK} Must be off</span>` : ""}${voiced ? ` <span class="via" style="margin-left:auto">${mic(12)} from voice</span>` : ""}</label></div>`;
+  const lock = V && V.action === "editContact" && V.target.contact && lockedOff(V.target.contact, f.k);
+  if (f.type === "bool") return `<div class="${cls}"><label class="tg" for="${id}"><input type="checkbox" id="${id}" ${v ? "checked" : ""}${lock ? " disabled" : ""}> ${esc(f.label)}${lock ? `<span class="opptag off">Only the Chief Gift Officer can turn this off</span>` : ""}${f.oppOff ? `<span class="opptag off">${OPP_MARK} Must be off</span>` : ""}${voiced ? ` <span class="via" style="margin-left:auto">${mic(12)} from voice</span>` : ""}</label></div>`;
   const opts = typeof f.opts === "function" ? f.opts(d) : f.opts;
   if (f.type === "select") input = `<select id="${id}">${(opts.includes(v) || !v ? opts : [v, ...opts]).map(o => `<option value="${esc(o)}" ${o === (v || "") ? "selected" : ""}>${esc(o === "" ? (f.fmt ? f.fmt("") : "Not set") : (f.fmt ? f.fmt(o) : o))}</option>`).join("")}</select>`;
   else if (f.type === "area") input = `<textarea id="${id}">${esc(v)}</textarea>`;
@@ -682,14 +693,14 @@ function fieldHTML(f, d, fromVoice) {
   else if (f.type === "date") input = `<input type="date" id="${id}" value="${esc(v || "")}">`;
   else if (f.type === "money") input = `<input type="text" inputmode="decimal" id="${id}" value="${v == null || v === "" ? "" : esc(f.num ? v : money(v))}">`;
   else input = `<input type="text" id="${id}" value="${esc(v)}" ${f.fixed ? "readonly" : ""}>`;
-  return `<div class="${cls}">${lab}${input}${f.check && v ? `<div class="cn">! Check this. ${esc(f.check)}</div>` : ""}</div>`;
+  return `<div class="${cls}">${lab}${input}${f.check && v && !same ? `<div class="cn">! Check this. ${esc(f.check)}</div>` : ""}</div>`;
 }
 function draftHTML() {
   const A = ACTIONS[V.action], d = V.data, fv = V.fromVoice;
   const paired = new Set((A.pairs || []).flat());
   // required fields (and anything already filled in) first; the rest under "More details"
   const has = (f) => f.type === "bool" ? false : !(d[f.k] === null || d[f.k] === undefined || d[f.k] === "");
-  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k) || (V.action === "contact" && (f.k === "email" || f.k === "mobile" || f.opp)); // a contact needs one of these, so they never hide under More details
+  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k) || ((V.action === "contact" || V.action === "editContact") && (f.k === "email" || f.k === "mobile" || f.opp)); // a contact needs one of these, so they never hide under More details
   let body = "", more = "", nMore = 0;
   for (const f of A.fields) {
     let unit = [f];
@@ -699,11 +710,11 @@ function draftHTML() {
   }
   if (more) body += `<details class="more" ${V.moreOpen ? "open" : ""}><summary>More details (${nMore} optional)</summary>${more}</details>`;
   const typed = V.typed && !fv.size;
-  const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : V.action === "task" ? `For ${esc(nameOf(V.target.contact))}${V.target.opp ? " · open opportunity " + esc(V.target.opp.name) : ""}` : (V.target.contact ? esc(nameOf(V.target.contact)) + (V.target.opp ? " · " + esc(V.target.opp.name) : "") : esc(V.target.opp ? V.target.opp.name : ""));
+  const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "editContact" ? esc(nameOf(V.target.contact)) : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : V.action === "task" ? `For ${esc(nameOf(V.target.contact))}${V.target.opp ? " · open opportunity " + esc(V.target.opp.name) : ""}` : (V.target.contact ? esc(nameOf(V.target.contact)) + (V.target.opp ? " · " + esc(V.target.opp.name) : "") : esc(V.target.opp ? V.target.opp.name : ""));
   let dupe = "";
   if (V.action === "contact") { const m = findContacts(`${d.first || ""} ${d.last || ""}`); dupe = m.length ? `<div class="note">Possible match: ${esc(m.map(nameOf).join(", "))} is already a contact. Save only if this is someone new.</div>` : `<div class="left">Checked for duplicates: no existing contact matches ${esc((d.first || "") + " " + (d.last || ""))}.</div>`; }
   return `<div class="grab"></div>
-  <div class="sh"><div style="min-width:0">${typed ? `<div class="vh">Fill in and save</div>` : `<div class="vh">${mic(15)} Draft from voice · check and save</div>`}<h3>${esc(A.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
+  <div class="sh"><div style="min-width:0">${typed ? `<div class="vh">${V.action === "editContact" ? "Change and save" : "Fill in and save"}</div>` : `<div class="vh">${mic(15)} Draft from voice · check and save</div>`}<h3>${esc(A.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
   <div class="sb">
     ${G.live ? "" : `<button type="button" class="vfill" data-act="voicefill">${mic(16)} Fill this in by voice</button>`}
     <div class="left">${typed ? `Type the details, or let ${esc(botName())} fill them in by voice. Fields marked * are required.` : "Drafted from your conversation. Say a correction out loud, or edit here."}${V.action === "contact" ? ` Fields marked <span class="opptag">${OPP_MARK} For opportunity</span> are optional now but needed before you can create an opportunity.` : ""}</div>
@@ -791,7 +802,7 @@ function saveDraft() {
     if (G.live) notice(`The officer tapped ${A.saveLabel} but ${ruleMsg[2]}, then call the draft tool again.`);
     return;
   }
-  if (!miss.length && V.action === "contact" && !String(d.email || "").trim() && !String(d.mobile || "").trim()) {
+  if (!miss.length && (V.action === "contact" || V.action === "editContact") && !String(d.email || "").trim() && !String(d.mobile || "").trim()) {
     const msg = "Add an email or a mobile number before saving. A contact needs at least one.";
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
     const first = document.getElementById("f_email"); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
@@ -835,10 +846,24 @@ const APPLY = {
     window.open(gcalLink(d, c), "_blank");
     S.sel.contact = c.id; S.screen = "contact"; return { contact: c };
   },
+  editContact(d, t) {
+    const c = t.contact, show = (k, v) => k === "capacity" ? (v ? `${v} (${CAPACITY[v]})` : "not rated") : typeof c[k] === "boolean" || ["permEmail", "permCalls", "permText", "ally", "dnc"].includes(k) ? (v ? "on" : "off") : (v || "blank");
+    const label = (k) => (ACTIONS.contact.fields.find(f => f.k === k) || {}).label || k;
+    EDIT_KEYS.forEach(k => {
+      let v = d[k]; if (["permEmail", "permCalls", "permText", "ally", "dnc"].includes(k)) v = !!v; else v = v == null ? "" : String(v).trim();
+      if (k === "capacity") v = v || null;
+      const was = ["permEmail", "permCalls", "permText", "ally", "dnc"].includes(k) ? !!c[k] : k === "capacity" ? (c[k] || null) : (c[k] || "");
+      if (v === was) return;
+      if (!v && lockedOff(c, k)) return; // the form disables these, so this only guards a voice draft
+      c[k] = v; if (k === "ally" && v) c.allySetBy = OFFICER;
+      log(`${label(k)} changed from ${show(k, was)} to ${show(k, v)} by ${OFFICER}`, { contactId: c.id }, !V.typed);
+    });
+    S.sel.contact = c.id; S.screen = "contact"; return { contact: c };
+  },
   contact(d) {
     const ct = { id: uid(), first: d.first, last: d.last, email: d.email, mobile: d.mobile, permEmail: !!d.permEmail, permCalls: !!d.permCalls, permText: !!d.permText,
       permSource: d.permSource, howMet: d.howMet, capacity: d.capacity || null, status: "Prospect", added: todayISO(), gifts: [] };
-    ct.ally = !!d.ally; ct.dnc = !!d.dnc;
+    ct.ally = !!d.ally; ct.dnc = !!d.dnc; if (ct.ally) ct.allySetBy = OFFICER;
     S.contacts.push(ct); log(`Contact added by ${OFFICER}`, { contactId: ct.id });
     if (ct.ally) log(`Ally - Do Not Solicit set by ${OFFICER}`, { contactId: ct.id });
     if (ct.dnc) log(`Do Not Contact set by ${OFFICER}`, { contactId: ct.id });
@@ -982,6 +1007,10 @@ const TOOLS = [
     ally: { type: "boolean", description: "Ally - Do Not Solicit: true only if the officer says this person must not be asked for a gift" }, dnc: { type: "boolean", description: "Do Not Contact: true only if the officer says the person asked not to be contacted" },
     permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" },
     capacity: { type: "string", enum: Object.keys(CAPACITY), description: "Set this whenever the officer names a rating or a dollar range for this person (say the letter, A to E). Leave it out if they say no or don't name one; never guess: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") } } },
+  { action: "editContact", name: "show_contact_edit_draft", description: "Change details of an EXISTING contact (name, email, mobile, permissions, texting, how met, permission source, Ally - Do Not Solicit, Do Not Contact, capacity rating). Send only the fields that change; the edit form opens with the rest filled in from the record, and the officer taps Save changes.", req: ["contact_name"], props: Object.assign({}, FOR, {
+    first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
+    permEmail: { type: "boolean" }, permCalls: { type: "boolean" }, permText: { type: "boolean" }, ally: { type: "boolean" }, dnc: { type: "boolean" },
+    permSource: { type: "string" }, howMet: { type: "string" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: "Only if the officer gives one: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") } }) },
   { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "date", "meetingType", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
     substantive: { type: "boolean", description: "True when it was a real conversation with the person about the relationship or the gift; emails and research notes are not substantive" },
@@ -1036,7 +1065,7 @@ Speak warmly and briefly: one or two short sentences per turn. Ask at most one q
 If the officer asks what you can do, say exactly: "${CAN_DO}"
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
-When the officer asks what's next for an opportunity, read its next step from the summary of contacts below. Stage rules the app enforces: an opportunity can be created only when the contact has a capacity rating, isn't Do Not Contact or an Ally - Do Not Solicit, and has no other open opportunity; if the app says they aren't ready, explain what's already true and what's still to do, and offer set_capacity_rating when the rating is missing. an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
+To change an existing contact's details, call show_contact_edit_draft with only what changes; never use show_contact_draft for someone who is already a contact. When the officer asks what's next for an opportunity, read its next step from the summary of contacts below. Stage rules the app enforces: an opportunity can be created only when the contact has a capacity rating, isn't Do Not Contact or an Ally - Do Not Solicit, and has no other open opportunity; if the app says they aren't ready, explain what's already true and what's still to do, and offer set_capacity_rating when the rating is missing. an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen from the start, before asking anything. Then ask for what is still needed one question at a time, and after each answer call the tool again so the form fills in as they talk. When the tool says nothing more is needed, ask the officer to check the draft and tap the button at the bottom of it, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
@@ -1104,9 +1133,11 @@ async function logReady() {
   try { const r = await fetch(tokenUrl().replace(/\/$/, "") + "/log"); ACT.ready = r.ok && !!(await r.json()).logging; } catch (e) { ACT.ready = false; }
   vlog("activity log " + (ACT.ready ? "on" : "off")); return ACT.ready;
 }
+// outside a conversation, taps are grouped into a visit (a new one after 30 quiet minutes)
+function visitId() { const now = Date.now(); if (!G.visit || now - G.visit.last > 30 * 60000) G.visit = { id: deviceId().slice(0, 8) + "-v" + now.toString(36) }; G.visit.last = now; return G.visit.id; }
 function act(role, text) {
-  if (!text || !G.session) return;
-  ACT.q.push({ at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session: G.session });
+  if (!text) return; const session = G.session || visitId();
+  ACT.q.push({ at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session });
   clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, role === "end" ? 0 : 4000);
 }
 async function flushAct() {
@@ -1117,6 +1148,27 @@ async function flushAct() {
       body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, ...e }) => e) }) }).catch(() => {});
   });
 }
+// taps for the activity log: what was tapped and on which screen (never what was typed into a field)
+const SCREEN_NAMES = { home: "Home", contacts: "Contacts", contact: "Contact", board: "Opportunities", opp: "Opportunity", tasks: "Tasks", settings: "Settings", flow: "Stages" };
+function tapLabel(el) {
+  const t = (x) => String(x || "").replace(/\s+/g, " ").trim();
+  let w = t(el.getAttribute("aria-label")) || t(el.innerText || el.textContent) || t(el.getAttribute("title")) || t(el.getAttribute("placeholder"));
+  if (!w && el.dataset) w = Object.entries(el.dataset).map(([k, v]) => k + "=" + v).join(" ");
+  return w.slice(0, 80);
+}
+document.addEventListener("click", (e) => {
+  try {
+    const el = e.target.closest("button, a, [role=button], [data-go], [data-contact], [data-opp], [data-form], [data-act], [data-act2], [data-act4], [data-pick], [data-rate], [data-ts], [data-rt], .tap, label, summary");
+    if (!el || el.matches("input[type=text], textarea")) return;
+    const where = V ? `${ACTIONS[V.action].title} form` : document.querySelector("#modal .scrim") ? "pop-up" : (SCREEN_NAMES[S.screen] || S.screen);
+    act("tap", `${tapLabel(el) || el.tagName.toLowerCase()} (${where})`);
+  } catch (err) {}
+}, true);
+document.addEventListener("change", (e) => {
+  try { const el = e.target; if (el.tagName !== "SELECT" && el.type !== "checkbox" && el.type !== "date") return;
+    const lab = el.closest("label, .fld") ? tapLabel(el.closest("label, .fld").querySelector(".lbl") || el.closest("label")) : el.id;
+    act("tap", `${lab || el.id}: ${el.type === "checkbox" ? (el.checked ? "on" : "off") : el.tagName === "SELECT" ? (el.options[el.selectedIndex] || {}).text : el.value}`); } catch (err) {}
+}, true);
 // the audio code that hands mic sound to the app, made once when the page opens
 const WORKLET_URL = URL.createObjectURL(new Blob([`class C extends AudioWorkletProcessor{process(i){const c=i[0]&&i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor("cap",C)`], { type: "application/javascript" }));
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
@@ -1551,7 +1603,7 @@ function onTool(callId, name, args) {
   const A = ACTIONS[tool.action], d = V.data, empty = (v) => v === null || v === undefined || String(v).trim() === "";
   const missing = A.fields.filter(f => f.req && !f.fixed && empty(d[f.k])).map(f => f.k === "campaign" && d.fund ? `Campaign (${d.badCampaign ? d.badCampaign + " isn't a campaign for " + d.fund + "; " : ""}for ${d.fund} it is ${campaignsFor(d.fund).join(" or ")})` : f.label);
   delete d.badCampaign;
-  if (tool.action === "contact" && empty(d.email) && empty(d.mobile)) missing.push("Email or mobile");
+  if ((tool.action === "contact" || tool.action === "editContact") && empty(d.email) && empty(d.mobile)) missing.push("Email or mobile");
   if (((tool.action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) || (tool.action === "ask" && d.response && d.response !== "Declined")) && (empty(d.nextStep) || empty(d.nextDue))) missing.push("Next step and its due date");
   // a new contact: ask once for the other of email/mobile, then once about the optional fields (the app drives this so it never gets skipped)
   if (tool.action === "contact" && !missing.length) {
@@ -1723,7 +1775,7 @@ function welcomeModal() {
       <p>You're a gift officer at Citizens Alliance. Tap the mic and ${esc(botName())} will introduce itself and ask your first name.</p>
       <button type="button" class="wl-mic big" data-act4="voice" aria-label="Tap to start talking">${mic(40)}</button>
       <div class="wl-tap">Tap to start</div>
-      <p class="wl-priv">Conversations are saved to improve the demo. Details in Settings.</p>
+      <p class="wl-priv">Conversations and taps are saved to improve the demo. Details in Settings.</p>
       <button type="button" class="btn quiet" data-act5="typename">I'd rather type my name</button></div></div>`;
     return;
   }
@@ -1734,7 +1786,7 @@ function welcomeModal() {
     <input id="wlName" class="wl-input" aria-label="Your first name" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}">
     <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
     <button class="btn blue" data-act4="welcome-ok">Start</button>
-    <p class="wl-priv">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
+    <p class="wl-priv">This demo saves what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
     <div class="wl-links"><button type="button" class="linkbtn" data-act4="voice">${mic(14)} Say it instead</button><button type="button" class="linkbtn" data-act2="share">Share this demo</button></div></div></div>`;
   setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
@@ -1962,7 +2014,7 @@ function contactScreen() {
   const checks = oppChecks(c), ready = !o && checks.every(x => x.ok);
   const cOpps = S.opps.filter(x => x.contactId === c.id).sort((x, y) => (x.stage === "Closed") - (y.stage === "Closed"));
   return topbar("Contact", "contacts") + `<main>
-  <section class="panel"><div class="hero"><h2>${esc(who)}</h2>
+  <section class="panel"><div class="hero"><div class="herotop"><h2>${esc(who)}</h2><button type="button" class="editbtn" data-form="editContact" data-cid="${c.id}" aria-label="Edit ${esc(who)}">Edit</button></div>
     <div class="flags"><span class="pill">${c.ally ? "Ally" : esc(c.status)}</span><button type="button" class="pill rate" data-rate="${c.id}" aria-label="Capacity rating: ${c.capacity ? c.capacity : "not rated"}. Change">${c.capacity ? "Capacity " + c.capacity + " · " + CAPACITY[c.capacity] : "Capacity not rated"}<svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="flags">${c.dnc ? '<span class="flag no dnc">✕ Do Not Contact</span>' : flag(c.permEmail, "Email") + flag(c.permCalls, "Calls") + flag(c.permText, "Texts")}${c.ally ? '<span class="flag no">✕ Do not solicit</span>' : ""}</div>
     ${c.permSource ? `<div style="font-size:12.5px;color:var(--muted)">Permission source: ${esc(c.permSource)} · recorded by voice</div>` : ""}
@@ -2165,7 +2217,7 @@ function settingsScreen() {
     ${saveTip(true)}</div></section>
   <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
     <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" enterkeyhint="done" value="${esc(S.settings.userName || "")}"></label>
-    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
   </div></section>
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
@@ -2269,7 +2321,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T19:27:54Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T20:25:56Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
