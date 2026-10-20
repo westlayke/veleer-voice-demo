@@ -1,0 +1,24 @@
+name: Test bot
+# Taps through the demo and plays Ara's side with a pretend voice line (no xAI cost).
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 11 * * *"   # every morning, 7 am US Eastern
+  workflow_dispatch:
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Test the preview
+        run: node tests/bot.js
+      - name: Test the live page
+        if: always()
+        run: PAGE=index.html node tests/bot.js
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: failure-screenshots, path: tests/results/ }
