@@ -91,6 +91,11 @@ main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-sh
 .alert { display: inline-block; border-radius: 10px; padding: 2px 9px; font-size: 12.5px; font-weight: 700; border: 1px solid; }
 .alert.ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
 .alert.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
+.alert.mute { background: var(--surface2); color: var(--muted); border-color: var(--line-strong); }
+.opptag { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; padding: 1px 7px; border-radius: 9px; font-size: 11.5px; font-weight: 700; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid var(--brand-line); white-space: nowrap; vertical-align: 1px; }
+.opptag.off { color: var(--muted); background: var(--surface2); border-color: var(--line-strong); }
+.oppready { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: var(--ok-soft); border-color: var(--ok); } .oppready b { color: var(--ok); } .oppready .gk { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--ok); color: #fff; font-weight: 700; }
+.gate.inpanel { padding: 12px 14px 4px; margin: 0; } .gatebtn { padding: 0 14px 14px 46px; }
 .alert.info { background: var(--brand-soft); color: var(--brand-ink); border-color: var(--brand-line); }
 .pill { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--surface2); }
 .flag { display: inline-flex; align-items: center; gap: 4px; border-radius: 12px; font-size: 13px; padding: 2px 9px; border: 1px solid; }
@@ -367,9 +372,9 @@ const ACTIONS = {
       { k: "email", label: "Email", check: "Spoken addresses are easy to mishear. Check the spelling before you save." },
       { k: "mobile", label: "Mobile" },
       { k: "permEmail", label: "Email permitted", type: "bool" }, { k: "permCalls", label: "Calls permitted", type: "bool" }, { k: "permText", label: "Texting permitted", type: "bool" },
-      { k: "ally", label: "Ally - Do Not Solicit", type: "bool" }, { k: "dnc", label: "Do Not Contact", type: "bool" },
+      { k: "ally", label: "Ally - Do Not Solicit", type: "bool", oppOff: true }, { k: "dnc", label: "Do Not Contact", type: "bool", oppOff: true },
       { k: "permSource", label: "Permission source" }, { k: "howMet", label: "How we met", type: "area" },
-      { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated" } ],
+      { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated", opp: true } ],
     pairs: [["first", "last"]],
     left: "A contact needs an email or a mobile number (at least one). A capacity rating is needed before you can create an opportunity. Voice ticks Ally - Do Not Solicit or Do Not Contact only when you say so." },
   interaction: { title: "Interaction report", saved: "Interaction report saved", saveLabel: "Save",
@@ -548,9 +553,17 @@ const latestAsk = (o) => o && o.asks.length ? o.asks[0] : null;
 const askedOf = (o) => { const a = latestAsk(o); return a && a.status !== "Planned" ? a.amount : 0; };
 const agreed = (a) => !!a && (a.status === "Accepted" || /Agreed/.test(a.status));
 const subCount = (c) => S.interactions.filter(i => i.contactId === c.id && i.substantive).length;
+// one alert on a contact with no open opportunity: ready, the step that's missing, or the flag that stops it
+function oppPill(c) {
+  if (openOpp(c.id)) return "";
+  if (c.dnc) return ' <span class="alert mute">Do Not Contact</span>';
+  if (c.ally) return ' <span class="alert mute">Ally</span>';
+  const miss = oppChecks(c).filter(x => !x.ok);
+  return miss.length ? ` <span class="alert warn">${miss.length === 1 && !c.capacity ? "Needs rating" : miss.length + " steps to opportunity"}</span>` : ' <span class="alert ok">Ready for opportunity</span>';
+}
 // what must be true before a contact can have an opportunity: shown as a checklist on screen, read out by the assistant
 const oppChecks = (c) => { const o = openOpp(c.id); return [
-  { ok: !!c.capacity, need: "They have a capacity rating", now: c.capacity ? `Rated ${c.capacity} · ${CAPACITY[c.capacity]}` : "Not rated yet", todo: "Tap Set capacity rating below, or pick a rating when you log a meeting." },
+  { ok: !!c.capacity, need: "They have a capacity rating", now: c.capacity ? `Rated ${c.capacity} · ${CAPACITY[c.capacity]}` : "Not rated yet", todo: "Set a capacity rating, or pick one when you log a meeting." },
   { ok: !c.dnc, need: "They aren't marked Do Not Contact", now: c.dnc ? "Marked Do Not Contact" : "Contact allowed", todo: "Only a Chief Gift Officer can clear Do Not Contact." },
   { ok: !c.ally, need: "They aren't an Ally - Do Not Solicit", now: c.ally ? "Marked Ally - Do Not Solicit" : "Can be asked for a gift", todo: "The officer who set Ally - Do Not Solicit, or the Chief Gift Officer, can turn it off." },
   { ok: !o, need: "They have no other open opportunity", now: o ? `${o.name} is open (${o.stage})` : "None open", todo: o ? `Work on ${o.name} instead; Veleer keeps one open opportunity per investor.` : "" } ]; };
@@ -630,16 +643,18 @@ function prefill(action, d, t) {
   if (action === "contact") { if (out.permEmail == null) out.permEmail = true; if (out.permCalls == null) out.permCalls = true; if (out.permText == null) out.permText = false; } // guide defaults
   return out;
 }
+const OPP_MARK = '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h7M6.5 3 9.5 6l-3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function fieldHTML(f, d, fromVoice) {
   const v = d[f.k];
   const voiced = fromVoice.has(f.k) && !f.fixed;
   const missing = f.req && (v === null || v === undefined || v === "");
   const cls = ["fld", voiced ? "v" : "", missing ? "miss" : "", f.check && v ? "chk" : ""].join(" ");
   const tag = voiced ? `<span class="via">${mic(12)} <span class="vt">from voice</span></span>` : (f.fixed ? `<span class="via" style="color:var(--muted)">filled in</span>` : "");
-  const lab = `<div class="lbl">${esc(f.label)}${f.req ? '<span class="req">*</span>' : ""}${tag}</div>`;
+  const oppTag = f.opp ? `<span class="opptag" title="Optional now, needed before you can create an opportunity">${OPP_MARK} For opportunity</span>` : "";
+  const lab = `<div class="lbl">${esc(f.label)}${f.req ? '<span class="req">*</span>' : ""}${oppTag}${tag}</div>`;
   const id = "f_" + f.k;
   let input;
-  if (f.type === "bool") return `<div class="${cls}"><label class="tg" for="${id}"><input type="checkbox" id="${id}" ${v ? "checked" : ""}> ${esc(f.label)}${voiced ? ` <span class="via" style="margin-left:auto">${mic(12)} from voice</span>` : ""}</label></div>`;
+  if (f.type === "bool") return `<div class="${cls}"><label class="tg" for="${id}"><input type="checkbox" id="${id}" ${v ? "checked" : ""}> ${esc(f.label)}${f.oppOff ? `<span class="opptag off">${OPP_MARK} Must be off</span>` : ""}${voiced ? ` <span class="via" style="margin-left:auto">${mic(12)} from voice</span>` : ""}</label></div>`;
   if (f.type === "select") input = `<select id="${id}">${(f.opts.includes(v) || !v ? f.opts : [v, ...f.opts]).map(o => `<option value="${esc(o)}" ${o === (v || "") ? "selected" : ""}>${esc(o === "" ? "Not set" : (f.fmt ? f.fmt(o) : o))}</option>`).join("")}</select>`;
   else if (f.type === "area") input = `<textarea id="${id}">${esc(v)}</textarea>`;
   else if (f.type === "time") input = `<input type="time" id="${id}" value="${esc(v || "")}">`;
@@ -653,7 +668,7 @@ function draftHTML() {
   const paired = new Set((A.pairs || []).flat());
   // required fields (and anything already filled in) first; the rest under "More details"
   const has = (f) => f.type === "bool" ? false : !(d[f.k] === null || d[f.k] === undefined || d[f.k] === "");
-  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k) || (V.action === "contact" && (f.k === "email" || f.k === "mobile")); // a contact needs one of these, so they never hide under More details
+  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k) || (V.action === "contact" && (f.k === "email" || f.k === "mobile" || f.opp)); // a contact needs one of these, so they never hide under More details
   let body = "", more = "", nMore = 0;
   for (const f of A.fields) {
     let unit = [f];
@@ -670,7 +685,7 @@ function draftHTML() {
   <div class="sh"><div style="min-width:0">${typed ? `<div class="vh">Fill in and save</div>` : `<div class="vh">${mic(15)} Draft from voice · check and save</div>`}<h3>${esc(A.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
   <div class="sb">
     ${G.live ? "" : `<button type="button" class="vfill" data-act="voicefill">${mic(16)} Fill this in by voice</button>`}
-    <div class="left">${typed ? `Type the details, or let ${esc(botName())} fill them in by voice. Fields marked * are required.` : "Drafted from your conversation. Say a correction out loud, or edit here."}</div>
+    <div class="left">${typed ? `Type the details, or let ${esc(botName())} fill them in by voice. Fields marked * are required.` : "Drafted from your conversation. Say a correction out loud, or edit here."}${V.action === "contact" ? ` Fields marked <span class="opptag">${OPP_MARK} For opportunity</span> are optional now but needed before you can create an opportunity.` : ""}</div>
     ${dupe}
     <form id="draftForm" novalidate>${body}</form>
     ${A.left ? `<div class="left">${esc(A.left)}</div>` : ""}
@@ -1748,7 +1763,7 @@ function homeScreen() {
 function contactsScreen() {
   const rows = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
   return topbar("Contacts") + `<main><input id="cSearch" class="search" type="search" placeholder="Search contacts" autocomplete="off"><section class="panel"><div class="ph"><h2>My contacts</h2><span class="meta">${rows.length}</span></div>
-  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">${CHEV}</span></div>`; }).join("")}
+  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}${oppPill(c)}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">${CHEV}</span></div>`; }).join("")}
   </section><button class="btn out" data-form="contact">Add a contact</button></main>`;
 }
 function historyPanel(filter) {
@@ -1838,6 +1853,7 @@ function contactScreen() {
   if (!c) return contactsScreen();
   const flag = (on, label) => `<span class="flag ${on ? "yes" : "no"}">${on ? "✓" : "✕"} ${label}</span>`;
   const o = openOpp(c.id), ints = S.interactions.filter(i => i.contactId === c.id), who = nameOf(c);
+  const checks = oppChecks(c), ready = !o && checks.every(x => x.ok);
   const cOpps = S.opps.filter(x => x.contactId === c.id).sort((x, y) => (x.stage === "Closed") - (y.stage === "Closed"));
   return topbar("Contact", "contacts") + `<main>
   <section class="panel"><div class="hero"><h2>${esc(who)}</h2>
@@ -1846,7 +1862,9 @@ function contactScreen() {
     ${c.permSource ? `<div style="font-size:12.5px;color:var(--muted)">Permission source: ${esc(c.permSource)} · recorded by voice</div>` : ""}
   </div>
   <dl class="kv" style="padding-top:0"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
-  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-form="interaction" data-cid="${c.id}">Log a meeting</button><button class="btn out" data-form="task" data-cid="${c.id}">Add a task</button>${o ? "" : `<button class="btn out" data-form="opportunity" data-cid="${c.id}">Create opportunity</button>`}</div>${callBtn(c)}</section>
+  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn ${ready ? "out" : "blue"}" data-form="interaction" data-cid="${c.id}">Log a meeting</button><button class="btn out" data-form="task" data-cid="${c.id}">Add a task</button>${o ? "" : `<button class="btn ${ready ? "blue" : "out"}" data-form="opportunity" data-cid="${c.id}">Create opportunity</button>`}</div>${callBtn(c)}</section>
+  ${o ? "" : ready ? `<section class="panel oppready"><span class="gk" aria-hidden="true">✓</span><div><b>Ready for opportunity</b><div class="s">Rated ${c.capacity} · ${esc(CAPACITY[c.capacity])}. Everything needed is in place.</div></div></section>`
+    : `<section class="panel"><div class="ph"><h2>Path to opportunity</h2><span class="alert warn">${checks.filter(x => !x.ok).length} to do</span></div><ul class="gate inpanel">${checks.map(x => `<li class="${x.ok ? "yes" : "no"}"><span class="gk" aria-hidden="true">${x.ok ? "✓" : "!"}</span><span>${esc(x.need)}<small>${x.ok ? esc(x.now) : "To do: " + esc(x.todo)}</small></span></li>`).join("")}</ul>${!c.capacity ? `<div class="gatebtn"><button type="button" class="btn out" data-rate="${c.id}">Set capacity rating</button></div>` : ""}</section>`}
   ${givingPanel(c)}
   ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">${CHEV}</span></div>`).join("")}</section>` : ""}
   ${interactionsPanel(ints, true)}
@@ -1929,7 +1947,7 @@ function taskRow(t, showWhere) {
 }
 // Create opportunity tapped for a contact who isn't ready: list what must be true, ticked or not, and what's left to do
 function oppGate(c) {
-  const h = document.getElementById("modal"), ch = oppChecks(c), canRate = !c.capacity && !c.dnc && !c.ally;
+  const h = document.getElementById("modal"), ch = oppChecks(c), canRate = !c.capacity;
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="ogTitle">
     <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
     <h2 id="ogTitle">${esc(c.first)} isn't ready for an opportunity yet</h2>
@@ -2143,7 +2161,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T17:22:38Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T17:28:40Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

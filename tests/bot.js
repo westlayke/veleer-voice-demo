@@ -215,9 +215,14 @@ test("Opportunity: an unrated contact gets the checklist, not the form (voice an
   await p.tap("text=Create opportunity"); await p.waitForTimeout(300);
   ok(await p.isVisible("text=isn't ready for an opportunity yet"), "tapping Create opportunity did not show the checklist");
   ok(await p.isVisible(".gate li.no"), "the missing item is not marked");
+  ok(await p.isVisible("text=Path to opportunity"), "the record has no Path to opportunity panel");
   await p.tap("#ogRate"); await p.waitForTimeout(200); await p.tap("[data-rt=B]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Noor").capacity === "B", "rating not saved");
   ok(await p.isVisible("[data-act=save]"), "the opportunity form did not open after rating");
+  await p.tap("[data-act=close]"); await p.waitForTimeout(300);
+  ok(await p.isVisible(".oppready"), "the record does not say Ready for opportunity");
+  await tab(p, "Contacts");
+  ok(await p.isVisible(".row:has-text('Haddad, Noor') .alert.ok"), "the list does not show Ready for opportunity");
 });
 test("Ara: setting a capacity rating asks first, then saves", async (p) => {
   await signIn(p);
