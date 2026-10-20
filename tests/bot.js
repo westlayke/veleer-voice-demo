@@ -248,6 +248,17 @@ test("Opportunity: Next step panel on the record and a Next: line in the list", 
   ok(await p.isVisible(".nextp") && /to Cultivation/.test(await p.textContent(".nextp .ph")), "James's record has no Next step panel to Cultivation");
   ok(await p.locator(".nextp li").count() === 3, "Qualification should list three steps");
 });
+test("Ask planning: the campaign choices follow the entity (touch and voice)", async (p) => {
+  await signIn(p);
+  let r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "Pennsylvania", plannedDate: "2026-12-01", amount: 50000 });
+  ok(r.still_needed && r.still_needed.some(x => /Pennsylvania isn't a campaign for Citizens Alliance C3.*National/.test(x)), "Ara was not told the campaign doesn't suit the entity: " + JSON.stringify(r).slice(0, 200));
+  const opts = async () => p.$$eval("#f_campaign option", os => os.map(o => o.value).filter(Boolean));
+  ok((await opts()).join() === "National", "C3 should offer National only");
+  await p.selectOption("#f_fund", "C.A. Idaho C4"); await p.waitForTimeout(300);
+  ok((await opts()).join() === "National,Idaho", "Idaho C4 should offer National and Idaho: " + (await opts()).join());
+  const ents = await p.$$eval("#f_fund option", os => os.map(o => o.value).filter(Boolean));
+  ok(ents.length === 11 && !ents.some(e => / - Citizens Alliance$/.test(e)), "the entity list is not the new 11");
+});
 test("Ara: giving history and screens", async (p) => {
   await signIn(p);
   const g = await ara(p, "get_giving", { contact_name: "Ruth Abernathy" }); ok(g.ok !== false, "giving lookup failed: " + JSON.stringify(g).slice(0, 120));
