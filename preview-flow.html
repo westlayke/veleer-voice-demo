@@ -111,11 +111,8 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .sp { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; padding: 5px 10px 5px 5px; border-radius: 999px; border: 1px solid; cursor: pointer; text-align: left; }
 .sp .spm { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; background: var(--surface); }
 .sp:active { filter: brightness(.95); }
-.sp.t-people { color: var(--brand-ink); background: var(--brand-soft); border-color: var(--brand-line); }
-.sp.t-pipe { color: var(--ok); background: var(--ok-soft); border-color: var(--ok); }
-.sp.t-money { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
-.sp.t-giving { color: var(--pv); background: var(--pv-soft); border-color: var(--pv-line); }
-.sp.t-look { color: var(--sl); background: var(--sl-soft); border-color: var(--sl-line); }
+/* voice options are all brand blue: in this app colour is kept for alerts */
+.sp.t-people, .sp.t-pipe, .sp.t-money, .sp.t-giving, .sp.t-look { color: var(--brand-ink); background: var(--brand-soft); border-color: var(--brand-line); }
 .saylist { list-style: none; margin: 0; padding: 4px 0; }
 .saylist li { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 15px; cursor: pointer; border-bottom: 1px solid var(--line); }
 .saylist li:last-child { border-bottom: 0; }
@@ -1897,7 +1894,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T00:28:51Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T00:40:29Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
