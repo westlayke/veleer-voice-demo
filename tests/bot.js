@@ -195,9 +195,8 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   ok(r.still_needed && r.still_needed.some(x => /Email or mobile/.test(x)), "Ara was not asked for an email or mobile");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(/mobile number/.test(r.status), "Ara was not asked for the mobile too");
-  r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "E" });
+  r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(/optional details/.test(r.status) && r.optional_fields && r.optional_fields.length >= 6 && /Capacity rating/.test(r.optional_fields[0]) && /opportunity/.test(r.status), "Ara was not told to offer the optional fields with the capacity rating first");
-  ok(!(await p.inputValue("#f_capacity")), "a rating Ara guessed before asking was kept");
   ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
   ok(/tap/.test(r.status) && !/optional details/.test(r.status), "a question repeated");
@@ -280,6 +279,17 @@ test("Ara: a planned ask takes a spoken date in any common form", async (p) => {
   }
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "National", planned_ask_date: "2026-12-20", amount: 50000 });
   ok((await p.inputValue("#f_plannedDate")) === "2026-12-20", "a date sent under another name was dropped");
+});
+test("Ara: sets a capacity rating on a new contact (in the draft, any wording, or with set_capacity_rating)", async (p) => {
+  await signIn(p);
+  await ara(p, "show_contact_draft", { first: "Lou", last: "Ng", email: "lou@example.org", mobile: "(555) 010-0111", capacity: "c · $25k to $100k" });
+  ok((await p.inputValue("#f_capacity")) === "C", "a rating in other words was not set: " + await p.inputValue("#f_capacity"));
+  await ara(p, "show_contact_draft", { first: "Lou", last: "Ng", capacity: "$150,000" });
+  ok((await p.inputValue("#f_capacity")) === "B", "a dollar amount did not become B");
+  const r = await ara(p, "set_capacity_rating", { contact_name: "Lou Ng", rating: "A", confirmed: true });
+  ok(r.on_draft && (await p.inputValue("#f_capacity")) === "A", "set_capacity_rating did not reach the open New contact form");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  ok((await state(p)).contacts.find(c => c.first === "Lou").capacity === "A", "the rating was not saved with the contact");
 });
 test("Ara: giving history and screens", async (p) => {
   await signIn(p);

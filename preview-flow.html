@@ -947,6 +947,14 @@ function toast(text, undo) {
 /* ---------- Grok conversation ---------- */
 const S_DATE = { type: "string", description: "YYYY-MM-DD, e.g. 2026-12-01. Work it out from what the officer says, using today's date" };
 // spoken dates can arrive as "December 1", "12/1/2026" or "2026-12-1"; turn them into YYYY-MM-DD (a date with no year is the next one to come)
+function normCap(v) {
+  if (v == null) return null; const t = String(v).trim(); if (!t) return null;
+  let m = t.match(/^([A-Ea-e])(?![a-z])/); if (m) return m[1].toUpperCase();
+  if (/under|less than|below/i.test(t) && /5/.test(t)) return "E";
+  m = t.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*(k|thousand|m|million)?/i); if (!m) return null;
+  const n = parseFloat(m[1]) * (/^(m|million)$/i.test(m[2] || "") ? 1e6 : /^(k|thousand)$/i.test(m[2] || "") ? 1e3 : 1);
+  return n >= 250000 ? "A" : n >= 100000 ? "B" : n >= 25000 ? "C" : n >= 5000 ? "D" : "E";
+}
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 function normDate(v) {
   if (v == null || v === "") return null; const t = String(v).trim().toLowerCase().replace(/(\d)(st|nd|rd|th)\b/g, "$1").replace(/,/g, " ").replace(/\s+/g, " ");
@@ -967,7 +975,7 @@ const TOOLS = [
     permEmail: { type: "boolean", description: "Default true" }, permCalls: { type: "boolean", description: "Default true" }, permText: { type: "boolean", description: "Default false" },
     ally: { type: "boolean", description: "Ally - Do Not Solicit: true only if the officer says this person must not be asked for a gift" }, dnc: { type: "boolean", description: "Do Not Contact: true only if the officer says the person asked not to be contacted" },
     permSource: { type: "string", description: "How permission was given, e.g. told Dana Rivera in person at the Spring Gala, Oct 17" }, howMet: { type: "string", description: "One short sentence: where they met and any interest" },
-    capacity: { type: "string", enum: Object.keys(CAPACITY), description: "Only when the officer names a rating in answer to the optional-details question; leave out if they say no or don't name one. Never guess: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") } } },
+    capacity: { type: "string", enum: Object.keys(CAPACITY), description: "Set this whenever the officer names a rating or a dollar range for this person (say the letter, A to E). Leave it out if they say no or don't name one; never guess: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") } } },
   { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "date", "meetingType", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
     substantive: { type: "boolean", description: "True when it was a real conversation with the person about the relationship or the gift; emails and research notes are not substantive" },
@@ -1392,7 +1400,15 @@ function onTool(callId, name, args) {
     toolReply(callId, { ok: true, status: `Saved. You already introduced yourself, so don't say your name or role again. If they haven't asked for anything yet, say exactly: "Nice to meet you, ${v}. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Thanks, ${v}" and carry on with it.` }); return;
   }
   if (name === "set_capacity_rating") {
-    const t = resolveTarget("interaction", data.contact_name || ""), r = CAPACITY[data.rating] ? data.rating : null;
+    const r = normCap(data.rating);
+    // a contact still being added: the rating goes on the open New contact form and saves with it
+    if (V && V.action === "contact") { const nm = norm(data.contact_name || ""), d = readDraft();
+      const hit = (x) => !!norm(x) && nm.includes(norm(x));
+      if (!nm || hit(d.first) || hit(d.last) || !findContacts(data.contact_name).length) {
+        if (!r) { toolReply(callId, { ok: false, error: "Ask which rating: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") }); return; }
+        d.capacity = r; V.data = d; V.fromVoice.add("capacity"); renderOverlay();
+        toolReply(callId, { ok: true, on_draft: true, say: `The rating ${r} (${CAPACITY[r]}) is on the New contact form now. It saves with the contact when they tap "${ACTIONS.contact.saveLabel}". Say so briefly, then carry on.` }); return; } }
+    const t = resolveTarget("interaction", data.contact_name || "");
     if (t.error) { toolReply(callId, { ok: false, error: t.error }); return; }
     if (!r) { toolReply(callId, { ok: false, error: "Ask which rating: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") }); return; }
     const c = t.contact, was = c.capacity;
@@ -1517,8 +1533,8 @@ function onTool(callId, name, args) {
     delete data[k]; });
   const badDates = [];
   dates.forEach(k => { if (data[k] == null || data[k] === "") return; const d = normDate(data[k]); if (d) { if (d !== data[k]) vlog(`${name}: ${k} "${data[k]}" read as ${d}`); data[k] = d; } else { vlog(`${name}: couldn't read ${k} "${data[k]}"`); badDates.push(`${k} "${data[k]}"`); delete data[k]; } });
-  // a new contact's rating comes only from the officer's answer to the optional-details question, so the assistant can't fill one in by guessing
-  if (tool.action === "contact" && data.capacity && !(V && V.action === "contact" && V.askedOptional)) delete data.capacity;
+  // a rating can arrive as "c", "C · $25k to $100k" or "$25,000 to $100,000": keep just the letter
+  if ("capacity" in data) { const r = normCap(data.capacity); if (r) data.capacity = r; else { if (data.capacity) vlog(`${name}: couldn't read capacity "${data.capacity}"`); delete data.capacity; } }
   const said = Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined);
   const same = V && V.action === tool.action && (V.target.contact || null) === (target.contact || null);
   if (same) { const cur = readDraft(); said.forEach(k => { cur[k] = data[k]; }); said.forEach(k => V.fromVoice.add(k)); V = Object.assign({}, V, { action: tool.action, target, data: prefill(tool.action, cur, target), fromVoice: V.fromVoice }); }
@@ -2245,7 +2261,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T18:57:17Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T19:14:16Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
