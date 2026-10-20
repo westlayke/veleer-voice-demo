@@ -240,6 +240,14 @@ test("Ara: setting a capacity rating asks first, then saves", async (p) => {
   const yes = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: true });
   ok(yes.saved && (await state(p)).contacts.find(c => c.id === c0.id).capacity === "D", "not saved after yes");
 });
+test("Opportunity: Next step panel on the record and a Next: line in the list", async (p) => {
+  await signIn(p); await tab(p, "Opportunities");
+  ok(await p.isVisible(".row:has-text('Ken Ito') .nextline"), "the list has no Next: line for Ken");
+  ok(/record Ken's answer/.test(await p.textContent(".row:has-text('Ken Ito') .nextline")), "Ken's Next: line is wrong");
+  await p.tap(".row:has-text('James Okafor')"); await p.waitForTimeout(400);
+  ok(await p.isVisible(".nextp") && /to Cultivation/.test(await p.textContent(".nextp .ph")), "James's record has no Next step panel to Cultivation");
+  ok(await p.locator(".nextp li").count() === 3, "Qualification should list three steps");
+});
 test("Ara: giving history and screens", async (p) => {
   await signIn(p);
   const g = await ara(p, "get_giving", { contact_name: "Ruth Abernathy" }); ok(g.ok !== false, "giving lookup failed: " + JSON.stringify(g).slice(0, 120));
