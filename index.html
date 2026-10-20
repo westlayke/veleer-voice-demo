@@ -142,6 +142,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .wl-name { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .wl-name input { min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
 .wl-start { align-items: center; text-align: center; } .wl-start .wl-logo { height: 54px; width: auto; } .wl-mic.big { width: 96px; height: 96px; margin: 6px auto 0; } .wl-tap { font-weight: 700; color: var(--brand-ink); margin-top: -4px; } .wl-start .btn { align-self: stretch; }
+.wl-type { text-align: center; } .wl-type .wl-logo { height: 44px; width: auto; align-self: center; } .wl-type p.wl-sub { font-size: 14px; color: var(--muted); margin-top: -4px; } .wl-input { min-height: 46px; border: 1.5px solid var(--line-strong); border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 17px; text-align: center; background: var(--surface); color: var(--fg); } .wl-type .wl-priv { font-size: 12px; } .wl-links { display: flex; justify-content: space-between; gap: 12px; } .wl-links .linkbtn { display: inline-flex; align-items: center; gap: 4px; }
 .wl-mic.mid { align-self: center; margin-left: auto; margin-right: auto; }
 .hmodal { position: relative; } .hm-x { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surface2); color: var(--fg); font-size: 24px; line-height: 1; cursor: pointer; } .hmodal h2 { padding-right: 40px; } .hm-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.4; }
 .wmodal p.wl-hint { font-size: 13px; color: var(--muted); margin-top: -6px; }
@@ -1578,18 +1579,15 @@ function welcomeModal() {
       <button type="button" class="btn quiet" data-act5="typename">I'd rather type my name</button></div></div>`;
     return;
   }
-  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
-    <div class="wl-role"><span class="wl-av">${S.settings.userName ? esc(OFFICER_INITIALS) : mic(16)}</span><div><b>You're ${S.settings.userName ? esc(OFFICER) : "the gift officer"}</b>${S.settings.userName ? ", a gift officer" : ""} at Citizens Alliance. The contacts and opportunities are examples for you to work with.</div></div>
-    <label class="wl-name">Your first name (the assistant will use it)<input id="wlName" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}"></label>
+  h.innerHTML = `<div class="scrim center"><div class="wmodal wl-type" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
+    <img src="logo-v5.png" alt="Citizens Alliance" class="wl-logo">
+    <h2 id="wmTitle">What's your first name?</h2>
+    <p class="wl-sub">${esc(botName())} will use it. You're a gift officer at Citizens Alliance, working with example contacts.</p>
+    <input id="wlName" class="wl-input" aria-label="Your first name" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}">
     <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
-    <div class="wl-hint">Or tap the blue mic below and just tell the assistant your first name.</div>
-    <button type="button" class="wl-mic mid" data-act4="voice" aria-label="Tap to start talking">${mic(24)}</button>
-    <h2 id="wmTitle">Talk to Citizens VCRM like a colleague</h2>
-    <p>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> and try: <b>“Log a meeting with Ruth.”</b> The assistant fills in the form as you talk; you check it and tap Save.</p>
-    ${saveTip()}
+    <button class="btn blue" data-act4="welcome-ok">Start</button>
     <p class="wl-priv">This demo saves what you say to the assistant and its replies, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
-    <button class="btn blue" data-act4="welcome-ok">Got it</button>
-    <button class="btn quiet" data-act2="share">Share this demo</button></div></div>`;
+    <div class="wl-links"><button type="button" class="linkbtn" data-act4="voice">${mic(14)} Say it instead</button><button type="button" class="linkbtn" data-act2="share">Share this demo</button></div></div></div>`;
   setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a && a.dataset.act4 === "voice") { const el = document.getElementById("wlName"), v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : "";
@@ -1599,10 +1597,11 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
     const isNew = v !== (S.settings.userName || "");
     S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.screen = "home"; save(); welcomeModal(); render(); window.scrollTo(0, 0);
     if (isNew && !G.live) startCall(greetLine(v)); } }); // a newly entered name starts the conversation with the standard greeting
+document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "wlName") { e.preventDefault(); const b = document.querySelector("[data-act4=welcome-ok]"); if (b) b.click(); } }); // the keyboard Go key starts too
 document.addEventListener("click", (e) => { if (e.target.closest("[data-act5=typename]")) { WELCOME_FULL = true; welcomeModal(); setTimeout(() => { const el = document.getElementById("wlName"); if (el) el.focus(); }, 50); } });
 const botName = () => (S.settings.botName || "").trim() || ((S.settings.voice || "ara")[0].toUpperCase() + (S.settings.voice || "ara").slice(1)); // the assistant's name: set in Settings, else its voice's name
 const CAN_DO = "I can do things related to managing your contacts and opportunities, like reviewing your open tasks, creating a contact, hearing a contact's giving history, reviewing your open opportunities, or review our fundraising process, and much more. What would you like to do today?";
-const greetLine = (name) => `The officer just entered their first name and tapped Got it. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I am ${botName()}, the Citizens Alliance VCRM voice assistant. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process".`;
+const greetLine = (name) => `The officer just entered their first name and tapped Start. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I am ${botName()}, the Citizens Alliance VCRM voice assistant. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process".`;
 
 const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
 const AWAIT_WARN_DAYS = 14; // tenant setting in the guide; demo default
@@ -2007,7 +2006,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T02:30:25Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T02:36:35Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
