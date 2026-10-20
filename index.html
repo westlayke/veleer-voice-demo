@@ -1519,6 +1519,8 @@ function alertTodo(o, al) {
   if (/^Ask planned/.test(al.text)) return `Your ${amt}ask to ${first} is coming up. Get ready.`;
   return "";
 }
+// a task's alert: the same pill on Home (Needs attention), the Tasks screen and the record screens
+const taskAlert = (t) => !t.done && t.due && t.due < todayISO() ? { tone: "warn", text: "Overdue" } : null;
 const alertPill = (al) => al ? `<span class="alert ${al.tone}">${esc(al.text)}</span>` : "";
 function needsAttention() {
   const rows = [];
@@ -1527,7 +1529,7 @@ function needsAttention() {
     const al = oppAlert(o);
     if (al && al.act) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">›</span></div>`);
   });
-  S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).sort((x, y) => x.due.localeCompare(y.due)).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${esc(t.text)}<div class="s">${t.due < todayISO() ? '<span class="alert warn" style="font-size:11px">Overdue</span> ' : ""}Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">›</span></div>`));
+  S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).sort((x, y) => x.due.localeCompare(y.due)).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">›</span></div>`));
   return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
 }
 // "Sun, Oct 25 · in 5 days"
@@ -1742,7 +1744,7 @@ function boardScreen() {
 const taskWhere = (t) => { const o = t.oppId && oppById(t.oppId); return o ? o.name : nameOf(contactById(t.contactId)); };
 function tasksPanel(list, label) {
   const open = list.filter(t => !t.done);
-  return `<section class="panel"><div class="ph"><h2>${label}</h2><span class="meta">${open.length} open</span></div>${open.length ? open.map(t => `<div class="row"><div class="t">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"}${t.oppId ? " · on the opportunity" : ""}</div></div></div>`).join("") : `<div class="empty">No open tasks.</div>`}</section>`;
+  return `<section class="panel"><div class="ph"><h2>${label}</h2><span class="meta">${open.length} open</span></div>${open.length ? open.map(t => `<div class="row"><div class="t">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"}${t.oppId ? " · on the opportunity" : ""}</div></div></div>`).join("") : `<div class="empty">No open tasks.</div>`}</section>`;
 }
 /* ---------- how it works: contact to Closed Won ---------- */
 const FI = (p) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
@@ -1787,7 +1789,7 @@ const flowScript = () => FLOW.map(f => `${f.stage}: ${f.means}${f.move.length ? 
 
 function tasksScreen() {
   return topbar("Tasks") + `<main><section class="panel"><div class="ph"><h2>My tasks</h2><span class="meta">${S.tasks.filter(t => !t.done).length} open</span></div>
-  ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(taskWhere(t))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. Say “Add a task”, or mention a next step when you log a meeting.</div>`}</section></main>`;
+  ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(taskWhere(t))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. Say “Add a task”, or mention a next step when you log a meeting.</div>`}</section></main>`;
 }
 function settingsScreen() {
   return topbar("Settings", "home") + `<main>
@@ -1895,7 +1897,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T00:24:00Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T00:29:43Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
