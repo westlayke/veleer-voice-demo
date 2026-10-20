@@ -58,8 +58,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .chip { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
 main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-/* Settings: stronger section edges so the sections don't blend together */
-main.setmain { gap: 18px; } .setmain .panel { border: 1.5px solid var(--line-strong); box-shadow: 0 2px 6px rgba(16, 24, 40, .10); } .setmain .ph { border-bottom-color: var(--line-strong); }
+/* every screen: stronger section edges so the sections don't blend together */
+main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-shadow: 0 2px 6px rgba(16, 24, 40, .10); } main .ph { border-bottom-color: var(--line-strong); }
 .ph { display: flex; align-items: baseline; gap: 8px; padding: 11px 14px 9px; background: var(--surface2); border-bottom: 1px solid var(--line); }
 .ph h2 { margin: 0; font-size: 16px; }
 .ph .meta { margin-left: auto; color: var(--muted); font-size: 13px; }
@@ -271,6 +271,12 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 .status-line { font-size: 13.5px; display: flex; gap: 8px; align-items: center; }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; } .dot.g { background: var(--ok); } .dot.r { background: var(--bad); } .dot.a { background: var(--warn-line); }
 .flowhero { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.ovrow { display: flex; align-items: center; gap: 10px; padding: 11px 12px 11px 14px; } .ovrow .t { flex: 1; min-width: 0; } .ovrow b { display: block; font-size: 15px; } .ovrow .linkbtn { font-size: 13.5px; font-weight: 600; text-decoration: underline; }
+.ovrow .btn { min-height: 38px; font-size: 14px; padding: 0 12px; flex: none; border-radius: 10px; }
+.sp.more { border-style: dashed; color: var(--brand); background: var(--surface); padding-left: 10px; }
+.na-do { font-size: 15px; color: var(--fg); margin-top: 6px; line-height: 1.3; }
+.mtg-prep { flex: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--brand); background: var(--surface); border: 1.5px solid var(--brand); border-radius: 999px; padding: 6px 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.tile.tap, .goals .tap { cursor: pointer; } .tile.tap:active, .goals .tap:active { background: var(--surface2); } .tile .go { float: right; color: var(--muted); }
 .flowhero p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
 .flowpath { list-style: none; margin: 0; padding: 6px 14px 14px; }
 .fstep { position: relative; display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding-bottom: 12px; }
@@ -908,6 +914,7 @@ Questions about the process (who can do what, rules, flags, alerts, settings, te
 When logging a meeting: if it was substantive and the outcome isn't Not interested or Referred elsewhere, the report needs a next step and its due date. If the officer hasn't said them, ask "What's the next step, and when is it due?" before asking them to save. Recording an ask needs the same unless the investor declined.
 To book a future meeting, use show_meeting_draft (ask for the day and start time if not said); logging a meeting that already happened is show_interaction_draft. After they tap Add to Google Calendar, Google Calendar opens and our conversation ends.
 When the officer wants to phone a contact, call call_contact. Only offer calls the app allows (the contact needs a phone number and Calls permitted on).
+When the officer asks you to prepare them for a meeting with someone, call get_contact_history for that contact and give a short spoken briefing in three or four sentences: their giving (last gift and this year's total), where their opportunity stands and the latest ask, anything outstanding, and one suggested goal for the meeting.
 When the officer asks what tasks they have, what's due or overdue, call get_my_tasks and read what it returns. When they ask about past interactions with a contact, what happened last time, or what's outstanding for a contact, call get_contact_history (focus history, tasks, or both) and read what it returns. Never read tasks or history from memory; always call the tool, since the records may have changed.
 When the officer asks about a contact's giving (lifetime, this year, year to date, last gift or donation), call get_giving and speak the figures it returns; never estimate them.
 When adding a task, always ask for the due date if none was said ("When is it due?"); a task can't be saved without one. If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
@@ -1328,8 +1335,13 @@ const SAY_GROUPS = [
   { tone: "giving", lines: ["What has Ruth given?", "Elena's last gift?"] },
   { tone: "look", lines: ["Explain the process", "Review FAQ", "My opportunities"] }
 ];
+// Home shows the first few options; "More ideas" opens the rest
+const SAY_FIRST = ["What are my open tasks?", "Add a contact", "Log a meeting", "Plan an ask", "Record a pledge", "What has Ruth given?"];
 function sayList() {
-  return `<div class="saypills">${SAY_GROUPS.map(g => g.lines.map(line => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`).join("")).join("")}</div>`;
+  const pill = (g, line) => `<button type="button" class="sp t-${g.tone}" data-say="${esc(line)}"><span class="spm">${mic(12)}</span>${esc(line)}</button>`;
+  const all = SAY_GROUPS.flatMap(g => g.lines.map(line => ({ g, line })));
+  const first = SAY_FIRST.map(l => all.find(x => x.line === l)).filter(Boolean), rest = all.filter(x => !SAY_FIRST.includes(x.line));
+  return `<div class="saypills">${first.map(x => pill(x.g, x.line)).join("")}${S.sayMore ? rest.map(x => pill(x.g, x.line)).join("") : ""}<button type="button" class="sp more" data-act2="saymore" aria-expanded="${S.sayMore ? "true" : "false"}">${S.sayMore ? "Fewer ideas" : `More ideas (${rest.length})`}</button></div>`;
 }
 const APP_BTN = (px) => `<img src="apple-touch-icon-v2.png" alt="" class="appbtn" style="width:${px}px;height:${px}px">`;
 const SAVE_TITLE = `Add Citizens VCRM to your Home Screen`;
@@ -1497,20 +1509,34 @@ function oppAlert(o) {
   if (o.stage === "Ask Planning" && a) { const days = Math.round((new Date(a.plannedDate) - new Date(todayISO())) / 864e5); return { tone: days <= 7 ? "warn" : "info", text: days < 0 ? `Ask date passed ${fmtDate(a.plannedDate)}` : `Ask planned for ${fmtDate(a.plannedDate)}`, act: days <= 7 }; }
   return null;
 }
+// Needs attention: one plain line saying what to do about each alert
+function alertTodo(o, al) {
+  const a = latestAsk(o), c = contactById(o.contactId), first = c ? c.first : "them", amt = a ? money(a.amount) + " " : "";
+  if (/^Ready for Cultivation/.test(al.text)) return `${first} meets every Qualification step. Move to Cultivation?`;
+  if (/^Pledge to record/.test(al.text)) return `${first} agreed to give. Record the pledge.`;
+  if (/^Awaiting response/.test(al.text)) { const d = al.text.match(/\d+/); return `No reply to your ${amt}ask for ${d ? d[0] : "some"} days. Follow up with ${first}?`; }
+  if (/^Ask date passed/.test(al.text)) return `The planned date for your ${amt}ask has passed. Make the ask or set a new date.`;
+  if (/^Ask planned/.test(al.text)) return `Your ${amt}ask to ${first} is coming up. Get ready.`;
+  return "";
+}
 const alertPill = (al) => al ? `<span class="alert ${al.tone}">${esc(al.text)}</span>` : "";
 function needsAttention() {
   const rows = [];
   myOpen().forEach(o => {
     const c = contactById(o.contactId);
     const al = oppAlert(o);
-    if (al && al.act) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="s" style="margin-top:5px">${esc(o.name)}</div></div><span class="chev">›</span></div>`);
+    if (al && al.act) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">›</span></div>`);
   });
   S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).sort((x, y) => x.due.localeCompare(y.due)).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${esc(t.text)}<div class="s">${t.due < todayISO() ? '<span class="alert warn" style="font-size:11px">Overdue</span> ' : ""}Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">›</span></div>`));
   return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
 }
+// "Sun, Oct 25 · in 5 days"
+function dayLabel(iso) { const d = new Date(iso + "T12:00:00"), n = Math.round((new Date(iso) - new Date(todayISO())) / 864e5);
+  return `${d.toLocaleDateString("en-US", { weekday: "short" })}, ${fmtDate(iso)} · ${n <= 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`}`; }
 function upcomingPanel() {
   const m = (S.meetings || []).filter(x => x.date >= todayISO()).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 3);
-  return `<section class="panel"><div class="ph"><h2>Upcoming meetings</h2><span class="meta">${m.length ? "next " + m.length : ""}</span></div>${m.length ? m.map(x => `<div class="row tap" data-contact="${x.contactId}"><div class="t">${esc(x.title)}<div class="s">${fmtDate(x.date)} · ${fmtTime(x.time)} · ${esc(x.type || "")}</div></div><span class="chev">›</span></div>`).join("") : `<div class="empty">No meetings booked. Say “Schedule a meeting with Ruth”.</div>`}</section>`;
+  return `<section class="panel"><div class="ph"><h2>Upcoming meetings</h2><span class="meta">${m.length ? "next " + m.length : ""}</span></div>${m.length ? m.map(x => { const who = nameOf(contactById(x.contactId));
+    return `<div class="row tap" data-contact="${x.contactId}"><div class="t">${esc(x.title)}<div class="s">${dayLabel(x.date)} · ${fmtTime(x.time)} · ${esc(x.type || "")}</div></div>${who ? `<button type="button" class="mtg-prep" data-act2="mtgprep" data-who="${esc(who)}">${mic(11)} Prepare</button>` : `<span class="chev">›</span>`}</div>`; }).join("") : `<div class="empty">No meetings booked. Say “Schedule a meeting with Ruth”.</div>`}</section>`;
 }
 // example goals until the customer gives real ones
 const GOALS = { raised: 300000, asks: 12 };
@@ -1519,8 +1545,8 @@ function goalsPanel() {
   const asks = S.opps.reduce((n, o) => n + o.asks.filter(a => a.status !== "Planned" && String(a.askedOn || "").slice(0, 4) === y).length, 0);
   const bar = (v, g) => `<div class="gbar"><span style="width:${Math.min(100, Math.round(v / g * 100))}%"></span></div>`;
   return `<section class="panel"><div class="ph"><h2>My goals</h2><span class="meta">example goals · this year</span></div>
-    <div class="goals"><div><div class="k">Raised</div><div class="v">${money(raised)} <small>of ${money(GOALS.raised)}</small></div>${bar(raised, GOALS.raised)}</div>
-    <div><div class="k">Asks made</div><div class="v">${asks} <small>of ${GOALS.asks}</small></div>${bar(asks, GOALS.asks)}</div></div></section>`;
+    <div class="goals"><div class="tap" data-go="board"><div class="k">Raised</div><div class="v">${money(raised)} <small>of ${money(GOALS.raised)}</small></div>${bar(raised, GOALS.raised)}</div>
+    <div class="tap" data-go="board"><div class="k">Asks made</div><div class="v">${asks} <small>of ${GOALS.asks}</small></div>${bar(asks, GOALS.asks)}</div></div></section>`;
 }
 // Home (last on the page): a slim card pointing to the add-to-home-screen steps in Settings; gone once the app is opened from the home screen, or when closed with ×
 function addBtnCard() {
@@ -1530,20 +1556,22 @@ function addBtnCard() {
 }
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
+  // the overview row sits at the top until it has been heard once, then moves to the bottom of Home
+  const ov = `<section class="panel"><div class="ovrow"><div class="t"><b>From first contact to Closed Won</b><button type="button" class="linkbtn" data-act2="flowhome">See the stages</button></div>
+    <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(15)} Hear the overview</button></div></section>`;
   return topbar("Home", null, true) + `<main>
-  <section class="panel"><div class="flowhero"><h2 style="margin:0;font-size:18px">From first contact to Closed Won</h2>
-    <p>Every opportunity moves through the same stages. <button type="button" data-act2="flowhome" style="background:none;border:0;padding:0;font:inherit;color:var(--brand);font-weight:600;cursor:pointer;text-decoration:underline">See the stages</button> to find out what has to happen before each can move on.</p>
-    <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(18)} Hear the overview</button></div></section>
+  ${S.heardOverview ? "" : ov}
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
   ${upcomingPanel()}
   <section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">open opportunities</span></div>
-    <div class="tiles"><div class="tile"><div class="k">Open opps</div><div class="v">${open.length}</div></div>
-    <div class="tile"><div class="k">Asked</div><div class="v">${money(asked)}</div></div>
-    <div class="tile ${pledged ? "hl" : ""}"><div class="k">Pledged</div><div class="v">${money(pledged)}</div></div></div>
+    <div class="tiles"><div class="tile tap" data-go="board"><div class="k">Open opportunities</div><div class="v">${open.length}</div></div>
+    <div class="tile tap" data-go="board"><div class="k">Asked <span class="go">›</span></div><div class="v">${money(asked)}</div></div>
+    <div class="tile tap ${pledged ? "hl" : ""}" data-go="board"><div class="k">Pledged <span class="go">›</span></div><div class="v">${money(pledged)}</div></div></div>
   </section>
   ${goalsPanel()}
   ${canTalk() ? "" : `<section class="note" style="border-radius:12px">Voice needs an xAI API key on this phone. <button class="btn quiet" data-go="settings" style="margin-top:8px;width:100%">Open Settings</button></section>`}
+  ${S.heardOverview ? ov : ""}
   ${addBtnCard()}
   </main>`;
 }
@@ -1762,7 +1790,7 @@ function tasksScreen() {
   ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(taskWhere(t))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. Say “Add a task”, or mention a next step when you log a meeting.</div>`}</section></main>`;
 }
 function settingsScreen() {
-  return topbar("Settings", "home") + `<main class="setmain">
+  return topbar("Settings", "home") + `<main>
   <section class="panel" id="setSave"><div class="ph"><h2>${SAVE_TITLE}</h2></div><div class="sb set">
     <div class="appbtn-tile">${APP_BTN(60)}<span>Citizens VCRM</span></div>
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45;text-align:center">This is the button you'll get. Tap it to open the demo like an app, with the mic ready.</div>
@@ -1813,9 +1841,11 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("#overlay") || e.target.closest("#modal")) return;
   const say = e.target.closest("[data-say]");
   if (say) { const line = say.dataset.say;
+    if (line === "Walk me through the process" && !S.heardOverview) { S.heardOverview = true; save(); }
     if (/^Show me a list of contacts/.test(line)) { go("contacts"); return; }
     if (/^(Show me )?my opportunities/i.test(line)) { go("board"); return; }
     hintCard(say); return; }
+  const mp = e.target.closest("[data-act2=mtgprep]"); if (mp) { ask(`"Prepare me for my meeting with ${mp.dataset.who}"`); return; } // the Prepare button sits inside the meeting row
   const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); tellPicked("contact"); return; }
   const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); tellPicked("opp"); return; }
   const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
@@ -1831,6 +1861,7 @@ document.addEventListener("click", (e) => {
     (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("vlogTxt"); el.value = txt; el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the text and copy it."); } }); }
   else if (act === "clearlog") { VLOG = []; try { localStorage.removeItem(LOGKEY); } catch (e) {} render(); toast("Log cleared"); }
   else if (act === "help") helpModal();
+  else if (act === "saymore") { S.sayMore = !S.sayMore; save(); render(); }
   else if (act === "restartask") restartConfirm();
   else if (act === "share") shareDemo();
   else if (act === "qr") showQR();
@@ -1864,7 +1895,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-19T23:56:32Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T00:24:00Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
