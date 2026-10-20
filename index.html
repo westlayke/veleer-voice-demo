@@ -1033,10 +1033,10 @@ async function keepAwake() {
 function letSleep() { try { G.wake && G.wake.release(); } catch (e) {} G.wake = null; }
 // locking the phone pauses the page, which cuts the mic and Grok's connection: end the conversation cleanly instead of leaving it hanging
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden" && G.live) { vlog("phone locked or app hidden: ending conversation"); G.endedByLock = true; endCall(); }
+  if (document.visibilityState === "hidden" && G.live) { vlog("phone locked or app hidden: ending conversation"); G.endedByLock = true; interrupted("app hidden"); }
   else if (document.visibilityState === "visible" && G.leftFor) { const was = G.leftFor; G.leftFor = null; G.endedByLock = false; toast(was === "calendar-live" ? "Welcome back. The conversation paused while you were in Google Calendar; tap the mic to carry on." : "Welcome back. If you tapped Save in Google Calendar, the meeting is in your calendar."); }
   else if (document.visibilityState === "visible" && S.pendingCall) { G.endedByLock = false; callDoneModal(); }
-  else if (document.visibilityState === "visible" && G.endedByLock) { G.endedByLock = false; toast("The conversation ended when the phone locked. Tap the mic to carry on."); }
+  else if (document.visibilityState === "visible" && G.endedByLock) { G.endedByLock = false; resumeModal(); }
 });
 // Grok bills for every minute a conversation is open, so hang up after 12 seconds with no talking and no taps
 const IDLE_MS = 12000;
@@ -1056,11 +1056,15 @@ document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
+  if (!G.keepRecent) G.recent = []; G.keepRecent = false;
   G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
     G.ctx.resume();
     G.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
+    const ctx = G.ctx; ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") interrupted("audio " + ctx.state); };
+    G.stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && G.status !== "Connecting…") interrupted("mic muted"); }; tr.onended = () => { if (G.live) interrupted("mic ended"); }; });
     const token = await mintToken();
     let worklet = false;
     try {
@@ -1096,10 +1100,40 @@ async function startCall(opening) {
       G.status = "Listening"; paintCall();
     };
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
-    G.ws.onclose = (ev) => { vlog("connection closed " + (ev && ev.code)); if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Try again in a moment."); } };
+    G.ws.onclose = (ev) => { vlog("connection closed " + (ev && ev.code)); if (G.live && document.visibilityState === "hidden") { interrupted("connection closed while away"); return; } if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Try again in a moment."); } };
     G.ws.onerror = () => {};
   } catch (e) { endCall(); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); }
 }
+/* ---------- interrupted conversations: a phone call, timer, Siri or locking the phone cuts the mic and speaker ---------- */
+// keep the last few lines said, so a new conversation can pick up where the old one stopped
+function recent(who, text) { (G.recent = G.recent || []).push(`${who}: ${String(text).slice(0, 300)}`); if (G.recent.length > 8) G.recent.shift(); }
+function draftSummary() {
+  if (!V || !ACTIONS[V.action]) return "";
+  const A = ACTIONS[V.action], t = V.target || {}, who = t.contact ? nameOf(t.contact) : "";
+  const have = (A.fields || []).filter(f => V.data && V.data[f.k] !== undefined && V.data[f.k] !== "" && V.data[f.k] !== false).map(f => `${f.label}: ${V.data[f.k]}`);
+  const need = (A.fields || []).filter(f => f.req && (!V.data || V.data[f.k] === undefined || V.data[f.k] === "")).map(f => f.label);
+  return `The "${A.title}" form${who ? ` for ${who}` : ""} is still open on screen, not saved yet. Filled in so far: ${have.join("; ") || "nothing"}.${need.length ? ` Still needed: ${need.join(", ")}.` : ""}`;
+}
+function interrupted(why) {
+  if (!G.live || G.interrupting) return; G.interrupting = true;
+  vlog("conversation interrupted: " + why);
+  G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "" };
+  endCall(); G.interrupting = false;
+  if (document.visibilityState === "visible") resumeModal(); else G.endedByLock = true;
+}
+function resumeModal() {
+  const r = G.resume;
+  if (!r || Date.now() - r.at > 30 * 60e3 || (!r.lines.length && !r.draft)) { G.resume = null; toast("The conversation ended. Tap the mic to carry on."); return; }
+  const h = document.getElementById("modal");
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="rsmTitle">
+    <span class="wl-mic">${mic(22)}</span>
+    <h2 id="rsmTitle">Your conversation was interrupted</h2>
+    <p>A call, an alarm or the phone locking cut it off.${r.what ? ` Your “${esc(r.what)}” form is still here, not saved.` : ""} ${esc(botName())} can pick up where you left off.</p>
+    <button class="btn blue" id="rsmGo">${mic(16)} Carry on</button><button class="btn quiet" id="rsmX">Not now</button></div></div>`;
+  document.getElementById("rsmX").onclick = () => { G.resume = null; h.innerHTML = ""; };
+  document.getElementById("rsmGo").onclick = () => { h.innerHTML = ""; const r2 = G.resume; G.resume = null; G.recent = r2.lines.slice(); G.keepRecent = true; startCall(resumeLine(r2)); };
+}
+const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " " : ""}Say "Welcome back" and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in.`;
 function endCall() {
   clearInterval(G.idleTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; stopPlayback(); letSleep();
@@ -1169,8 +1203,8 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) act("user", e.transcript);
-  if (t === "response.done" && G.bot) act("grok", G.bot);
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { act("user", e.transcript); recent("Officer", e.transcript); }
+  if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
   else if (t === "response.created") { G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
@@ -1894,7 +1928,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T00:43:22Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T00:56:05Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
