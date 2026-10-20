@@ -189,16 +189,47 @@ test("Ara: a task draft opens on screen and nothing saves until Save", async (p)
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).tasks.length === n + 1, "task not saved after Save");
 });
-test("Ara: a new contact gets the other contact detail, then the optional-fields question", async (p) => {
+test("Ara: a new contact gets the other contact detail, a capacity rating, then the optional-fields question", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin" });
   ok(r.still_needed && r.still_needed.some(x => /Email or mobile/.test(x)), "Ara was not asked for an email or mobile");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(/mobile number/.test(r.status), "Ara was not asked for the mobile too");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
+  ok(/capacity rating/.test(r.status) && r.ratings, "Ara was not told to offer a capacity rating");
+  r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C" });
   ok(/optional details/.test(r.status) && r.optional_fields && r.optional_fields.length >= 5, "Ara was not told to offer the optional fields");
-  r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", howMet: "Town hall" });
-  ok(/tap/.test(r.status) && !/optional details/.test(r.status), "the optional-fields question repeated");
+  r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
+  ok(/tap/.test(r.status) && !/optional details|capacity rating/.test(r.status), "a question repeated");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  ok((await state(p)).contacts.find(c => c.first === "Maya").capacity === "C", "the rating was not saved with the contact");
+});
+test("Opportunity: an unrated contact gets the checklist, not the form (voice and touch)", async (p) => {
+  await signIn(p);
+  await ara(p, "show_contact_draft", { first: "Noor", last: "Haddad", email: "noor@example.org", mobile: "(555) 010-0199" });
+  for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  const r = await ara(p, "show_opportunity_draft", { contact_name: "Noor Haddad" });
+  ok(r.ok === false && /only when all of these are true/.test(r.error) && /capacity rating \(not yet/.test(r.error), "Ara was not given the checklist: " + JSON.stringify(r).slice(0, 160));
+  ok(!(await p.isVisible("[data-act=save]")), "the opportunity form opened anyway");
+  await p.tap("text=Create opportunity"); await p.waitForTimeout(300);
+  ok(await p.isVisible("text=isn't ready for an opportunity yet"), "tapping Create opportunity did not show the checklist");
+  ok(await p.isVisible(".gate li.no"), "the missing item is not marked");
+  await p.tap("#ogRate"); await p.waitForTimeout(200); await p.tap("[data-rt=B]"); await p.waitForTimeout(400);
+  ok((await state(p)).contacts.find(c => c.first === "Noor").capacity === "B", "rating not saved");
+  ok(await p.isVisible("[data-act=save]"), "the opportunity form did not open after rating");
+});
+test("Ara: setting a capacity rating asks first, then saves", async (p) => {
+  await signIn(p);
+  await ara(p, "show_contact_draft", { first: "Omar", last: "Reyes", email: "omar@example.org", mobile: "(555) 010-0177" });
+  for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  const c0 = (await state(p)).contacts.find(c => c.first === "Omar"), name = "Omar Reyes";
+  ok(c0 && !c0.capacity, "test contact not added unrated");
+  const ask = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: false });
+  ok(/Rate/.test(ask.say) && !(await state(p)).contacts.find(c => c.id === c0.id).capacity, "saved before yes");
+  const yes = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: true });
+  ok(yes.saved && (await state(p)).contacts.find(c => c.id === c0.id).capacity === "D", "not saved after yes");
 });
 test("Ara: giving history and screens", async (p) => {
   await signIn(p);
