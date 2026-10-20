@@ -65,7 +65,17 @@ main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-sh
 .ph .meta { margin-left: auto; color: var(--muted); font-size: 13px; }
 .row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
 .row:last-child { border-bottom: 0; }
-.row .t { flex: 1; min-width: 0; }
+.trow { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); } .trow:last-of-type { border-bottom: 0; } .trow .row { border-bottom: 0; background: var(--surface); position: relative; z-index: 1; transition: transform .2s; }
+.tacts { position: absolute; right: 0; top: 0; bottom: 0; display: flex; } .tacts button { border: 0; width: 80px; color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; } .ta-wait { background: #b26a00; } .ta-done { background: #1f8a4c; }
+.tcheck { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; color: #fff; position: relative; } .tcheck::after { content: ""; position: absolute; inset: -9px; } .tcheck.on { background: #1f8a4c; border-color: #1f8a4c; }
+.trow.isdone .ttext { text-decoration: line-through; color: var(--muted); }
+.tstat { flex: none; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line-strong); background: var(--surface); border-radius: 999px; padding: 5px 9px; min-height: 32px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--fg); cursor: pointer; white-space: nowrap; }
+.tstat.s-doing { color: var(--brand-ink); border-color: var(--brand-line); background: var(--brand-soft); } .tstat.s-waiting { color: #8a5300; border-color: #e3c08a; background: #fff6e8; } .tstat.s-done { color: #1f6b3e; border-color: #a9d8bb; background: #edf8f1; }
+.tsopts { display: flex; flex-direction: column; gap: 8px; } .tsopt { display: flex; align-items: center; gap: 10px; min-height: 46px; border: 1.5px solid var(--line-strong); border-radius: 12px; background: var(--surface); padding: 8px 12px; font: inherit; font-size: 16px; font-weight: 600; color: var(--fg); cursor: pointer; text-align: left; } .trow.tflash .tmain { animation: tflash 1.6s ease 2; } @keyframes tflash { 50% { background: var(--brand-soft); } } .tsopt.cur { border-color: var(--brand); background: var(--brand-soft); } .tscur { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 600; }
+.tdot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-strong); flex: none; } .tdot.s-doing { background: var(--brand); border-color: var(--brand); } .tdot.s-waiting { background: #d08a1c; border-color: #d08a1c; } .tdot.s-done { background: #1f8a4c; border-color: #1f8a4c; }
+.tswait { display: flex; flex-direction: column; gap: 10px; } .tswait input { min-height: 44px; border: 1.5px solid var(--line-strong); border-radius: 9px; padding: 6px 10px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
+.thint { font-size: 12.5px; color: var(--muted); padding: 10px 14px 12px; border-top: 1px solid var(--line); }
+.row .t { flex: 1; min-width: 0; } .chev svg { display: block; } span.chev { display: inline-flex; align-items: center; align-self: center; flex: none; color: #9aa3af; }
 .row .s { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .row.tap { cursor: pointer; } .row.tap:active { background: var(--surface2); }
 .lnk { color: var(--brand); }
@@ -928,10 +938,11 @@ const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, descrip
   .concat([{ type: "function", name: "show_screen", description: "Open a screen when the officer asks to see something. For a contact's record or opportunity, pass contact_name.", parameters: { type: "object", properties: Object.assign({ screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record", "how_it_works"] } }, FOR), required: ["screen"] } },
     { type: "function", name: "call_contact", description: "Put a Call button for a contact on screen when the officer wants to phone them. The officer taps it; the phone places the call.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
     { type: "function", name: "get_giving", description: "Look up a contact's giving: lifetime total, this year's total, the last gift with its date, and any open pledge balance. Also opens their contact record.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
-    { type: "function", name: "get_my_tasks", description: "Read the officer's open tasks (not done), soonest due first, with any overdue ones marked. Also opens the Tasks screen. Use it when the officer asks what's on their list, what's due, or what's overdue.", parameters: { type: "object", properties: { which: { type: "string", enum: ["all", "overdue", "due_today", "this_week"], description: "Which open tasks: all (default), overdue only, due today or earlier, or due in the next seven days" } }, required: [] } },
+    { type: "function", name: "get_my_tasks", description: "Read the officer's open tasks (not done), soonest due first, with any overdue ones marked. Also opens the Tasks screen. Use it when the officer asks what's on their list, what's due, or what's overdue.", parameters: { type: "object", properties: { which: { type: "string", enum: ["all", "overdue", "due_today", "this_week", "waiting", "in_progress"], description: "Which open tasks: all (default), overdue only, due today or earlier, due in the next seven days, the ones waiting on someone, or the ones in progress" } }, required: [] } },
     { type: "function", name: "get_contact_history", description: "Read a contact's interaction history (meetings, calls and asks, newest first) and their open tasks, including tasks on their opportunity. Also opens their contact record. Use it when the officer asks about past interactions with a contact, what happened last time, or what's outstanding for a contact.", parameters: { type: "object", properties: Object.assign({ focus: { type: "string", enum: ["history_and_tasks", "history", "tasks"], description: "What the officer asked for; default both" } }, FOR), required: ["contact_name"] } },
     { type: "function", name: "highlight_stage", description: "During the process overview, light up one stage on the How it works screen. Call it just before you describe that stage.", parameters: { type: "object", properties: { stage: { type: "string", enum: FLOW.map(f => f.stage) } }, required: ["stage"] } },
     { type: "function", name: "set_user_name", description: "Save the first name of the person using the app, once they tell you. Call it as soon as they say it.", parameters: { type: "object", properties: { first_name: { type: "string" } }, required: ["first_name"] } },
+    { type: "function", name: "set_task_status", description: "Change a task's status: to do, in progress, waiting (on someone, with a check-back date) or done. First call it with confirmed false: the app finds the task and shows it; read back what will change and ask the officer to confirm. Only after they say yes, call again with confirmed true.", parameters: { type: "object", properties: Object.assign({ task: { type: "string", description: "Words from the task as the officer said them, e.g. 'pledge decision' or 'Pennsylvania update'" }, status: { type: "string", enum: ["to_do", "in_progress", "waiting", "done"] }, check_back_on: { type: "string", description: "YYYY-MM-DD to check back, for waiting; leave out if not said" }, confirmed: { type: "boolean" } }, FOR), required: ["task", "status", "confirmed"] } },
     { type: "function", name: "set_speaking_speed", description: "Change how fast you talk when the officer asks you to speak faster or slower (or normally). The choice is remembered on this phone.", parameters: { type: "object", properties: { change: { type: "string", enum: ["faster", "slower", "normal"] } }, required: ["change"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
@@ -961,7 +972,7 @@ To book a future meeting, use show_meeting_draft (ask for the day and start time
 When the officer wants to phone a contact, call call_contact. Only offer calls the app allows (the contact needs a phone number and Calls permitted on).
 When the officer asks you to talk faster, slower or at normal speed, call set_speaking_speed; it is remembered on this phone.
 When the officer asks you to prepare them for a meeting with someone, call get_contact_history for that contact and give a short spoken briefing in three or four sentences: their giving (last gift and this year's total), where their opportunity stands and the latest ask, anything outstanding, and one suggested goal for the meeting.
-When the officer asks what tasks they have, what's due or overdue, call get_my_tasks and read what it returns. When they ask about past interactions with a contact, what happened last time, or what's outstanding for a contact, call get_contact_history (focus history, tasks, or both) and read what it returns. Never read tasks or history from memory; always call the tool, since the records may have changed.
+When the officer asks what tasks they have, what's due or overdue, call get_my_tasks and read what it returns. When the officer says a task is done, started, or that they are waiting on someone, call set_task_status (confirmed false), read back the change, and only after they say yes call it again with confirmed true. When they ask about past interactions with a contact, what happened last time, or what's outstanding for a contact, call get_contact_history (focus history, tasks, or both) and read what it returns. Never read tasks or history from memory; always call the tool, since the records may have changed.
 When the officer asks about a contact's giving (lifetime, this year, year to date, last gift or donation), call get_giving and speak the figures it returns; never estimate them.
 When adding a task, always ask for the due date if none was said ("When is it due?"); a task can't be saved without one. If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
 When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?" Always pass date and meetingType in show_interaction_draft and show_ask_result_draft: the date resolved from what the officer said (for example yesterday), and the type they said. Leaving them out puts today and In person on the draft.
@@ -1315,6 +1326,24 @@ function onTool(callId, name, args) {
     S.settings.userName = v; S.settings.seenPrivacy = true; S.seenWelcome = true; if (wasAsking) S.screen = "home"; save(); applyName(); welcomeModal(); render(); if (wasAsking) window.scrollTo(0, 0); whenIdle("instr");
     toolReply(callId, { ok: true, status: `Saved. You already introduced yourself, so don't say your name or role again. If they haven't asked for anything yet, say exactly: "Nice to meet you, ${v}. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Thanks, ${v}" and carry on with it.` }); return;
   }
+  if (name === "set_task_status") {
+    const words = (data.task || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 2 && !["the", "and", "for", "task", "with", "about"].includes(w));
+    const who = data.contact_name ? resolveTarget("interaction", data.contact_name) : null;
+    let pool = S.tasks.filter(t => !who || who.error || t.contactId === who.contact.id);
+    if (data.status !== "done" && data.status !== "to_do") pool = pool.filter(t => !t.done);
+    const score = (t) => { const tx = (t.text + " " + taskWhere(t)).toLowerCase(); return words.filter(w => tx.includes(w)).length; };
+    const ranked = pool.map(t => [t, score(t)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1] || (a[0].done - b[0].done));
+    if (!ranked.length) { toolReply(callId, { ok: false, error: "No task matches that. Ask which task they mean, or offer to read their open tasks." }); return; }
+    if (ranked.length > 1 && ranked[1][1] === ranked[0][1]) { toolReply(callId, { ok: false, matches: ranked.slice(0, 4).map(x => ({ task: x[0].text, for: taskWhere(x[0]), status: TSTAT[taskStatus(x[0])] })), error: "More than one task matches. Read these briefly and ask which one." }); return; }
+    const t = ranked[0][0], st = { to_do: "todo", in_progress: "doing", waiting: "waiting", done: "done" }[data.status] || "done";
+    const until = st === "waiting" ? (/^\d{4}-\d{2}-\d{2}$/.test(data.check_back_on || "") ? data.check_back_on : addDays(todayISO(), 7)) : null;
+    const change = st === "waiting" ? `Waiting, check back ${fmtDate(until)}` : TSTAT[st];
+    if (!data.confirmed) { go("tasks"); whenIdle("instr"); setTimeout(() => { const r = document.querySelector(`.trow[data-tid="${t.id}"]`); if (r) { r.classList.add("tflash"); r.scrollIntoView({ block: "center", behavior: "smooth" }); } }, 150);
+      toolReply(callId, { ok: true, task: t.text, for: taskWhere(t), now: TSTAT[taskStatus(t)], will_become: change, say: `Ask in one short sentence: "Mark '${t.text}' as ${change.toLowerCase()}?"${st === "waiting" && !data.check_back_on ? " Mention the check-back date is a week from today unless they want another day." : ""} Wait for yes before calling again with confirmed true.` }); return; }
+    const undo = setTaskStatus(t, st, until); go("tasks"); toast(`${change}: ${t.text}`, undo);
+    const meetingish = /follow|call|meet|visit|lunch|coffee|pledge|ask/i.test(t.text);
+    toolReply(callId, { ok: true, saved: true, task: t.text, status: change, say: `Confirm in one short sentence that it's saved${st === "done" && meetingish ? ", then ask whether they'd like to log an interaction for it (for example a call or meeting report)" : ""}.` }); return;
+  }
   if (name === "set_speaking_speed") {
     const now = talkSpeed(), next = data.change === "normal" ? 1 : SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, SPEEDS.indexOf(nearSpeed(now)) + (data.change === "faster" ? 1 : -1)))];
     S.settings.speed = next; save(); send({ type: "session.update", session: sessionCfg() });
@@ -1349,10 +1378,10 @@ function onTool(callId, name, args) {
   if (name === "get_my_tasks") {
     const T = todayISO(), which = data.which || "all";
     const open = S.tasks.filter(t => !t.done).sort((x, y) => (x.due || "9999").localeCompare(y.due || "9999"));
-    const pick = open.filter(t => which === "overdue" ? t.due && t.due < T : which === "due_today" ? t.due && t.due <= T : which === "this_week" ? t.due && t.due <= addDays(T, 7) : true);
+    const pick = open.filter(t => which === "overdue" ? t.due && t.due < T : which === "due_today" ? t.due && t.due <= T : which === "this_week" ? t.due && t.due <= addDays(T, 7) : which === "waiting" ? taskStatus(t) === "waiting" : which === "in_progress" ? taskStatus(t) === "doing" : true);
     go("tasks"); whenIdle("instr");
     toolReply(callId, { ok: true, open_tasks_total: open.length, overdue_total: open.filter(t => t.due && t.due < T).length, showing: which, count: pick.length,
-      tasks: pick.map(t => ({ task: t.text, for: taskWhere(t), due: t.due ? fmtDate(t.due) + (t.due.slice(0, 4) !== T.slice(0, 4) ? " " + t.due.slice(0, 4) : "") : "no due date", overdue: !!(t.due && t.due < T), due_today: t.due === T })),
+      tasks: pick.map(t => ({ task: t.text, status: TSTAT[taskStatus(t)], for: taskWhere(t), due: t.due ? fmtDate(t.due) + (t.due.slice(0, 4) !== T.slice(0, 4) ? " " + t.due.slice(0, 4) : "") : "no due date", overdue: !!(t.due && t.due < T), due_today: t.due === T })),
       say: pick.length ? "Say how many there are, overdue ones first, then read each task briefly with who it's for and when it's due (say overdue, today, or the day). If there are more than five, read the first five and ask whether to go on. Then ask if they'd like to act on one, for example log the follow-up." : "Say there are no open tasks of that kind." }); return;
   }
   if (name === "get_contact_history") {
@@ -1429,6 +1458,7 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
 
 /* ---------- screens ---------- */
 const go = (s) => { S.screen = s; save(); render(); window.scrollTo(0, 0); };
+const CHEV = '<svg width="8" height="13" viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5l-5 5"/></svg>'; // iPhone-style row chevron
 const BACK_NAMES = { home: "Home", opp: "Opportunity", contact: "Contact", contacts: "Contacts", board: "Opportunities", opps: "Opportunities", tasks: "Tasks", settings: "Settings" }; // iPhone-style back button shows where it goes
 function topbar(title, back, logo) {
   return `<header class="top${logo ? " withlogo" : ""}">${logo ? '<img class="top-logo" src="logo-v5.png" alt="Citizens Alliance" width="82" height="50">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back to ${BACK_NAMES[back] || "previous screen"}"><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2 2 10l8 8"/></svg><span>${(BACK_NAMES[back] || "").length > 9 ? "Back" : (BACK_NAMES[back] || "Back")}</span></button>` : ""}${logo ? `<div class="who"><b>${OFFICER}</b><span>You're the gift officer</span></div>` : `<h1>${esc(title)}</h1>`}
@@ -1633,9 +1663,9 @@ function needsAttention() {
   myOpen().forEach(o => {
     const c = contactById(o.contactId);
     const al = oppAlert(o);
-    if (al && al.act) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">›</span></div>`);
+    if (al && al.act) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">${CHEV}</span></div>`);
   });
-  S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).sort((x, y) => x.due.localeCompare(y.due)).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">›</span></div>`));
+  S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).sort((x, y) => x.due.localeCompare(y.due)).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">${CHEV}</span></div>`));
   return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
 }
 // "Sun, Oct 25 · in 5 days"
@@ -1644,7 +1674,7 @@ function dayLabel(iso) { const d = new Date(iso + "T12:00:00"), n = Math.round((
 function upcomingPanel() {
   const m = (S.meetings || []).filter(x => x.date >= todayISO()).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 3);
   return `<section class="panel"><div class="ph"><h2>Upcoming meetings</h2><span class="meta">${m.length ? "next " + m.length : ""}</span></div>${m.length ? m.map(x => { const who = nameOf(contactById(x.contactId));
-    return `<div class="row tap" data-contact="${x.contactId}"><div class="t">${esc(x.title)}<div class="s">${dayLabel(x.date)} · ${fmtTime(x.time)} · ${esc(x.type || "")}</div></div>${who ? `<button type="button" class="mtg-prep" data-act2="mtgprep" data-who="${esc(who)}">${mic(11)} Prepare</button>` : `<span class="chev">›</span>`}</div>`; }).join("") : `<div class="empty">No meetings booked. Say “Schedule a meeting with Ruth”.</div>`}</section>`;
+    return `<div class="row tap" data-contact="${x.contactId}"><div class="t">${esc(x.title)}<div class="s">${dayLabel(x.date)} · ${fmtTime(x.time)} · ${esc(x.type || "")}</div></div>${who ? `<button type="button" class="mtg-prep" data-act2="mtgprep" data-who="${esc(who)}">${mic(11)} Prepare</button>` : `<span class="chev">${CHEV}</span>`}</div>`; }).join("") : `<div class="empty">No meetings booked. Say “Schedule a meeting with Ruth”.</div>`}</section>`;
 }
 // example goals until the customer gives real ones
 const GOALS = { raised: 300000, asks: 12 };
@@ -1660,7 +1690,7 @@ function goalsPanel() {
 function addBtnCard() {
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
   if (standalone || S.settings.hideAddBtn) return "";
-  return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add Citizens VCRM to your Home Screen</b><span>Open the demo like an app. Show me how</span></div><span class="chev">›</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
+  return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add Citizens VCRM to your Home Screen</b><span>Open the demo like an app. Show me how</span></div><span class="chev">${CHEV}</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
 }
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
@@ -1686,7 +1716,7 @@ function homeScreen() {
 function contactsScreen() {
   const rows = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
   return topbar("Contacts") + `<main><input id="cSearch" class="search" type="search" placeholder="Search contacts" autocomplete="off"><section class="panel"><div class="ph"><h2>My contacts</h2><span class="meta">${rows.length}</span></div>
-  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">›</span></div>`; }).join("")}
+  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">${CHEV}</span></div>`; }).join("")}
   </section><button class="btn out" data-form="contact">Add a contact</button></main>`;
 }
 function historyPanel(filter) {
@@ -1786,7 +1816,7 @@ function contactScreen() {
   <dl class="kv" style="padding-top:0"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
   <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns"><button class="btn blue" data-form="interaction" data-cid="${c.id}">Log a meeting</button><button class="btn out" data-form="task" data-cid="${c.id}">Add a task</button>${o || c.ally ? "" : `<button class="btn out" data-form="opportunity" data-cid="${c.id}">Create opportunity</button>`}</div>${callBtn(c)}</section>
   ${givingPanel(c)}
-  ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">›</span></div>`).join("")}</section>` : ""}
+  ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">${CHEV}</span></div>`).join("")}</section>` : ""}
   ${interactionsPanel(ints, true)}
   ${meetingsPanel(c)}
   ${tasksPanel(S.tasks.filter(t => t.contactId === c.id), "Tasks")}
@@ -1831,7 +1861,7 @@ function oppListHTML() {
   return STAGES.slice(0, 5).map(st => { const os = S.opps.filter(o => o.stage === st); if (!os.length) return "";
     return `<div class="lgroup">${st} <span>${os.length}</span></div>` + os.map(o => { const a = latestAsk(o), c = contactById(o.contactId);
       const amt = o.pledge ? "Pledged " + money(o.pledge.amount) : a ? (a.status === "Planned" ? "Ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
-      return `<div class="row tap" data-opp="${o.id}"><div class="t"><span class="lnk">${esc(nameOf(c))}</span><div class="s">${amt} · ${esc(o.fund || "")}</div>${oppAlert(o) ? `<div style="margin-top:5px">${alertPill(oppAlert(o))}</div>` : ""}</div><span class="chev">›</span></div>`; }).join(""); }).join("");
+      return `<div class="row tap" data-opp="${o.id}"><div class="t"><span class="lnk">${esc(nameOf(c))}</span><div class="s">${amt} · ${esc(o.fund || "")}</div>${oppAlert(o) ? `<div style="margin-top:5px">${alertPill(oppAlert(o))}</div>` : ""}</div><span class="chev">${CHEV}</span></div>`; }).join(""); }).join("");
 }
 function boardScreen() {
   const view = S.oppView || "list";
@@ -1848,9 +1878,53 @@ function boardScreen() {
   <div class="empty" style="font-size:12.5px">Cards move only when something is recorded. Swipe sideways to see every stage.</div></section></main>`;
 }
 const taskWhere = (t) => { const o = t.oppId && oppById(t.oppId); return o ? o.name : nameOf(contactById(t.contactId)); };
+/* ---------- task statuses: To do, In progress, Waiting, Done (SpiceCRM: Not Started, In Progress, Pending Input, Completed) ---------- */
+const TSTAT = { todo: "To do", doing: "In progress", waiting: "Waiting", done: "Done" };
+const taskStatus = (t) => t.done ? "done" : (t.status || "todo");
+function setTaskStatus(t, st, until) {
+  const before = { done: t.done, status: t.status, due: t.due, doneOn: t.doneOn };
+  t.done = st === "done"; t.status = st; t.doneOn = st === "done" ? todayISO() : null;
+  if (st === "waiting" && until) t.due = until;
+  save(); render(); return () => { Object.assign(t, before); save(); render(); };
+}
+const checkSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function taskRow(t, showWhere) {
+  const st = taskStatus(t), al = taskAlert(t);
+  return `<div class="trow${st === "done" ? " isdone" : ""}" data-tid="${t.id}"><div class="tacts"><button type="button" class="ta-wait" data-tk-wait="${t.id}">Waiting</button><button type="button" class="ta-done" data-tk-done="${t.id}">Done</button></div>
+    <div class="row tmain"><button type="button" class="tcheck${st === "done" ? " on" : ""}" data-tk-done="${t.id}" aria-label="${st === "done" ? "Mark not done" : "Mark done"}">${st === "done" ? checkSvg : ""}</button>
+    <div class="t">${alertPill(al)}<div class="ttext${al ? " na-do" : ""}">${esc(t.text)}</div><div class="s">${st === "done" ? "Done" + (t.doneOn ? " " + fmtDate(t.doneOn) : "") : st === "waiting" ? (t.due ? "Check back " + fmtDate(t.due) : "Waiting") : t.due ? "Due " + fmtDate(t.due) : "No due date"}${showWhere ? " · " + esc(taskWhere(t)) : t.oppId ? " · on the opportunity" : ""}</div></div>
+    <button type="button" class="tstat s-${st}" data-tk-stat="${t.id}" aria-label="Status: ${TSTAT[st]}. Change">${TSTAT[st]}<svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div></div>`;
+}
+function statusPicker(t, pickWaiting) {
+  const h = document.getElementById("modal"), st = taskStatus(t), dflt = t.due && t.due > todayISO() && st === "waiting" ? t.due : addDays(todayISO(), 7);
+  h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="tsTitle">
+    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    <h2 id="tsTitle">Task status</h2><p class="wl-hint">${esc(t.text)}</p>
+    <div class="tsopts">${Object.keys(TSTAT).map(k => `<button type="button" class="tsopt${k === st ? " cur" : ""}" data-ts="${k}"><span class="tdot s-${k}"></span>${TSTAT[k]}${k === st ? '<span class="tscur">Current</span>' : ""}</button>`).join("")}</div>
+    <div class="tswait" ${pickWaiting ? "" : "hidden"}><label class="wl-name">Check back on<input type="date" id="tsUntil" value="${dflt}" min="${todayISO()}"></label><button type="button" class="btn blue" id="tsWaitGo">Save as Waiting</button></div></div></div>`;
+  const set = (k, until) => { h.innerHTML = ""; const undo = setTaskStatus(t, k, until); toast(`${k === "waiting" ? "Waiting until " + fmtDate(until) : TSTAT[k]}: ${t.text}`, undo); };
+  h.querySelectorAll("[data-ts]").forEach(b => b.onclick = () => { const k = b.dataset.ts; if (k === "waiting") { h.querySelector(".tswait").hidden = false; document.getElementById("tsUntil").focus(); return; } set(k); });
+  document.getElementById("tsWaitGo").onclick = () => set("waiting", document.getElementById("tsUntil").value || addDays(todayISO(), 7));
+}
+document.addEventListener("click", (e) => {
+  const d = e.target.closest("[data-tk-done]"), w = e.target.closest("[data-tk-wait]"), s2 = e.target.closest("[data-tk-stat]");
+  const el = d || w || s2; if (!el) return; e.stopPropagation();
+  const t = S.tasks.find(k => k.id === (el.dataset.tkDone || el.dataset.tkWait || el.dataset.tkStat)); if (!t) return;
+  if (d) { const was = taskStatus(t); const undo = setTaskStatus(t, was === "done" ? "todo" : "done"); toast(was === "done" ? "Back on your list" : "Done: " + t.text, undo); }
+  else if (w) statusPicker(t, true); else statusPicker(t, false);
+}, true);
+// swipe left on a task to show Waiting and Done, as in Apple's Reminders
+(() => { let row = null, x0 = 0, y0 = 0, dx = 0, sw = false;
+  const close = (except) => document.querySelectorAll(".trow.open").forEach(r => { if (r !== except) { r.classList.remove("open"); r.querySelector(".tmain").style.transform = ""; } });
+  document.addEventListener("touchstart", (e) => { const r = e.target.closest(".trow"); if (!r || e.target.closest(".tacts")) { if (!r) close(); return; } row = r; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; sw = false; close(r); }, { passive: true });
+  document.addEventListener("touchmove", (e) => { if (!row) return; const mx = e.touches[0].clientX - x0, my = e.touches[0].clientY - y0;
+    if (!sw && Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my)) sw = true; if (!sw) return;
+    dx = Math.max(-170, Math.min(0, mx + (row.classList.contains("open") ? -160 : 0))); const m = row.querySelector(".tmain"); m.style.transition = "none"; m.style.transform = `translateX(${dx}px)`; }, { passive: true });
+  document.addEventListener("touchend", () => { if (!row) return; const m = row.querySelector(".tmain"); m.style.transition = ""; if (sw) { const open = dx < -60; row.classList.toggle("open", open); m.style.transform = open ? "translateX(-160px)" : ""; } row = null; });
+})();
 function tasksPanel(list, label) {
-  const open = list.filter(t => !t.done);
-  return `<section class="panel"><div class="ph"><h2>${label}</h2><span class="meta">${open.length} open</span></div>${open.length ? open.map(t => `<div class="row"><div class="t">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"}${t.oppId ? " · on the opportunity" : ""}</div></div></div>`).join("") : `<div class="empty">No open tasks.</div>`}</section>`;
+  const open = list.filter(t => !t.done).sort((x, y) => (x.due || "9999").localeCompare(y.due || "9999"));
+  return `<section class="panel"><div class="ph"><h2>${label}</h2><span class="meta">${open.length} open</span></div>${open.length ? open.map(t => taskRow(t, false)).join("") : `<div class="empty">No open tasks.</div>`}</section>`;
 }
 /* ---------- how it works: contact to Closed Won ---------- */
 const FI = (p) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
@@ -1894,8 +1968,11 @@ const FAQ_TEXT = "Citizens Alliance Fundraising - Process FAQ for the voice assi
 const flowScript = () => FLOW.map(f => `${f.stage}: ${f.means}${f.move.length ? " To move on: " + f.move.join(" ") : ""}${f.note ? " " + f.note : ""}`).join("\n");
 
 function tasksScreen() {
-  return topbar("Tasks") + `<main><section class="panel"><div class="ph"><h2>My tasks</h2><span class="meta">${S.tasks.filter(t => !t.done).length} open</span></div>
-  ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(taskWhere(t))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. Say “Add a task”, or mention a next step when you log a meeting.</div>`}</section></main>`;
+  const open = S.tasks.filter(t => !t.done).sort((x, y) => (x.due || "9999").localeCompare(y.due || "9999")), done = S.tasks.filter(t => t.done).sort((x, y) => (y.doneOn || "").localeCompare(x.doneOn || ""));
+  return topbar("Tasks") + `<main><section class="panel"><div class="ph"><h2>My tasks</h2><span class="meta">${open.length} open</span></div>
+  ${open.length ? open.map(t => taskRow(t, true)).join("") : `<div class="empty">${S.tasks.length ? "Nothing open. Nice work." : "No tasks yet. Say “Add a task”, or mention a next step when you log a meeting."}</div>`}
+  <div class="thint">Tap the circle when a task is done, or tap its status to change it. You can also swipe a task left, or just tell ${esc(botName())}.</div></section>
+  ${done.length ? `<section class="panel"><div class="ph"><h2>Done</h2><span class="meta">${done.length}</span></div>${done.map(t => taskRow(t, true)).join("")}</section>` : ""}</main>`;
 }
 function settingsScreen() {
   return topbar("Settings", "home") + `<main>
@@ -2007,7 +2084,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T11:51:36Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T12:59:41Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
