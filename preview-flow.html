@@ -91,6 +91,8 @@ main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-sh
 .alert { display: inline-block; border-radius: 10px; padding: 2px 9px; font-size: 12.5px; font-weight: 700; border: 1px solid; }
 .alert.ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
 .alert.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
+.cfilt { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 12px; padding-bottom: 2px; scrollbar-width: none; } .cfilt::-webkit-scrollbar { display: none; }
+.cfilt button { flex: none; font: inherit; font-size: 14px; font-weight: 600; min-height: 36px; padding: 6px 13px; border-radius: 18px; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--fg); cursor: pointer; } .cfilt button.on { background: var(--brand); border-color: var(--brand); color: #fff; } .cfilt b { font-weight: 700; opacity: .8; margin-left: 2px; }
 .alert.mute { background: var(--surface2); color: var(--muted); border-color: var(--line-strong); }
 .opptag { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; padding: 1px 7px; border-radius: 9px; font-size: 11.5px; font-weight: 700; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid var(--brand-line); white-space: nowrap; vertical-align: 1px; }
 .opptag.off { color: var(--muted); background: var(--surface2); border-color: var(--line-strong); }
@@ -554,6 +556,8 @@ const askedOf = (o) => { const a = latestAsk(o); return a && a.status !== "Plann
 const agreed = (a) => !!a && (a.status === "Accepted" || /Agreed/.test(a.status));
 const subCount = (c) => S.interactions.filter(i => i.contactId === c.id && i.substantive).length;
 // one alert on a contact with no open opportunity: ready, the step that's missing, or the flag that stops it
+const oppReady = (c) => !openOpp(c.id) && oppChecks(c).every(x => x.ok);
+const needsRating = (c) => !openOpp(c.id) && !c.dnc && !c.ally && !c.capacity;
 function oppPill(c) {
   if (openOpp(c.id)) return "";
   if (c.dnc) return ' <span class="alert mute">Do Not Contact</span>';
@@ -978,7 +982,7 @@ const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, descrip
 
 function crmSnapshot() {
   return S.contacts.map(c => { const o = openOpp(c.id), a = latestAsk(o);
-    return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") : ": no open opportunity"}`; }).join("; ");
+    return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") : oppReady(c) ? ": no open opportunity, ready for one" : ": no open opportunity"}`; }).join("; ");
 }
 function grokInstructions() {
   const f = focusContact();
@@ -1712,6 +1716,7 @@ function needsAttention() {
     const al = oppAlert(o);
     if (al && al.act) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">${CHEV}</span></div>`);
   });
+  S.contacts.filter(oppReady).forEach(c => rows.push(`<div class="row tap" data-contact="${c.id}"><div class="t"><span class="alert ok">Ready for opportunity</span><div class="na-do">${esc(c.first)} meets every requirement. Create an opportunity?</div><div class="s">${esc(nameOf(c))} · capacity ${c.capacity}</div></div><span class="chev">${CHEV}</span></div>`));
   S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).sort((x, y) => x.due.localeCompare(y.due)).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">${CHEV}</span></div>`));
   return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
 }
@@ -1761,8 +1766,11 @@ function homeScreen() {
   </main>`;
 }
 function contactsScreen() {
-  const rows = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
-  return topbar("Contacts") + `<main><input id="cSearch" class="search" type="search" placeholder="Search contacts" autocomplete="off"><section class="panel"><div class="ph"><h2>My contacts</h2><span class="meta">${rows.length}</span></div>
+  const all = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
+  const F = { all: ["All", () => true, "My contacts"], ready: ["Ready for opportunity", oppReady, "Ready for opportunity"], rating: ["Needs rating", needsRating, "Need a capacity rating"] };
+  const fk = F[S.cFilter] ? S.cFilter : "all", rows = all.filter(F[fk][1]);
+  const chips = `<div class="cfilt" role="tablist" aria-label="Show">${Object.entries(F).map(([k, f]) => `<button type="button" role="tab" aria-selected="${k === fk}" class="${k === fk ? "on" : ""}" data-act2="cfilt" data-v="${k}">${f[0]}${k === "all" ? "" : ` <b>${all.filter(f[1]).length}</b>`}</button>`).join("")}</div>`;
+  return topbar("Contacts") + `<main><input id="cSearch" class="search" type="search" placeholder="Search contacts" autocomplete="off">${chips}<section class="panel"><div class="ph"><h2>${F[fk][2]}</h2><span class="meta">${rows.length}</span></div>${rows.length ? "" : `<div class="empty">${fk === "ready" ? "Nobody is ready yet. Contacts need a capacity rating and no open opportunity." : "Everyone is rated."}</div>`}
   ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}${oppPill(c)}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">${CHEV}</span></div>`; }).join("")}
   </section><button class="btn out" data-form="contact">Add a contact</button></main>`;
 }
@@ -2119,6 +2127,7 @@ document.addEventListener("click", (e) => {
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
+  else if (act === "cfilt") { S.cFilter = a.dataset.v; save(); render(); }
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
   else if (act === "flowat") { S.flowBack = "opp"; highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
@@ -2161,7 +2170,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T17:28:40Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T17:30:59Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

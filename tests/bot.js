@@ -223,6 +223,10 @@ test("Opportunity: an unrated contact gets the checklist, not the form (voice an
   ok(await p.isVisible(".oppready"), "the record does not say Ready for opportunity");
   await tab(p, "Contacts");
   ok(await p.isVisible(".row:has-text('Haddad, Noor') .alert.ok"), "the list does not show Ready for opportunity");
+  await p.tap("[data-act2=cfilt][data-v=ready]"); await p.waitForTimeout(300);
+  ok(await p.isVisible("text=Haddad, Noor") && !(await p.isVisible("text=Abernathy, Ruth")), "the Ready for opportunity filter is wrong");
+  await tab(p, "Home");
+  ok(await p.isVisible("text=Noor meets every requirement"), "Needs attention does not list Noor as ready");
 });
 test("Ara: setting a capacity rating asks first, then saves", async (p) => {
   await signIn(p);
