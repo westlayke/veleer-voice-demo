@@ -1786,7 +1786,7 @@ function welcomeModal() {
     <input id="wlName" class="wl-input" aria-label="Your first name" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}">
     <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
     <button class="btn blue" data-act4="welcome-ok">Start</button>
-    <p class="wl-priv">This demo saves what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
+    <p class="wl-priv">This demo saves when you open the app, what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
     <div class="wl-links"><button type="button" class="linkbtn" data-act4="voice">${mic(14)} Say it instead</button><button type="button" class="linkbtn" data-act2="share">Share this demo</button></div></div></div>`;
   setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
@@ -2217,7 +2217,7 @@ function settingsScreen() {
     ${saveTip(true)}</div></section>
   <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
     <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" enterkeyhint="done" value="${esc(S.settings.userName || "")}"></label>
-    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves when you open the app, what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
   </div></section>
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
@@ -2321,7 +2321,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T20:20:01Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T20:52:42Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
@@ -2344,6 +2344,9 @@ window.addEventListener("pageshow", checkUpdate);
 setInterval(() => { if (document.visibilityState === "visible") checkUpdate(); }, 5 * 60000); // pages left open pick up new versions too
 if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
 render(); save(); welcomeModal(); checkUpdate(); setTimeout(prefetchToken, 300);
+// Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
+function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app"); }
+logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
 window.__demo = { get state() { return S; }, resolveTarget };
 })();
 </script>

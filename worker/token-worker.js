@@ -88,8 +88,16 @@ a{color:#1f5fbf}</style></head><body>${body}</body></html>`, { headers: { "Conte
     FROM events ${device ? "WHERE device = ?" : ""} GROUP BY session ORDER BY start DESC LIMIT ${device ? 200 : 50}`).bind(...(device ? [device] : [])).all()).results;
   const ids = sessions.map(s => s.session);
   const rows = ids.length ? (await env.DB.prepare(`SELECT session, at, role, text FROM events WHERE session IN (${ids.map(() => "?").join(",")}) ORDER BY id`).bind(...ids).all()).results : [];
-  const label = { user: "They said", grok: "Grok", step: "Step", saved: "Saved", start: "Started", end: "Ended", tap: "Tapped" };
+  const label = { user: "They said", grok: "Grok", step: "Step", saved: "Saved", start: "Started", end: "Ended", tap: "Tapped", open: "Opened" };
   let h = `<h1>Citizens VCRM activity</h1><div class="meta">Times are US Eastern. Location is approximate, from the phone's internet connection. Kept ${KEEP_DAYS} days.</div>`;
+  const day = (t) => { try { return new Date(t).toLocaleDateString("en-US", { timeZone: "America/New_York" }); } catch (e) { return ""; } };
+  const today = day(new Date());
+  const recentRows = (await env.DB.prepare("SELECT device, at, name, page, city, region, country FROM events WHERE at >= ? ORDER BY id")
+    .bind(new Date(Date.now() - 30 * 3600e3).toISOString()).all()).results.filter(r => day(r.at) === today);
+  const todays = {}; recentRows.forEach(r => { const t = todays[r.device] = todays[r.device] || { device: r.device, first: r.at }; Object.assign(t, { last: r.at, name: r.name || t.name, page: r.page, city: r.city, region: r.region, country: r.country }); });
+  const tl = Object.values(todays);
+  h += `<h2>Today: ${tl.length} device${tl.length === 1 ? "" : "s"}</h2><table><tr><th>Name</th><th>First seen</th><th>Last seen</th><th>Location</th><th>Page</th></tr>`
+    + tl.map(t => `<tr><td>${esc(t.name || "no name")}</td><td>${when(t.first)}</td><td>${when(t.last)}</td><td>${esc(place(t))}</td><td>${esc(t.page || "")}</td></tr>`).join("") + "</table>";
   h += `<h2>Phones (${phones.length})</h2><table><tr><th>Name</th><th>Last seen</th><th>Conversations</th><th>Location</th><th>Phone ID</th></tr>`
     + phones.map(p => `<tr><td>${esc(p.name || "no name")}</td><td>${when(p.last)}</td><td>${p.convs}</td><td>${esc(place(p))}</td><td><a href="?device=${encodeURIComponent(p.device)}">${esc(String(p.device).slice(0, 8))}</a></td></tr>`).join("") + "</table>";
   h += `<h2>${device ? `Conversations from phone ${esc(device.slice(0, 8))} · <a href="/activity">show all</a>` : "Latest conversations"}</h2>`;

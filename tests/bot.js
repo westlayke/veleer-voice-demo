@@ -301,9 +301,10 @@ test("Ara: sets a capacity rating on a new contact (in the draft, any wording, o
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Lou").capacity === "A", "the rating was not saved with the contact");
 });
-test("Activity log records taps outside a conversation", async (p) => {
+test("Activity log records opening the app and taps outside a conversation", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(4600);
   const ev = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
+  ok(ev.filter(x => x === "open: Opened the app").length === 1, "opening the app was not logged exactly once: " + ev.slice(0, 4).join(" | "));
   ok(ev.some(x => /^tap: .*Contacts/.test(x)) && ev.some(x => /^tap: .*Abernathy/.test(x)), "taps were not sent to the activity log: " + ev.slice(0, 6).join(" | "));
 });
 test("Contacts can be edited by touch and voice; changes go to History; Do Not Contact stays locked on", async (p) => {
