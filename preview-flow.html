@@ -58,8 +58,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .chip { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
 main { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-/* Settings and Home: stronger section edges so the sections don't blend together */
-main.setmain { gap: 18px; } .setmain .panel { border: 1.5px solid var(--line-strong); box-shadow: 0 2px 6px rgba(16, 24, 40, .10); } .setmain .ph { border-bottom-color: var(--line-strong); }
+/* every screen: stronger section edges so the sections don't blend together */
+main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-shadow: 0 2px 6px rgba(16, 24, 40, .10); } main .ph { border-bottom-color: var(--line-strong); }
 .ph { display: flex; align-items: baseline; gap: 8px; padding: 11px 14px 9px; background: var(--surface2); border-bottom: 1px solid var(--line); }
 .ph h2 { margin: 0; font-size: 16px; }
 .ph .meta { margin-left: auto; color: var(--muted); font-size: 13px; }
@@ -1559,7 +1559,7 @@ function homeScreen() {
   // the overview row sits at the top until it has been heard once, then moves to the bottom of Home
   const ov = `<section class="panel"><div class="ovrow"><div class="t"><b>From first contact to Closed Won</b><button type="button" class="linkbtn" data-act2="flowhome">See the stages</button></div>
     <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(15)} Hear the overview</button></div></section>`;
-  return topbar("Home", null, true) + `<main class="setmain">
+  return topbar("Home", null, true) + `<main>
   ${S.heardOverview ? "" : ov}
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
@@ -1790,7 +1790,7 @@ function tasksScreen() {
   ${S.tasks.length ? S.tasks.map(t => `<div class="row"><div class="t" style="${t.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(t.text)}<div class="s">${t.due ? "Due " + fmtDate(t.due) : "No due date"} · ${esc(taskWhere(t))}${t.done ? " · done" : ""}</div></div></div>`).join("") : `<div class="empty">No tasks yet. Say “Add a task”, or mention a next step when you log a meeting.</div>`}</section></main>`;
 }
 function settingsScreen() {
-  return topbar("Settings", "home") + `<main class="setmain">
+  return topbar("Settings", "home") + `<main>
   <section class="panel" id="setSave"><div class="ph"><h2>${SAVE_TITLE}</h2></div><div class="sb set">
     <div class="appbtn-tile">${APP_BTN(60)}<span>Citizens VCRM</span></div>
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45;text-align:center">This is the button you'll get. Tap it to open the demo like an app, with the mic ready.</div>
@@ -1895,7 +1895,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-20T00:11:14Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-20T00:16:41Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
