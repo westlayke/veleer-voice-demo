@@ -1,0 +1,28 @@
+{
+  "name": "New contact with spelled corrections (from a real session, names and email changed)",
+  "source": "Activity log, Oct 21 2026, live page",
+  "start": "no-name",
+  "steps": [
+    { "tool": "set_user_name", "args": { "first_name": "Eve" }, "expect": { "status": "E V E", "notSaved": true } },
+    { "said": "My name is actually Sam." },
+    { "tool": "set_user_name", "args": { "first_name": "Sam" }, "expect": { "status": "S A M", "notSaved": true } },
+    { "said": "Yes." },
+    { "tool": "set_user_name", "args": { "first_name": "Sam", "confirmed": true }, "expect": { "userName": "Sam" } },
+    { "said": "I just want to add a contact." },
+    { "said": "Katherine." },
+    { "tool": "show_contact_draft", "args": { "first": "Katherine" } },
+    { "said": "Hudson." },
+    { "tool": "show_contact_draft", "args": { "first": "Katherine", "last": "Hudson" } },
+    { "said": "Katherine at example dot org." },
+    { "tool": "show_contact_draft", "args": { "email": "katherine@example.org", "ally": false, "dnc": false, "capacity": "E" }, "expect": { "field": { "#f_capacity": "" } } },
+    { "said": "Yeah, it's Katherine is spelled K A T H A R I N E." },
+    { "tool": "show_contact_draft", "args": { "first": "Katharine", "last": "Hudson", "email": "katherine@example.org" }, "expect": { "field": { "#f_first": "Katharine" } } },
+    { "said": "The last name is actually Zelnik. Z E L N I K." },
+    { "tool": "show_contact_draft", "args": { "email": "katherine@example.org", "ally": false, "dnc": false, "capacity": "E" }, "expect": { "status": "Z E L N I K", "field": { "#f_last": "Hudson", "#f_capacity": "" } } },
+    { "tool": "show_contact_draft", "args": { "first": "Katharine", "last": "Zelnik", "email": "katherine@example.org" }, "expect": { "field": { "#f_last": "Zelnik" } } },
+    { "said": "K as in kite, A T H A R I N E at example dot org." },
+    { "tool": "show_contact_draft", "args": { "email": "katharine@example.org" }, "expect": { "field": { "#f_email": "katharine@example.org" } } },
+    { "said": "She donates a million dollars a year." },
+    { "tool": "show_contact_draft", "args": { "capacity": "A" }, "expect": { "field": { "#f_capacity": "A" } } }
+  ]
+}

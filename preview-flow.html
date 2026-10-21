@@ -973,16 +973,23 @@ function toast(text, undo) {
 const S_DATE = { type: "string", description: "YYYY-MM-DD, e.g. 2026-12-01. Work it out from what the officer says, using today's date" };
 // spoken dates can arrive as "December 1", "12/1/2026" or "2026-12-1"; turn them into YYYY-MM-DD (a date with no year is the next one to come)
 // did the officer just give a capacity rating? (their last few lines, as transcribed)
+const NATO = "alpha alfa bravo charlie delta echo foxtrot golf hotel india juliet juliett kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey whisky xray x-ray yankee zulu".split(" ");
+// "T as in Tom", "D like David" and NATO words (Tango Uniform Delta) count as spelled letters
+function spellPrep(t) {
+  t = String(t).replace(/\b([a-z])\s+(?:as in|like|for)\s+[a-z]+\b/gi, "$1");
+  const words = t.split(/\s+/); if (words.filter(w => NATO.includes(w.toLowerCase().replace(/[^a-z-]/g, ""))).length >= 3) t = words.map(w => NATO.includes(w.toLowerCase().replace(/[^a-z-]/g, "")) ? w.replace(/[^a-z]/gi, "").charAt(0).toUpperCase() : w).join(" ");
+  return t;
+}
 const spellOut = (w) => String(w).replace(/[^A-Za-z'-]/g, "").toUpperCase().split("").join(" ");
 // letters the officer spelled out ("T U D Z I N", "K-A-T-H"), joined into words, from their last few lines
 function spelledWords() {
   const lines = (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1).map(l => l.slice(9));
-  const out = []; lines.forEach(t => (t.match(/\b(?:[A-Za-z][.,-]?\s+){2,}[A-Za-z]\b\.?/g) || []).forEach(m => { const w = m.replace(/[^A-Za-z]/g, ""); if (w.length >= 3) out.push(w); }));
+  const out = []; lines.forEach(t => (spellPrep(t).match(/\b(?:[A-Za-z][.,-]?\s+){2,}[A-Za-z]\b\.?/g) || []).forEach(m => { const w = m.replace(/[^A-Za-z]/g, ""); if (w.length >= 3) out.push(w); }));
   return out;
 }
 function officerRated() {
   const lines = (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-3).map(l => l.slice(9).toLowerCase().trim());
-  return lines.some(t => /\b(capacity|rating|rated|rate them|rate her|rate him)\b/.test(t) || /\$\s?\d|\b\d+\s?(k|thousand|million)\b|\bunder (five|5)\b/.test(t)
+  return lines.some(t => /\b(capacity|rating|rated|rate them|rate her|rate him)\b/.test(t) || /\$\s?\d|\b\d+\s?(k|thousand|million)\b|\b(thousand|million|grand)\b|\b(donat\w*|gives?|gave|giving)\b.*\b(dollars?|a year|annually)\b|\bunder (five|5)\b/.test(t)
     || /^(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)[.!]?( please)?[.!]?$/.test(t.replace(/^(it's|its|make it|let's say|lets say|say|um|uh|okay|ok)[, ]+/, "")));
 }
 function normCap(v) {
@@ -1078,7 +1085,7 @@ After a save, briefly confirm and ask what they'd like to do next, or whether to
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
 When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one. Once you have the name and the email or mobile, ask once whether they'd like to fill in any optional fields, and list them in one sentence: how you met them, texting permitted, whether they're an ally who shouldn't be asked for a gift, Do Not Contact, and where their contact permission came from. Mention that email and calls are already allowed. Fill in only the ones they choose, one question at a time. If they say no, tell them they can review the form and tap Save contact.
-If the officer asks how to do a particular task ("how do I add a contact", "how do I log a meeting", "how do I create an opportunity"), don't open the process overview: start doing that task with them straight away (call its draft tool or ask for the first detail it needs), saying in one short sentence that you'll fill the form in together as they talk. When the officer spells something out letter by letter, use exactly those letters in the field they mean. When they correct how a name is spelled, ask once whether the email address should change to match. If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first (no "Opening the overview"), then open with the short introduction the tool reply gives you, then give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait for the answer. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
+If the officer asks how to do a particular task ("how do I add a contact", "how do I log a meeting", "how do I create an opportunity"), don't open the process overview: start doing that task with them straight away (call its draft tool or ask for the first detail it needs), saying in one short sentence that you'll fill the form in together as they talk. When the officer spells something out letter by letter, use exactly those letters in the field they mean; "T as in Tom" and words like Tango or Delta stand for their first letter. The officer can say "cancel", "undo", "go back", "start over" or "say that again" at any time: the app carries these out itself and sends you a notice, so follow the notice and don't act on those words yourself. When they correct how a name is spelled, ask once whether the email address should change to match. If the officer asks how the process works, for an overview, or to be walked through it: call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first (no "Opening the overview"), then open with the short introduction the tool reply gives you, then give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait for the answer. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
 ${flowScript()}
 If the officer says "Review FAQ" or asks what they can ask about the process, name four or five topics the Process FAQ covers (for example who can do what, stage rules, Ally and Do Not Contact flags, alerts, pledges and payments) in one or two sentences, give one example question, and ask what they would like to know. Then answer as below.
 Questions about the process (who can do what, rules, flags, alerts, settings, terms): answer only from the stage list above and the Process FAQ below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't in them, say plainly that it isn't covered in this demo and the Chief Gift Officer's Guide has the full detail; if the FAQ says something is still open with the customer, say that. If two FAQ answers seem to disagree, give the more specific one.
@@ -1370,6 +1377,28 @@ function tellPicked(kind) {
   const what = kind === "opp" ? `the opportunity ${o.name} (${o.stage}) for ${nameOf(c)}` : `the contact record for ${nameOf(c)}${o ? ` (open opportunity in ${o.stage})` : " (no open opportunity)"}`;
   notice(`The officer tapped on screen and opened ${what}. Treat ${nameOf(c)} as the contact they mean from now on. In one short sentence, say you see they picked ${nameOf(c)} and ask what they'd like to do.`);
 }
+// Commands the app carries out itself, so they work the same way every time instead of depending on the model
+const VOICE_CMDS = [
+  [/^(cancel( that| it| this)?|never ?mind|forget (it|that))$/, "cancel"],
+  [/^(undo( that| it)?|undo (the )?last (change|one))$/, "undo"],
+  [/^(go back|back|take me back)$/, "back"],
+  [/^(start over|start again|clear (it|the form|everything))$/, "restart"],
+  [/^(say (that|it) again|repeat( that| it)?|what did you say|come again)$/, "repeat"],
+];
+function voiceCommand(text) {
+  const t = String(text).toLowerCase().replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim().replace(/^((please|okay|ok|um|uh|hey|ara|so) )+/, "").replace(/ please$/, "");
+  const hit = VOICE_CMDS.find(([re]) => re.test(t)); if (!hit) return false;
+  const cmd = hit[1], who = botName() + ": "; let say;
+  if (cmd === "repeat") { const last = (G.recent || []).filter(l => l.startsWith(who)).slice(-1)[0]; if (!last) return false; say = `The officer asked you to repeat. Say again exactly: "${last.slice(who.length)}"`; }
+  else if (cmd === "cancel") { if (!V) return false; const what = ACTIONS[V.action].title; V = null; renderOverlay(); say = `The officer said "cancel". The app closed the ${what} form without saving. Say only "Cancelled, nothing was saved. What would you like to do?"`; }
+  else if (cmd === "undo") { if (!V || !(V.history || []).length) say = `The officer said "undo", but there is no change on an open form to undo. Say so in one short sentence; a saved record is changed with Edit.`;
+    else { V.data = V.history.pop(); renderOverlay(); say = `The officer said "undo". The app put the ${ACTIONS[V.action].title} form back the way it was before your last change. Say in a few words what changed back, then carry on.`; } }
+  else if (cmd === "restart") { if (!V) return false; V.history = []; V.data = prefill(V.action, {}, V.target); V.fromVoice = new Set(); V.askedOther = V.askedOptional = false; renderOverlay(); say = `The officer said "start over". The app cleared the ${ACTIONS[V.action].title} form. Ask for the first detail again.`; }
+  else if (cmd === "back") { if (V) return false; const b = document.querySelector("header.top .back"); if (!b) return false; const where = BACK_NAMES[b.dataset.go] || "the previous screen"; go(b.dataset.go); say = `The officer said "go back". The app is now on ${where}. Say only "Back on ${where}."`; }
+  vlog("voice command: " + cmd); act("step", "voice command " + cmd);
+  stopPlayback(); if (G.responding) send({ type: "response.cancel" }); G.cmdAt = Date.now(); // drop whatever the model started to do with those words
+  notice(say); return true;
+}
 function notice(text) {
   send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(App notice, not spoken by the officer) " + text }] } });
   whenIdle("create");
@@ -1423,7 +1452,7 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { act("user", e.transcript); recent("Officer", e.transcript); }
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript); }
   if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
@@ -1457,6 +1486,7 @@ function onTool(callId, name, args) {
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
+  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command. Follow the app notice." }); return; }
   if (name === "set_user_name") {
     const v = String(data.first_name || "").trim().split(/\s+/)[0].replace(/\s+/g, " ").slice(0, 60);
     if (!v) { toolReply(callId, { ok: false, error: "No name given." }); return; }
@@ -1612,7 +1642,7 @@ function onTool(callId, name, args) {
   const missedSpelling = (tool.action === "contact" || tool.action === "editContact") ? spelledWords().filter(w => !flat.includes(w.toLowerCase())) : [];
   if (missedSpelling.length) vlog(`${name}: spelling not used: ${missedSpelling.join(", ")}`);
   const same = V && V.action === tool.action && (V.target.contact || null) === (target.contact || null);
-  if (same) { const cur = readDraft(); said.forEach(k => { cur[k] = data[k]; }); said.forEach(k => V.fromVoice.add(k)); V = Object.assign({}, V, { action: tool.action, target, data: prefill(tool.action, cur, target), fromVoice: V.fromVoice }); }
+  if (same) { const cur = readDraft(); (V.history = V.history || []).push(Object.assign({}, cur)); if (V.history.length > 20) V.history.shift(); said.forEach(k => { cur[k] = data[k]; }); said.forEach(k => V.fromVoice.add(k)); V = Object.assign({}, V, { action: tool.action, target, data: prefill(tool.action, cur, target), fromVoice: V.fromVoice }); }
   else V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice: new Set(said) };
   renderOverlay();
   const A = ACTIONS[tool.action], d = V.data, empty = (v) => v === null || v === undefined || String(v).trim() === "";
@@ -2338,7 +2368,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-21T18:22:02Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-21T18:32:07Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

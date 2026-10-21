@@ -361,6 +361,38 @@ test("Ara: talk faster is remembered", async (p) => {
   ok(((await state(p)).settings.speed || 1) > before, "speed did not go up");
 });
 
+test("Voice commands: undo, start over, cancel and go back are carried out by the app", async (p) => {
+  await signIn(p);
+  await said(p, "Add Lou Ng."); await ara(p, "show_contact_draft", { first: "Lou", last: "Ng" });
+  await said(p, "Email lou@example.org."); await ara(p, "show_contact_draft", { email: "lou@example.org" });
+  await said(p, "Undo that."); await p.waitForTimeout(900);
+  ok(!(await p.inputValue("#f_email")) && (await p.inputValue("#f_first")) === "Lou", "undo did not take back the last change");
+  await said(p, "Start over"); await p.waitForTimeout(900);
+  ok(!(await p.inputValue("#f_first")), "start over did not clear the form");
+  await said(p, "Never mind."); await p.waitForTimeout(900);
+  ok(!(await p.isVisible(".sheet")), "cancel did not close the form");
+  await p.evaluate(() => window.__demo && 0); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
+  await said(p, "Go back."); await p.waitForTimeout(900);
+  ok((await titleOf(p)) === "Contacts", "go back did not return to Contacts");
+  const notices = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "message").map(e => e.item.content[0].text).join(" | "));
+  ok(/said "undo"/.test(notices) && /said "cancel"/.test(notices) && /said "go back"/.test(notices), "Ara was not told what the app did");
+});
+// ---------- replays of real sessions (tests/replays/*.json; names and contact details changed) ----------
+for (const f of fs.readdirSync(path.join(__dirname, "replays")).filter(f => f.endsWith(".json"))) {
+  const r = JSON.parse(fs.readFileSync(path.join(__dirname, "replays", f), "utf8"));
+  test("Replay: " + r.name, async (p) => {
+    if (r.start === "no-name") { await p.tap(".wl-mic.big"); await p.waitForTimeout(600); } else await signIn(p);
+    for (const [i, st] of r.steps.entries()) {
+      const at = `step ${i + 1}`;
+      if (st.said) { await said(p, st.said); await p.waitForTimeout(50); continue; }
+      const out = await ara(p, st.tool, st.args); const x = st.expect || {};
+      if (x.status) ok(String(out.status || "").includes(x.status), `${at}: Ara was not told "${x.status}": ${out.status || out.error}`);
+      if (x.notSaved) ok(out.saved === false, `${at}: saved without confirming`);
+      if (x.userName) ok((await state(p)).settings.userName === x.userName, `${at}: name is not ${x.userName}`);
+      for (const [sel, want] of Object.entries(x.field || {})) { const got = await p.inputValue(sel); ok(got === want, `${at}: ${sel} is "${got}", expected "${want}"`); }
+    }
+  });
+}
 // ---------- the live page ----------
 test("Live page loads as Citizens VCRM and checks version.json", async (p) => {
   ok((await p.title()) === "Citizens VCRM", `live title is "${await p.title()}"`);
