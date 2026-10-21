@@ -1,0 +1,12 @@
+# Deploy settings for the Citizens VCRM Worker (used by .github/workflows/deploy-worker.yml).
+# Secrets (XAI_API_KEY, DEMO_CODE, ADMIN_PASSWORD) stay in Cloudflare and are never in this repo.
+name = "veleer-voice"
+main = "token-worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+keep_vars = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "veleer-activity"
+database_id = "c21cd15d-3eb1-434d-93c4-fe027d895e60"
