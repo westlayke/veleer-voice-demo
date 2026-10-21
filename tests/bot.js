@@ -307,6 +307,30 @@ test("Activity log records opening the app and taps outside a conversation", asy
   ok(ev.filter(x => x === "open: Opened the app").length === 1, "opening the app was not logged exactly once: " + ev.slice(0, 4).join(" | "));
   ok(ev.some(x => /^tap: .*Contacts/.test(x)) && ev.some(x => /^tap: .*Abernathy/.test(x)), "taps were not sent to the activity log: " + ev.slice(0, 6).join(" | "));
 });
+test("Ara reads a spoken name back, spelled, and saves it only once confirmed; the header name opens Settings", async (p) => {
+  await p.tap(".wl-mic.big"); await p.waitForTimeout(600);
+  let r = await ara(p, "set_user_name", { first_name: "Eve" });
+  ok(r.saved === false && /E V E/.test(r.status), "the name was not read back spelled: " + JSON.stringify(r));
+  ok(!(await state(p)).settings.userName, "the name was saved before it was confirmed");
+  r = await ara(p, "set_user_name", { first_name: "Matt", confirmed: true });
+  ok(r.saved === false && /M A T T/.test(r.status), "a corrected name skipped the read-back");
+  r = await ara(p, "set_user_name", { first_name: "Matt", confirmed: true });
+  ok(r.ok && r.saved !== false && (await state(p)).settings.userName === "Matt", "the confirmed name was not saved");
+  await p.waitForTimeout(300); await p.evaluate(() => document.getElementById("modal").innerHTML = "");
+  await p.tap("header.top .who"); await p.waitForTimeout(300);
+  ok((await titleOf(p)) === "Settings" && (await p.evaluate(() => document.activeElement && document.activeElement.id)) === "userName", "tapping the header name did not open the name field");
+});
+test("Ara: a spelled-out name the update missed is sent back to her to apply", async (p) => {
+  await signIn(p);
+  await said(p, "Add Katherine Hudson, katherine@example.org.");
+  await ara(p, "show_contact_draft", { first: "Katherine", last: "Hudson", email: "katherine@example.org" });
+  await said(p, "The last name is actually Tudzin. T U D Z I N.");
+  const r = await ara(p, "show_contact_draft", { email: "katherine@example.org", ally: false, dnc: false });
+  ok(/T U D Z I N/.test(r.status || "") && /spelled/.test(r.status), "the missed spelling was not flagged: " + JSON.stringify(r));
+  await said(p, "The last name is actually Tudzin. T U D Z I N.");
+  const r2 = await ara(p, "show_contact_draft", { last: "Tudzin" });
+  ok(!/spelled out/.test(r2.status || "") && (await p.inputValue("#f_last")) === "Tudzin", "the applied spelling was still flagged or not on the form");
+});
 test("Contacts can be edited by touch and voice; changes go to History; Do Not Contact stays locked on", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
   await p.tap(".editbtn"); await p.waitForTimeout(300);
