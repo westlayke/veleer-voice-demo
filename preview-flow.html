@@ -1148,7 +1148,7 @@ function crmSnapshot() {
 }
 function grokInstructions() {
   const f = focusContact();
-  return `You are ${botName()}, the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. Your name is ${botName()}; if asked your name, say it. Introduce yourself (your name and that you are the Citizens Alliance VCRM voice assistant) only once per conversation. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say "Hi, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What's your first name?" When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
+  return `You are ${botName()}, the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. Your name is ${botName()}; if asked your name, say it. Introduce yourself by name only once per conversation, and keep the greeting to the exact words you are given. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say "Hi, I'm ${botName()}, what's your first name?" When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
 Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile and the one optional-fields question for a new contact (below), and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 If the officer asks what you can do, say exactly: "${CAN_DO}"
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
@@ -1398,7 +1398,7 @@ async function startCall(opening) {
       else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
       srcNode.connect(G.node);
       const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
-      notice(S.settings.userName ? (opening || `The officer just opened the conversation. Say exactly "Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What would you like to do?" and nothing more.`) : (opening ? opening + ` But you don't know their name yet: first say exactly "Hi, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What's your first name?", then call set_user_name, then help with that.` : `The officer just opened the conversation and you don't know their name yet. Say exactly "Hi, I'm ${botName()}, the Citizens Alliance VCRM voice assistant. What's your first name?" and nothing more.`));
+      notice(S.settings.userName ? (opening || `The officer just opened the conversation. Say exactly "Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, what would you like to do?" and nothing more.`) : (opening ? opening + ` But you don't know their name yet: first say exactly "Hi, I'm ${botName()}, what's your first name?", then call set_user_name, then help with that.` : `The officer just opened the conversation and you don't know their name yet. Say exactly "Hi, I'm ${botName()}, what's your first name?" and nothing more.`));
       G.status = "Listening"; paintCall(); vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     };
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
@@ -1572,7 +1572,7 @@ function onTool(callId, name, args) {
     G.nameCheck = null;
     const wasAsking = !!document.getElementById("wlName"); // the name screen was open
     S.settings.userName = v; S.settings.seenPrivacy = true; S.seenWelcome = true; if (wasAsking) S.screen = "home"; save(); applyName(); welcomeModal(); render(); if (wasAsking) window.scrollTo(0, 0); whenIdle("instr");
-    toolReply(callId, { ok: true, status: `Saved. You already introduced yourself, so don't say your name or role again. If they haven't asked for anything yet, say exactly: "Nice to meet you, ${v}. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Thanks, ${v}" and carry on with it.` }); return;
+    toolReply(callId, { ok: true, status: `Saved. You already introduced yourself, so don't say your name or role again. If they haven't asked for anything yet, say exactly: "Nice to meet you, ${v}. What would you like to do?" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Thanks, ${v}" and carry on with it.` }); return;
   }
   if (name === "set_capacity_rating") {
     const r = normCap(data.rating);
@@ -1973,7 +1973,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.
 document.addEventListener("click", (e) => { if (e.target.closest("[data-act5=typename]")) { WELCOME_FULL = true; welcomeModal(); setTimeout(() => { const el = document.getElementById("wlName"); if (el) el.focus(); }, 50); } });
 const botName = () => (S.settings.botName || "").trim() || ((S.settings.voice || "ara")[0].toUpperCase() + (S.settings.voice || "ara").slice(1)); // the assistant's name: set in Settings, else its voice's name
 const CAN_DO = "I can do things related to managing your contacts and opportunities, like reviewing your open tasks, creating a contact, hearing a contact's giving history, reviewing your open opportunities, or review our fundraising process, and much more. What would you like to do today?";
-const greetLine = (name) => `The officer just entered their first name and tapped Start. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I am ${botName()}, the Citizens Alliance VCRM voice assistant. Would you like me to tell you the kinds of things I can do for you?" If they say yes, say exactly: "${CAN_DO}" If they say no, ask what they would like to do today. If they ask for the process, walk them through it as you would for "Walk me through the process".`;
+const greetLine = (name) => `The officer just entered their first name and tapped Start. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I'm ${botName()}, what would you like to do?" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process".`;
 
 const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
 const AWAIT_WARN_DAYS = 14; // tenant setting in the guide; demo default
@@ -2494,7 +2494,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-22T18:21:42Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-22T18:33:24Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
