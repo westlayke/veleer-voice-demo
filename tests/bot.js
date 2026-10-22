@@ -238,7 +238,7 @@ test("A save is acknowledged by Ara and listed for her, and a pledge payment set
   await p.waitForTimeout(6800);
   ok(!(await p.isVisible(".party")), "the celebration did not clear away");
 });
-test("Ara congratulates the officer when a pledge is recorded", async (p) => {
+test("Ara has a friendly personality and congratulates the officer when a pledge is recorded", async (p) => {
   await signIn(p);
   const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage === "Ask Made") || S.opps.find(o => o.stage !== "Closed"); o.stage = "Ask Made"; const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
   const r = await ara(p, "show_pledge_draft", { contact_name: who, amount: 5000, fund: "Citizens Alliance C3", confirmedBy: "Email", confirmedOn: "2026-10-22", firstDue: "2026-11-10" });
@@ -246,7 +246,8 @@ test("Ara congratulates the officer when a pledge is recorded", async (p) => {
   const n = await p.evaluate(() => __sent.length);
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
   const sent = await p.evaluate((n) => __sent.slice(n).join(" "), n);
-  ok(/Pledge recorded/.test(sent) && /Congrats/.test(sent) && /Well done/.test(sent), "Ara was not told to congratulate the officer");
+  ok(/Pledge recorded/.test(sent) && /Congrats/.test(sent) && /Well done/.test(sent), "Ara was not told to congratulate the officer");  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.instructions).map(e => e.session.instructions).pop());
+  ok(/Your personality: friendly, upbeat/.test(instr) && /Never joke about investors/.test(instr), "Ara has no personality line");
 });
 test("Opportunity: an unrated contact gets the checklist, not the form (voice and touch)", async (p) => {
   await signIn(p);
