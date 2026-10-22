@@ -1507,6 +1507,12 @@ function onTool(callId, name, args) {
         if (!r) { toolReply(callId, { ok: false, error: "Ask which rating: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") }); return; }
         d.capacity = r; V.data = d; V.fromVoice.add("capacity"); renderOverlay();
         toolReply(callId, { ok: true, on_draft: true, say: `The rating ${r} (${CAPACITY[r]}) is on the New contact form now. It saves with the contact when they tap "${ACTIONS.contact.saveLabel}". Say so briefly, then carry on.` }); return; } }
+    // that contact's Edit form is open: the rating goes on the form, otherwise the form keeps showing (and would save back) the old one
+    if (V && V.action === "editContact" && V.target.contact) { const ec = V.target.contact, nm = norm(data.contact_name || "");
+      if (!nm || nm.includes(norm(ec.first)) || nm.includes(norm(ec.last))) {
+        if (!r) { toolReply(callId, { ok: false, error: "Ask which rating: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") }); return; }
+        const d = readDraft(); d.capacity = r; V.data = d; V.fromVoice.add("capacity"); renderOverlay();
+        toolReply(callId, { ok: true, on_draft: true, saved: false, say: `The rating ${r} (${CAPACITY[r]}) is on ${ec.first}'s Edit contact form now. It is NOT saved yet: ask them to check it and tap "${ACTIONS.editContact.saveLabel}".` }); return; } }
     const t = resolveTarget("interaction", data.contact_name || "");
     if (t.error) { toolReply(callId, { ok: false, error: t.error }); return; }
     if (!r) { toolReply(callId, { ok: false, error: "Ask which rating: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") }); return; }
@@ -2368,7 +2374,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-21T18:32:07Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-22T04:40:02Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

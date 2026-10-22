@@ -377,6 +377,18 @@ test("Voice commands: undo, start over, cancel and go back are carried out by th
   const notices = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "message").map(e => e.item.content[0].text).join(" | "));
   ok(/said "undo"/.test(notices) && /said "cancel"/.test(notices) && /said "go back"/.test(notices), "Ara was not told what the app did");
 });
+test("Ara: a rating said while the contact's Edit form is open goes on the form, then saves with it", async (p) => {
+  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Ito, Ken"); await p.waitForTimeout(300);
+  const before = (await state(p)).contacts.find(c => c.first === "Ken").capacity;
+  await ara(p, "show_contact_edit_draft", { contact_name: "Ken" });
+  await said(p, "How about let's take him to A.");
+  const want = before === "A" ? "B" : "A";
+  const r = await ara(p, "set_capacity_rating", { contact_name: "Ken", rating: want, confirmed: true });
+  ok(r.on_draft && (await p.inputValue("#f_capacity")) === want, "the open Edit form did not show the new rating");
+  ok((await state(p)).contacts.find(c => c.first === "Ken").capacity === before, "the rating was saved without the officer tapping Save");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  ok((await state(p)).contacts.find(c => c.first === "Ken").capacity === want, "Save changes did not save the rating");
+});
 // ---------- replays of real sessions (tests/replays/*.json; names and contact details changed) ----------
 for (const f of fs.readdirSync(path.join(__dirname, "replays")).filter(f => f.endsWith(".json"))) {
   const r = JSON.parse(fs.readFileSync(path.join(__dirname, "replays", f), "utf8"));
