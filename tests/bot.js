@@ -208,6 +208,22 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Maya").capacity === "C", "the rating was not saved with the contact");
 });
+test("New contact and new opportunity forms show every field, and Ara offers the opportunity's optional fields", async (p) => {
+  await signIn(p);
+  await ara(p, "show_contact_draft", { first: "Ana", last: "Ruiz" });
+  ok(!(await p.isVisible("details.more")) && (await p.isVisible("#f_howMet")), "the new contact form still hides fields under More details");
+  await p.tap("[data-act=close]"); await p.waitForTimeout(300);
+  await ara(p, "show_contact_draft", { first: "Ana", last: "Ruiz", email: "ana@example.org", mobile: "(555) 010-0142" });
+  await said(p, "Rate her B."); await ara(p, "show_contact_draft", { first: "Ana", last: "Ruiz", email: "ana@example.org", mobile: "(555) 010-0142", capacity: "B" });
+  for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  const ready = "Ana Ruiz";
+  let r = await ara(p, "show_opportunity_draft", { contact_name: ready });
+  ok(!(await p.isVisible("details.more")) && (await p.isVisible("#f_potential")) && (await p.isVisible("#f_notes")), "the new opportunity form still hides fields under More details");
+  ok(/enough information yet/.test(r.status) && /entity of interest/.test(r.status) && /potential amount/.test(r.status), "Ara was not told to offer the opportunity's optional fields");
+  r = await ara(p, "show_opportunity_draft", { contact_name: ready, potential: 50000 });
+  ok(/tap/.test(r.status) && !/enough information yet/.test(r.status), "the optional-fields question repeated");
+});
 test("Opportunity: an unrated contact gets the checklist, not the form (voice and touch)", async (p) => {
   await signIn(p);
   await ara(p, "show_contact_draft", { first: "Noor", last: "Haddad", email: "noor@example.org", mobile: "(555) 010-0199" });
