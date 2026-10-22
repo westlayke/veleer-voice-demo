@@ -249,6 +249,20 @@ test("Ara has a friendly personality and congratulates the officer when a pledge
   ok(/Pledge recorded/.test(sent) && /Congrats/.test(sent) && /Well done/.test(sent), "Ara was not told to congratulate the officer");  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.instructions).map(e => e.session.instructions).pop());
   ok(/Your personality: friendly, upbeat/.test(instr) && /Never joke about investors/.test(instr), "Ara has no personality line");
 });
+test("Planning an ask: the entity set on the opportunity is on the form, and Ara is told not to ask for it", async (p) => {
+  await signIn(p);
+  await ara(p, "show_contact_draft", { first: "Lee", last: "Park", email: "lee@example.org", capacity: "B" });
+  await said(p, "B."); await ara(p, "show_contact_draft", { first: "Lee", last: "Park", email: "lee@example.org", capacity: "B" });
+  for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  await ara(p, "show_opportunity_draft", { contact_name: "Lee Park" });
+  await p.selectOption("#f_fund", "C.A. North Dakota C4"); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  await p.evaluate(() => { window.__demo.state.opps.find(o => o.name.startsWith("Park")).stage = "Cultivation"; });
+  const r = await ara(p, "show_ask_plan_draft", { contact_name: "Lee Park" });
+  ok((await p.inputValue("#f_fund")) === "C.A. North Dakota C4", "the planned ask form did not take the opportunity's entity");
+  ok(/Already on the form[^.]*Entity: C\.A\. North Dakota C4/.test(r.status) && /Never ask for these again/.test(r.status), "Ara was not told the entity is already set");
+  ok(!r.still_needed.includes("Entity") && /already set/.test(r.still_needed[0]), "Ara was asked for the entity again");
+});
 test("Opportunity: an unrated contact gets the checklist, not the form (voice and touch)", async (p) => {
   await signIn(p);
   await ara(p, "show_contact_draft", { first: "Noor", last: "Haddad", email: "noor@example.org", mobile: "(555) 010-0199" });
