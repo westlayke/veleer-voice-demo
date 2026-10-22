@@ -355,6 +355,19 @@ test("Ara: giving history and screens", async (p) => {
   ok(await titleOf(p) === "Contact", "Ruth's record did not open");
   await ara(p, "show_screen", { screen: "opportunities" }); ok(await titleOf(p) === "Opportunities", "show_screen did not open Opportunities");
 });
+test("Ara: reads contact and opportunity details, with who can change each field", async (p) => {
+  await signIn(p);
+  const elena = (await state(p)).contacts.find(c => c.first === "Elena");
+  const d = await ara(p, "get_contact_details", { contact_name: "Elena Vasquez" });
+  ok(d.ok && d.fields.email.value === (elena.email || "Not given"), "Elena's email was not returned: " + JSON.stringify(d).slice(0, 160));
+  ok(/Chief Gift Officer/.test(d.fields.gift_officer.who_can_change), "gift officer change rule missing");
+  const o = await ara(p, "get_opportunity_details", { contact_name: "Ken Ito" });
+  ok(o.ok && o.fields.stage.value === "Ask Made", "Ken's stage was not returned: " + JSON.stringify(o).slice(0, 160));
+  ok(/system/i.test(o.fields.stage.who_can_change) && /system/i.test(o.fields.asked_tile.who_can_change), "stage and Asked are not marked system-controlled");
+  ok(o.fields.asks.value[0].planned_ask_date && await titleOf(p) !== "Contact", "planned ask date missing or opportunity did not open");
+  const v = await ara(p, "get_opportunity_details", { contact_name: "Elena Vasquez" });
+  ok(/You can edit a planned ask/.test(v.fields.asks.value[0].who_can_change), "a planned ask is not marked editable");
+});
 test("Ara: talk faster is remembered", async (p) => {
   await signIn(p); const before = (await state(p)).settings.speed || 1;
   await ara(p, "set_speaking_speed", { change: "faster" });
