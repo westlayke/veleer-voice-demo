@@ -1059,6 +1059,8 @@ const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, descrip
   .concat([{ type: "function", name: "show_screen", description: "Open a screen when the officer asks to see something. For a contact's record or opportunity, pass contact_name.", parameters: { type: "object", properties: Object.assign({ screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record", "how_it_works"] } }, FOR), required: ["screen"] } },
     { type: "function", name: "call_contact", description: "Put a Call button for a contact on screen when the officer wants to phone them. The officer taps it; the phone places the call.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
     { type: "function", name: "get_giving", description: "Look up a contact's giving: lifetime total, this year's total, the last gift with its date, and any open pledge balance. Also opens their contact record.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
+    { type: "function", name: "get_contact_details", description: "Read every field on a contact's record: email, mobile, contact permissions (email, calls, texting), Ally - Do Not Solicit, Do Not Contact, where permission came from, how we met, capacity rating, status and gift officer. Each field says who is allowed to change it. Also opens their contact record. Use it whenever the officer asks for a contact's email, phone, permissions or any other detail.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
+    { type: "function", name: "get_opportunity_details", description: "Read every field on a contact's opportunity (the open one, or the latest closed one): name, stage, gift officer, potential, entity, every ask with its planned date, amount, type, campaign, participants and status (original and revised), pledge terms and payments, gift, close reason and any deferral. Each field says who is allowed to change it. Also opens the opportunity. Use it whenever the officer asks about an opportunity, ask, pledge or planned ask date.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
     { type: "function", name: "get_my_tasks", description: "Read the officer's open tasks (not done), soonest due first, with any overdue ones marked. Also opens the Tasks screen. Use it when the officer asks what's on their list, what's due, or what's overdue.", parameters: { type: "object", properties: { which: { type: "string", enum: ["all", "overdue", "due_today", "this_week", "waiting", "in_progress"], description: "Which open tasks: all (default), overdue only, due today or earlier, due in the next seven days, the ones waiting on someone, or the ones in progress" } }, required: [] } },
     { type: "function", name: "get_contact_history", description: "Read a contact's interaction history (meetings, calls and asks, newest first) and their open tasks, including tasks on their opportunity. Also opens their contact record. Use it when the officer asks about past interactions with a contact, what happened last time, or what's outstanding for a contact.", parameters: { type: "object", properties: Object.assign({ focus: { type: "string", enum: ["history_and_tasks", "history", "tasks"], description: "What the officer asked for; default both" } }, FOR), required: ["contact_name"] } },
     { type: "function", name: "highlight_stage", description: "During the process overview, light up one stage on the How it works screen. Call it just before you describe that stage.", parameters: { type: "object", properties: { stage: { type: "string", enum: FLOW.map(f => f.stage) } }, required: ["stage"] } },
@@ -1095,6 +1097,7 @@ When the officer wants to phone a contact, call call_contact. Only offer calls t
 When the officer asks you to talk faster, slower or at normal speed, call set_speaking_speed; it is remembered on this phone.
 When the officer asks you to prepare them for a meeting with someone, call get_contact_history for that contact and give a short spoken briefing in three or four sentences: their giving (last gift and this year's total), where their opportunity stands and the latest ask, anything outstanding, and one suggested goal for the meeting.
 When the officer asks what tasks they have, what's due or overdue, call get_my_tasks and read what it returns. When the officer says a task is done, started, or that they are waiting on someone, call set_task_status (confirmed false), read back the change, and only after they say yes call it again with confirmed true. When they ask about past interactions with a contact, what happened last time, or what's outstanding for a contact, call get_contact_history (focus history, tasks, or both) and read what it returns. Never read tasks or history from memory; always call the tool, since the records may have changed.
+When the officer asks for any detail on a contact (email, phone, permissions, Ally or Do Not Contact, how we met, rating), call get_contact_details and read the field they asked for; never say you can't see it. For anything about an opportunity, ask, pledge, gift or planned ask date, call get_opportunity_details. If they ask to change something, follow the field's who_can_change note: fields only the system or the Chief Gift Officer can change are never changed by you; explain the rule in one sentence and offer the proper action.
 When the officer asks about a contact's giving (lifetime, this year, year to date, last gift or donation), call get_giving and speak the figures it returns; never estimate them.
 When adding a task, always ask for the due date if none was said ("When is it due?"); a task can't be saved without one. If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
 When logging a meeting or recording an ask, if the officer hasn't said how it happened, ask: "Was it in person, a phone call, or a video call?" Always pass date and meetingType in show_interaction_draft and show_ask_result_draft: the date resolved from what the officer said (for example yesterday), and the type they said. Leaving them out puts today and In person on the draft.
@@ -1562,6 +1565,50 @@ function onTool(callId, name, args) {
     if (!c.permCalls) { toolReply(callId, { ok: false, error: `Calls aren't permitted for ${nameOf(c)} (Calls permitted is off on the contact).` }); return; }
     callPromptModal(c); whenIdle("instr");
     toolReply(callId, { ok: true, status: `A Call button for ${nameOf(c)} is on screen. In one short sentence, tell the officer to tap Call, and that you'll help write up the call when they're back. Our conversation ends when the call starts.` }); return;
+  }
+  if (name === "get_contact_details") {
+    const r = resolveTarget("interaction", data.contact_name);
+    if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
+    const c = r.contact; S.sel.contact = c.id; go("contact"); whenIdle("instr");
+    const F = (value, change) => ({ value, who_can_change: change }), yn = (b) => b ? "Yes" : "No", OFF = "You (the gift officer), on Edit contact";
+    toolReply(callId, { ok: true, contact: nameOf(c), fields: {
+      name: F(nameOf(c), OFF), email: F(c.email || "Not given", OFF), mobile: F(c.mobile || "Not given", OFF),
+      email_permitted: F(yn(c.permEmail), OFF), calls_permitted: F(yn(c.permCalls), OFF), texting_permitted: F(yn(c.permText), OFF),
+      permission_source: F(c.permSource || "Not given", OFF), how_we_met: F(c.howMet || "Not given", OFF),
+      capacity_rating: F(c.capacity || "Not rated", OFF + ", or by voice with set_capacity_rating"),
+      ally_do_not_solicit: F(yn(c.ally), c.ally ? (lockedOff(c, "ally") ? "Only the officer who set it, or the Chief Gift Officer, can turn it off; you can't" : "You set it, so you or the Chief Gift Officer can turn it off") : OFF),
+      do_not_contact: F(yn(c.dnc), c.dnc ? "Only the Chief Gift Officer can clear it" : OFF),
+      status: F(c.status || "Prospect", "The system: a contact becomes an Investor when a pledge or gift is recorded"),
+      gift_officer: F(OFFICER, "Only the Chief Gift Officer can reassign a contact"),
+      added: F(fmtDate(c.added) || "Not known", "The system") },
+      say: "Answer only what the officer asked, from these fields. If they ask to change a field, say who can change it; for fields they can change, offer to open Edit contact. Never claim to change a field that says only the system or the Chief Gift Officer can change it." }); return;
+  }
+  if (name === "get_opportunity_details") {
+    const r = resolveTarget("interaction", data.contact_name);
+    if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
+    const c = r.contact, o = openOpp(c.id) || S.opps.filter(x => x.contactId === c.id).slice(-1)[0];
+    if (!o) { toolReply(callId, { ok: false, error: `${nameOf(c)} has no opportunity yet. Offer to create one.` }); return; }
+    S.sel.contact = c.id; S.sel.opp = o.id; go("opp"); whenIdle("instr");
+    const F = (value, change) => ({ value, who_can_change: change }), SYS = "The system, from what you record", MONEY = "Recorded amounts can only be corrected by a Veleer administrator";
+    const NEXT = { Qualification: "Log interaction, or Move to Cultivation when Ready for Cultivation shows", Cultivation: "Add ask", "Ask Planning": "Record the ask", "Ask Made": "Record pledge or Record gift", Commitment: "Record payment" };
+    const asks = o.asks.slice().reverse().map((a, i, all) => ({ order: i === 0 ? "original ask" : i === all.length - 1 ? "latest (revised) ask" : "revised ask " + i,
+      amount: money(a.amount), ask_type: a.askType || "Outright", entity: a.fund, campaign: a.campaign || "National", planned_ask_date: a.plannedDate ? fmtDate(a.plannedDate) : "Not set",
+      asked_on: a.askedOn ? fmtDate(a.askedOn) : "Not asked yet", participants: a.participants || "None", status: a.status, response: a.response || "", decline_reason: a.reason || "",
+      who_can_change: a.status === "Planned" ? "You can edit a planned ask; it becomes fixed once you record the ask" : SYS + "; a new response is recorded as a new ask, the earlier ones stay in the ask history" }));
+    const p = o.pledge, paid = p ? (p.payments || []).reduce((n, x) => n + (x.amount || 0), 0) : 0;
+    toolReply(callId, { ok: true, contact: nameOf(c), fields: {
+      name: F(o.name, "The system names it from the contact and year"),
+      stage: F(o.stage === "Closed" ? `Closed ${o.closed || ""}`.trim() : o.stage, "The system moves the stage only when something is recorded (an ask, pledge, gift or payment). The only manual move is Move to Cultivation, or Defer with a reason. Nobody sets the stage directly."),
+      next_action_button: F(o.stage === "Closed" ? "None, it's closed" : NEXT[o.stage], "Follows the stage"),
+      gift_officer: F(OFFICER, "Only the Chief Gift Officer can reassign an opportunity"),
+      potential: F(money(o.potential), "You (the gift officer)"), entity: F(o.fund, "You (the gift officer)"),
+      asked_tile: F(askedOf(o) ? money(askedOf(o)) : "Nothing asked yet", "Calculated by the system: the latest revised ask"),
+      asks: F(asks.length ? asks : "No asks yet", "See each ask"),
+      pledge: F(p ? { amount: money(p.amount), entity: p.fund, confirmed_by: p.confirmedBy, confirmed_on: fmtDate(p.confirmedDate), installments: p.installments, frequency: p.frequency || "", first_payment: money(p.firstAmount), first_due: p.firstDue ? fmtDate(p.firstDue) : "", paid: money(paid), balance: money(Math.max(0, p.amount - paid)), status: p.status || "Open" } : "None", p ? MONEY : "Recorded with Record pledge"),
+      gift: F(o.gift ? { amount: money(o.gift.amount), entity: o.gift.fund, date: fmtDate(o.gift.date), method: o.gift.method } : "None", o.gift ? MONEY : "Recorded with Record gift"),
+      closed: F(o.stage === "Closed" ? `${o.closed} on ${fmtDate(o.closedOn)}${o.lostReason ? ", reason: " + o.lostReason : ""}` : "Open", SYS),
+      deferred: F(o.defer && deferActive(o) ? `Yes: ${o.defer.reason || "no reason given"}${o.defer.until ? ", reconsider on " + fmtDate(o.defer.until) : ""}` : "No", "You, with Defer on Ready for Cultivation") },
+      say: "Answer only what the officer asked, from these fields. If they ask you to change a field the system controls (stage, asked amount, recorded asks, pledge, gift, payments, gift officer), don't change it and don't say it changed: say who can change it and offer the proper action instead, e.g. the next action button or recording what happened." }); return;
   }
   if (name === "get_giving") {
     const r = resolveTarget("interaction", data.contact_name);
@@ -2374,7 +2421,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-22T04:40:48Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-22T11:51:36Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
