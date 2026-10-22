@@ -115,6 +115,7 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .flags { display: flex; gap: 6px; flex-wrap: wrap; }
 .hero { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .hero h2 { margin: 0; font-size: 21px; }
+.rowedit { flex: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--brand); background: none; border: 0; min-height: 44px; padding: 0 2px 0 10px; cursor: pointer; } .rowedit.inl { min-height: 0; padding: 0; font-size: inherit; }
 .herotop { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; } .editbtn { flex: none; font: inherit; font-size: 16px; font-weight: 600; color: var(--brand); background: none; border: 0; min-height: 44px; min-width: 44px; padding: 0 4px; margin: -10px -4px 0 0; cursor: pointer; }
 .btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; border-radius: 12px; font-size: 16px; font-weight: 700; border: 0; cursor: pointer; padding: 0 16px; }
 .btn.blue { background: var(--brand); color: #fff; }
@@ -608,11 +609,42 @@ function focusContact() {
 // editing a contact uses the New contact fields, filled in from the record
 ACTIONS.editContact = { title: "Edit contact", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.contact.fields, pairs: ACTIONS.contact.pairs,
   left: "A contact needs an email or a mobile number. Every change is recorded in History. Only the Chief Gift Officer can turn off Do Not Contact; Ally - Do Not Solicit can be turned off by whoever set it or the Chief Gift Officer." };
+// editing a saved meeting, task or planned ask: the same fields, filled in from what was saved
+ACTIONS.editInteraction = { title: "Edit interaction report", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.interaction.fields.filter(f => !["capacity", "nextStep", "nextDue"].includes(f.k)), pairs: ACTIONS.interaction.pairs,
+  left: "Every change is recorded in History. To change the next step, edit its task. A recorded ask is changed only by the Chief Gift Officer." };
+ACTIONS.editTask = { title: "Edit task", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.task.fields.filter(f => f.k !== "onOpp"), left: "Every change is recorded in History. Change the status from the task's status button." };
+ACTIONS.editPlan = { title: "Edit planned ask", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.plan.fields, pairs: ACTIONS.plan.pairs,
+  left: "A planned ask can be changed until the ask is recorded. Its reminder task moves with the planned date. Every change is recorded in History." };
+const EDITS = ["editContact", "editInteraction", "editTask", "editPlan"];
+// which saved item an edit is for: by id when tapped, otherwise the one the officer described (or the latest)
+function editItem(action, c, sel) {
+  const words = (x) => norm(x).split(" ").filter(w => w.length > 2);
+  if (action === "editInteraction") {
+    const l = S.interactions.filter(i => i.contactId === c.id && i.kind !== "ask").sort((x, y) => String(y.date).localeCompare(String(x.date)));
+    const hit = sel.id ? l.find(i => i.id === sel.id) : sel.date ? l.find(i => i.date === sel.date) : l[0];
+    if (!hit) return { error: l.length ? `${nameOf(c)} has no interaction report on ${fmtDate(sel.date)}. Their reports are on ${l.map(i => fmtDate(i.date)).join(", ")}. Ask which one.` : `${nameOf(c)} has no interaction reports to edit. A recorded ask can be corrected only by the Chief Gift Officer.` };
+    return { contact: c, item: hit };
+  }
+  if (action === "editTask") {
+    const l = S.tasks.filter(t => t.contactId === c.id && !t.done);
+    let hit = sel.id ? S.tasks.find(t => t.id === sel.id) : null;
+    if (!hit && sel.which) { const w = words(sel.which), m = l.filter(t => w.some(x => norm(t.text).includes(x))); if (m.length === 1) hit = m[0]; }
+    if (!hit && !sel.id && l.length === 1) hit = l[0];
+    if (!hit) return { error: l.length ? `Which of ${nameOf(c)}'s tasks? ${l.map(t => `"${t.text}"`).join("; ")}. Ask which one, then call again with which set to words from it.` : `${nameOf(c)} has no open tasks to edit.` };
+    return { contact: c, item: hit, opp: hit.oppId ? oppById(hit.oppId) : null };
+  }
+  if (action === "editPlan") {
+    const o = openOpp(c.id), a = latestAsk(o);
+    if (!o) return { error: `${nameOf(c)} has no open opportunity, so there's no planned ask to edit.` };
+    if (!a || a.status !== "Planned") return { error: a ? `${o.name} has no planned ask: the ask was already recorded (${a.status}). A recorded ask, pledge or gift can be corrected only by the Chief Gift Officer or an administrator. Explain that.` : `${o.name} has no planned ask yet. Offer to plan one.` };
+    return { contact: c, opp: o, item: a };
+  }
+}
 const EDIT_KEYS = ["first", "last", "email", "mobile", "permEmail", "permCalls", "permText", "ally", "dnc", "permSource", "howMet", "capacity"];
 // flags this officer may not turn off (the demo officer is a gift officer, not the Chief Gift Officer)
 const lockedOff = (c, k) => k === "dnc" ? !!c.dnc : k === "ally" ? !!c.ally && (c.allySetBy || "") !== OFFICER : false;
 // Returns { contact, opp } or { error } for Grok to relay.
-function resolveTarget(action, spoken) {
+function resolveTarget(action, spoken, sel = {}) {
   if (action === "contact") return {};
   let list = spoken ? findContacts(spoken) : [];
   if (!spoken) { const f = focusContact(); if (f) list = [f]; }
@@ -620,6 +652,7 @@ function resolveTarget(action, spoken) {
   if (list.length > 1) return { error: `More than one contact matches: ${list.map(nameOf).join(", ")}. Ask which one.` };
   const contact = list[0];
   if (action === "editContact") return { contact };
+  if (EDITS.includes(action)) return editItem(action, contact, sel);
   if (action === "opportunity") { const ch = oppChecks(contact), miss = ch.filter(x => !x.ok);
     return miss.length ? { gate: contact, error: `An opportunity can be created for ${nameOf(contact)} only when all of these are true: ${ch.map(x => `${x.need.replace(/^They/, nameOf(contact).split(" ")[0])} (${x.ok ? "done" : "not yet"}: ${x.now})`).join("; ")}. Still to do: ${miss.map(x => x.todo).join(" ")} Explain this briefly: what is already true and what still needs doing.${!contact.capacity && !contact.dnc && !contact.ally ? " Then offer to set their capacity rating now (set_capacity_rating)." : ""}` } : { contact }; }
   if (contact.dnc && ["meeting", "plan", "ask", "opportunity"].includes(action)) return { error: `${nameOf(contact)} is marked Do Not Contact, so no outreach can be planned. Only a Chief Gift Officer can clear it.` };
@@ -665,6 +698,10 @@ function prefill(action, d, t) {
     if (out.firstAmount == null && out.amount && out.installments) out.firstAmount = Math.round(out.amount / out.installments);
   }
   if (action === "meeting") { out.forName = nameOf(c); if (!out.title) out.title = `Meeting with ${nameOf(c)}`; if (!out.duration) out.duration = "1 hour"; if (!out.meetingType) out.meetingType = "In person"; }
+  const it = t.item;
+  if (action === "editInteraction" && it) { out.forName = nameOf(c); [["date", "date"], ["meetingType", "type"], ["summary", "summary"], ["substantive", "substantive"], ["outcome", "outcome"]].forEach(([k, f]) => { if (out[k] == null) out[k] = it[f] == null ? "" : it[f]; }); out.substantive = !!out.substantive; }
+  if (action === "editTask" && it) { out.forName = nameOf(c); if (out.text == null) out.text = it.text; if (out.due == null) out.due = it.due || ""; }
+  if (action === "editPlan" && it) { out.forName = o.name; out.officer = OFFICER; ["fund", "campaign", "plannedDate", "amount", "askType", "participants"].forEach(k => { if (out[k] == null) out[k] = it[k] == null ? "" : it[k]; }); }
   if (action === "editContact" && c) EDIT_KEYS.forEach(k => { if (out[k] === undefined || out[k] === null) out[k] = c[k] == null ? (typeof c[k] === "boolean" ? false : "") : c[k]; });
   if (action === "contact") { if (out.permEmail == null) out.permEmail = true; if (out.permCalls == null) out.permCalls = true; if (out.permText == null) out.permText = false; } // guide defaults
   if (ACTIONS[action].fields.some(f => f.k === "campaign") && out.fund) { const ok = campaignsFor(out.fund); // the campaign must suit the entity; National-only entities fill it in
@@ -739,9 +776,9 @@ function readDraft() {
 const COND_REQ = ["nextStep", "nextDue", "lostReason", "reason", "substantive", "outcome"]; // plus two that decide those rules
 document.getElementById("overlay").addEventListener("toggle", (e) => { if (V && e.target.matches && e.target.matches("details.more")) V.moreOpen = e.target.open; }, true);
 // a form opened by tapping: the officer types, or hands it to the assistant
-function openForm(action, cid) {
+function openForm(action, cid, item) {
   let target = {};
-  if (action !== "contact") { const c = contactById(cid); target = resolveTarget(action, c ? nameOf(c) : ""); }
+  if (action !== "contact") { const c = contactById(cid); target = resolveTarget(action, c ? nameOf(c) : "", { id: item }); }
   if (target.gate) { oppGate(target.gate); return; }
   if (target.error) { toast(plainErr(target.error)); return; }
   V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true }; renderOverlay();
@@ -837,6 +874,18 @@ function gcalLink(d, c) {
   return "https://calendar.google.com/calendar/render?" + new URLSearchParams(q).toString().replace("%2F", "/");
 }
 const fmtTime = (t) => { if (!t) return ""; const [h, m] = t.split(":").map(Number); return `${(h % 12) || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
+// copy the changed fields onto a saved item; returns "Label changed from A to B" for each change
+function editLog(obj, d, map) {
+  const out = [];
+  Object.entries(map).forEach(([k, [f, label, show]]) => {
+    let v = d[k]; if (typeof obj[f] === "boolean" || k === "substantive") v = !!v; else if (k === "amount") v = toNum(v); else v = v == null ? "" : String(v).trim();
+    const was = typeof obj[f] === "boolean" || k === "substantive" ? !!obj[f] : obj[f] == null ? "" : obj[f];
+    if (v === was || (v === "" && was === "")) return;
+    const sh = (x) => x === "" || x == null ? "blank" : show ? show(x) : String(x);
+    out.push(`${label} changed from ${sh(was)} to ${sh(v)}`); obj[f] = v;
+  });
+  return out;
+}
 const APPLY = {
   meeting(d, t) {
     const c = t.contact; S.meetings = S.meetings || [];
@@ -845,6 +894,23 @@ const APPLY = {
     G.leftFor = G.live ? "calendar-live" : "calendar"; if (G.live) endCall(); // Google Calendar takes over the screen
     window.open(gcalLink(d, c), "_blank");
     S.sel.contact = c.id; S.screen = "contact"; return { contact: c };
+  },
+  editInteraction(d, t) {
+    const i = t.item, ch = editLog(i, d, { date: ["date", "Date", fmtDate], meetingType: ["type", "Type"], summary: ["summary", "Summary"], substantive: ["substantive", "Substantive", (v) => v ? "yes" : "no"], outcome: ["outcome", "Outcome"] });
+    if (ch.length) log(`Interaction report of ${fmtDate(i.date)} edited by ${OFFICER}: ${ch.join("; ")}`, { contactId: i.contactId, oppId: i.oppId }, !V.typed);
+    S.sel.contact = t.contact.id; S.screen = "contact"; return { contact: t.contact };
+  },
+  editTask(d, t) {
+    const k = t.item, ch = editLog(k, d, { text: ["text", "Task"], due: ["due", "Due date", fmtDate] });
+    if (ch.length) log(`Task edited by ${OFFICER}: ${ch.join("; ")}`, { contactId: k.contactId, oppId: k.oppId }, !V.typed);
+    S.screen = "tasks"; return { contact: t.contact };
+  },
+  editPlan(d, t) {
+    const a = t.item, o = t.opp, ch = editLog(a, d, { fund: ["fund", "Entity"], campaign: ["campaign", "Campaign"], plannedDate: ["plannedDate", "Planned ask date", fmtDate], amount: ["amount", "Amount", money], askType: ["askType", "Ask type"], participants: ["participants", "Participants"] });
+    const r = S.tasks.find(k => k.oppId === o.id && !k.done && /^Make the ask/.test(k.text));
+    if (r) { r.text = `Make the ask: ${money(a.amount)} for ${a.fund} on ${fmtDate(a.plannedDate)}`; const due = addDays(a.plannedDate, -7); r.due = due < todayISO() ? todayISO() : due; }
+    if (ch.length) log(`Planned ask edited by ${OFFICER}: ${ch.join("; ")}`, { contactId: o.contactId, oppId: o.id }, !V.typed);
+    S.sel.opp = o.id; S.screen = "opp"; return t;
   },
   editContact(d, t) {
     const c = t.contact, show = (k, v) => k === "capacity" ? (v ? `${v} (${CAPACITY[v]})` : "not rated") : typeof c[k] === "boolean" || ["permEmail", "permCalls", "permText", "ally", "dnc"].includes(k) ? (v ? "on" : "off") : (v || "blank");
@@ -1025,6 +1091,12 @@ const TOOLS = [
     first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
     permEmail: { type: "boolean" }, permCalls: { type: "boolean" }, permText: { type: "boolean" }, ally: { type: "boolean" }, dnc: { type: "boolean" },
     permSource: { type: "string" }, howMet: { type: "string" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: "Only if the officer gives one: " + Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", ") } }) },
+  { action: "editInteraction", name: "show_interaction_edit_draft", description: "Change a SAVED interaction report (date, type, summary, substantive, outcome). Send only what changes; the edit form opens filled in from the report, and the officer taps Save changes. Not for recorded asks: only the Chief Gift Officer corrects those. To change the next step, edit its task.", req: ["contact_name"], props: Object.assign({}, FOR, {
+    which_date: { type: "string", description: "YYYY-MM-DD date of the report to change, if the officer names one; leave out for the latest" }, date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES }, summary: { type: "string" }, substantive: { type: "boolean" }, outcome: { type: "string", enum: OUTCOMES } }) },
+  { action: "editTask", name: "show_task_edit_draft", description: "Change a SAVED open task's wording or due date. Send only what changes; the officer taps Save changes. To mark it done, waiting or in progress use set_task_status instead.", req: ["contact_name"], props: Object.assign({}, FOR, {
+    which: { type: "string", description: "A few words from the task's current text, so the right one is found" }, text: { type: "string", description: "The new wording" }, due: S_DATE }) },
+  { action: "editPlan", name: "show_ask_plan_edit_draft", description: "Change the PLANNED ask on a contact's open opportunity (entity, campaign, planned ask date, amount, ask type, participants) before the ask is made. Send only what changes; the officer taps Save changes. A recorded ask, pledge, gift or payment can't be changed: only the Chief Gift Officer or an administrator corrects them.", req: ["contact_name"], props: Object.assign({}, FOR, {
+    fund: { type: "string", enum: FUNDS }, campaign: { type: "string" }, plannedDate: S_DATE, amount: { type: "number" }, askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
   { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "date", "meetingType", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
     substantive: { type: "boolean", description: "True when it was a real conversation with the person about the relationship or the gift; emails and research notes are not substantive" },
@@ -1097,6 +1169,7 @@ When the officer wants to phone a contact, call call_contact. Only offer calls t
 When the officer asks you to talk faster, slower or at normal speed, call set_speaking_speed; it is remembered on this phone.
 When the officer asks you to prepare them for a meeting with someone, call get_contact_history for that contact and give a short spoken briefing in three or four sentences: their giving (last gift and this year's total), where their opportunity stands and the latest ask, anything outstanding, and one suggested goal for the meeting.
 When the officer asks what tasks they have, what's due or overdue, call get_my_tasks and read what it returns. When the officer says a task is done, started, or that they are waiting on someone, call set_task_status (confirmed false), read back the change, and only after they say yes call it again with confirmed true. When they ask about past interactions with a contact, what happened last time, or what's outstanding for a contact, call get_contact_history (focus history, tasks, or both) and read what it returns. Never read tasks or history from memory; always call the tool, since the records may have changed.
+To change something already saved, use the edit tools: show_contact_edit_draft (contact), show_interaction_edit_draft (a logged meeting or call), show_task_edit_draft (a task's wording or due date), show_ask_plan_edit_draft (a planned ask). A recorded ask, pledge, gift or payment can't be edited by a gift officer: say only the Chief Gift Officer or an administrator can correct it, and never claim it changed.
 When the officer asks for any detail on a contact (email, phone, permissions, Ally or Do Not Contact, how we met, rating), call get_contact_details and read the field they asked for; never say you can't see it. For anything about an opportunity, ask, pledge, gift or planned ask date, call get_opportunity_details. If they ask to change something, follow the field's who_can_change note: fields only the system or the Chief Gift Officer can change are never changed by you; explain the rule in one sentence and offer the proper action.
 When the officer asks about a contact's giving (lifetime, this year, year to date, last gift or donation), call get_giving and speak the figures it returns; never estimate them.
 When adding a task, always ask for the due date if none was said ("When is it due?"); a task can't be saved without one. If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
@@ -1673,9 +1746,9 @@ function onTool(callId, name, args) {
   G.tour = false; // the officer moved on to other work; keep it out of the walkthrough that gets dropped
   const tool = TOOLS.find(t => t.name === name);
   if (!tool) { toolReply(callId, { ok: false, error: "Unknown tool." }); return; }
-  const target = resolveTarget(tool.action, data.contact_name);
+  const target = resolveTarget(tool.action, data.contact_name, { date: data.which_date ? normDate(data.which_date) : "", which: data.which });
   if (target.error) { toolReply(callId, { ok: false, error: target.error }); return; }
-  delete data.contact_name;
+  delete data.contact_name; delete data.which; delete data.which_date;
   // the voice model sometimes files the officer's words under a name the tool doesn't have (notes, description...); put them where they belong, and note any other stray field in the Voice log
   const known = new Set(Object.keys(tool.props || {})), area = (ACTIONS[tool.action].fields.find(f => f.type === "area" && f.req) || {}).k;
   const dates = ACTIONS[tool.action].fields.filter(f => f.type === "date").map(f => f.k);
@@ -1694,7 +1767,7 @@ function onTool(callId, name, args) {
   const flat = said.map(k => String(data[k]).toLowerCase().replace(/[^a-z]/g, "")).join(" ");
   const missedSpelling = (tool.action === "contact" || tool.action === "editContact") ? spelledWords().filter(w => !flat.includes(w.toLowerCase())) : [];
   if (missedSpelling.length) vlog(`${name}: spelling not used: ${missedSpelling.join(", ")}`);
-  const same = V && V.action === tool.action && (V.target.contact || null) === (target.contact || null);
+  const same = V && V.action === tool.action && (V.target.contact || null) === (target.contact || null) && (V.target.item || null) === (target.item || null);
   if (same) { const cur = readDraft(); (V.history = V.history || []).push(Object.assign({}, cur)); if (V.history.length > 20) V.history.shift(); said.forEach(k => { cur[k] = data[k]; }); said.forEach(k => V.fromVoice.add(k)); V = Object.assign({}, V, { action: tool.action, target, data: prefill(tool.action, cur, target), fromVoice: V.fromVoice }); }
   else V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice: new Set(said) };
   renderOverlay();
@@ -2103,7 +2176,7 @@ function interactionsPanel(list, always) {
   if (!list.length && !always) return "";
   const l = list.slice().sort((x, y) => String(y.date).localeCompare(String(x.date)));
   return `<section class="panel"><div class="ph"><h2>Interactions</h2><span class="meta">${l.length}</span></div>
-  ${l.length ? l.map(i => `<div class="row"><div class="t">${esc(i.type)} · ${fmtDate(i.date)} ${i.kind === "ask" ? '<span class="alert info">Ask made</span>' : ""} ${i.example ? "" : `<span class="via">${mic(11)} via voice</span>`}<div class="s">${esc(i.summary)}</div></div></div>`).join("") : `<div class="empty">No interactions yet.</div>`}</section>`;
+  ${l.length ? l.map(i => `<div class="row"><div class="t">${esc(i.type)} · ${fmtDate(i.date)} ${i.kind === "ask" ? '<span class="alert info">Ask made</span>' : ""} ${i.example ? "" : `<span class="via">${mic(11)} via voice</span>`}<div class="s">${esc(i.summary)}</div></div>${i.kind === "ask" ? "" : `<button type="button" class="rowedit" data-form="editInteraction" data-cid="${i.contactId}" data-item="${i.id}" aria-label="Edit the ${esc(i.type)} report of ${fmtDate(i.date)}">Edit</button>`}</div>`).join("") : `<div class="empty">No interactions yet.</div>`}</section>`;
 }
 function contactScreen() {
   const c = contactById(S.sel.contact);
@@ -2156,9 +2229,9 @@ function oppScreen() {
     <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:8px">${met ? `<button class="btn ${readyForCultivation(o) ? "blue" : "out"}" data-act2="cultivate">Move to Cultivation?</button>` : ""}${btn}</div>
   </section>
   ${nextPanel(o)}
-  ${o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd>${o.pledge.payments ? `<dt>Received</dt><dd>${o.pledge.payments.map(x => `${money(x.amount)} on ${fmtDate(x.date)} (${esc(String(x.method).toLowerCase())})`).join("<br>")}</dd><dt>Status</dt><dd>${esc(o.pledge.status)}</dd>` : ""}</dl></section>` : ""}
+  ${o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd><dt>Corrections</dt><dd>Only the Chief Gift Officer or an administrator</dd>${o.pledge.payments ? `<dt>Received</dt><dd>${o.pledge.payments.map(x => `${money(x.amount)} on ${fmtDate(x.date)} (${esc(String(x.method).toLowerCase())})`).join("<br>")}</dd><dt>Status</dt><dd>${esc(o.pledge.status)}</dd>` : ""}</dl></section>` : ""}
   ${o.gift ? `<section class="panel"><div class="ph"><h2>Gift</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.gift.amount)}</dd><dt>Entity</dt><dd>${esc(o.gift.fund)}</dd><dt>Received</dt><dd>${fmtDate(o.gift.date)} · ${esc(o.gift.method)}</dd></dl></section>` : ""}
-  ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${x.status === "Planned" ? '<span class="alert info">Planned</span> ' : ""}${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : x.status === "Made" ? "awaiting response" : esc(x.status)}${x.reason ? ": " + esc(x.reason) : ""}</div></div></div>`).join("")}</section>` : ""}
+  ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${x.status === "Planned" ? '<span class="alert info">Planned</span> ' : ""}${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : x.status === "Made" ? "awaiting response" : esc(x.status)}${x.reason ? ": " + esc(x.reason) : ""}</div></div>${x.status === "Planned" && x === latestAsk(o) && o.stage !== "Closed" ? `<button type="button" class="rowedit" data-form="editPlan" data-cid="${o.contactId}" aria-label="Edit the planned ask">Edit</button>` : ""}</div>`).join("")}</section>` : ""}
   ${interactionsPanel(S.interactions.filter(i => i.oppId === o.id || (i.contactId === o.contactId && !i.oppId)))}
   ${tasksPanel(S.tasks.filter(t => t.oppId === o.id), "Tasks on this opportunity")}
   ${historyPanel(x => x.oppId === o.id)}
@@ -2199,7 +2272,7 @@ function taskRow(t, showWhere) {
   const st = taskStatus(t), al = taskAlert(t);
   return `<div class="trow${st === "done" ? " isdone" : ""}" data-tid="${t.id}"><div class="tacts"><button type="button" class="ta-wait" data-tk-wait="${t.id}">Waiting</button><button type="button" class="ta-done" data-tk-done="${t.id}">Done</button></div>
     <div class="row tmain"><button type="button" class="tcheck${st === "done" ? " on" : ""}" data-tk-done="${t.id}" aria-label="${st === "done" ? "Mark not done" : "Mark done"}">${st === "done" ? checkSvg : ""}</button>
-    <div class="t">${alertPill(al)}<div class="ttext${al ? " na-do" : ""}">${esc(t.text)}</div><div class="s">${st === "done" ? "Done" + (t.doneOn ? " " + fmtDate(t.doneOn) : "") : st === "waiting" ? (t.due ? "Check back " + fmtDate(t.due) : "Waiting") : t.due ? "Due " + fmtDate(t.due) : "No due date"}${showWhere ? " · " + esc(taskWhere(t)) : t.oppId ? " · on the opportunity" : ""}</div></div>
+    <div class="t">${alertPill(al)}<div class="ttext${al ? " na-do" : ""}">${esc(t.text)}</div><div class="s">${st === "done" ? "Done" + (t.doneOn ? " " + fmtDate(t.doneOn) : "") : st === "waiting" ? (t.due ? "Check back " + fmtDate(t.due) : "Waiting") : t.due ? "Due " + fmtDate(t.due) : "No due date"}${showWhere ? " · " + esc(taskWhere(t)) : t.oppId ? " · on the opportunity" : ""}${st === "done" ? "" : ` · <button type="button" class="rowedit inl" data-form="editTask" data-cid="${t.contactId}" data-item="${t.id}" aria-label="Edit task">Edit</button>`}</div></div>
     <button type="button" class="tstat s-${st}" data-tk-stat="${t.id}" aria-label="Status: ${TSTAT[st]}. Change">${TSTAT[st]}<svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div></div>`;
 }
 // Create opportunity tapped for a contact who isn't ready: list what must be true, ticked or not, and what's left to do
@@ -2360,7 +2433,7 @@ document.addEventListener("input", (e) => { if (e.target.id !== "cSearch") retur
 document.addEventListener("click", (e) => {
   const cl = e.target.closest("[data-call]"); if (cl) { placeCall(cl.dataset.call); return; }
   if (e.target.closest("#overlay") || e.target.closest("#modal")) return;
-  const fm = e.target.closest("[data-form]"); if (fm && fm.dataset.form) { openForm(fm.dataset.form, fm.dataset.cid); return; }
+  const fm = e.target.closest("[data-form]"); if (fm && fm.dataset.form) { openForm(fm.dataset.form, fm.dataset.cid, fm.dataset.item); return; }
   const say = e.target.closest("[data-say]");
   if (say) { const line = say.dataset.say;
     if (line === "Walk me through the process" && !S.heardOverview) { S.heardOverview = true; save(); }
@@ -2421,7 +2494,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-22T11:51:36Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-22T18:25:35Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
