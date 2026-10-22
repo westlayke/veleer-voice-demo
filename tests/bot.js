@@ -442,6 +442,21 @@ test("Voice commands: undo, start over, cancel and go back are carried out by th
   const notices = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "message").map(e => e.item.content[0].text).join(" | "));
   ok(/said "undo"/.test(notices) && /said "cancel"/.test(notices) && /said "go back"/.test(notices), "Ara was not told what the app did");
 });
+test("Voice commands: everyday ways of saying cancel or start over work, and Ara can close a form herself", async (p) => {
+  await signIn(p);
+  const open = async () => { await said(p, "Add Pat Lee."); await ara(p, "show_contact_draft", { first: "Pat", last: "Lee", email: "pat@example.org" }); };
+  const closed = async (line) => { await open(); await said(p, line); await p.waitForTimeout(900); ok(!(await p.isVisible(".sheet")), `"${line}" did not close the form`); };
+  for (const line of ["Let's cancel this contact.", "I don't want to do this anymore. Let's cancel.", "Can you clear my screen, please?", "Close this form.", "Okay, get rid of it."]) await closed(line);
+  await open(); await said(p, "Cancel this contact and start a new one."); await p.waitForTimeout(900);
+  ok((await p.isVisible(".sheet")) && !(await p.inputValue("#f_first")), "cancel-and-start-a-new-one did not clear the form");
+  await said(p, "Never mind."); await p.waitForTimeout(900);
+  await open(); await said(p, "Cancel Ken's pledge from last week."); await p.waitForTimeout(900);
+  ok(await p.isVisible(".sheet"), "a sentence about something else was taken as cancel");
+  const r = await ara(p, "close_form", { change: "close" });
+  ok(!(await p.isVisible(".sheet")) && r.ok, "Ara could not close the form herself");
+  const r2 = await ara(p, "close_form", { change: "close" });
+  ok(!r2.ok, "close_form said ok with no form open");
+});
 test("Ara: a rating said while the contact's Edit form is open goes on the form, then saves with it", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Ito, Ken"); await p.waitForTimeout(300);
   const before = (await state(p)).contacts.find(c => c.first === "Ken").capacity;
