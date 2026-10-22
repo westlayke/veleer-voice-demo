@@ -224,6 +224,20 @@ test("New contact and new opportunity forms show every field, and Ara offers the
   r = await ara(p, "show_opportunity_draft", { contact_name: ready, potential: 50000 });
   ok(/tap/.test(r.status) && !/enough information yet/.test(r.status), "the optional-fields question repeated");
 });
+test("A save is acknowledged by Ara and listed for her, and a pledge payment sets off confetti and balloons", async (p) => {
+  await signIn(p);
+  const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage !== "Closed"); o.stage = "Commitment"; o.pledge = { amount: 1000, fund: "Citizens Alliance C3", status: "Current", confirmedBy: "Email", payments: [] }; const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
+  await ara(p, "show_payment_draft", { contact_name: who, amount: 1000, date: "2026-10-22", method: "Check" });
+  const n = await p.evaluate(() => __sent.length);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  ok(await p.isVisible(".party .bl"), "no balloons after recording the payment");
+  ok(await p.isVisible(".party .cf"), "no confetti after recording the payment");
+  const sent = await p.evaluate((n) => __sent.slice(n).join(" "), n);
+  ok(/saying out loud that you saw the save/.test(sent) && /Payment recorded/.test(sent), "Ara was not told to acknowledge the save");
+  ok(/Saved so far in this conversation: Payment recorded/.test(sent), "the save is not listed in Ara's instructions");
+  await p.waitForTimeout(6800);
+  ok(!(await p.isVisible(".party")), "the celebration did not clear away");
+});
 test("Opportunity: an unrated contact gets the checklist, not the form (voice and touch)", async (p) => {
   await signIn(p);
   await ara(p, "show_contact_draft", { first: "Noor", last: "Haddad", email: "noor@example.org", mobile: "(555) 010-0199" });

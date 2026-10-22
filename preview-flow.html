@@ -216,6 +216,13 @@ details.othbr > summary { cursor: pointer; color: var(--brand); font-weight: 700
 .micbtn { width: 58px; height: 58px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); margin-top: -18px; cursor: pointer; }
 .micbtn.pulse { animation: pulse 1.6s ease-out infinite; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(47,116,208,.55); } 100% { box-shadow: 0 0 0 16px rgba(47,116,208,0); } }
+.party { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
+.party .cf { position: absolute; top: -20px; border-radius: 1px; animation-name: cfall; animation-timing-function: linear; animation-fill-mode: both; }
+.party .bl { position: absolute; bottom: -120px; width: 46px; height: 58px; background: var(--c); border-radius: 50% 50% 47% 47% / 56% 56% 44% 44%; box-shadow: inset -7px -9px 0 rgba(0,0,0,.13); animation-name: brise; animation-timing-function: ease-in; animation-fill-mode: both; }
+.party .bl::before { content: ""; position: absolute; top: 10px; left: 11px; width: 9px; height: 14px; border-radius: 50%; background: rgba(255,255,255,.45); }
+.party .bl::after { content: ""; position: absolute; top: 100%; left: 50%; width: 1px; height: 48px; background: rgba(0,0,0,.35); }
+@keyframes cfall { to { transform: translate(var(--dx), calc(100vh + 40px)) rotate(var(--r)); } }
+@keyframes brise { 50% { transform: translate(calc(var(--dx) * -0.5), -55vh); } to { transform: translate(var(--dx), calc(-100vh - 200px)); } }
 @media (prefers-reduced-motion: reduce) { .micbtn.pulse, .dots i, .wave i { animation: none !important; } }
 /* sheet */
 .scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; align-items: flex-end; justify-content: center; }
@@ -860,6 +867,7 @@ function saveDraft() {
   const result = APPLY[action](d, t);
   save(); V = null; renderOverlay(); render(); window.scrollTo(0, 0);
   toast(A.saved, () => { S = JSON.parse(undo); save(); render(); });
+  if (action === "payment") celebrate();
   grokSaved(action, result);
 }
 
@@ -1029,6 +1037,15 @@ const APPLY = {
 
 /* ---------- toast ---------- */
 let toastTimer = null;
+// confetti falling and balloons floating up across the screen, when a payment is recorded on a pledge
+function celebrate() {
+  const colors = ["#1f5fbf", "#e8b923", "#d94848", "#2e9d6a", "#8a4fd1", "#f07b2a"], rnd = (a, b) => a + Math.random() * (b - a);
+  let h = "";
+  for (let i = 0; i < 90; i++) { const w = Math.round(rnd(6, 11)); h += `<i class="cf" style="left:${rnd(0, 100).toFixed(1)}%;width:${w}px;height:${Math.round(w * 0.45)}px;background:${colors[i % colors.length]};animation-delay:${rnd(0, 0.8).toFixed(2)}s;animation-duration:${rnd(2.4, 4).toFixed(2)}s;--r:${Math.round(rnd(-540, 540))}deg;--dx:${Math.round(rnd(-70, 70))}px"></i>`; }
+  for (let i = 0; i < 9; i++) h += `<b class="bl" style="left:${(3 + i * 10.5 + rnd(0, 4)).toFixed(1)}%;--c:${colors[i % colors.length]};animation-delay:${rnd(0, 1).toFixed(2)}s;animation-duration:${rnd(3.6, 5).toFixed(2)}s;--dx:${Math.round(rnd(-60, 60))}px"></b>`;
+  const box = document.createElement("div"); box.className = "party"; box.setAttribute("aria-hidden", "true"); box.innerHTML = h;
+  document.body.appendChild(box); setTimeout(() => box.remove(), 6600);
+}
 function toast(text, undo) {
   const h = document.getElementById("toastHost");
   h.innerHTML = `<div class="toast" role="status"><span>${esc(text)}</span>${undo ? '<button id="undoBtn">Undo</button>' : ""}</div>`;
@@ -1158,6 +1175,7 @@ The officer can do any of these, in any order, for any contact: add a contact, l
 To change an existing contact's details, call show_contact_edit_draft with only what changes; never use show_contact_draft for someone who is already a contact. When the officer asks what's next for an opportunity, read its next step from the summary of contacts below. Stage rules the app enforces: an opportunity can be created only when the contact has a capacity rating, isn't Do Not Contact or an Ally - Do Not Solicit, and has no other open opportunity; if the app says they aren't ready, explain what's already true and what's still to do, and offer set_capacity_rating when the rating is missing. an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge, or use show_gift_draft for an outright gift, which closes it as Closed Won. In Commitment, the first payment (show_payment_draft) closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen from the start, before asking anything. Then ask for what is still needed one question at a time, and after each answer call the tool again so the form fills in as they talk. When the tool says nothing more is needed, ask the officer to check the draft and tap the button at the bottom of it, using its exact label: ${TOOLS.map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
 After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
+You can see saves: the app tells you each time the officer taps a save button. ${(G.saves || []).length ? `Saved so far in this conversation: ${G.saves.join("; ")}.` : "Nothing has been saved yet in this conversation."} If the officer asks whether something saved, answer from that; never say you can't see saves.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
 When adding a new contact, always ask for their email and their mobile number (one question at a time, skipping any the officer already gave). Explain briefly that a contact needs at least an email or a phone number. If the officer has neither, say the contact can't be saved until they have one. Once you have the name and the email or mobile, ask once whether they'd like to fill in any optional fields, and list them in one sentence: how you met them, texting permitted, whether they're an ally who shouldn't be asked for a gift, Do Not Contact, and where their contact permission came from. Mention that email and calls are already allowed. Fill in only the ones they choose, one question at a time. If they say no, tell them they can review the form and tap Save contact.
@@ -1376,7 +1394,7 @@ document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
-  if (!G.keepRecent) G.recent = []; G.keepRecent = false;
+  if (!G.keepRecent) { G.recent = []; G.saves = []; } G.keepRecent = false;
   G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     G.t0 = Date.now(); G.passReady = !!TOK.p;
@@ -1823,12 +1841,13 @@ function onTool(callId, name, args) {
 }
 function grokSaved(action, r) {
   if (!G.live) return;
-  whenIdle("instr");
   const who = r && r.contact ? nameOf(r.contact) : "";
   const hasOpp = r && r.contact && openOpp(r.contact.id);
   const o = r && r.opp, closed = o && o.stage === "Closed" ? ` The opportunity is now Closed ${o.closed}.` : "";
+  (G.saves = G.saves || []).push(`${ACTIONS[action].saved}${who ? " for " + who : ""}${closed ? " (Closed " + o.closed + ")" : ""}`);
   const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? (hasOpp.stage === "Qualification" ? "for example move the opportunity to Cultivation if it's ready, or log another meeting" : hasOpp.stage === "Cultivation" ? "for example plan an ask or log another meeting" : "for example add a task or log another meeting") : "for example create an opportunity or log another meeting") : "";
-  notice(`The officer tapped ${ACTIONS[action].saveLabel}: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} Confirm in a few words, then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
+  whenIdle("instr");
+  notice(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} Start by saying out loud that you saw the save, in a few words (for example "I see that's saved: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who.split(" ")[0] : ""}."), even if the officer has started talking; then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
 
