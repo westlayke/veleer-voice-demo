@@ -368,6 +368,48 @@ test("Ara: reads contact and opportunity details, with who can change each field
   const v = await ara(p, "get_opportunity_details", { contact_name: "Elena Vasquez" });
   ok(/You can edit a planned ask/.test(v.fields.asks.value[0].who_can_change), "a planned ask is not marked editable");
 });
+test("Edit a saved meeting, task and planned ask, by tapping and by voice; recorded money stays locked", async (p) => {
+  await signIn(p);
+  // planned ask, typed: Elena's opportunity is in Ask Planning
+  await tab(p, "Opportunities"); await p.tap("text=Elena Vasquez >> nth=0"); await p.waitForTimeout(300);
+  await p.tap("[data-form=editPlan]"); await p.waitForTimeout(300);
+  await p.fill("#f_amount", "45000"); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  let st = await state(p), el = st.contacts.find(c => c.first === "Elena"), o = st.opps.find(x => x.contactId === el.id);
+  ok(o.asks[0].amount === 45000 && o.asks[0].status === "Planned", "typed planned-ask edit not saved: " + JSON.stringify(o.asks[0]));
+  ok(st.history.some(h => /Planned ask edited .*Amount changed from \$40,000 to \$45,000/.test(h.text)), "planned-ask edit not in History");
+  // planned ask, voice: move the date; the reminder task follows
+  await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez", plannedDate: "2026-12-15" });
+  ok(await p.isVisible("text=Edit planned ask"), "voice planned-ask edit form did not open");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  st = await state(p); o = st.opps.find(x => x.contactId === el.id);
+  ok(o.asks[0].plannedDate === "2026-12-15", "voice planned-ask date not saved");
+  const rem = st.tasks.find(k => k.oppId === o.id && /^Make the ask/.test(k.text) && !k.done);
+  ok(!rem || rem.due === "2026-12-08", "reminder task did not move with the planned date: " + (rem && rem.due));
+  // recorded ask: Ken's is Ask Made, so it can't be edited
+  const r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Ken Ito", amount: 1 });
+  ok(r.ok === false && /Chief Gift Officer/.test(r.error), "a recorded ask could be edited: " + JSON.stringify(r).slice(0, 160));
+  // meeting, typed: Ruth's latest report
+  await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
+  await p.tap("[data-form=editInteraction] >> nth=0"); await p.waitForTimeout(300);
+  await p.fill("#f_summary", "Edited summary for the test."); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  st = await state(p); const ruth = st.contacts.find(c => c.first === "Ruth");
+  ok(st.interactions.some(i => i.contactId === ruth.id && i.summary === "Edited summary for the test."), "typed meeting edit not saved");
+  // meeting, voice
+  await ara(p, "show_interaction_edit_draft", { contact_name: "Ruth Abernathy", meetingType: "Video call" });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  st = await state(p);
+  ok(st.interactions.some(i => i.contactId === ruth.id && i.summary === "Edited summary for the test." && i.type === "Video call"), "voice meeting edit not saved");
+  // task, voice then typed
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send the annual report", due: "2026-11-20" }); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  await ara(p, "show_task_edit_draft", { contact_name: "Ruth Abernathy", which: "annual report", due: "2026-11-27" });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  st = await state(p); let tk = st.tasks.find(k => k.text === "Send the annual report");
+  ok(tk && tk.due === "2026-11-27", "voice task edit not saved: " + JSON.stringify(tk));
+  await tab(p, "Tasks"); await p.tap(`[data-form=editTask][data-item="${tk.id}"]`); await p.waitForTimeout(300);
+  await p.fill("#f_text", "Send the annual report and a thank-you note"); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  st = await state(p); tk = st.tasks.find(k => k.id === tk.id);
+  ok(tk.text === "Send the annual report and a thank-you note", "typed task edit not saved");
+});
 test("Ara: talk faster is remembered", async (p) => {
   await signIn(p); const before = (await state(p)).settings.speed || 1;
   await ara(p, "set_speaking_speed", { change: "faster" });
@@ -430,7 +472,7 @@ test("Live page loads as Citizens VCRM and checks version.json", async (p) => {
   const args = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--autoplay-policy=no-user-gesture-required"]; // a silent pretend microphone
   browser = await chromium.launch(Object.assign({ args }, process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : fs.existsSync("/opt/pw-browsers/chromium") ? { executablePath: "/opt/pw-browsers/chromium" } : {}));
   fs.mkdirSync(OUT, { recursive: true });
-  const run = tests.filter(t => PAGE === "preview-flow.html" || !t.opts.page || t.opts.always);
+  const run = tests.filter(t => PAGE === "preview-flow.html" || !t.opts.page || t.opts.always).filter(t => !process.env.ONLY || t.name.includes(process.env.ONLY));
   let failed = 0; const lines = [];
   for (const t of run) {
     const p = await fresh(t.opts.page || PAGE); const t0 = Date.now();
