@@ -238,6 +238,16 @@ test("A save is acknowledged by Ara and listed for her, and a pledge payment set
   await p.waitForTimeout(6800);
   ok(!(await p.isVisible(".party")), "the celebration did not clear away");
 });
+test("Ara congratulates the officer when a pledge is recorded", async (p) => {
+  await signIn(p);
+  const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage === "Ask Made") || S.opps.find(o => o.stage !== "Closed"); o.stage = "Ask Made"; const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
+  const r = await ara(p, "show_pledge_draft", { contact_name: who, amount: 5000, fund: "Citizens Alliance C3", confirmedBy: "Email", confirmedOn: "2026-10-22", firstDue: "2026-11-10" });
+  ok(r.ok !== false, "the pledge draft did not open: " + JSON.stringify(r).slice(0, 160));
+  const n = await p.evaluate(() => __sent.length);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  const sent = await p.evaluate((n) => __sent.slice(n).join(" "), n);
+  ok(/Pledge recorded/.test(sent) && /Congrats/.test(sent) && /Well done/.test(sent), "Ara was not told to congratulate the officer");
+});
 test("Opportunity: an unrated contact gets the checklist, not the form (voice and touch)", async (p) => {
   await signIn(p);
   await ara(p, "show_contact_draft", { first: "Noor", last: "Haddad", email: "noor@example.org", mobile: "(555) 010-0199" });
