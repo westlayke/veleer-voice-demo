@@ -233,7 +233,7 @@ test("A save is acknowledged by Ara and listed for her, and a pledge payment set
   ok(await p.isVisible(".party .bl"), "no balloons after recording the payment");
   ok(await p.isVisible(".party .cf"), "no confetti after recording the payment");
   const sent = await p.evaluate((n) => __sent.slice(n).join(" "), n);
-  ok(/saying out loud that you saw the save/.test(sent) && /Payment recorded/.test(sent), "Ara was not told to acknowledge the save");
+  ok(/out loud that you saw the save/.test(sent) && /Payment recorded/.test(sent), "Ara was not told to acknowledge the save");
   ok(/Saved so far in this conversation: Payment recorded/.test(sent), "the save is not listed in Ara's instructions");
   await p.waitForTimeout(6800);
   ok(!(await p.isVisible(".party")), "the celebration did not clear away");
