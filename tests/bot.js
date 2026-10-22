@@ -307,6 +307,16 @@ test("Activity log records opening the app and taps outside a conversation", asy
   ok(ev.filter(x => x === "open: Opened the app").length === 1, "opening the app was not logged exactly once: " + ev.slice(0, 4).join(" | "));
   ok(ev.some(x => /^tap: .*Contacts/.test(x)) && ev.some(x => /^tap: .*Abernathy/.test(x)), "taps were not sent to the activity log: " + ev.slice(0, 6).join(" | "));
 });
+test("Activity log records what is in a form when Save is tapped", async (p) => {
+  await signIn(p);
+  ok(!(await p.isVisible("#fmbar")), "a new user was shown the form-logging notice again");
+  await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
+  await p.tap("[data-form=task]"); await p.waitForTimeout(300);
+  await p.fill("#f_text", "Mail the gala invitation"); await p.fill("#f_due", "2026-11-30");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(4600);
+  const ev = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
+  ok(ev.some(x => /^form: New task \(opened by tapping\)\. .*Task: Mail the gala invitation; Due date: 2026-11-30/.test(x)), "the saved form was not logged: " + ev.filter(x => x.startsWith("form")).join(" | "));
+});
 test("Ara reads a spoken name back, spelled, and saves it only once confirmed; the header name opens Settings", async (p) => {
   await p.tap(".wl-mic.big"); await p.waitForTimeout(600);
   let r = await ara(p, "set_user_name", { first_name: "Eve" });
