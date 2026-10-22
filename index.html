@@ -856,6 +856,7 @@ function saveDraft() {
     return;
   }
   const undo = JSON.stringify(S), action = V.action, t = V.target;
+  try { act("form", formLog(A, d, V.fromVoice, V.typed)); } catch (e) {}
   const result = APPLY[action](d, t);
   save(); V = null; renderOverlay(); render(); window.scrollTo(0, 0);
   toast(A.saved, () => { S = JSON.parse(undo); save(); render(); });
@@ -1230,6 +1231,21 @@ function act(role, text) {
   ACT.q.push({ at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session });
   clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, role === "end" ? 0 : 4000);
 }
+// what was in a form when Save was tapped, for the activity log (the privacy notice says so)
+function formLog(A, d, fromVoice, typed) {
+  const parts = A.fields.map(f => { const v = d[f.k]; if (v === null || v === undefined || v === "" || (f.type === "bool" && !v && !(f.k in d))) return "";
+    const shown = f.type === "bool" ? (v ? "yes" : "no") : f.type === "money" ? money(v) : String(v);
+    return `${f.label}: ${shown}${fromVoice && fromVoice.has(f.k) ? " (by voice)" : ""}`; }).filter(Boolean);
+  return `${A.title}${typed ? " (opened by tapping)" : ""}. ${parts.join("; ")}`;
+}
+// phones that accepted the notice before form contents were logged are told once
+function formLogNotice() {
+  if (!S.settings.seenPrivacy || S.settings.seenFormLog || document.getElementById("fmbar")) return;
+  const bar = document.createElement("div"); bar.id = "fmbar"; bar.className = "updbar";
+  bar.innerHTML = `<b>To improve the demo, it now also saves what is in each form when you tap Save. Settings has the full notice.</b><button type="button">OK</button>`;
+  bar.querySelector("button").onclick = () => { S.settings.seenFormLog = true; save(); bar.remove(); };
+  document.body.appendChild(bar);
+}
 async function flushAct() {
   if (!ACT.q.length || !(await logReady())) { if (ACT.ready === false) ACT.q = []; return; }
   const bySession = {}; ACT.q.splice(0).forEach(e => (bySession[e.session] = bySession[e.session] || []).push(e));
@@ -1571,7 +1587,7 @@ function onTool(callId, name, args) {
       toolReply(callId, { ok: true, saved: false, status: `Not saved yet. Say exactly: "Did I get that right: ${v}, ${spellOut(v)}?" and wait. If they say yes, call set_user_name again with "${v}" and confirmed true. If they correct it or spell it, call set_user_name with their spelling and confirmed false, and read that back the same way.` }); return; }
     G.nameCheck = null;
     const wasAsking = !!document.getElementById("wlName"); // the name screen was open
-    S.settings.userName = v; S.settings.seenPrivacy = true; S.seenWelcome = true; if (wasAsking) S.screen = "home"; save(); applyName(); welcomeModal(); render(); if (wasAsking) window.scrollTo(0, 0); whenIdle("instr");
+    S.settings.userName = v; S.settings.seenPrivacy = true; S.settings.seenFormLog = true; S.seenWelcome = true; if (wasAsking) S.screen = "home"; save(); applyName(); welcomeModal(); render(); if (wasAsking) window.scrollTo(0, 0); whenIdle("instr");
     toolReply(callId, { ok: true, status: `Saved. You already introduced yourself, so don't say your name or role again. If they haven't asked for anything yet, say exactly: "Nice to meet you, ${v}. What would you like to do?" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Thanks, ${v}" and carry on with it.` }); return;
   }
   if (name === "set_capacity_rating") {
@@ -1958,16 +1974,16 @@ function welcomeModal() {
     <input id="wlName" class="wl-input" aria-label="Your first name" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}">
     <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
     <button class="btn blue" data-act4="welcome-ok">Start</button>
-    <p class="wl-priv">This demo saves when you open the app, what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
+    <p class="wl-priv">This demo saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
     <div class="wl-links"><button type="button" class="linkbtn" data-act4="voice">${mic(14)} Say it instead</button><button type="button" class="linkbtn" data-act2="share">Share this demo</button></div></div></div>`;
   setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a && a.dataset.act4 === "voice") { const el = document.getElementById("wlName"), v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : "";
-    if (v) S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.screen = "home"; save(); document.getElementById("modal").innerHTML = ""; render(); window.scrollTo(0, 0); ask(null); return; }
+    if (v) S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.settings.seenFormLog = true; S.screen = "home"; save(); document.getElementById("modal").innerHTML = ""; render(); window.scrollTo(0, 0); ask(null); return; }
   if (a) { const el = document.getElementById("wlName"); const v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : (S.settings.userName || "");
     if (!v) { const er = document.getElementById("wlErr"); if (er) er.hidden = false; if (el) el.focus(); return; }
     const isNew = v !== (S.settings.userName || "");
-    S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.screen = "home"; save(); welcomeModal(); render(); window.scrollTo(0, 0);
+    S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.settings.seenFormLog = true; S.screen = "home"; save(); welcomeModal(); render(); window.scrollTo(0, 0);
     if (isNew && !G.live) startCall(greetLine(v)); } }); // a newly entered name starts the conversation with the standard greeting
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "wlName") { e.preventDefault(); const b = document.querySelector("[data-act4=welcome-ok]"); if (b) b.click(); } }); // the keyboard Go key starts too
 document.addEventListener("click", (e) => { if (e.target.closest("[data-act5=typename]")) { WELCOME_FULL = true; welcomeModal(); setTimeout(() => { const el = document.getElementById("wlName"); if (el) el.focus(); }, 50); } });
@@ -2389,7 +2405,7 @@ function settingsScreen() {
     ${saveTip(true)}</div></section>
   <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
     <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" enterkeyhint="done" value="${esc(S.settings.userName || "")}"></label>
-    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves when you open the app, what you say to the assistant and its replies, and what you tap, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
   </div></section>
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
@@ -2494,7 +2510,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-22T19:01:54Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-22T20:00:50Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
@@ -2516,7 +2532,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 window.addEventListener("pageshow", checkUpdate);
 setInterval(() => { if (document.visibilityState === "visible") checkUpdate(); }, 5 * 60000); // pages left open pick up new versions too
 if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
-render(); save(); welcomeModal(); checkUpdate(); setTimeout(prefetchToken, 300);
+render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
 function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app"); }
 logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
