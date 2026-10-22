@@ -868,7 +868,7 @@ function saveDraft() {
   save(); V = null; renderOverlay(); render(); window.scrollTo(0, 0);
   toast(A.saved, () => { S = JSON.parse(undo); save(); render(); });
   if (action === "payment") celebrate();
-  grokSaved(action, result);
+  grokSaved(action, result, d);
 }
 
 // Google Calendar's "create event" link: the officer's own calendar opens with the meeting filled in, and they tap Save there
@@ -1159,7 +1159,7 @@ const toolDefs = () => TOOLS.map(t => ({ type: "function", name: t.name, descrip
     { type: "function", name: "set_task_status", description: "Change a task's status: to do, in progress, waiting (on someone, with a check-back date) or done. First call it with confirmed false: the app finds the task and shows it; read back what will change and ask the officer to confirm. Only after they say yes, call again with confirmed true.", parameters: { type: "object", properties: Object.assign({ task: { type: "string", description: "Words from the task as the officer said them, e.g. 'pledge decision' or 'Pennsylvania update'" }, status: { type: "string", enum: ["to_do", "in_progress", "waiting", "done"] }, check_back_on: { type: "string", description: "YYYY-MM-DD to check back, for waiting; leave out if not said" }, confirmed: { type: "boolean" } }, FOR), required: ["task", "status", "confirmed"] } },
     { type: "function", name: "set_speaking_speed", description: "Change how fast you talk when the officer asks you to speak faster or slower (or normally). The choice is remembered on this phone.", parameters: { type: "object", properties: { change: { type: "string", enum: ["faster", "slower", "normal"] } }, required: ["change"] } },
     { type: "function", name: "close_form", description: "Close the open form without saving (close), or clear it to start again (clear), when the officer asks in words the app didn't already carry out. Never say a form was closed or cleared unless this returns ok.", parameters: { type: "object", properties: { change: { type: "string", enum: ["close", "clear"] } }, required: ["change"] } },
-    { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short goodbye first, then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
+    { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short, warm goodbye first (for example \"Great work today, talk soon!\"; vary it), then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
 function crmSnapshot() {
   return S.contacts.map(c => { const o = openOpp(c.id), a = latestAsk(o);
@@ -1168,7 +1168,7 @@ function crmSnapshot() {
 function grokInstructions() {
   const f = focusContact();
   return `You are ${botName()}, the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. Your name is ${botName()}; if asked your name, say it. Introduce yourself by name only once per conversation, and keep the greeting to the exact words you are given. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say "Hi, I'm ${botName()}, what's your first name?" When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
-Speak warmly and briefly: one or two short sentences per turn. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile and the one optional-fields question for a new contact or a new opportunity (below), and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
+Speak warmly and briefly: one or two short sentences per turn. Your personality: friendly, upbeat and a little playful, like a favourite colleague. Use everyday contractions and, now and then, a light touch of a few words ("Nice!", "Love it.", "Ooh, good one.", "Got it!"), and vary your wording so you never sound scripted. Share in the officer's wins and show a little sympathy when something goes badly. Never joke about investors, money, Do Not Contact or Ally flags, or the officer's mistakes, and never let personality add a sentence or slow down a task; lines the app gives you word for word stay exact. Ask at most one question at a time, and only for a required field the officer hasn't said; never ask about optional fields, except email and mobile and the one optional-fields question for a new contact or a new opportunity (below), and the next step for a substantive meeting (ask type defaults to Outright). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 If the officer asks what you can do, say exactly: "${CAN_DO}"
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record an outright gift, record a payment on a pledge, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
@@ -1839,7 +1839,17 @@ function onTool(callId, name, args) {
     ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}.${badDates.length ? ` The app couldn't read ${badDates.join(", ")} as a date: send dates as YYYY-MM-DD (today is ${todayISO()}).` : ""}${missing.includes("Summary") ? " When the officer describes what happened, put it in the summary parameter (1 to 3 sentences, past tense, in their words) and call this tool again with it." : ""} Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
     : { ok: true, button: A.saveLabel, status: `The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${A.saveLabel}" button (say that exact label).` });
 }
-function grokSaved(action, r) {
+// a few words of human reaction to what was just saved (good news, a setback), said before Ara confirms the save
+function savedMood(action, d) {
+  if (action === "pledge") return `Open with a short, warm congratulation such as "Congrats!", "Nice job!" or "Well done!" (pick one, vary it).`;
+  if (action === "payment" || action === "gift") return `Open by celebrating in a few happy words, such as "Woohoo, money in the door!" or "That's a win, nice work!" (vary it).`;
+  if (action === "ask" && d.response === "Accepted") return `Open with a short, delighted reaction, such as "Yes! That's fantastic news." (vary it).`;
+  if (action === "ask" && d.response === "Countered") return `Open with a short upbeat note that a counter is still progress, such as "A counter is still a yes in the making." (vary it).`;
+  if (action === "ask" && d.response === "Declined") return `Open with a few words of genuine sympathy, such as "Ah, that's a shame." Keep it kind and brief, no forced cheer.`;
+  if (action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) return `Open with a short friendly reaction, such as "Sounds like a good meeting!" (vary it).`;
+  return "";
+}
+function grokSaved(action, r, d = {}) {
   if (!G.live) return;
   const who = r && r.contact ? nameOf(r.contact) : "";
   const hasOpp = r && r.contact && openOpp(r.contact.id);
@@ -1847,7 +1857,7 @@ function grokSaved(action, r) {
   (G.saves = G.saves || []).push(`${ACTIONS[action].saved}${who ? " for " + who : ""}${closed ? " (Closed " + o.closed + ")" : ""}`);
   const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? (hasOpp.stage === "Qualification" ? "for example move the opportunity to Cultivation if it's ready, or log another meeting" : hasOpp.stage === "Cultivation" ? "for example plan an ask or log another meeting" : "for example add a task or log another meeting") : "for example create an opportunity or log another meeting") : "";
   whenIdle("instr");
-  notice(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} Start by saying out loud that you saw the save, in a few words (for example "I see that's saved: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who.split(" ")[0] : ""}."), even if the officer has started talking; then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
+  notice(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see that's saved: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who.split(" ")[0] : ""}."), even if the officer has started talking; then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
 
@@ -2549,7 +2559,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-22T22:12:20Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-22T22:39:59Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
