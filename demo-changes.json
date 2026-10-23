@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "One money button: Record payment is gone and Record gift covers all money in. In Ask Made, a gift with no pledge is recorded as an implied commitment (the opportunity passes through Commitment and closes Closed Won; the screen shows a Commitment panel marked Implied and a Committed tile). In Commitment, Record gift is applied to the pledge. Ask Made now shows Record gift beside Record pledge, and Ara uses one gift tool.",
+   "area": "Process"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Confetti and balloons now also play when an outright gift is recorded (Record gift), not only a pledge payment, whether the form was typed or filled by voice.",
    "area": "Screens"
   },

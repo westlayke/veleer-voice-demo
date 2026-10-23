@@ -126,7 +126,8 @@ test("The + button on every screen opens one menu to log, add or record anything
   await p.setViewportSize({ width: 390, height: 844 }); await tab(p, "Home");
   // from a list: pick the contact, then the form opens for them
   await p.tap("header.top .addbtn"); await p.waitForTimeout(250);
-  for (const label of ["Log a meeting or call", "Schedule a meeting", "Add a task", "Add a contact", "Plan an ask", "Record a payment"]) ok(await p.locator(`[data-qa] >> text=${label}`).count(), "menu is missing " + label);
+  for (const label of ["Log a meeting or call", "Schedule a meeting", "Add a task", "Add a contact", "Plan an ask", "Record a gift"]) ok(await p.locator(`[data-qa] >> text=${label}`).count(), "menu is missing " + label);
+  ok(!(await p.locator("[data-qa] >> text=Record a payment").count()), "the menu still has a separate Record a payment");
   // Record the ask lists Ask Planning first and says why each opportunity is there
   await p.tap("[data-qa=ask]"); await p.waitForTimeout(250);
   const askList = await p.evaluate(() => [...document.querySelectorAll("[data-pick] small")].map(s => s.textContent));
@@ -291,17 +292,20 @@ test("New contact and new opportunity forms show every field, and Ara offers the
   r = await ara(p, "show_opportunity_draft", { contact_name: ready, potential: 50000 });
   ok(/tap/.test(r.status) && !/enough information yet/.test(r.status), "the optional-fields question repeated");
 });
-test("A save is acknowledged by Ara and listed for her, and a pledge payment sets off confetti and balloons", async (p) => {
+test("A save is acknowledged by Ara and listed for her, and a gift on a pledge sets off confetti and balloons", async (p) => {
   await signIn(p);
   const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage !== "Closed"); o.stage = "Commitment"; o.pledge = { amount: 1000, fund: "Citizens Alliance C3", status: "Current", confirmedBy: "Email", payments: [] }; const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
-  await ara(p, "show_payment_draft", { contact_name: who, amount: 1000, date: "2026-10-22", method: "Check" });
+  const gone = await ara(p, "show_payment_draft", { contact_name: who, amount: 1000, date: "2026-10-22", method: "Check" });
+  ok(gone && gone.ok === false, "Ara still has a separate payment tool");
+  await ara(p, "show_gift_draft", { contact_name: who, amount: 1000, date: "2026-10-22", method: "Check", fund: "Citizens Alliance C3" });
+  ok(/applied to the pledge/.test(await p.evaluate(() => document.body.innerText)), "Record gift in Commitment does not say it is applied to the pledge");
   const n = await p.evaluate(() => __sent.length);
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
   ok(await p.isVisible(".party .bl"), "no balloons after recording the payment");
   ok(await p.isVisible(".party .cf"), "no confetti after recording the payment");
   const sent = await p.evaluate((n) => __sent.slice(n).join(" "), n);
-  ok(/out loud that you saw the save/.test(sent) && /Payment recorded/.test(sent), "Ara was not told to acknowledge the save");
-  ok(/Saved so far in this conversation: Payment recorded/.test(sent), "the save is not listed in Ara's instructions");
+  ok(/out loud that you saw the save/.test(sent) && /Gift recorded/.test(sent), "Ara was not told to acknowledge the save");
+  ok(/Saved so far in this conversation: Gift recorded/.test(sent), "the save is not listed in Ara's instructions");
   await p.waitForTimeout(6800);
   ok(!(await p.isVisible(".party")), "the celebration did not clear away");
 });
@@ -312,6 +316,26 @@ test("Recording an outright gift by tapping also sets off confetti and balloons"
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
   ok((await state(p)).opps.some(o => o.name === "Ito, Ken - 2026" && o.closed === "Won"), "the gift did not close Ken's opportunity as Closed Won");
   ok(await p.isVisible(".party .bl") && await p.isVisible(".party .cf"), "no confetti and balloons after recording a gift by tapping");
+  // a gift with no pledge is an implied commitment: it passes through Commitment and the screen says so
+  const o = (await state(p)).opps.find(o => o.name === "Ito, Ken - 2026");
+  ok(o.pledge && o.pledge.implied && o.pledge.status === "Paid in full", "the gift did not record an implied commitment");
+  const hist = (await state(p)).history.filter(h => h.oppId === o.id).map(h => h.text).join(" | ");
+  ok(/Implied commitment of/.test(hist) && /Closed Won/.test(hist), "History does not show the implied commitment: " + hist);
+  const body = await p.evaluate(() => document.body.innerText);
+  ok(/Implied commitment/.test(body) && /Committed/.test(body), "the opportunity does not show the implied commitment");
+});
+test("Ask Made shows Record gift beside Record pledge, and Record gift in Commitment applies to the pledge", async (p) => {
+  await signIn(p);
+  const name = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage === "Ask Made" && (o.asks[0] || {}).askType !== "Outright"); const c = o && S.contacts.find(c => c.id === o.contactId); return o && c.first + " " + c.last; });
+  ok(name, "no Ask Made pledge opportunity in the seed");
+  await tab(p, "Opportunities"); await p.tap(`text=${name}`); await p.waitForTimeout(300);
+  ok(await p.locator("button.btn.blue >> text=Record pledge").count() && await p.locator("button.btn.out[data-form=gift] >> text=Record gift").count(), "Ask Made is missing the Record gift button");
+  await p.evaluate((name) => { const S = window.__demo.state, c = S.contacts.find(c => c.first + " " + c.last === name), o = S.opps.find(o => o.contactId === c.id && o.stage !== "Closed"); o.stage = "Commitment"; o.pledge = { amount: 3000, fund: "Citizens Alliance C3", confirmedBy: "Email", installments: 3, frequency: "Annual", firstAmount: 1000, firstDue: "2026-12-01" }; }, name);
+  await tab(p, "Home"); await tab(p, "Opportunities"); await p.tap(`text=${name}`); await p.waitForTimeout(300);
+  ok(await p.locator("button.btn.blue >> text=Record gift").count(), "Commitment's button is not Record gift");
+  await p.tap("button.btn.blue >> text=Record gift"); await p.waitForTimeout(300);
+  ok(await p.inputValue("#f_amount").then(v => /1,?000/.test(v)), "Record gift in Commitment did not fill in the scheduled first gift");
+  ok(/applied to the pledge/.test(await p.evaluate(() => document.body.innerText)), "the form does not say the gift is applied to the pledge");
 });
 test("Ara has a friendly personality and congratulates the officer when a pledge is recorded", async (p) => {
   await signIn(p);
