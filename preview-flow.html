@@ -140,9 +140,10 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .track div.on { color: var(--brand); font-weight: 700; }
 .next .nextbtn { margin-bottom: 8px; } .next .nextbtn .btn { flex: 1; }
 .stepnext { font-size: 14px; font-weight: 600; color: var(--brand-ink); } .stepnext.warn { color: var(--warn); }
-.whatnext { border: 1.5px solid var(--brand-line); background: var(--brand-soft); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
-.whatnext .wn-saved { font-size: 12.5px; color: var(--muted); font-weight: 600; } .whatnext .wn-line { font-size: 15px; font-weight: 700; color: var(--brand-ink); }
-.whatnext .wn-btns { display: flex; gap: 8px; margin-top: 4px; } .whatnext .wn-btns .btn { flex: 1; }
+.justsaved { font-size: 12.5px; font-weight: 600; color: var(--ok); }
+.nextblk { display: flex; flex-direction: column; gap: 8px; margin: 0 6px 8px; padding: 6px 8px 8px; border-radius: 12px; }
+.nextblk.flash { animation: nbflash 1.6s ease-out 1; }
+@keyframes nbflash { 0%, 35% { background: var(--brand-soft); box-shadow: 0 0 0 2px var(--brand-line) inset; } 100% { background: transparent; box-shadow: none; } }
 .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; padding: 12px 14px; font-size: 14px; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .via { color: var(--brand); font-size: 12px; font-weight: 700; white-space: nowrap; }
@@ -2182,7 +2183,7 @@ function nextStep(o) {
 function nextPanel(o) {
   const n = nextStep(o); if (!n) return "";
   const mark = { yes: "✓", no: "!", next: "→", wait: "·" };
-  return `<section class="panel nextp"><div class="ph"><h2>Next step</h2><span class="meta">to ${esc(n.to)}</span></div><ul class="gate inpanel">${n.items.map(x => `<li class="${{ next: "gnext", wait: "gwait" }[x.st] || x.st}"><span class="gk" aria-hidden="true">${mark[x.st]}</span><span>${esc(x.need)}${x.sub ? `<small>${esc(x.sub)}</small>` : ""}</span></li>`).join("")}</ul>
+  return `<section class="panel nextp"><div class="ph"><h2>To reach ${esc(n.to)}</h2></div><ul class="gate inpanel">${n.items.map(x => `<li class="${{ next: "gnext", wait: "gwait" }[x.st] || x.st}"><span class="gk" aria-hidden="true">${mark[x.st]}</span><span>${esc(x.need)}${x.sub ? `<small>${esc(x.sub)}</small>` : ""}</span></li>`).join("")}</ul>
     <span class="flowlink" data-act2="flowat" data-stage="${esc(o.stage)}">How ${esc(o.stage)} works ›</span></section>`;
 }
 // Needs attention: one plain line saying what to do about each alert
@@ -2380,11 +2381,11 @@ function contactScreen() {
     ${c.permText && c.permSource ? `<div style="font-size:12.5px;color:var(--muted)">Texting permission source: ${esc(c.permSource)}</div>` : ""}
   </div>
   ${trackHTML(o ? STAGES.indexOf(o.stage) + 1 : 0)}
-  ${jn ? `<div class="stepnext${jn.warn ? " warn" : ""}" style="padding:0 14px 6px">Next: ${esc(jn.line)}</div>` : ""}
+  ${nextBlock(jn && jn.line, jn && jn.warn, nb ? nextBtnHTML(nb) : "")}
   <dl class="kv" style="padding-top:0"><dt>Email</dt><dd>${esc(c.email || "Not given")}</dd><dt>Mobile</dt><dd>${esc(c.mobile || "Not given")}</dd><dt>How we met</dt><dd>${esc(c.howMet || "")}</dd><dt>Gift officer</dt><dd>${OFFICER}</dd></dl></section>
-  <section class="next"><b>Do something for ${esc(c.first)}</b>${nb ? `<div class="btns nextbtn">${nextBtnHTML(nb)}</div>` : ""}<div class="btns">${others.map(([l, f]) => `<button class="btn out" data-form="${f}" data-cid="${c.id}">${l}</button>`).join("")}</div>${callBtn(c)}</section>
+  <section class="next"><b>Do something for ${esc(c.first)}</b><div class="btns">${others.map(([l, f]) => `<button class="btn out" data-form="${f}" data-cid="${c.id}">${l}</button>`).join("")}</div>${callBtn(c)}</section>
   ${o ? "" : ready ? `<section class="panel oppready"><span class="gk" aria-hidden="true">✓</span><div><b>Ready for opportunity</b><div class="s">Rated ${c.capacity} · ${esc(CAPACITY[c.capacity])}. Everything needed is in place.</div></div></section>`
-    : `<section class="panel"><div class="ph"><h2>Path to opportunity</h2><span class="alert warn">${checks.filter(x => !x.ok).length} to do</span></div><ul class="gate inpanel">${checks.map((x, i) => `<li class="${x.ok ? "yes" : i === firstTodo && !c.dnc && !c.ally ? "gnext" : "no"}"><span class="gk" aria-hidden="true">${x.ok ? "✓" : i === firstTodo && !c.dnc && !c.ally ? "→" : "!"}</span><span>${esc(x.need)}<small>${x.ok ? esc(x.now) : "To do: " + esc(x.todo)}</small></span></li>`).join("")}</ul></section>`}
+    : `<section class="panel"><div class="ph"><h2>To create an opportunity</h2><span class="alert warn">${checks.filter(x => !x.ok).length} to do</span></div><ul class="gate inpanel">${checks.map((x, i) => `<li class="${x.ok ? "yes" : i === firstTodo && !c.dnc && !c.ally ? "gnext" : "no"}"><span class="gk" aria-hidden="true">${x.ok ? "✓" : i === firstTodo && !c.dnc && !c.ally ? "→" : "!"}</span><span>${esc(x.need)}<small>${x.ok ? esc(x.now) : "To do: " + esc(x.todo)}</small></span></li>`).join("")}</ul></section>`}
   ${givingPanel(c)}
   ${cOpps.length ? `<section class="panel"><div class="ph"><h2>Opportunities</h2></div>${cOpps.map(x => `<div class="row tap" data-opp="${x.id}"><div class="t"><span class="lnk">${esc(x.name)}</span><div class="s">${esc(stageName(x))}${x.gift ? " · gift " + money(x.gift.amount) : x.pledge ? " · pledged " + money(x.pledge.amount) : ""}</div></div><span class="chev">${CHEV}</span></div>`).join("")}</section>` : ""}
   ${interactionsPanel(ints, true)}
@@ -2424,16 +2425,12 @@ function trackHTML(idx, closed) {
 // after a save: what happened and the next form, one tap away (the screens' version of "take me to the next step")
 const WN_ACTIONS = ["contact", "interaction", "opportunity", "plan", "ask", "pledge", "gift", "payment", "cultivate"];
 function setWhatNext(action, result, t) {
-  G.whatNext = null;
-  if (!WN_ACTIONS.includes(action)) return;
-  const c = (result && result.contact) || (t && t.contact), o0 = (result && result.opp) || (t && t.opp), o = o0 && oppById(o0.id);
-  const next = o && o.stage === "Closed" && !openOpp(o.contactId) ? { done: o.closed === "Lost" ? "This opportunity is closed." : "Closed Won. Nothing more to do on this opportunity." } : journeyNext(c || (o && contactById(o.contactId)));
-  if (next && (next.done || next.btn)) G.whatNext = Object.assign({ saved: ACTIONS[action].saved, screen: S.screen }, next);
+  G.whatNext = WN_ACTIONS.includes(action) ? { saved: ACTIONS[action].saved, screen: S.screen } : null;
 }
-function whatNextCard() {
-  const w = G.whatNext; if (!w || w.screen !== S.screen) return "";
-  if (w.done) return `<section class="panel whatnext" role="status"><div class="wn-saved">✓ ${esc(w.saved)}</div><div class="wn-line">${esc(w.done)}</div><div class="wn-btns"><button class="btn out" data-act2="wnclose">OK</button></div></section>`;
-  return `<section class="panel whatnext" role="status"><div class="wn-saved">✓ ${esc(w.saved)}</div><div class="wn-line">Next: ${esc(w.line)}</div><div class="wn-btns">${nextBtnHTML(w.btn, "btn blue", 'data-wn="1"')}<button class="btn out" data-act2="wnclose">Not now</button></div></section>`;
+// the record's one Next block: what was just saved (once), the Next: line and the next-step buttons
+function nextBlock(line, warn, btns) {
+  const w = G.whatNext && G.whatNext.screen === S.screen ? G.whatNext : null;
+  return `<div class="nextblk${w ? " flash" : ""}">${w ? `<div class="justsaved" role="status">✓ ${esc(w.saved)}</div>` : ""}${line ? `<div class="stepnext${warn ? " warn" : ""}">Next: ${esc(line)}</div>` : ""}${btns}</div>`;
 }
 function oppScreen() {
   const o = oppById(S.sel.opp);
@@ -2457,7 +2454,7 @@ function oppScreen() {
   <section class="panel"><div class="hero"><h2>${esc(o.name)}</h2><div style="color:var(--muted);font-size:13px"><span class="lnk" data-contact="${c.id}" role="button" tabindex="0">${esc(nameOf(c))}</span> · ${OFFICER}${o.fund ? " · " + esc(o.fund) : ""}</div>${alert ? `<div>${alert}</div>` : ""}</div>
     ${trackHTML(idx + 1, o.closed)}
     <div class="tiles"><div class="tile"><div class="k">Potential</div><div class="v">${money(o.potential)}</div></div><div class="tile ${asked ? "hl" : ""}"><div class="k">Asked</div><div class="v">${money(asked)}</div></div>${o.gift ? `<div class="tile hl"><div class="k">Received</div><div class="v">${money(o.gift.amount)}</div></div>` : `<div class="tile ${o.pledge ? "hl" : ""}"><div class="k">${o.pledge && (o.pledge.implied || o.pledge.outright) ? "Committed" : "Pledged"}</div><div class="v">${money(o.pledge ? o.pledge.amount : 0)}</div></div>`}</div>
-    <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:8px">${nextStep(o) ? `<div class="stepnext${nextStep(o).warn ? " warn" : ""}">Next: ${esc(nextStep(o).line)}</div>` : ""}${met ? `<button class="btn ${readyForCultivation(o) ? "blue" : "out"}" data-act2="cultivate">Move to Cultivation?</button>` : ""}${btn}</div>
+    ${nextBlock(nextStep(o) && nextStep(o).line, nextStep(o) && nextStep(o).warn, (met ? `<button class="btn ${readyForCultivation(o) ? "blue" : "out"}" data-act2="cultivate">Move to Cultivation?</button>` : "") + btn)}
   </section>
   ${nextPanel(o)}
   ${o.pledge && o.pledge.implied ? `<section class="panel"><div class="ph"><h2>Commitment</h2></div><dl class="kv"><dt>Type</dt><dd>Implied commitment: the gift arrived while the ask was open, with no pledge</dd><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Entity</dt><dd>${esc(o.pledge.fund)}</dd><dt>Received</dt><dd>${o.pledge.payments.map(x => `${money(x.amount)} on ${fmtDate(x.date)} (${esc(String(x.method).toLowerCase())})`).join("<br>")}</dd><dt>Status</dt><dd>${esc(o.pledge.status)}</dd></dl></section>`
@@ -2530,7 +2527,7 @@ function ratingPicker(c, thenOpp) {
   h.querySelectorAll("[data-rt]").forEach(b => b.onclick = () => {
     const k = b.dataset.rt; h.innerHTML = "";
     if (k !== c.capacity) { c.capacity = k; log(`Capacity rated ${k} (${CAPACITY[k]})`, { contactId: c.id }, false);
-      const n = !thenOpp && S.screen === "contact" && !openOpp(c.id) && journeyNext(c); G.whatNext = n && n.btn ? Object.assign({ saved: `Capacity rated ${k}`, screen: S.screen }, n) : null;
+      const n = !thenOpp && S.screen === "contact" && !openOpp(c.id) && journeyNext(c); G.whatNext = n ? { saved: `Capacity rated ${k}`, screen: S.screen } : null;
       save(); render(); }
     toast(`${nameOf(c)}: capacity ${k} · ${CAPACITY[k]}`);
     if (thenOpp) openForm("opportunity", c.id);
@@ -2653,7 +2650,6 @@ function render() {
   const app = document.getElementById("app");
   const s = S.screen;
   app.innerHTML = s === "contacts" ? contactsScreen() : s === "contact" ? contactScreen() : s === "opp" ? oppScreen() : s === "board" ? boardScreen() : s === "tasks" ? tasksScreen() : s === "settings" ? settingsScreen() : s === "flow" ? flowScreen() : homeScreen();
-  const wn = whatNextCard(), m = wn && app.querySelector("main"); if (m) m.insertAdjacentHTML("afterbegin", wn);
   const tab = (id, label, icon, also) => `<button class="tab ${s === id || s === also ? "on" : ""}" data-go="${id}">${icon}<span>${label}</span></button>`;
   const I = (p) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   document.getElementById("tabs").innerHTML =
@@ -2669,7 +2665,6 @@ document.addEventListener("input", (e) => { if (e.target.id !== "cSearch") retur
 document.addEventListener("click", (e) => {
   const cl = e.target.closest("[data-call]"); if (cl) { placeCall(cl.dataset.call); return; }
   if (e.target.closest("#overlay") || e.target.closest("#modal")) return;
-  const wb = e.target.closest("[data-wn]"); if (wb) { G.whatNext = null; wb.closest(".whatnext").remove(); }
   const oi = e.target.closest("[data-oppid]"); if (oi) S.sel.opp = oi.dataset.oppid;
   const fm = e.target.closest("[data-form]"); if (fm && fm.dataset.form) { openForm(fm.dataset.form, fm.dataset.cid, fm.dataset.item); return; }
   const say = e.target.closest("[data-say]");
@@ -2686,7 +2681,6 @@ document.addEventListener("click", (e) => {
   const act = a.dataset.act2;
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
-  else if (act === "wnclose") { G.whatNext = null; render(); }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
   else if (act === "cfilt") { S.cFilter = a.dataset.v; save(); render(); }
   else if (act === "nafilt") { S.naFilter = a.dataset.v; save(); render(); }
@@ -2737,7 +2731,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "Oct 23, 2:03 PM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "Oct 23, 2:52 PM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

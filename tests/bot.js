@@ -414,7 +414,7 @@ test("Opportunity: an unrated contact gets the checklist, not the form (voice an
   await p.tap("text=Create opportunity"); await p.waitForTimeout(300);
   ok(await p.isVisible("text=isn't ready for an opportunity yet"), "tapping Create opportunity did not show the checklist");
   ok(await p.isVisible(".gate li.no"), "the missing item is not marked");
-  ok(await p.isVisible("text=Path to opportunity"), "the record has no Path to opportunity panel");
+  ok(await p.isVisible("text=To create an opportunity"), "the record has no To create an opportunity panel");
   await p.tap("#ogRate"); await p.waitForTimeout(200); await p.tap("[data-rt=B]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Noor").capacity === "B", "rating not saved");
   ok(await p.isVisible("[data-act=save]"), "the opportunity form did not open after rating");
@@ -444,31 +444,30 @@ test("Opportunity: Next step panel on the record and a Next: line in the list", 
   ok(await p.isVisible(".row:has-text('Ken Ito') .nextline"), "the list has no Next: line for Ken");
   ok(/record Ken's answer/.test(await p.textContent(".row:has-text('Ken Ito') .nextline")), "Ken's Next: line is wrong");
   await p.tap(".row:has-text('James Okafor')"); await p.waitForTimeout(400);
-  ok(await p.isVisible(".nextp") && /to Cultivation/.test(await p.textContent(".nextp .ph")), "James's record has no Next step panel to Cultivation");
+  ok(await p.isVisible(".nextp") && /To reach Cultivation/.test(await p.textContent(".nextp .ph")), "James's record has no Next step panel to Cultivation");
   ok(await p.locator(".nextp li").count() === 3, "Qualification should list three steps");
 });
-test("Guided flow: stage stepper with a Next: line, and a What's next card after Save that opens the next form", async (p) => {
+test("Guided flow: one Next block on each record (stepper, Next: line, blue button), the save shown in it, and checklists that explain", async (p) => {
   await signIn(p); await tab(p, "Opportunities");
   await p.tap(".row:has-text('James Okafor')"); await p.waitForTimeout(400);
   ok(await p.locator(".track div").count() === 7 && /Qualif/.test(await p.textContent(".track div.on")), "the stepper does not mark Qualification as the current stage");
-  ok(/^Next: /.test(await p.textContent(".stepnext")), "the record has no Next: line above its stage button");
+  ok(/^Next: /.test(await p.textContent(".nextblk .stepnext")) && await p.locator("main >> text=/^Next/").count() === 1, "the record should say Next once, in its Next block");
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "National", plannedDate: "2026-12-01", amount: 50000 });
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
-  ok(await p.isVisible(".whatnext") && /Planned ask saved/.test(await p.textContent(".whatnext")) && /Next: record the ask/.test(await p.textContent(".whatnext .wn-line")), "no What's next card pointing at recording the ask");
-  await p.tap(".whatnext [data-wn]"); await p.waitForTimeout(400);
-  ok(/the ask/.test(await p.textContent("#overlay")), "the card's button did not open the Record the ask form");
-  ok(!(await p.$(".whatnext")), "the card stayed after its button was used");
+  ok(/Planned ask saved/.test(await p.textContent(".nextblk .justsaved")) && /Next: record the ask/.test(await p.textContent(".nextblk .stepnext")), "the Next block does not show the save and the next step");
+  ok(/Record the ask/.test(await p.textContent(".nextblk")) && /To reach Ask Made/.test(await p.textContent(".nextp .ph")), "the Next block has no Record the ask button, or the checklist is not titled To reach Ask Made");
+  ok(!(await p.$(".whatnext")), "the old What's next card is still there");
+  await p.tap(".nextblk .btn.blue"); await p.waitForTimeout(400);
+  ok(/the ask/.test(await p.textContent("#overlay")), "the Next block's button did not open the Record the ask form");
   await p.tap("[data-act=close]"); await p.waitForTimeout(300);
   await ara(p, "show_contact_draft", { first: "Lee", last: "Park", email: "lee.park@example.org" });
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
-  ok(/Next: set a capacity rating for Lee/.test(await p.textContent(".whatnext")), "a new contact without a rating should be offered a rating first");
-  ok(/Next: set a capacity rating for Lee/.test(await p.textContent(".stepnext")) && /Contact/.test(await p.textContent(".track div.on")), "the record's stepper and Next: line do not match the card");
-  ok(/Set capacity rating/.test(await p.textContent(".next .nextbtn")), "the blue button on the record is not the next step");
-  await p.tap(".whatnext [data-wn]"); await p.waitForTimeout(250); await p.tap("[data-rt=C]"); await p.waitForTimeout(400);
-  ok(/Next: create an opportunity for Lee/.test(await p.textContent(".whatnext")) && /Create opportunity/.test(await p.textContent(".whatnext [data-wn]")), "after the rating the card did not offer Create opportunity");
-  ok(/Create opportunity/.test(await p.textContent(".next .nextbtn")), "after the rating the record's blue button is not Create opportunity");
-  await p.tap(".whatnext [data-act2=wnclose]"); await p.waitForTimeout(200);
-  ok(!(await p.$(".whatnext")), "Not now did not close the card");
+  ok(/Contact saved/.test(await p.textContent(".nextblk .justsaved")) && /Next: set a capacity rating for Lee/.test(await p.textContent(".nextblk .stepnext")) && /Contact/.test(await p.textContent(".track div.on")), "the new contact's Next block is wrong");
+  ok(/Set capacity rating/.test(await p.textContent(".nextblk .btn.blue")) && /To create an opportunity/.test(await p.textContent("main")), "the contact's blue button is not the next step, or the checklist is not renamed");
+  await p.tap(".nextblk .btn.blue"); await p.waitForTimeout(250); await p.tap("[data-rt=C]"); await p.waitForTimeout(400);
+  ok(/Capacity rated C/.test(await p.textContent(".nextblk .justsaved")) && /Create opportunity/.test(await p.textContent(".nextblk .btn.blue")), "after the rating the Next block does not offer Create opportunity");
+  await tab(p, "Home"); await tab(p, "Contacts"); await p.tap("text=Park, Lee"); await p.waitForTimeout(300);
+  ok(!(await p.$(".justsaved")), "the saved line stayed after leaving the record");
 });
 test("Ask planning: the campaign choices follow the entity (touch and voice)", async (p) => {
   await signIn(p);
