@@ -131,6 +131,8 @@ test("The + button on every screen opens one menu to log, add or record anything
   // Record the ask says why each opportunity is there
   await p.tap("[data-qa=ask]"); await p.waitForTimeout(250);
   const askList = await p.evaluate(() => [...document.querySelectorAll("[data-pick] small")].map(s => s.textContent));
+  const heads = await p.$$eval(".qa-h", hs => hs.filter(h => h.closest("#modal")).map(h => h.textContent));
+  ok(heads[0] === "Planned asks (Ask Planning)" && heads[1] === "Other opportunities" && /^Ask Planning/.test(askList[0]), "Record the ask does not group planned asks first: " + heads.join(" | "));
   ok(askList.some(x => /^Ask Planning · planned for/.test(x)) && askList.includes("Ask Made · record the answer") && askList.includes("Cultivation · unplanned ask"), "Record the ask list doesn't say why: " + askList.join(" | "));
   await p.evaluate(() => document.getElementById("modal").innerHTML = ""); await p.tap("header.top .addbtn"); await p.waitForTimeout(250);
   await p.tap("[data-qa=task]"); await p.waitForTimeout(250);

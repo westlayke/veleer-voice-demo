@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "Record the ask's pick list (+ menu) shows planned asks (Ask Planning) in their own section first, then other opportunities, each section A to Z by last name.",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "The + menu's pick lists (who is it for, which opportunity) always have a search box at the top, are sorted A to Z by last name, and show names as Last, First. Searching \"ken ito\" finds Ito, Ken.",
    "area": "Screens"
   },

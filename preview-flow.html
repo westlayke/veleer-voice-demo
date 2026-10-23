@@ -813,18 +813,22 @@ function pickFor(action) {
   const why = (o) => { if (action === "gift") return o.stage === "Commitment" ? (o.pledge && o.pledge.outright ? "Commitment · agreed outright gift" : "Commitment · applied to the pledge") : "Ask Made · implied commitment";
     if (action !== "ask") return o.stage; const a = latestAsk(o);
     return o.stage === "Ask Planning" ? `Ask Planning · planned for ${a ? fmtDate(a.plannedDate) : "a set date"}` : o.stage === "Ask Made" ? (a && a.status === "Made" ? "Ask Made · record the answer" : "Ask Made · record another ask") : o.stage === "Cultivation" ? "Cultivation · unplanned ask" : o.stage; };
+  // Record the ask: planned asks in their own section first, then everything else, each A to Z
+  const planned = ok.filter(x => x.t.opp && x.t.opp.stage === "Ask Planning");
+  const groups = action === "ask" && planned.length && planned.length < ok.length ? [["Planned asks (Ask Planning)", planned], ["Other opportunities", ok.filter(x => !planned.includes(x))]] : [["", ok]];
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="pkTitle">
     <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
     <h2 id="pkTitle">${esc(action === "ask" ? "Record the ask" : A.title)}: ${oppFirst ? "which opportunity?" : "who is it for?"}</h2>
-    ${ok.length ? `<div class="pick">${ok.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : `${x.c.last}, ${x.c.first}`)}${oppFirst && x.t.opp ? `<small>${esc(why(x.t.opp))}</small>` : x.t.gate ? "<small>Not ready yet</small>" : ""}</button>`).join("")}</div>`
+    ${ok.length ? groups.map(([head, xs]) => `${head ? `<div class="qa-h">${head}</div>` : ""}<div class="pick">${xs.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : `${x.c.last}, ${x.c.first}`)}${oppFirst && x.t.opp ? `<small>${esc(why(x.t.opp))}</small>` : x.t.gate ? "<small>Not ready yet</small>" : ""}</button>`).join("")}</div>`).join("")
       : `<p class="wl-hint">None of your ${oppFirst ? "opportunities is at the right stage" : "contacts can take this"} yet.</p>`}
     <button type="button" class="btn quiet" data-helpx="1">Cancel</button></div></div>`;
   h.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { h.innerHTML = ""; openForm(action, b.dataset.pick); });
   // a search box at the top narrows the list; every word typed must match ("ken ito" finds "Ito, Ken")
   const list = h.querySelector(".pick");
   if (list) { const q = document.createElement("input"); q.type = "search"; q.className = "pick-q"; q.placeholder = "Search by name"; q.setAttribute("aria-label", "Search by name");
-    q.oninput = () => { const ws = q.value.trim().toLowerCase().split(/[\s,]+/).filter(Boolean); list.querySelectorAll("[data-pick]").forEach(b => { const t = b.textContent.toLowerCase(); b.hidden = ws.some(w => !t.includes(w)); }); };
-    list.before(q); }
+    q.oninput = () => { const ws = q.value.trim().toLowerCase().split(/[\s,]+/).filter(Boolean); h.querySelectorAll("[data-pick]").forEach(b => { const t = b.textContent.toLowerCase(); b.hidden = ws.some(w => !t.includes(w)); });
+      h.querySelectorAll(".pick").forEach(g => { const hd = g.previousElementSibling; if (hd && hd.classList.contains("qa-h")) hd.hidden = g.hidden = ![...g.querySelectorAll("[data-pick]")].some(b => !b.hidden); }); };
+    (list.previousElementSibling && list.previousElementSibling.classList.contains("qa-h") ? list.previousElementSibling : list).before(q); }
 }
 // the + button on every screen: one place to log, add or record anything
 const QUICK = [["People and meetings", [["interaction", "Log a meeting or call"], ["meeting", "Schedule a meeting"], ["task", "Add a task"], ["contact", "Add a contact"]]],
@@ -2641,7 +2645,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-23 07:37", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-23 07:46", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
