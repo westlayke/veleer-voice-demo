@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "The Next step field on the Interaction report and the Record the ask report is now a three-line box, so a longer next step shows in full.",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Field mics on the Interaction report and the Record the ask report. A small mic inside the Summary and Next step fields lets you dictate just that field. Your words appear as you speak. Tap the mic again, or pause, to finish. Ara then tidies the punctuation and name spelling without speaking, and for Next step she also fills in the due date you said. A second dictation adds to the text. \"Fill this in by voice\" stays at the top. Nothing is saved until you tap Save.",
    "area": "Voice"
   },
