@@ -140,6 +140,11 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .track div.on { color: var(--brand); font-weight: 700; }
 .next .nextbtn { margin-bottom: 8px; } .next .nextbtn .btn { flex: 1; }
 .stepnext { font-size: 14px; font-weight: 600; color: var(--brand-ink); } .stepnext.warn { color: var(--warn); }
+.dwrap { position: relative; } .dwrap textarea, .dwrap input { padding-right: 48px !important; }
+.fmic { position: absolute; right: 5px; top: 5px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--brand-soft); color: var(--brand); display: flex; align-items: center; justify-content: center; padding: 0; }
+.fmic.on { background: var(--brand); color: #fff; box-shadow: 0 0 0 4px var(--brand-soft); animation: fmicp 1.2s ease-in-out infinite; }
+@keyframes fmicp { 50% { box-shadow: 0 0 0 7px var(--brand-soft); } }
+.fld.dicting textarea, .fld.dicting input { border-color: var(--brand); } .dstat { font-size: 12.5px; font-weight: 600; color: var(--brand-ink); margin-top: 4px; }
 .justsaved { font-size: 12.5px; font-weight: 600; color: var(--ok); }
 .nextblk { display: flex; flex-direction: column; gap: 8px; margin: 0 6px 8px; padding: 6px 8px 8px; border-radius: 12px; }
 .nextblk.flash { animation: nbflash 1.6s ease-out 1; }
@@ -278,7 +283,7 @@ details.said summary { font-style: normal; color: var(--brand); font-weight: 600
 .lbl .req { color: var(--bad); } .lbl .via { margin-left: auto; }
 .two .vt { display: none; }
 .fld input[type=text], .fld input[type=date], .fld input[type=time], .fld select, .fld textarea { width: 100%; min-height: 42px; border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 16px; background: var(--surface); color: var(--fg); }
-.fld textarea { min-height: 64px; resize: vertical; }
+.fld textarea { min-height: 64px; resize: vertical; } .fld textarea.short { min-height: 84px; }
 .fld.chk input { border-color: var(--warn-line); background: var(--warn-soft); }
 .cn { font-size: 12.5px; color: var(--warn); }
 .tg { display: flex; align-items: center; gap: 10px; font-size: 15px; }
@@ -441,7 +446,7 @@ const ACTIONS = {
     fields: [
       { k: "name", label: "Opportunity name", req: true, fixed: true }, { k: "officer", label: "Gift officer", fixed: true },
       { k: "fund", label: "Entity of interest", type: "select", opts: ["", ...FUNDS] }, { k: "potential", label: "Potential amount", type: "money" },
-      { k: "moveToCultivation", label: "Then move to Cultivation", type: "bool" }, { k: "notes", label: "Notes", type: "area" } ] },
+      { k: "notes", label: "Notes", type: "area" } ] }, // moving to Cultivation is always its own step (Move to Cultivation?, or defer with a reason)
   plan: { title: "Add planned ask", saved: "Planned ask saved", saveLabel: "Save planned ask",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
@@ -736,6 +741,56 @@ function prefill(action, d, t) {
   return out;
 }
 const OPP_MARK = '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h7M6.5 3 9.5 6l-3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+/* ---------- field mics: dictate just the Summary or the Next step; Ara tidies the words and stays quiet ---------- */
+const DICT_FIELDS = { summary: "Summary", nextStep: "Next step" };
+const dictable = (k) => !!(V && DICT_FIELDS[k] && ["interaction", "ask", "editInteraction"].includes(V.action));
+const DICT_TOOL = { type: "function", name: "set_dictated_text", description: "Put the officer's dictated words into the field they are dictating. Call it only when an app notice asks.", parameters: { type: "object", properties: {
+  text: { type: "string", description: "Exactly what the officer said, with punctuation and capitals added and names spelled as on the record. Don't add, summarise, reword or drop anything." },
+  due_date: { type: "string", description: "Next step only: the due date the officer said, as YYYY-MM-DD. Leave it out if they gave none." } }, required: ["text"] } };
+const dictInstructions = () => { const c = V && V.target && V.target.contact;
+  return `You are a silent dictation helper in a fundraising app. The officer is dictating the ${DICT_FIELDS[G.dict.k]} field of the ${V ? ACTIONS[V.action].title : ""} form${c ? " for " + nameOf(c) : ""}. Never speak, never answer questions and never call any tool except set_dictated_text, and only when an app notice asks. Today is ${todayISO()}. Names to spell as on the record: ${[c && nameOf(c), OFFICER].filter(Boolean).join(", ")}.`; };
+function dictate(k) {
+  if (G.dict) { dictStop(); return; }
+  if (G.live) { toast(`You're already talking to ${botName()}. Just say what goes in the ${DICT_FIELDS[k]}.`); return; }
+  V.data = readDraft();
+  G.dict = { k, base: String(V.data[k] || "").trim(), raw: [] };
+  startCall(null);
+  G.dict.timer = setTimeout(dictStop, 12000); // nothing said at all
+  dictPaint();
+}
+function dictPaint(note) {
+  const d = G.dict;
+  document.querySelectorAll(".fmic").forEach(b => b.classList.toggle("on", !!d && b.dataset.dict === d.k));
+  if (!d) return;
+  const el = document.getElementById("f_" + d.k); if (!el) return;
+  el.value = [d.base, ...d.raw].filter(Boolean).join(" ");
+  const fl = el.closest(".fld"); fl.classList.add("dicting");
+  let st = fl.querySelector(".dstat"); if (!st) { st = document.createElement("div"); st.className = "dstat"; st.setAttribute("role", "status"); fl.appendChild(st); }
+  st.textContent = note || (G.status === "Connecting…" ? "Connecting…" : d.raw.length ? "Listening… tap the mic when you're done" : "Listening… speak now");
+}
+function dictHeard(text) {
+  const d = G.dict; if (!d || d.asked) return;
+  d.raw.push(String(text).trim()); dictPaint();
+  clearTimeout(d.timer); d.timer = setTimeout(dictStop, 3500); // a pause this long means they're done
+}
+function dictStop() {
+  const d = G.dict; if (!d) return; clearTimeout(d.timer);
+  if (!d.raw.length) { G.dict = null; endCall(); toast("I didn't catch anything. Tap the mic and try again."); return; }
+  if (d.asked) return; d.asked = true; dictPaint("Tidying…");
+  notice(`The officer has finished dictating the ${DICT_FIELDS[d.k]}. They said: "${d.raw.join(" ")}". Call set_dictated_text now with that text tidied${d.k === "nextStep" ? ", and due_date if they said when it's due" : ""}. Say nothing.`);
+  d.timer = setTimeout(() => dictApply({}), 6000); // Ara didn't answer: keep the words as heard
+}
+function dictApply(a) {
+  const d = G.dict; if (!d) return; clearTimeout(d.timer);
+  const text = String(a.text || d.raw.join(" ")).trim();
+  const data = V ? readDraft() : null;
+  G.dict = null; endCall();
+  if (!V || !data) return;
+  data[d.k] = d.base ? d.base + " " + text : text; V.fromVoice.add(d.k);
+  if (d.k === "nextStep" && a.due_date) { const iso = normDate(a.due_date); if (iso) { data.nextDue = iso; V.fromVoice.add("nextDue"); } }
+  V.data = data; renderOverlay();
+}
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-dict]"); if (b) { e.preventDefault(); dictate(b.dataset.dict); } });
 function fieldHTML(f, d, fromVoice) {
   const v = d[f.k];
   const voiced = fromVoice.has(f.k) && !f.fixed;
@@ -752,10 +807,12 @@ function fieldHTML(f, d, fromVoice) {
   const opts = typeof f.opts === "function" ? f.opts(d) : f.opts;
   if (f.type === "select") input = `<select id="${id}">${(opts.includes(v) || !v ? opts : [v, ...opts]).map(o => `<option value="${esc(o)}" ${o === (v || "") ? "selected" : ""}>${esc(o === "" ? (f.fmt ? f.fmt("") : "Not set") : (f.fmt ? f.fmt(o) : o))}</option>`).join("")}</select>`;
   else if (f.type === "area") input = `<textarea id="${id}">${esc(v)}</textarea>`;
+  else if (dictable(f.k)) input = `<textarea id="${id}" class="short" rows="3">${esc(v)}</textarea>`; // Next step: room for a full sentence
   else if (f.type === "time") input = `<input type="time" id="${id}" value="${esc(v || "")}">`;
   else if (f.type === "date") input = `<input type="date" id="${id}" value="${esc(v || "")}">`;
   else if (f.type === "money") input = `<input type="text" inputmode="decimal" id="${id}" value="${v == null || v === "" ? "" : esc(f.num ? v : money(v))}">`;
   else input = `<input type="text" id="${id}" value="${esc(v)}" ${f.fixed ? "readonly" : ""}>`;
+  if (dictable(f.k)) input = `<div class="dwrap">${input}<button type="button" class="fmic" data-dict="${f.k}" aria-label="Dictate the ${esc(DICT_FIELDS[f.k])}">${mic(17)}</button></div>`;
   return `<div class="${cls}">${lab}${input}${f.check && v && !same ? `<div class="cn">! Check this. ${esc(f.check)}</div>` : ""}</div>`;
 }
 function draftHTML() {
@@ -1010,7 +1067,6 @@ const APPLY = {
     const c = t.contact;
     const op = { id: uid(), contactId: c.id, name: `${c.last}, ${c.first} - ${YEAR}`, stage: "Qualification", fund: d.fund || null, potential: d.potential, notes: d.notes, asks: [], pledge: null, created: todayISO() };
     S.opps.push(op); log("Opportunity created in Qualification", { contactId: c.id, oppId: op.id });
-    if (d.moveToCultivation && !cultMissing(c).length) { op.stage = "Cultivation"; log("Moved to Cultivation (criteria met: capacity rating and a substantive interaction)", { contactId: c.id, oppId: op.id }); }
     S.sel.opp = op.id; S.screen = "opp"; return { contact: c, opp: op };
   },
   plan(d, t) {
@@ -1184,7 +1240,7 @@ const TOOLS = [
     text: { type: "string", description: "What to do, as a short imperative, e.g. Send Ruth the annual report" }, due: S_DATE,
     onOpp: { type: "boolean", description: "True if the officer wants the task on the contact's opportunity (or is looking at it); false for the contact only" } }) },
   { action: "opportunity", name: "show_opportunity_draft", description: "Show a new Opportunity draft for a contact.", req: ["contact_name"], props: Object.assign({}, FOR, {
-    fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, potential: { type: "number", description: "Dollars" }, moveToCultivation: { type: "boolean", description: "True only if the officer asks to move it to Cultivation" }, notes: { type: "string" } }) },
+    fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, potential: { type: "number", description: "Dollars" }, notes: { type: "string" } }) },
   { action: "plan", name: "show_ask_plan_draft", description: "Show a planned Ask draft (Add planned ask) on the contact's open opportunity.", req: ["contact_name", "fund", "campaign", "plannedDate", "amount"], props: Object.assign({}, FOR, {
     fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, campaign: { type: "string", enum: CAMPAIGNS, description: "Must suit the entity: National, or the entity's own state. " + ENTITY_RULE }, plannedDate: S_DATE, amount: { type: "number" },
     askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
@@ -1414,6 +1470,7 @@ function downsample(f32, from) {
   return out;
 }
 function playChunk(b64) {
+  if (G.dict) return; // dictation is silent
   const i16 = int16FromB64(b64); if (!i16.length) return;
   const buf = G.ctx.createBuffer(1, i16.length, 24000), ch = buf.getChannelData(0);
   for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 32768;
@@ -1444,7 +1501,7 @@ const SPEEDS = [0.85, 1, 1.15, 1.3], SPEED_NAMES = { 0.85: "Slower", 1: "Normal"
 const nearSpeed = (v) => SPEEDS.reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a, 1);
 const talkSpeed = () => nearSpeed(Number(S.settings.speed) || 1);
 // the whole session setup; sent again in full when the speed changes mid-call, so nothing else is reset
-const sessionCfg = () => ({ voice: S.settings.voice || "ara", instructions: grokInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
+const sessionCfg = () => ({ voice: S.settings.voice || "ara", instructions: G.dict ? dictInstructions() : grokInstructions(), turn_detection: { type: "server_vad" }, tools: G.dict ? [DICT_TOOL] : toolDefs(),
   audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() } } });
 const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
 const busy = () => { G.lastAct = Date.now(); };
@@ -1502,8 +1559,8 @@ async function startCall(opening) {
       else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
       srcNode.connect(G.node);
       const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
-      notice(S.settings.userName ? (opening || `The officer just opened the conversation. Say exactly "Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, what would you like to do?" and nothing more.`) : (opening ? opening + ` But you don't know their name yet: first say exactly "Hi, I'm ${botName()}, what's your first name?", then call set_user_name, then help with that.` : `The officer just opened the conversation and you don't know their name yet. Say exactly "Hi, I'm ${botName()}, what's your first name?" and nothing more.`));
-      G.status = "Listening"; paintCall(); vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
+      if (!G.dict) notice(S.settings.userName ? (opening || `The officer just opened the conversation. Say exactly "Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, what would you like to do?" and nothing more.`) : (opening ? opening + ` But you don't know their name yet: first say exactly "Hi, I'm ${botName()}, what's your first name?", then call set_user_name, then help with that.` : `The officer just opened the conversation and you don't know their name yet. Say exactly "Hi, I'm ${botName()}, what's your first name?" and nothing more.`));
+      G.status = "Listening"; paintCall(); if (G.dict) dictPaint(); vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     };
     G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
     G.ws.onclose = (ev) => { vlog("connection closed " + (ev && ev.code)); if (G.live && document.visibilityState === "hidden") { interrupted("connection closed while away"); return; } if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Try again in a moment."); } };
@@ -1541,6 +1598,7 @@ function resumeModal() {
 }
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " " : ""}Say "Welcome back" and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in.`;
 function endCall() {
+  if (G.dict) { clearTimeout(G.dict.timer); G.dict = null; } // hung up mid-dictation: the words heard so far stay in the field
   clearInterval(G.idleTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; stopPlayback(); letSleep();
   try { G.ws && G.ws.close(); } catch (e) {}
@@ -1646,8 +1704,9 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript); }
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { act("user", e.transcript); recent("Officer", e.transcript); if (G.dict) dictHeard(e.transcript); else voiceCommand(e.transcript); }
   if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); }
+  if (t === "input_audio_buffer.speech_started" && G.dict && !G.dict.asked) clearTimeout(G.dict.timer);
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
   else if (t === "response.created") { G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
@@ -1680,6 +1739,10 @@ function onTool(callId, name, args) {
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
+  if (G.dict) { // dictation: only the tidied text counts, and only once the app asked for it
+    toolReply(callId, name === "set_dictated_text" && G.dict.asked ? { ok: true } : { ok: false, error: "Dictation only. Wait for the app notice." }, false);
+    if (name === "set_dictated_text" && G.dict.asked) dictApply(data);
+    return; }
   if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command. Follow the app notice." }); return; }
   if (name === "set_user_name") {
     const v = String(data.first_name || "").trim().split(/\s+/)[0].replace(/\s+/g, " ").slice(0, 60);
@@ -2731,7 +2794,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "Oct 23, 2:58 PM ET", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "Oct 23, 4:39 PM ET", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
