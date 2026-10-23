@@ -747,17 +747,13 @@ function fieldHTML(f, d, fromVoice) {
 function draftHTML() {
   const A = ACTIONS[V.action], d = V.data, fv = V.fromVoice;
   const paired = new Set((A.pairs || []).flat());
-  // required fields (and anything already filled in) first; the rest under "More details", except on a new contact or opportunity, where every field shows
-  const has = (f) => f.type === "bool" ? false : !(d[f.k] === null || d[f.k] === undefined || d[f.k] === "");
-  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k) || ((V.action === "contact" || V.action === "editContact") && (f.k === "email" || f.k === "mobile" || f.opp)) || V.action === "contact" || V.action === "opportunity"; // a contact needs one of these, so they never hide under More details
-  let body = "", more = "", nMore = 0;
+  // every field shows, in form order (no "More details" fold)
+  let body = "";
   for (const f of A.fields) {
     let unit = [f];
     if (paired.has(f.k)) { const pair = A.pairs.find(p => p[0] === f.k); if (!pair) continue; unit = pair.map(k => A.fields.find(x => x.k === k)); }
-    const html = unit.length > 1 ? `<div class="two">${unit.map(x => fieldHTML(x, d, fv)).join("")}</div>` : fieldHTML(f, d, fv);
-    if (unit.some(main)) body += html; else { more += html; nMore += unit.length; }
+    body += unit.length > 1 ? `<div class="two">${unit.map(x => fieldHTML(x, d, fv)).join("")}</div>` : fieldHTML(f, d, fv);
   }
-  if (more) body += `<details class="more" ${V.moreOpen ? "open" : ""}><summary>More details (${nMore} optional)</summary>${more}</details>`;
   const typed = V.typed && !fv.size;
   const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "editContact" ? esc(nameOf(V.target.contact)) : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : V.action === "task" ? `For ${esc(nameOf(V.target.contact))}${V.target.opp ? " · open opportunity " + esc(V.target.opp.name) : ""}` : (V.target.contact ? esc(nameOf(V.target.contact)) + (V.target.opp ? " · " + esc(V.target.opp.name) : "") : esc(V.target.opp ? V.target.opp.name : ""));
   let dupe = "";
@@ -786,7 +782,6 @@ function readDraft() {
 }
 // fields that become required by a rule (a substantive meeting needs a next step; a declined ask or a defer needs a reason)
 const COND_REQ = ["nextStep", "nextDue", "lostReason", "reason", "substantive", "outcome"]; // plus two that decide those rules
-document.getElementById("overlay").addEventListener("toggle", (e) => { if (V && e.target.matches && e.target.matches("details.more")) V.moreOpen = e.target.open; }, true);
 // a form opened by tapping: the officer types, or hands it to the assistant
 function openForm(action, cid, item) {
   let target = {};
@@ -2623,7 +2618,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-23T03:40:24Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-23T04:03:38Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

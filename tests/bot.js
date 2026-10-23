@@ -162,6 +162,15 @@ test("Ending a conversation with a form open brings back the voice button, keepi
   const start = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" "));
   ok(/Coffee with Ken/.test(start), "the new conversation was not told what is already on the form");
 });
+test("Every form shows all its fields, with no More details fold", async (p) => {
+  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Ito, Ken"); await p.waitForTimeout(300);
+  for (const a of ["interaction", "meeting", "task", "pledge"]) {
+    await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap(`[data-qa=${a}]`); await p.waitForTimeout(300);
+    const r = await p.evaluate(() => ({ fold: !!document.querySelector("#overlay details"), title: document.querySelector("#overlay h3") && document.querySelector("#overlay h3").textContent }));
+    ok(r.title && !r.fold, `${a}: ${r.title ? "fields are still folded under More details" : "the form did not open"}`);
+    await p.tap("[data-act=close]"); await p.waitForTimeout(200);
+  }
+});
 test("Adding a task from a contact puts it on the Tasks list", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("[data-contact] >> nth=0"); await p.waitForTimeout(400);
   await p.tap("[data-form=task]"); await p.waitForTimeout(300);

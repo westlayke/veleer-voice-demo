@@ -2,6 +2,11 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 23, 2026",
+   "change": "Every form now shows all its fields. The \"More details\" fold that hid optional fields is gone from all forms (it had already been removed from New contact and New opportunity on Oct 22).",
+   "area": "Screens"
+  },
+  {
    "date": "Oct 22, 2026",
    "change": "Ending a conversation while a form is open now brings back the voice button on every form, keeping what was filled in. It reads \"Continue by voice\" once anything was filled by voice, and Ara picks up from what is already on the form (saying \"start over\" clears it). The voice button also disappears as soon as a conversation starts.",
    "area": "Voice"
