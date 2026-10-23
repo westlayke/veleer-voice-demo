@@ -119,6 +119,11 @@ test("New contact needs a name and an email or mobile, then saves", async (p) =>
 test("The + button on every screen opens one menu to log, add or record anything", async (p) => {
   await signIn(p);
   for (const t of ["Home", "Contacts", "Opportunities", "Tasks"]) { if (t !== "Home") await tab(p, t); ok(await p.locator("header.top .addbtn").isVisible(), `no + button on ${t}`); }
+  // a small phone: the initials sit on the left and the title clears the + button
+  await p.setViewportSize({ width: 375, height: 700 }); await tab(p, "Opportunities");
+  const [h1, add, chip] = await Promise.all(["header.top h1", "header.top .addbtn", "header.top .chip"].map(s => p.locator(s).boundingBox()));
+  ok(chip && chip.x < h1.x && h1.x + h1.width + 8 < add.x, `the Opportunities title runs into the + button: ${JSON.stringify({ h1, add, chip })}`);
+  await p.setViewportSize({ width: 390, height: 844 }); await tab(p, "Home");
   // from a list: pick the contact, then the form opens for them
   await p.tap("header.top .addbtn"); await p.waitForTimeout(250);
   for (const label of ["Log a meeting or call", "Schedule a meeting", "Add a task", "Add a contact", "Plan an ask", "Record a payment"]) ok(await p.locator(`[data-qa] >> text=${label}`).count(), "menu is missing " + label);

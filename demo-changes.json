@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 22, 2026",
+   "change": "Top bar rearranged so titles no longer run into the + button: on Contacts, Opportunities and Tasks your initials are on the far left (tap them to change your name), the title is centred, and the + and the gear are on the right. Home shows your name, the logo, the + and the gear. Screens with a Back button show Back, the title, the + and the gear.",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 22, 2026",
    "change": "A + button at the top right of every main screen opens one menu to log a meeting or call, schedule a meeting, add a task, add a contact, create an opportunity, plan or record an ask, or record a pledge, gift or payment. On a contact or opportunity it is for that contact (with a Someone else option); elsewhere it asks which contact first, with a search box when the list is long.",
    "area": "Screens"
   },
