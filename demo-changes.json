@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "One guided path from contact to Closed Won. The What's next card, the contact record and the opportunity record now follow one next-step rule. For a new contact that is: set a capacity rating, then create the opportunity, then the opportunity's own steps. The contact record has the same dot stepper (starting at Contact) with a Next: line. The blue button under \"Do something\" is always the next step, and Path to opportunity marks the next to-do with an arrow. The card's Set capacity rating button opens the rating choices, and after a rating the card offers Create opportunity.",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Guided flow. After saving an opportunity step (and a new contact), a \"What's next\" card at the top of the screen says what was saved and the next step, with a button that opens that form and a Not now button. The opportunity record's stage bar is now a stepper with dots (done, current, still to come) and a \"Next:\" line just above the stage button.",
    "area": "Screens"
   },

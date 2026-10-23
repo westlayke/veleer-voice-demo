@@ -450,7 +450,7 @@ test("Opportunity: Next step panel on the record and a Next: line in the list", 
 test("Guided flow: stage stepper with a Next: line, and a What's next card after Save that opens the next form", async (p) => {
   await signIn(p); await tab(p, "Opportunities");
   await p.tap(".row:has-text('James Okafor')"); await p.waitForTimeout(400);
-  ok(await p.locator(".track div").count() === 6 && /Qualif/.test(await p.textContent(".track div.on")), "the stepper does not mark Qualification as the current stage");
+  ok(await p.locator(".track div").count() === 7 && /Qualif/.test(await p.textContent(".track div.on")), "the stepper does not mark Qualification as the current stage");
   ok(/^Next: /.test(await p.textContent(".stepnext")), "the record has no Next: line above its stage button");
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "National", plannedDate: "2026-12-01", amount: 50000 });
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
@@ -461,7 +461,12 @@ test("Guided flow: stage stepper with a Next: line, and a What's next card after
   await p.tap("[data-act=close]"); await p.waitForTimeout(300);
   await ara(p, "show_contact_draft", { first: "Lee", last: "Park", email: "lee.park@example.org" });
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
-  ok(/Next: log an interaction with Lee/.test(await p.textContent(".whatnext")), "a new contact without a rating should be offered Log interaction");
+  ok(/Next: set a capacity rating for Lee/.test(await p.textContent(".whatnext")), "a new contact without a rating should be offered a rating first");
+  ok(/Next: set a capacity rating for Lee/.test(await p.textContent(".stepnext")) && /Contact/.test(await p.textContent(".track div.on")), "the record's stepper and Next: line do not match the card");
+  ok(/Set capacity rating/.test(await p.textContent(".next .nextbtn")), "the blue button on the record is not the next step");
+  await p.tap(".whatnext [data-wn]"); await p.waitForTimeout(250); await p.tap("[data-rt=C]"); await p.waitForTimeout(400);
+  ok(/Next: create an opportunity for Lee/.test(await p.textContent(".whatnext")) && /Create opportunity/.test(await p.textContent(".whatnext [data-wn]")), "after the rating the card did not offer Create opportunity");
+  ok(/Create opportunity/.test(await p.textContent(".next .nextbtn")), "after the rating the record's blue button is not Create opportunity");
   await p.tap(".whatnext [data-act2=wnclose]"); await p.waitForTimeout(200);
   ok(!(await p.$(".whatnext")), "Not now did not close the card");
 });
