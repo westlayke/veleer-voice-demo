@@ -469,6 +469,32 @@ test("Guided flow: one Next block on each record (stepper, Next: line, blue butt
   await tab(p, "Home"); await tab(p, "Contacts"); await p.tap("text=Park, Lee"); await p.waitForTimeout(300);
   ok(!(await p.$(".justsaved")), "the saved line stayed after leaving the record");
 });
+test("Field mics: dictate the Summary and the Next step on their own; Ara tidies the words and fills the due date, silently", async (p) => {
+  await signIn(p); await p.tap(".cb-end"); await p.waitForTimeout(300);
+  await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
+  await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap("[data-qa=interaction]"); await p.waitForTimeout(300);
+  ok(await p.locator(".fmic").count() === 2 && await p.isVisible("[data-dict=summary]") && await p.isVisible("[data-dict=nextStep]"), "the Interaction report has no mics in Summary and Next step");
+  ok(await p.isVisible(".vfill"), "Fill this in by voice should stay at the top");
+  await p.fill("#f_summary", "Coffee at the club.");
+  const n0 = await p.evaluate(() => __sent.length);
+  await p.tap("[data-dict=summary]"); await p.waitForTimeout(400);
+  const sent = await p.evaluate((n0) => __sent.slice(n0).map(x => JSON.parse(x)), n0);
+  const cfg = sent.find(e => e.type === "session.update");
+  ok(cfg && cfg.session.tools.length === 1 && cfg.session.tools[0].name === "set_dictated_text" && /silent dictation/.test(cfg.session.instructions), "the dictation call is not set up as silent dictation");
+  ok(!sent.some(e => e.type === "conversation.item.create"), "the dictation call should not send Ara a greeting");
+  await said(p, "she wants an update on pennsylvania before the year end ask"); await p.waitForTimeout(200);
+  ok(/Coffee at the club\. she wants an update/.test(await p.inputValue("#f_summary")) && await p.isVisible(".fmic.on"), "the words heard were not added to the Summary while listening");
+  await p.tap("[data-dict=summary]"); await p.waitForTimeout(300);
+  ok(/finished dictating the Summary/.test(await p.evaluate((n0) => __sent.slice(n0).join(" "), n0)), "stopping did not ask Ara to tidy the text");
+  await ara(p, "set_dictated_text", { text: "She wants an update on Pennsylvania before the year-end ask." });
+  ok((await p.inputValue("#f_summary")) === "Coffee at the club. She wants an update on Pennsylvania before the year-end ask.", "the tidied text did not replace the raw words: " + await p.inputValue("#f_summary"));
+  ok(!(await p.isVisible(".cb-end")) && !(await p.$(".fmic.on")), "the dictation call did not end");
+  await p.tap("[data-dict=nextStep]"); await p.waitForTimeout(400);
+  await said(p, "call her back next tuesday"); await p.tap("[data-dict=nextStep]"); await p.waitForTimeout(300);
+  await ara(p, "set_dictated_text", { text: "Call her back", due_date: "2026-10-27" });
+  ok((await p.inputValue("#f_nextStep")) === "Call her back" && (await p.inputValue("#f_nextDue")) === "2026-10-27", "the Next step or its due date was not filled");
+  ok(await p.isVisible("[data-act=save]"), "the form closed; dictation must never save");
+});
 test("Ask planning: the campaign choices follow the entity (touch and voice)", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "Pennsylvania", plannedDate: "2026-12-01", amount: 50000 });
