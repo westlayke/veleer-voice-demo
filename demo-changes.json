@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "Permission source is now \"Texting permission source\" and shows on the New contact and Edit contact forms only while Texting permitted is ticked (it appears as soon as the box is ticked). The contact record shows it only when texting is on. Ara asks for it only after texting is turned on.",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Needs attention on Home has filter chips with counts (All, Overdue, Opportunities, Tasks, Contacts; the phone remembers the choice), puts the most urgent first (overdue, then waiting too long, then ready to move), and under All groups items into Overdue, Move an opportunity forward, Tasks this week and Ready for an opportunity, five each with Show all. The old limit of three tasks is gone. Ara can filter it: \"What's overdue?\", \"Show only my tasks\".",
    "area": "Screens"
   },

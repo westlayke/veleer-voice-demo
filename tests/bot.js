@@ -276,7 +276,7 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(/mobile number/.test(r.status), "Ara was not asked for the mobile too");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
-  ok(/optional details/.test(r.status) && r.optional_fields && r.optional_fields.length >= 6 && /Capacity rating/.test(r.optional_fields[0]) && /opportunity/.test(r.status), "Ara was not told to offer the optional fields with the capacity rating first");
+  ok(/optional details/.test(r.status) && r.optional_fields && r.optional_fields.length >= 5 && /turn texting on/.test(r.status) && /Capacity rating/.test(r.optional_fields[0]) && /opportunity/.test(r.status), "Ara was not told to offer the optional fields with the capacity rating first");
   ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
   await said(p, "C.");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
@@ -676,6 +676,22 @@ test("Ara: a rating said while the contact's Edit form is open goes on the form,
   ok((await state(p)).contacts.find(c => c.first === "Ken").capacity === before, "the rating was saved without the officer tapping Save");
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Ken").capacity === want, "Save changes did not save the rating");
+});
+test("Contact form: Texting permission source shows only while Texting permitted is ticked", async (p) => {
+  await signIn(p);
+  await ara(p, "show_contact_draft", { first: "Lee", last: "Park", email: "lee.park@example.org" });
+  ok(!(await p.$("#f_permSource")), "the permission source showed with texting off");
+  await p.check("#f_permText"); await p.waitForTimeout(200);
+  ok(await p.$("#f_permSource"), "ticking Texting permitted did not show the permission source");
+  await p.fill("#f_permSource", "Told Dana at the town hall");
+  await p.uncheck("#f_permText"); await p.waitForTimeout(200);
+  ok(!(await p.$("#f_permSource")), "unticking Texting permitted did not hide the permission source");
+  await p.check("#f_permText"); await p.waitForTimeout(200);
+  ok((await p.inputValue("#f_permSource")) === "Told Dana at the town hall", "the typed source was lost when texting was toggled");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  const c = (await state(p)).contacts.find(x => x.first === "Lee" && x.last === "Park");
+  ok(c && c.permText && c.permSource === "Told Dana at the town hall", "the source was not saved");
+  ok(/Texting permission source: Told Dana/.test(await p.textContent("body")), "the record does not show the texting permission source");
 });
 // ---------- replays of real sessions (tests/replays/*.json; names and contact details changed) ----------
 for (const f of fs.readdirSync(path.join(__dirname, "replays")).filter(f => f.endsWith(".json"))) {
