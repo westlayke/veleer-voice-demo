@@ -98,6 +98,7 @@ main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-sh
 .alert.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
 .cfilt { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 12px; padding-bottom: 2px; scrollbar-width: none; } .cfilt::-webkit-scrollbar { display: none; }
 .cfilt button { flex: none; font: inherit; font-size: 14px; font-weight: 600; min-height: 36px; padding: 6px 13px; border-radius: 18px; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--fg); cursor: pointer; } .cfilt button.on { background: var(--brand); border-color: var(--brand); color: #fff; } .cfilt b { font-weight: 700; opacity: .8; margin-left: 2px; }
+.na-chips { margin: 10px 12px 4px; } .na-h { padding: 10px 14px 4px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; } .na-h b { font-weight: 700; } .na-more { display: block; margin: 4px 14px 10px; }
 .gate .gnext .gk { background: var(--brand-soft); color: var(--brand); border: 1.5px solid var(--brand-line); } .gate .gwait .gk { background: var(--surface2); color: var(--muted); border: 1.5px solid var(--line-strong); } .gate .gwait { color: var(--muted); }
 .nextp .flowlink { padding: 2px 14px 12px 46px; } .nextline { font-size: 13.5px; color: var(--brand-ink); font-weight: 600; margin-top: 3px; } .nextline.warn { color: var(--warn); }
 .alert.mute { background: var(--surface2); color: var(--muted); border-color: var(--line-strong); }
@@ -1189,6 +1190,7 @@ const TOOLS = [
 ];
 const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function", name: t.name, description: t.description + " Call it as soon as you know what the officer wants to do, with whatever you know so far, then again after each answer with everything known so far.", parameters: { type: "object", properties: t.props, required: t.req.filter(k => k === "contact_name") } }))
   .concat([{ type: "function", name: "show_screen", description: "Open a screen when the officer asks to see something. For a contact's record or opportunity, pass contact_name.", parameters: { type: "object", properties: Object.assign({ screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record", "how_it_works"] } }, FOR), required: ["screen"] } },
+    { type: "function", name: "show_needs_attention", description: "Show the officer's Needs attention list on Home, filtered when they ask (\"What's overdue?\", \"Show only my tasks\"). Returns the items, most urgent first, to read out briefly.", parameters: { type: "object", properties: { filter: { type: "string", enum: ["all", "overdue", "opportunities", "tasks", "contacts"] } }, required: ["filter"] } },
     { type: "function", name: "call_contact", description: "Put a Call button for a contact on screen when the officer wants to phone them. The officer taps it; the phone places the call.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
     { type: "function", name: "get_giving", description: "Look up a contact's giving: lifetime total, this year's total, the last gift with its date, and any open pledge balance. Also opens their contact record.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
     { type: "function", name: "get_contact_details", description: "Read every field on a contact's record: email, mobile, contact permissions (email, calls, texting), Ally - Do Not Solicit, Do Not Contact, where permission came from, how we met, capacity rating, status and gift officer. Each field says who is allowed to change it. Also opens their contact record. Use it whenever the officer asks for a contact's email, phone, permissions or any other detail.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
@@ -1853,6 +1855,12 @@ function onTool(callId, name, args) {
     const facts = `${f.means}${f.move.length ? " To move on: " + f.move.join(" ") : ""}${f.note ? " " + f.note : ""}`;
     toolReply(callId, { ok: true, summary: `${f.stage} is lit up on screen. ${i === 0 ? `First say exactly: "${PROCESS_INTRO}" Then talk` : "Your next words are"} about ${f.stage} only: start with "${f.stage}" and say one or two sentences based on this: ${facts} Say nothing about earlier stages and don't finish or repeat anything you said before. Then ${nx ? `ask "Shall I go on to ${nx.stage}?" and wait for the answer (unless they asked you to go straight through). When they say yes, call highlight_stage for ${nx.stage} before saying anything.` : "ask if they have questions or want to try a step."}` }); return;
   }
+  if (name === "show_needs_attention") {
+    const k = { all: "all", overdue: "overdue", opportunities: "opps", tasks: "tasks", contacts: "contacts" }[data.filter] || "all";
+    S.naFilter = k; save(); go("home");
+    const xs = attentionItems().filter(NA_FILTERS[k][1]);
+    toolReply(callId, { ok: true, filter: NA_FILTERS[k][0], count: xs.length, items: xs.slice(0, 8).map(x => x.say), status: xs.length ? "Shown on Home. Read out the first few briefly, most urgent first." : "Shown on Home: nothing in this list right now." }); return;
+  }
   if (name === "show_screen") {
     const map = { home: "home", contacts: "contacts", opportunities: "board", tasks: "tasks", contact_record: "contact", opportunity_record: "opp", how_it_works: "flow" };
     const target = map[data.screen] || "home"; if (target !== "flow") G.tour = false;
@@ -2177,16 +2185,36 @@ function alertTodo(o, al) {
 // a task's alert: the same pill on Home (Needs attention), the Tasks screen and the record screens
 const taskAlert = (t) => !t.done && t.due && t.due < todayISO() ? { tone: "warn", text: "Overdue" } : null;
 const alertPill = (al) => al ? `<span class="alert ${al.tone}">${esc(al.text)}</span>` : "";
-function needsAttention() {
-  const rows = [];
+// Needs attention: every item with its kind and urgency, so it can be filtered (chips) and grouped (All)
+function attentionItems() {
+  const items = [], late = (al) => /overdue|passed/i.test(al.text);
+  const rank = (al) => !al ? 3 : late(al) ? 0 : al.tone === "warn" ? 1 : al.tone === "ok" ? 2 : 3;
   myOpen().forEach(o => {
-    const c = contactById(o.contactId);
     const al = oppAlert(o);
-    if (al && al.act) rows.push(`<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">${CHEV}</span></div>`);
+    if (al && al.act) items.push({ kind: "opp", overdue: late(al), rank: rank(al), name: o.name, say: `${o.name}: ${al.text}. ${alertTodo(o, al)}`,
+      html: `<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">${CHEV}</span></div>` });
   });
-  S.contacts.filter(oppReady).forEach(c => rows.push(`<div class="row tap" data-contact="${c.id}"><div class="t"><span class="alert ok">Ready for opportunity</span><div class="na-do">${esc(c.first)} meets every requirement. Create an opportunity?</div><div class="s">${esc(nameOf(c))} · capacity ${c.capacity}</div></div><span class="chev">${CHEV}</span></div>`));
-  S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).sort((x, y) => x.due.localeCompare(y.due)).slice(0, 3).forEach(t => rows.push(`<div class="row tap" data-go="tasks"><div class="t">${alertPill(taskAlert(t))}<div class="${taskAlert(t) ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">${CHEV}</span></div>`));
-  return rows.length ? rows.join("") : `<div class="empty">Nothing needs your attention right now.</div>`;
+  S.contacts.filter(oppReady).forEach(c => items.push({ kind: "contact", overdue: false, rank: 2, name: `${c.last}, ${c.first}`, say: `${nameOf(c)} is ready for an opportunity`,
+    html: `<div class="row tap" data-contact="${c.id}"><div class="t"><span class="alert ok">Ready for opportunity</span><div class="na-do">${esc(c.first)} meets every requirement. Create an opportunity?</div><div class="s">${esc(nameOf(c))} · capacity ${c.capacity}</div></div><span class="chev">${CHEV}</span></div>` }));
+  S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).forEach(t => { const al = taskAlert(t);
+    items.push({ kind: "task", overdue: !!al, rank: al ? 0 : 3, due: t.due, name: t.text, say: `Task "${t.text}" for ${nameOf(contactById(t.contactId))}, due ${fmtDate(t.due)}${al ? " (overdue)" : ""}`,
+      html: `<div class="row tap" data-go="tasks"><div class="t">${alertPill(al)}<div class="${al ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">${CHEV}</span></div>` }); });
+  // most urgent first: overdue, then waiting too long (amber), then ready to move (green); tasks by due date
+  return items.sort((a, b) => a.rank - b.rank || (a.due || "").localeCompare(b.due || "") || a.name.localeCompare(b.name));
+}
+const NA_FILTERS = { all: ["All", () => true], overdue: ["Overdue", x => x.overdue], opps: ["Opportunities", x => x.kind === "opp"], tasks: ["Tasks", x => x.kind === "task"], contacts: ["Contacts", x => x.kind === "contact"] };
+const NA_GROUPS = [["overdue", "Overdue", x => x.overdue], ["opps", "Move an opportunity forward", x => !x.overdue && x.kind === "opp"], ["tasks", "Tasks this week", x => !x.overdue && x.kind === "task"], ["contacts", "Ready for an opportunity", x => x.kind === "contact"]];
+const NA_SHOW = 5;
+function needsAttention() {
+  const items = attentionItems(), fk = NA_FILTERS[S.naFilter] ? S.naFilter : "all";
+  if (!items.length) return `<div class="empty">Nothing needs your attention right now.</div>`;
+  const chips = `<div class="cfilt na-chips" role="tablist" aria-label="Show">${Object.entries(NA_FILTERS).map(([k, f]) => `<button type="button" role="tab" aria-selected="${k === fk}" class="${k === fk ? "on" : ""}" data-act2="nafilt" data-v="${k}">${f[0]} <b>${items.filter(f[1]).length}</b></button>`).join("")}</div>`;
+  if (fk !== "all") { const rows = items.filter(NA_FILTERS[fk][1]); return chips + (rows.length ? rows.map(x => x.html).join("") : `<div class="empty">Nothing here right now.</div>`); }
+  // All: short groups, up to five each, with Show all
+  G.naOpen = G.naOpen || {};
+  return chips + NA_GROUPS.map(([k, head, f]) => { const xs = items.filter(f); if (!xs.length) return "";
+    const shown = G.naOpen[k] ? xs : xs.slice(0, NA_SHOW);
+    return `<div class="na-h">${head} <b>${xs.length}</b></div>${shown.map(x => x.html).join("")}${xs.length > shown.length ? `<button type="button" class="linkbtn na-more" data-act2="namore" data-v="${k}">Show all ${xs.length}</button>` : ""}`; }).join("");
 }
 // "Sun, Oct 25 · in 5 days"
 function dayLabel(iso) { const d = new Date(iso + "T12:00:00"), n = Math.round((new Date(iso) - new Date(todayISO())) / 864e5);
@@ -2214,11 +2242,10 @@ function addBtnCard() {
 }
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);
-  // the overview row sits at the top until it has been heard once, then moves to the bottom of Home
+  // the overview row sits at the bottom of Home
   const ov = `<section class="panel"><div class="ovrow"><div class="t"><b>From first contact to Closed Won</b><button type="button" class="linkbtn" data-act2="flowhome">See the stages</button></div>
     <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(15)} Hear the overview</button></div></section>`;
   return topbar("Home", null, true) + `<main>
-  ${S.heardOverview ? "" : ov}
   <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
   <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
   ${upcomingPanel()}
@@ -2229,7 +2256,7 @@ function homeScreen() {
   </section>
   ${goalsPanel()}
   ${canTalk() ? "" : `<section class="note" style="border-radius:12px">Voice needs an xAI API key on this phone. <button class="btn quiet" data-go="settings" style="margin-top:8px;width:100%">Open Settings</button></section>`}
-  ${S.heardOverview ? ov : ""}
+  ${ov}
   ${addBtnCard()}
   </main>`;
 }
@@ -2600,6 +2627,8 @@ document.addEventListener("click", (e) => {
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
   else if (act === "cfilt") { S.cFilter = a.dataset.v; save(); render(); }
+  else if (act === "nafilt") { S.naFilter = a.dataset.v; save(); render(); }
+  else if (act === "namore") { G.naOpen = G.naOpen || {}; G.naOpen[a.dataset.v] = true; render(); }
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
   else if (act === "flowat") { S.flowBack = "opp"; highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
@@ -2645,7 +2674,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-23 07:46", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-23 08:08", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

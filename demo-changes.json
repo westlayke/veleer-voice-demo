@@ -3,6 +3,16 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "Needs attention on Home has filter chips with counts (All, Overdue, Opportunities, Tasks, Contacts; the phone remembers the choice), puts the most urgent first (overdue, then waiting too long, then ready to move), and under All groups items into Overdue, Move an opportunity forward, Tasks this week and Ready for an opportunity, five each with Show all. The old limit of three tasks is gone. Ara can filter it: \"What's overdue?\", \"Show only my tasks\".",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 23, 2026",
+   "change": "The \"From first contact to Closed Won\" overview panel is always last on Home (it used to sit at the top until heard once).",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Record the ask's pick list (+ menu) shows planned asks (Ask Planning) in their own section first, then other opportunities, each section A to Z by last name.",
    "area": "Screens"
   },

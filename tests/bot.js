@@ -354,6 +354,17 @@ test("A yes to an outright ask moves the opportunity to Commitment; a yes to a p
   const o3 = (await state(p)).opps.find(o => o.id === o1.id);
   ok(o3.stage === "Closed" && o3.closed === "Won" && (await state(p)).tasks.filter(k => k.oppId === o1.id && /^Follow up on agreed gift/.test(k.text)).every(k => k.done), "Record gift did not close the agreed outright gift as Closed Won");
 });
+test("Home: Needs attention has filter chips and urgency groups; the overview panel is last", async (p) => {
+  await signIn(p); await tab(p, "Home");
+  const chips = await p.$$eval(".na-chips button", bs => bs.map(b => b.textContent.trim()));
+  ok(["All", "Overdue", "Opportunities", "Tasks", "Contacts"].every((k, i) => chips[i] && chips[i].startsWith(k)), "Needs attention chips missing: " + chips.join(" | "));
+  ok(await p.evaluate(() => { const ps = [...document.querySelectorAll("main > section.panel")]; return /From first contact to Closed Won/.test(ps[ps.length - 1].textContent); }), "the overview panel is not last on Home");
+  await p.tap(".na-chips button >> text=Tasks"); await p.waitForTimeout(250);
+  ok(await p.evaluate(() => [...document.querySelectorAll(".na-chips ~ .row")].every(r => r.dataset.go === "tasks")), "the Tasks chip shows more than tasks");
+  ok((await state(p)).naFilter === "tasks", "the chip choice is not remembered");
+  const r = await ara(p, "show_needs_attention", { filter: "overdue" });
+  ok(r.ok && r.filter === "Overdue" && (await state(p)).naFilter === "overdue", "Ara cannot filter Needs attention");
+});
 test("Ask Made shows Record gift beside Record pledge, and Record gift in Commitment applies to the pledge", async (p) => {
   await signIn(p);
   const name = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage === "Ask Made" && (o.asks[0] || {}).askType !== "Outright"); const c = o && S.contacts.find(c => c.id === o.contactId); return o && c.first + " " + c.last; });
