@@ -692,7 +692,7 @@ let V = null; // { action, data, fromVoice, target }
 function prefill(action, d, t) {
   const out = Object.assign({}, d);
   const c = t.contact, o = t.opp, a = latestAsk(o);
-  if (action === "interaction") out.forName = nameOf(c);
+  if (action === "interaction") { out.forName = nameOf(c); if (!out.capacity && c.capacity) out.capacity = c.capacity; } // shows the contact's current rating
   if (action === "task") { out.forName = nameOf(c); if (out.onOpp && !o) out.onOpp = false; }
   if (["plan", "ask", "pledge", "cultivate", "gift", "payment"].includes(action)) out.forName = o ? o.name : "";
   if (action === "cultivate" && !out.decision) out.decision = "Move to Cultivation";
@@ -971,7 +971,7 @@ const APPLY = {
   interaction(d, t) {
     const c = t.contact;
     S.interactions.unshift({ id: uid(), contactId: c.id, oppId: t.opp ? t.opp.id : null, date: d.date, type: d.meetingType, summary: d.summary, substantive: !!d.substantive, outcome: d.outcome || "", kind: "meeting" });
-    if (d.capacity) { c.capacity = d.capacity; log(`Capacity rated ${d.capacity} (${CAPACITY[d.capacity]})`, { contactId: c.id }); }
+    if (d.capacity && d.capacity !== c.capacity) { c.capacity = d.capacity; log(`Capacity rated ${d.capacity} (${CAPACITY[d.capacity]})`, { contactId: c.id }); }
     log(`Interaction report: ${d.meetingType}, ${fmtDate(d.date)}`, { contactId: c.id, oppId: t.opp ? t.opp.id : null });
     if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: t.opp ? t.opp.id : null, text: d.nextStep, due: d.nextDue, done: false });
     S.sel.contact = c.id; S.screen = "contact"; return { contact: c };
@@ -2618,7 +2618,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-23T04:09:20Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-23T09:17:24Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
