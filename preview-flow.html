@@ -765,7 +765,7 @@ function draftHTML() {
   return `<div class="grab"></div>
   <div class="sh"><div style="min-width:0">${typed ? `<div class="vh">${V.action === "editContact" ? "Change and save" : "Fill in and save"}</div>` : `<div class="vh">${mic(15)} Draft from voice · check and save</div>`}<h3>${esc(A.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
   <div class="sb">
-    ${G.live ? "" : `<button type="button" class="vfill" data-act="voicefill">${mic(16)} Fill this in by voice</button>`}
+    ${G.live ? "" : `<button type="button" class="vfill" data-act="voicefill">${mic(16)} ${typed ? "Fill this in by voice" : "Continue by voice"}</button>`}
     <div class="left">${typed ? `Type the details, or let ${esc(botName())} fill them in by voice. Fields marked * are required.` : "Drafted from your conversation. Say a correction out loud, or edit here."}${V.action === "contact" ? ` Fields marked <span class="opptag">${OPP_MARK} For opportunity</span> are optional now but needed before you can create an opportunity.` : ""}</div>
     ${dupe}
     <form id="draftForm" novalidate>${body}</form>
@@ -1434,7 +1434,7 @@ async function startCall(opening) {
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
   if (!G.keepRecent) { G.recent = []; G.saves = []; } G.keepRecent = false;
-  G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
+  G.live = true; { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     G.t0 = Date.now(); G.passReady = !!TOK.p;
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1517,7 +1517,10 @@ function endCall() {
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
   vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended"); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = false; clearTimeout(G.qTimer);
-  paintCall(); render(); setTimeout(prefetchToken, 1000);
+  paintCall(); render();
+  // a form left open gets its voice button back, keeping what was filled in
+  if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
+  setTimeout(prefetchToken, 1000);
 }
 function tellPicked(kind) {
   if (!G.live) return;
@@ -2620,7 +2623,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-23T03:29:57Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-23T03:40:24Z", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

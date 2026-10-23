@@ -149,6 +149,19 @@ test("The + button on every screen opens one menu to log, add or record anything
   await p.tap("[data-qa=contact]"); await p.waitForTimeout(300);
   ok(await p.evaluate(() => /New contact/.test(document.getElementById("overlay").textContent)), "Add a contact did not open the New contact form");
 });
+test("Ending a conversation with a form open brings back the voice button, keeping what was filled in", async (p) => {
+  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Ito, Ken"); await p.waitForTimeout(300);
+  await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap("[data-qa=meeting]"); await p.waitForTimeout(300);
+  await p.tap("[data-act=voicefill]"); await p.waitForTimeout(600);
+  ok(!(await p.locator(".vfill").count()), "the voice button stayed during the conversation");
+  await ara(p, "show_meeting_draft", { contact_name: "Ken Ito", title: "Coffee with Ken" });
+  await p.tap(".cb-end"); await p.waitForTimeout(400);
+  ok(await p.locator(".vfill").isVisible() && /Continue by voice/.test(await p.locator(".vfill").textContent()), "no Continue by voice button after End");
+  ok(await p.inputValue("#f_title") === "Coffee with Ken", "the title filled in by voice was lost");
+  await p.tap(".vfill"); await p.waitForTimeout(600);
+  const start = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" "));
+  ok(/Coffee with Ken/.test(start), "the new conversation was not told what is already on the form");
+});
 test("Adding a task from a contact puts it on the Tasks list", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("[data-contact] >> nth=0"); await p.waitForTimeout(400);
   await p.tap("[data-form=task]"); await p.waitForTimeout(300);

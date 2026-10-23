@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 22, 2026",
+   "change": "Ending a conversation while a form is open now brings back the voice button on every form, keeping what was filled in. It reads \"Continue by voice\" once anything was filled by voice, and Ara picks up from what is already on the form (saying \"start over\" clears it). The voice button also disappears as soon as a conversation starts.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 22, 2026",
    "change": "The + menu's Record the ask list now says why each opportunity is there, Ask Planning first: \"Ask Planning · planned for (date)\", \"Ask Made · record the answer\" (the investor's response to an ask already made) and \"Cultivation · unplanned ask\" (the guide lets an unplanned ask be recorded; it passes through Ask Planning in the same save).",
    "area": "Screens"
   },
