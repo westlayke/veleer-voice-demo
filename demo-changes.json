@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 22, 2026",
+   "change": "The + menu's Record the ask list now says why each opportunity is there, Ask Planning first: \"Ask Planning · planned for (date)\", \"Ask Made · record the answer\" (the investor's response to an ask already made) and \"Cultivation · unplanned ask\" (the guide lets an unplanned ask be recorded; it passes through Ask Planning in the same save).",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 22, 2026",
    "change": "Top bar rearranged so titles no longer run into the + button: on Contacts, Opportunities and Tasks your initials are on the far left (tap them to change your name), the title is centred, and the + and the gear are on the right. Home shows your name, the logo, the + and the gear. Screens with a Back button show Back, the title, the + and the gear.",
    "area": "Screens"
   },
