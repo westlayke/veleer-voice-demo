@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "Confetti and balloons now also play when an outright gift is recorded (Record gift), not only a pledge payment, whether the form was typed or filled by voice.",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Fix: the Interaction report's Capacity rating now shows the contact's saved rating (it showed empty, so a new contact rated on the New contact form looked unrated). Saving a report with the rating unchanged no longer logs it again in History.",
    "area": "Rules"
   },

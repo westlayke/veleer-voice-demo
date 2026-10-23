@@ -305,6 +305,14 @@ test("A save is acknowledged by Ara and listed for her, and a pledge payment set
   await p.waitForTimeout(6800);
   ok(!(await p.isVisible(".party")), "the celebration did not clear away");
 });
+test("Recording an outright gift by tapping also sets off confetti and balloons", async (p) => {
+  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Ito, Ken"); await p.waitForTimeout(300);
+  await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap("[data-qa=gift]"); await p.waitForTimeout(300);
+  for (const sel of await p.$$("#draftForm select")) { if (!(await sel.inputValue())) { const v = await sel.evaluate(s => [...s.options].map(o => o.value).find(Boolean)); if (v) await sel.selectOption(v); } }
+  await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  ok((await state(p)).opps.some(o => o.name === "Ito, Ken - 2026" && o.closed === "Won"), "the gift did not close Ken's opportunity as Closed Won");
+  ok(await p.isVisible(".party .bl") && await p.isVisible(".party .cf"), "no confetti and balloons after recording a gift by tapping");
+});
 test("Ara has a friendly personality and congratulates the officer when a pledge is recorded", async (p) => {
   await signIn(p);
   const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage === "Ask Made") || S.opps.find(o => o.stage !== "Closed"); o.stage = "Ask Made"; const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
