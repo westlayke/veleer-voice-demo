@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "The New opportunity form no longer has a \"Then move to Cultivation\" checkbox. When a contact already has a rating and a substantive interaction, the new opportunity's Next block offers Move to Cultivation? (move, or defer with a reason) right away.",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "The Next step field on the Interaction report and the Record the ask report is now a three-line box, so a longer next step shows in full.",
    "area": "Screens"
   },
