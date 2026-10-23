@@ -447,6 +447,24 @@ test("Opportunity: Next step panel on the record and a Next: line in the list", 
   ok(await p.isVisible(".nextp") && /to Cultivation/.test(await p.textContent(".nextp .ph")), "James's record has no Next step panel to Cultivation");
   ok(await p.locator(".nextp li").count() === 3, "Qualification should list three steps");
 });
+test("Guided flow: stage stepper with a Next: line, and a What's next card after Save that opens the next form", async (p) => {
+  await signIn(p); await tab(p, "Opportunities");
+  await p.tap(".row:has-text('James Okafor')"); await p.waitForTimeout(400);
+  ok(await p.locator(".track div").count() === 6 && /Qualif/.test(await p.textContent(".track div.on")), "the stepper does not mark Qualification as the current stage");
+  ok(/^Next: /.test(await p.textContent(".stepnext")), "the record has no Next: line above its stage button");
+  await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "National", plannedDate: "2026-12-01", amount: 50000 });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  ok(await p.isVisible(".whatnext") && /Planned ask saved/.test(await p.textContent(".whatnext")) && /Next: record the ask/.test(await p.textContent(".whatnext .wn-line")), "no What's next card pointing at recording the ask");
+  await p.tap(".whatnext [data-wn]"); await p.waitForTimeout(400);
+  ok(/the ask/.test(await p.textContent("#overlay")), "the card's button did not open the Record the ask form");
+  ok(!(await p.$(".whatnext")), "the card stayed after its button was used");
+  await p.tap("[data-act=close]"); await p.waitForTimeout(300);
+  await ara(p, "show_contact_draft", { first: "Lee", last: "Park", email: "lee.park@example.org" });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  ok(/Next: log an interaction with Lee/.test(await p.textContent(".whatnext")), "a new contact without a rating should be offered Log interaction");
+  await p.tap(".whatnext [data-act2=wnclose]"); await p.waitForTimeout(200);
+  ok(!(await p.$(".whatnext")), "Not now did not close the card");
+});
 test("Ask planning: the campaign choices follow the entity (touch and voice)", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "Pennsylvania", plannedDate: "2026-12-01", amount: 50000 });

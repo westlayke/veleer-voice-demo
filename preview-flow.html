@@ -129,10 +129,19 @@ details.trouble > summary { list-style: none; cursor: pointer; } details.trouble
 .btn.quiet { background: var(--surface2); color: var(--fg); border: 1px solid var(--line); font-weight: 600; }
 .btn:disabled { opacity: .5; cursor: default; }
 .btns { display: flex; gap: 8px; } .btns > * { flex: 1; } a.btn, a.chev { text-decoration: none; }
-.track { display: flex; gap: 3px; padding: 4px 14px 12px; }
-.track div { flex: 1; text-align: center; font-size: 10.5px; color: var(--muted); padding-top: 7px; border-top: 5px solid var(--line); }
-.track div.done { border-color: var(--brand-line); }
-.track div.on { border-color: var(--brand); color: var(--brand); font-weight: 700; }
+.track { display: flex; padding: 6px 6px 10px; }
+.track div { flex: 1; position: relative; text-align: center; font-size: 10.5px; color: var(--muted); padding-top: 24px; }
+.track div::before { content: ""; position: absolute; top: 4px; left: 50%; transform: translateX(-50%); width: 16px; height: 16px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--line); background: var(--surface); z-index: 1; font-size: 10px; line-height: 12px; color: #fff; font-weight: 700; }
+.track div::after { content: ""; position: absolute; top: 11px; left: -50%; width: 100%; height: 2px; background: var(--line); }
+.track div:first-child::after { display: none; }
+.track div.done::before { content: "✓"; background: var(--brand-line); border-color: var(--brand-line); }
+.track div.done::after, .track div.on::after { background: var(--brand-line); }
+.track div.on::before { background: var(--brand); border-color: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft); }
+.track div.on { color: var(--brand); font-weight: 700; }
+.stepnext { font-size: 14px; font-weight: 600; color: var(--brand-ink); } .stepnext.warn { color: var(--warn); }
+.whatnext { border: 1.5px solid var(--brand-line); background: var(--brand-soft); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.whatnext .wn-saved { font-size: 12.5px; color: var(--muted); font-weight: 600; } .whatnext .wn-line { font-size: 15px; font-weight: 700; color: var(--brand-ink); }
+.whatnext .wn-btns { display: flex; gap: 8px; margin-top: 4px; } .whatnext .wn-btns .btn { flex: 1; }
 .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; padding: 12px 14px; font-size: 14px; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .via { color: var(--brand); font-size: 12px; font-weight: 700; white-space: nowrap; }
@@ -899,7 +908,8 @@ function saveDraft() {
   try { act("form", formLog(A, d, V.fromVoice, V.typed)); } catch (e) {}
   const result = APPLY[action](d, t);
   save(); V = null; renderOverlay(); render(); window.scrollTo(0, 0);
-  toast(A.saved, () => { S = JSON.parse(undo); save(); render(); });
+  setWhatNext(action, result, t); if (G.whatNext) render();
+  toast(A.saved, () => { S = JSON.parse(undo); G.whatNext = null; save(); render(); });
   if (action === "payment" || action === "gift") celebrate(); // the money came in: a pledge payment or an outright gift
   grokSaved(action, result, d);
 }
@@ -1949,7 +1959,7 @@ function grokSaved(action, r, d = {}) {
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
 
 /* ---------- screens ---------- */
-const go = (s) => { S.screen = s; save(); render(); window.scrollTo(0, 0); };
+const go = (s) => { G.whatNext = null; S.screen = s; save(); render(); window.scrollTo(0, 0); };
 const CHEV = '<svg width="8" height="13" viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5l-5 5"/></svg>'; // iPhone-style row chevron
 const BACK_NAMES = { home: "Home", opp: "Opportunity", contact: "Contact", contacts: "Contacts", board: "Opportunities", opps: "Opportunities", tasks: "Tasks", settings: "Settings" }; // iPhone-style back button shows where it goes
 function topbar(title, back, logo) {
@@ -2381,6 +2391,33 @@ function contactScreen() {
 const STAGE_BTN = { Qualification: "Log interaction", Cultivation: "+ Add planned ask", "Ask Planning": "Record the ask", "Ask Made": "Record pledge", Commitment: "Record gift" };
 const STAGE_SAY = { Qualification: "Log a meeting", Cultivation: "Plan an ask", "Ask Planning": "Record the ask", "Ask Made": "Record a pledge", Commitment: "Record a gift" };
 const stageName = (o) => o.stage === "Closed" ? "Closed " + (o.closed || "Won") : o.stage;
+// the one thing to do next on an opportunity: the same button its record shows
+function oppPrimary(o) {
+  if (!o || o.stage === "Closed") return null;
+  const c = contactById(o.contactId), a = latestAsk(o);
+  if (readyForCultivation(o)) return { label: "Move to Cultivation", act2: "cultivate", oppId: o.id };
+  const outright = o.stage === "Ask Made" && a && a.askType === "Outright";
+  const label = outright ? "Record gift" : STAGE_BTN[o.stage], sayIt = outright ? "Record a gift" : STAGE_SAY[o.stage];
+  return label ? { label, form: FORM_FOR[sayIt] || "gift", cid: c.id, oppId: o.id } : null;
+}
+// after a save: what happened and the next form, one tap away (the screens' version of "take me to the next step")
+const WN_ACTIONS = ["contact", "interaction", "opportunity", "plan", "ask", "pledge", "gift", "payment", "cultivate"];
+function setWhatNext(action, result, t) {
+  G.whatNext = null;
+  if (!WN_ACTIONS.includes(action)) return;
+  const c = (result && result.contact) || (t && t.contact), o0 = (result && result.opp) || (t && t.opp) || (c && openOpp(c.id)), o = o0 && oppById(o0.id);
+  let next = null;
+  if (o && o.stage === "Closed") next = { done: o.closed === "Lost" ? "This opportunity is closed." : "Closed Won. Nothing more to do on this opportunity." };
+  else if (o) { const n = nextStep(o), b = oppPrimary(o); if (n && b) next = { line: n.line, warn: n.warn, btn: b }; }
+  else if (c && !c.dnc && !openOpp(c.id)) next = c.capacity && !c.ally ? { line: `create an opportunity for ${c.first}`, btn: { label: "Create opportunity", form: "opportunity", cid: c.id } } : { line: `log an interaction with ${c.first}`, btn: { label: "Log interaction", form: "interaction", cid: c.id } };
+  if (next) G.whatNext = Object.assign({ saved: ACTIONS[action].saved, screen: S.screen }, next);
+}
+function whatNextCard() {
+  const w = G.whatNext; if (!w || w.screen !== S.screen) return "";
+  if (w.done) return `<section class="panel whatnext" role="status"><div class="wn-saved">✓ ${esc(w.saved)}</div><div class="wn-line">${esc(w.done)}</div><div class="wn-btns"><button class="btn out" data-act2="wnclose">OK</button></div></section>`;
+  const b = w.btn;
+  return `<section class="panel whatnext" role="status"><div class="wn-saved">✓ ${esc(w.saved)}</div><div class="wn-line">Next: ${esc(w.line)}</div><div class="wn-btns"><button class="btn blue" data-wn="1" ${b.act2 ? `data-act2="${b.act2}" data-oppid="${b.oppId}"` : `data-form="${b.form}" data-cid="${b.cid}"`}>${esc(b.label)}</button><button class="btn out" data-act2="wnclose">Not now</button></div></section>`;
+}
 function oppScreen() {
   const o = oppById(S.sel.opp);
   if (!o) return boardScreen();
@@ -2403,7 +2440,7 @@ function oppScreen() {
   <section class="panel"><div class="hero"><h2>${esc(o.name)}</h2><div style="color:var(--muted);font-size:13px"><span class="lnk" data-contact="${c.id}" role="button" tabindex="0">${esc(nameOf(c))}</span> · ${OFFICER}${o.fund ? " · " + esc(o.fund) : ""}</div>${alert ? `<div>${alert}</div>` : ""}</div>
     <div class="track">${STAGES.map((s, i) => `<div class="${i < idx ? "done" : i === idx ? "on" : ""}">${s === "Closed" && o.closed ? (o.closed === "Lost" ? "Lost" : "Won") : s.replace("Qualification", "Qualif.").replace("Cultivation", "Cultiv.")}</div>`).join("")}</div>
     <div class="tiles"><div class="tile"><div class="k">Potential</div><div class="v">${money(o.potential)}</div></div><div class="tile ${asked ? "hl" : ""}"><div class="k">Asked</div><div class="v">${money(asked)}</div></div>${o.gift ? `<div class="tile hl"><div class="k">Received</div><div class="v">${money(o.gift.amount)}</div></div>` : `<div class="tile ${o.pledge ? "hl" : ""}"><div class="k">${o.pledge && (o.pledge.implied || o.pledge.outright) ? "Committed" : "Pledged"}</div><div class="v">${money(o.pledge ? o.pledge.amount : 0)}</div></div>`}</div>
-    <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:8px">${met ? `<button class="btn ${readyForCultivation(o) ? "blue" : "out"}" data-act2="cultivate">Move to Cultivation?</button>` : ""}${btn}</div>
+    <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:8px">${nextStep(o) ? `<div class="stepnext${nextStep(o).warn ? " warn" : ""}">Next: ${esc(nextStep(o).line)}</div>` : ""}${met ? `<button class="btn ${readyForCultivation(o) ? "blue" : "out"}" data-act2="cultivate">Move to Cultivation?</button>` : ""}${btn}</div>
   </section>
   ${nextPanel(o)}
   ${o.pledge && o.pledge.implied ? `<section class="panel"><div class="ph"><h2>Commitment</h2></div><dl class="kv"><dt>Type</dt><dd>Implied commitment: the gift arrived while the ask was open, with no pledge</dd><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Entity</dt><dd>${esc(o.pledge.fund)}</dd><dt>Received</dt><dd>${o.pledge.payments.map(x => `${money(x.amount)} on ${fmtDate(x.date)} (${esc(String(x.method).toLowerCase())})`).join("<br>")}</dd><dt>Status</dt><dd>${esc(o.pledge.status)}</dd></dl></section>`
@@ -2597,6 +2634,7 @@ function render() {
   const app = document.getElementById("app");
   const s = S.screen;
   app.innerHTML = s === "contacts" ? contactsScreen() : s === "contact" ? contactScreen() : s === "opp" ? oppScreen() : s === "board" ? boardScreen() : s === "tasks" ? tasksScreen() : s === "settings" ? settingsScreen() : s === "flow" ? flowScreen() : homeScreen();
+  const wn = whatNextCard(), m = wn && app.querySelector("main"); if (m) m.insertAdjacentHTML("afterbegin", wn);
   const tab = (id, label, icon, also) => `<button class="tab ${s === id || s === also ? "on" : ""}" data-go="${id}">${icon}<span>${label}</span></button>`;
   const I = (p) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   document.getElementById("tabs").innerHTML =
@@ -2612,6 +2650,7 @@ document.addEventListener("input", (e) => { if (e.target.id !== "cSearch") retur
 document.addEventListener("click", (e) => {
   const cl = e.target.closest("[data-call]"); if (cl) { placeCall(cl.dataset.call); return; }
   if (e.target.closest("#overlay") || e.target.closest("#modal")) return;
+  const wb = e.target.closest("[data-wn]"); if (wb) { G.whatNext = null; wb.closest(".whatnext").remove(); if (wb.dataset.oppid) S.sel.opp = wb.dataset.oppid; }
   const fm = e.target.closest("[data-form]"); if (fm && fm.dataset.form) { openForm(fm.dataset.form, fm.dataset.cid, fm.dataset.item); return; }
   const say = e.target.closest("[data-say]");
   if (say) { const line = say.dataset.say;
@@ -2627,6 +2666,7 @@ document.addEventListener("click", (e) => {
   const act = a.dataset.act2;
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
+  else if (act === "wnclose") { G.whatNext = null; render(); }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
   else if (act === "cfilt") { S.cFilter = a.dataset.v; save(); render(); }
   else if (act === "nafilt") { S.naFilter = a.dataset.v; save(); render(); }
@@ -2677,7 +2717,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "Oct 23, 10:13 AM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "Oct 23, 10:37 AM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

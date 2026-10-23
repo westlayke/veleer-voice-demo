@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "Guided flow. After saving an opportunity step (and a new contact), a \"What's next\" card at the top of the screen says what was saved and the next step, with a button that opens that form and a Not now button. The opportunity record's stage bar is now a stepper with dots (done, current, still to come) and a \"Next:\" line just above the stage button.",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Permission source is now \"Texting permission source\" and shows on the New contact and Edit contact forms only while Texting permitted is ticked (it appears as soon as the box is ticked). The contact record shows it only when texting is on. Ara asks for it only after texting is turned on.",
    "area": "Screens"
   },
