@@ -298,7 +298,7 @@ test("A save is acknowledged by Ara and listed for her, and a gift on a pledge s
   const gone = await ara(p, "show_payment_draft", { contact_name: who, amount: 1000, date: "2026-10-22", method: "Check" });
   ok(gone && gone.ok === false, "Ara still has a separate payment tool");
   await ara(p, "show_gift_draft", { contact_name: who, amount: 1000, date: "2026-10-22", method: "Check", fund: "Citizens Alliance C3" });
-  ok(/applied to the pledge/.test(await p.evaluate(() => document.body.innerText)), "Record gift in Commitment does not say it is applied to the pledge");
+  ok(/applied to the (pledge|commitment)/.test(await p.evaluate(() => document.body.innerText)), "Record gift in Commitment does not say it is applied to the pledge");
   const n = await p.evaluate(() => __sent.length);
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
   ok(await p.isVisible(".party .bl"), "no balloons after recording the payment");
@@ -324,6 +324,28 @@ test("Recording an outright gift by tapping also sets off confetti and balloons"
   const body = await p.evaluate(() => document.body.innerText);
   ok(/Implied commitment/.test(body) && /Committed/.test(body), "the opportunity does not show the implied commitment");
 });
+test("A yes to an outright ask moves the opportunity to Commitment; a yes to a pledge ask waits for Record pledge", async (p) => {
+  await signIn(p);
+  const [who, other] = await p.evaluate(() => { const S = window.__demo.state, open = S.opps.filter(o => o.stage !== "Closed").slice(0, 2);
+    open.forEach((o, i) => { o.stage = "Ask Made"; o.asks = [{ fund: "Citizens Alliance C3", campaign: "National", amount: 5000, askType: i ? "Pledge" : "Outright", status: "Made", plannedDate: "2026-10-01", askedOn: "2026-10-01" }]; delete o.pledge; });
+    return open.map(o => { const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; }); });
+  for (const name of [who, other]) {
+    await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-23", meetingType: "Phone call", amount: 5000, fund: "Citizens Alliance C3", response: "Accepted", summary: "Said yes on the call.", nextStep: "Thank them", nextDue: "2026-10-30" });
+    for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
+    await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  }
+  const st = await state(p), oid = (n) => st.opps.find(o => o.stage !== "Closed" && st.contacts.find(c => c.id === o.contactId && c.first + " " + c.last === n));
+  const o1 = oid(who), o2 = oid(other);
+  ok(o1 && o1.stage === "Commitment" && o1.pledge && o1.pledge.outright, "an accepted outright ask did not move to Commitment: " + (o1 && o1.stage));
+  ok(o2 && o2.stage === "Ask Made" && !o2.pledge, "an accepted pledge ask did not stay in Ask Made for Record pledge: " + (o2 && o2.stage));
+  ok(st.tasks.some(k => k.oppId === o1.id && /^Follow up on agreed gift/.test(k.text)), "no Follow up on agreed gift task");
+  const body = await p.evaluate(() => document.body.innerText);
+  ok(/Agreed, gift to follow/.test(body) || /Commitment/.test(body), "the opportunity does not show the agreed gift");
+  await ara(p, "show_gift_draft", { contact_name: who, amount: 5000, date: "2026-10-24", method: "Check" });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  const o3 = (await state(p)).opps.find(o => o.id === o1.id);
+  ok(o3.stage === "Closed" && o3.closed === "Won" && (await state(p)).tasks.filter(k => k.oppId === o1.id && /^Follow up on agreed gift/.test(k.text)).every(k => k.done), "Record gift did not close the agreed outright gift as Closed Won");
+});
 test("Ask Made shows Record gift beside Record pledge, and Record gift in Commitment applies to the pledge", async (p) => {
   await signIn(p);
   const name = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage === "Ask Made" && (o.asks[0] || {}).askType !== "Outright"); const c = o && S.contacts.find(c => c.id === o.contactId); return o && c.first + " " + c.last; });
@@ -335,7 +357,7 @@ test("Ask Made shows Record gift beside Record pledge, and Record gift in Commit
   ok(await p.locator("button.btn.blue >> text=Record gift").count(), "Commitment's button is not Record gift");
   await p.tap("button.btn.blue >> text=Record gift"); await p.waitForTimeout(300);
   ok(await p.inputValue("#f_amount").then(v => /1,?000/.test(v)), "Record gift in Commitment did not fill in the scheduled first gift");
-  ok(/applied to the pledge/.test(await p.evaluate(() => document.body.innerText)), "the form does not say the gift is applied to the pledge");
+  ok(/applied to the (pledge|commitment)/.test(await p.evaluate(() => document.body.innerText)), "the form does not say the gift is applied to the pledge");
 });
 test("Ara has a friendly personality and congratulates the officer when a pledge is recorded", async (p) => {
   await signIn(p);
