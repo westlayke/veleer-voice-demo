@@ -70,7 +70,7 @@ async function activity(request, env, url) {
   const page = (body) => new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Citizens VCRM activity</title>
 <style>body{font:15px/1.4 system-ui,sans-serif;margin:0;padding:16px;background:#f4f6f9;color:#1d232b}h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
 table{border-collapse:collapse;width:100%;background:#fff}td,th{border-bottom:1px solid #e3e7ec;padding:6px 8px;text-align:left;vertical-align:top;font-size:14px}th{background:#eef1f5}
-.conv{background:#fff;border:1px solid #e3e7ec;border-radius:8px;margin:10px 0;padding:10px 12px}.meta{color:#5b6470;font-size:13px}.r{margin:4px 0}.user b{color:#1f5fbf}.grok b{color:#2f7d4f}.step{color:#8a5a00;font-size:13px}.sys{color:#5b6470;font-size:13px}
+.conv{background:#fff;border:1px solid #e3e7ec;border-radius:8px;margin:10px 0;padding:10px 12px}.meta{color:#5b6470;font-size:13px}.r{margin:4px 0}.user b{color:#1f5fbf}.grok b{color:#2f7d4f}.step{color:#8a5a00;font-size:13px}.sys{color:#5b6470;font-size:13px}.q{background:#fff6e0;padding:2px 4px;border-radius:4px}
 a{color:#1f5fbf}</style></head><body>${body}</body></html>`, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   if (!env.DB) return page("<h1>Citizens VCRM activity</h1><p>No database is connected to this Worker yet (binding DB).</p>");
   await ensureTable(env.DB);
@@ -88,7 +88,7 @@ a{color:#1f5fbf}</style></head><body>${body}</body></html>`, { headers: { "Conte
     FROM events ${device ? "WHERE device = ?" : ""} GROUP BY session ORDER BY start DESC LIMIT ${device ? 200 : 50}`).bind(...(device ? [device] : [])).all()).results;
   const ids = sessions.map(s => s.session);
   const rows = ids.length ? (await env.DB.prepare(`SELECT session, at, role, text FROM events WHERE session IN (${ids.map(() => "?").join(",")}) ORDER BY id`).bind(...ids).all()).results : [];
-  const label = { user: "They said", grok: "Grok", step: "Step", saved: "Saved", start: "Started", end: "Ended", tap: "Tapped", open: "Opened", form: "Form saved" };
+  const label = { user: "They said", grok: "Grok", step: "Step", saved: "Saved", start: "Started", end: "Ended", tap: "Tapped", open: "Opened", form: "Form saved", question: "Question for the team" };
   let h = `<h1>Citizens VCRM activity</h1><div class="meta">Times are US Eastern. Location is approximate, from the phone's internet connection. Kept ${KEEP_DAYS} days.</div>`;
   const day = (t) => { try { return new Date(t).toLocaleDateString("en-US", { timeZone: "America/New_York" }); } catch (e) { return ""; } };
   const today = day(new Date());
@@ -98,10 +98,15 @@ a{color:#1f5fbf}</style></head><body>${body}</body></html>`, { headers: { "Conte
   const tl = Object.values(todays);
   h += `<h2>Today: ${tl.length} device${tl.length === 1 ? "" : "s"}</h2><table><tr><th>Name</th><th>First seen</th><th>Last seen</th><th>Location</th><th>Page</th></tr>`
     + tl.map(t => `<tr><td>${esc(t.name || "no name")}</td><td>${when(t.first)}</td><td>${when(t.last)}</td><td>${esc(place(t))}</td><td>${esc(t.page || "")}</td></tr>`).join("") + "</table>";
+  // questions Ara passed to the team (the officer said yes to passing them on)
+  const qs = (await env.DB.prepare("SELECT device, name, at, text, city, region, country FROM events WHERE role = 'question' ORDER BY id DESC LIMIT 100").all()).results;
+  h += `<h2>Questions for the team (${qs.length})</h2>` + (qs.length ? `<table><tr><th>When</th><th>Name</th><th>Question</th><th>Phone</th></tr>`
+    + qs.map(q => `<tr><td>${when(q.at)}</td><td>${esc(q.name || "no name")}</td><td>${esc(q.text)}</td><td><a href="?device=${encodeURIComponent(q.device)}">${esc(String(q.device).slice(0, 8))}</a></td></tr>`).join("") + "</table>"
+    : `<p class="meta">None yet. When Ara can't answer something, she offers to pass it on, and it appears here.</p>`);
   h += `<h2>Phones (${phones.length})</h2><table><tr><th>Name</th><th>Last seen</th><th>Conversations</th><th>Location</th><th>Phone ID</th></tr>`
     + phones.map(p => `<tr><td>${esc(p.name || "no name")}</td><td>${when(p.last)}</td><td>${p.convs}</td><td>${esc(place(p))}</td><td><a href="?device=${encodeURIComponent(p.device)}">${esc(String(p.device).slice(0, 8))}</a></td></tr>`).join("") + "</table>";
   h += `<h2>${device ? `Conversations from phone ${esc(device.slice(0, 8))} · <a href="/activity">show all</a>` : "Latest conversations"}</h2>`;
   h += sessions.map(s => `<div class="conv"><div class="meta"><b>${esc(s.name || "no name")}</b> · ${when(s.start)} · ${esc(place(s))} · ${esc(s.page || "")} · phone ${esc(String(s.device).slice(0, 8))}</div>`
-    + rows.filter(r => r.session === s.session).map(r => `<div class="r ${r.role === "user" ? "user" : r.role === "grok" ? "grok" : r.role === "step" ? "step" : "sys"}"><b>${label[r.role] || esc(r.role)}:</b> ${esc(r.text)}</div>`).join("") + "</div>").join("") || "<p>No conversations yet.</p>";
+    + rows.filter(r => r.session === s.session).map(r => `<div class="r ${r.role === "user" ? "user" : r.role === "grok" ? "grok" : r.role === "step" ? "step" : r.role === "question" ? "q" : "sys"}"><b>${label[r.role] || esc(r.role)}:</b> ${esc(r.text)}</div>`).join("") + "</div>").join("") || "<p>No conversations yet.</p>";
   return page(h);
 }

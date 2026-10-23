@@ -1,0 +1,870 @@
+{
+ "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
+ "changes": [
+  {
+   "date": "Oct 22, 2026",
+   "change": "Fix: when planning an ask, the form already had the opportunity's entity but Ara asked for it again. Ara is now told what is already on every form, including values from earlier steps, and never asks for them again. New test with the same steps (41 checks).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "Ara has a friendly, upbeat, lightly playful personality with varied wording: short reactions to wins (accepted ask, good meeting, gift, payment), sympathy for a declined ask, warmer goodbyes. No jokes about investors, money, flags or mistakes; word-for-word lines stay exact.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "After Record pledge, Ara opens with a short congratulation (\"Congrats!\", \"Nice job!\" or \"Well done!\", varied) before saying she saw the save. New test (40 checks).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "Ara says out loud that she saw each save, even if the officer has started talking, and keeps a list of what was saved in the conversation so she can answer \"did it save?\". Recording a payment on a pledge sets off confetti and balloons across the screen. New test (39 checks).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "New contact and new opportunity forms show every field (no More details button). By voice, Ara asks once on a new opportunity whether the officer has enough information yet to add the entity of interest, a potential amount and notes. New test (38 checks).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "Cancel and start over now work when said in everyday words (\"let's cancel this contact\", \"I don't want to do this anymore\", \"clear my screen\", \"cancel this and start a new one\"). Ara can close or clear a form herself when the app misses the words, never says a form closed unless it did, and lists the voice commands when asked what she understands. New test with those phrasings.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "Activity log records what is in each form when Save is tapped (every filled field, marked \"by voice\" where Ara filled it); activity page labels it \"Form saved\". Privacy notice updated; phones that accepted the old notice see a one-time note. Tester guide and its Word copy updated. Test bot 36 of 36.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "Shorter greeting: \"Hi [first name], I'm Ara, what would you like to do?\" at the start of every conversation and after a name is entered; with no name yet, \"Hi, I'm Ara, what's your first name?\". The list of things Ara can do is read only if asked.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "Saved meetings (interaction reports), tasks (wording and due date) and planned asks can be edited, by tapping Edit or by voice. Changes go in History; a planned ask's reminder task moves with its date. Recorded asks, pledges, gifts and payments stay locked: the Pledge panel says only the Chief Gift Officer or an administrator corrects them, and Ara explains this. Test bot 35 of 35.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "Ara can read every field on a contact (email, mobile, permissions, Ally, Do Not Contact, how we met, rating) and on an opportunity (stage, potential, entity, each ask with planned date and status, pledge, payments, gift, close reason). Each field says who can change it per the guide; for fields only the system or the Chief Gift Officer can change, Ara explains the rule and offers the proper action instead. Test bot 34 of 34.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "A rating given by voice while the contact's Edit form is open now goes on the form and saves with Save changes. Before, it was saved behind the form, so the form kept showing (and could save back) the old rating. Test bot 33 of 33.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 21, 2026",
+   "change": "Voice commands carried out by the app: cancel, undo, go back, start over, say that again. Spelling accepts \"K as in kite\" and NATO words. A rating said in words (\"donates a million dollars a year\") is no longer dropped. Replay tests from real sessions (names changed). Test bot 32 of 32.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 21, 2026",
+   "change": "Ara reads the officer's first name back, spelled, and saves it only when confirmed; tapping the name in the Home header opens it in Settings. \"How do I add a contact\" (and similar) starts the task instead of the process tour. A spelled-out name that Ara's update missed is sent back to her to apply; she offers to update the email when a name's spelling changes. Test bot 30 of 30.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Cloudflare Worker now deploys automatically from GitHub whenever its code changes (Deploy Worker workflow, CLOUDFLARE_API_TOKEN secret). First deploy succeeded; secrets and the activity database are kept.",
+   "area": "Process"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Activity log records each time the app is opened (or reopened after 30 minutes away); privacy notice says so. Activity page gets a \"Today: N devices\" table with first and last seen and location (needs Worker redeploy).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Test bot checks the live page only with the checks from its last go-live, so preview pushes no longer send false failure emails.",
+   "area": "Process"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Contacts can be edited: Edit button (top right of the contact record) opens the contact form filled in, with Save changes; by voice, Ara opens the same form with just the changes (show_contact_edit_draft). Each changed field goes to History with old and new value, who and when. Still needs an email or mobile. Do Not Contact stays locked on for a gift officer (only the CGO can turn it off); Ally - Do Not Solicit is locked on unless you set it. Test bot check added (28).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Activity log now records taps (what was tapped and on which screen or form, plus menu and switch choices; never text typed into a field) and touch saves, also outside voice conversations (grouped into visits, new after 30 quiet minutes). Privacy notice in Settings and the name pop-up now says \"and what you tap\"; first-screen line says \"Conversations and taps are saved\". Worker code in the repo labels these \"Tapped\" (optional redeploy; without it they show as \"tap\"). Test bot check added (27).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Fix: a capacity rating from Ara (new contact or interaction report) is kept only if the officer's last few spoken lines mention a rating, a dollar amount, or just a letter (\"C\"). Otherwise the field stays \"No rating set\" and the dropped guess is noted in the Voice log. Test bot updated (26).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Fix: Ara can set the capacity rating while adding a contact. The rating is accepted whenever the officer names it (not only after the optional-details question), in any wording (\"C\", \"C · $25k to $100k\", or a dollar amount like $150,000, which becomes B). If Ara uses her rating tool while the New contact form is open, the rating goes on that form. Test bot check added (26).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Fix: dates from voice in any common form (\"December 1\", \"12/1/2026\", \"2026-12-1\", \"tomorrow\") now fill date fields, including the planned ask date; a date sent under another field name is used; if a date can't be read, Ara is told to resend it. Applies to every voice form. Test bot check added (25).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Fix: an interaction report keeps the spoken summary even when the voice model sends it under another field name (such as notes); Ara is told to put the officer's words in the summary while it is still missing; stray fields are noted in the Voice log. Test bot check added (24).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Cultivation stage button renamed \"+ Add planned ask\"; form titled \"Add planned ask\" with a \"Save planned ask\" button; Next step says \"Add a planned ask\"; Asks panel shows a blue Planned label; list and board say \"Planned ask $X\" instead of \"Ask $X\"; FAQ and stage help updated. Guide wording change for cascade (\"Add ask\" -> \"Add planned ask\").",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Entity list replaced with 11 entities (Citizens Alliance C3; C.A. of America Action C4; C.A. Fed PAC; C.A. Idaho C4; C.A. Idaho PAC; C.A. North Dakota C4; C.A. North Dakota State PAC; C.A. North Dakota Fed PAC; C.A. New Hampshire C4; C.A. Pennsylvania C4; C.A. Pennsylvania State PAC). Old C3/C4/PAC entities removed. Campaign choices follow the entity: National, plus the entity's own state. \"General / no campaign\" removed (National used instead). Existing records moved to the new names. Ara checks the pairing. Guide, FDM and other documents to update at cascade.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Opportunity record has a Next step panel under the stage bar showing what moves it to the next stage (Qualification: rating, substantive interaction, officer confirms; later stages: plan the ask, record the ask, record the answer, record the pledge, record the first payment), amber when late. Opportunities list shows a \"Next:\" line per row; Board unchanged. Ara can say what's next for an opportunity. Guide change for cascade.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "New contact form: capacity rating shows \"No rating set\" until one is chosen. Ara no longer asks a separate rating question: the capacity rating is first in the optional-details list, explained as needed before an opportunity. The app ignores a rating Ara sends before that question, so she can't fill one in by guessing.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Opportunity readiness went live: Ara offers a capacity rating on new contacts (optional); Create opportunity blocked until the contact is ready, with a checklist; Ready for opportunity / Needs rating alerts on the list; Path to opportunity panel on the record; For opportunity markers on the form; Needs attention item; Contacts filter chips; Ara can set a rating. Test bot 21 of 21 on the live page. Guide change for cascade: rating required to create an opportunity.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Home Needs attention lists each contact who is Ready for opportunity (\"Jim meets every requirement. Create an opportunity?\"). Contacts screen has filter chips: All, Ready for opportunity, Needs rating (with counts). Ara knows which contacts are ready.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Contacts with no open opportunity get one alert on the list: green Ready for opportunity, amber Needs rating, or grey Ally / Do Not Contact. Contact record shows a Path to opportunity checklist (with Set capacity rating) or a green Ready for opportunity bar, and Create opportunity becomes the main button when ready. New contact form: capacity rating shown (still optional) with a \"For opportunity\" marker; Ally and Do Not Contact marked \"Must be off\". Guide change for cascade.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "New contact: Ara offers a capacity rating (A to E) before the optional details; the form has the field too. Create opportunity is blocked until the contact has a capacity rating, isn't Do Not Contact or an Ally, and has no other open opportunity; a checklist shows what's done and what's left, with Set capacity rating. Capacity pill on a contact is tappable to rate; Ara can rate an existing contact (asks first). Guide change for cascade: rating required to create an opportunity.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "New contact form always shows email and mobile. When a new contact has only one of them, Ara asks for the other, then asks once whether to add the optional details and lists them. Test bot passes 19 of 19 on the live page.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Test bot added (tests/bot.js in the repo): 19 checks that tap through screens, back buttons, typed forms, task statuses and Settings, and play Ara's side of a conversation without calling xAI. GitHub runs it on every change and every morning.",
+   "area": "Process"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "New contact: email and mobile always show on the form instead of hiding under More details (found by the test bot). By voice, the app now tells Ara to ask for the other of email or mobile, then once ask about the optional fields and list them; before, this relied on Ara remembering an instruction.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Live: task statuses by touch and voice, and iPhone-style chevrons on list rows.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "List rows (Contacts, Opportunities, Home) use a drawn iPhone-style chevron, centred on the row, instead of the thin › character. The whole row stays the tap target.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Task statuses To do, In progress, Waiting (with a check-back date that becomes the due date) and Done. Touch: check circle marks Done with Undo; status pill opens a picker; swipe left for Waiting or Done; Done tasks in their own section. Voice: \"Mark the Ruth follow-up done\", \"I'm waiting on Ken until Friday\", \"What am I waiting on?\"; Ara reads back the change and saves only after the officer says yes, and offers to log an interaction after a finished follow-up. Also needs adding to the guide.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Live: standard back button (chevron plus screen name, 44 × 44 tap area) and screen titles centred in the header.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Screen titles (Contacts, Contact, Opportunities, Opportunity, Tasks, Settings, How it works) centred in the header, iPhone style. A back label too long to fit beside a centred title shortens to \"Back\" (Opportunity screen), as iPhone does.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 20, 2026",
+   "change": "Back button made iPhone standard on every screen: a full-size chevron plus the name of the screen it goes back to (for example \"‹ Contacts\"), with a 44 × 44 tap area (was a small ‹ character with a 13 × 32 tap area).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: stronger border around the Home Screen button picture.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Home Screen button picture (Settings, and the Add card on Home) has a darker, thicker border and a soft shadow so it stands out.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: simpler type-your-name screen (What's your first name?, Start, privacy notice, Say it instead and Share links).",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Type-your-name screen simplified: logo, \"What's your first name?\", one line on the role, name field, Start button (was Got it; the keyboard Go key works too), full privacy notice in small text, then small \"Say it instead\" and \"Share this demo\" links. Removed the role box, big mic, \"Talk to Citizens VCRM like a colleague\" tip and the Home Screen steps (still in Settings and on Home).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: blue mic centred on the typed-name welcome screen.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Typed-name welcome screen: the blue mic under \"Or tap the blue mic below\" is centred on the page instead of sitting at the left.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: new logo (original shield and wings, white inside with a blue mic and lines, no text or star) in the header, welcome screen and Home Screen icon. Phones keep the old icon until it is removed and added again.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Logo: star removed from the shield, mic and lines centred in the shield, header logo a little smaller (50 px tall instead of 58).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Logo redone: original shield, wings, star and stripes kept at the same size; the Citizens Alliance text is removed and the shield is white inside with a blue mic and lines; the red mic above the shield is gone. Replaces the 10:04 pm redraw.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "New logo: redrawn shield with a white inside and blue border, blue mic and radiating lines inside the shield above Citizens Alliance, red wings kept. Used in the header and welcome screen; the home-screen icon changes when it goes live.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: faster voice start (voice pass fetched ahead of time, mic and audio set up at the same time). In testing, Ara was ready about 0.1 s after the tap instead of 0.7 to 1.6 s.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Faster voice start: the voice pass is fetched ahead of time (when the app opens or comes back, after each conversation, every few minutes while open); tapping the mic gets the mic, pass and audio code at the same time. The voice log shows how long connecting took.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: speaking speed, set in Settings or by asking Ara, saved on the phone.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Speaking speed: Settings > Voice assistant has Slower, Normal, A bit faster and Faster; saying \"talk faster\" or \"slower\" changes it mid-conversation. Saved on that phone.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: forms you can fill in by typing (buttons open forms, Fill this in by voice, required fields first, Type it instead).",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Forms you can type into: action buttons (Record pledge, gift, payment, the ask, Add ask, Log a meeting, Add a task, Create opportunity, Schedule, Add a contact) open their form straight away, prefilled; each form has \"Fill this in by voice\"; required fields first, optional under \"More details\"; the hint card on Home options adds \"Type it instead\".",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: new contact by voice, the assistant offers and lists the optional fields.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "New contact by voice: after the name and email or mobile, the assistant asks once whether to fill in any optional fields and lists them (how you met, texting permitted, ally, Do Not Contact, permission source), then fills only the ones chosen.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: recovery after a call or other interruption (Carry on card; assistant picks up where it stopped).",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Interrupted conversations: when a call, alarm, Siri or locking the phone takes the mic or speaker, the conversation ends cleanly and keeps the open form; back in the app, \"Your conversation was interrupted\" offers Carry on, and the assistant says \"Welcome back\" and picks up where it stopped.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: voice options all brand blue.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "\"Say things like…\" voice options all brand blue (were five colours by kind of work).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: full-size Overdue pill, the same on Home, the Tasks screen and contact and opportunity records.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Overdue pill in Needs attention made the same size as the other alert pills, placed above the task. Overdue tasks on the Tasks screen and on contact and opportunity records get the same pill.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: Home review changes (overview card as one row, 6 voice options plus More ideas, Needs attention says what to do, meeting days away and Prepare briefing, tappable pipeline and goals) and stronger section borders on every screen.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Stronger section borders (darker border, light shadow, more spacing) on every screen, not just Settings and Home.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Home sections get the same darker border, light shadow and extra spacing as Settings.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Home greeting (\"Good evening, Sam\" with the date) removed.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Home: greeting with the date; overview card shrunk to one row (moves to the bottom once heard); 6 voice options plus \"More ideas\"; Needs attention rows say what to do; meetings show weekday and days away, with a Prepare button (the assistant gives a short spoken briefing); pipeline and goal numbers open Opportunities; \"Open opps\" spelled out.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Live: 12-second quiet hang-up; \"How to talk to\" help card behind the ?; Settings tidied (own-browser steps, save on change, hints switch, Restart confirmation, For support at the bottom, no gear on Settings); heading \"Add Citizens VCRM to your Home Screen\"; clearer Settings section borders.",
+   "area": "Went live"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Settings sections get a darker border, a light shadow and more space between them. Other screens unchanged.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Home-screen heading shortened to \"Add Citizens VCRM to your Home Screen\" (button image dropped from the sentence) in Settings, the welcome popup and the Home card.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Settings tidied: home-screen steps show only the browser in use (others under \"Using a different browser?\"); fields save as you change them (no Save buttons); hints on/off switch always shown; link to the \"How to talk to\" card; Version text says the demo updates itself; Restart asks \"Are you sure?\"; Troubleshooting renamed \"For support\" and moved to the bottom; no gear icon on Settings itself.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "The ? next to Say things like… now opens a short How to talk to Ara card (4 steps) instead of the full welcome popup. It closes with an × at the top right, a Close button, a tap outside, or Esc.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Quiet hang-up after 12 seconds with no talking or tapping (was 15).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "The Add the Citizens VCRM button card moves from the top of Home to the bottom, after My goals.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Home has a slim card at the top: app icon, \"Add the Citizens VCRM button to your home screen\", \"Open the demo like an app. Show me how\". Tapping it opens Settings at that section, which flashes briefly. It disappears once the app is opened from the home screen, and the × hides it (Restart brings it back).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Settings: the Restart section is now headed \"Restart the demo and reset all settings\", and Restart now really does reset them all: first name, voice, assistant's name and hints. Before, it kept the voice, assistant's name and hints. Only the phone ID and code word stay.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Save-to-phone heading is now \"Add the [app icon] Citizens VCRM button to your home screen\", in Settings and the welcome popup, with the real app icon in the heading. In Settings it is the first section, with a large picture of the button as it appears on the home screen and the line \"This is the button you'll get.\"",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Welcome popup: the save-to-phone headings now say Keep Citizens Alliance VCRM on your phone (was Citizens VCRM), matching Settings.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Settings: the section is now titled Keep Citizens Alliance VCRM on your phone, Safari always comes before Chrome, and both browser sections end with \"Then open it from the Citizens VCRM icon...\".",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "First screen heading now reads \"Meet your new voice assistant!\" (was \"Meet your voice assistant\").",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "First screen's privacy notice shortened to one line: \"Conversations are saved to improve the demo. Details in Settings.\" The full notice stays in Settings and in the type-your-name popup. Logging is unchanged.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "First visit opens on a simple screen: logo, one big mic (Tap to start) and the privacy notice. One tap starts the assistant, which introduces itself and asks for the first name. I'd rather type my name opens the previous welcome popup. Phones need one tap before a page can use the mic or play sound, so it can't start with no tap at all. The save-to-phone steps are in Settings for people who take the voice route.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Settings has a Keep Citizens VCRM on your phone section, second from the top, with the same Safari and Chrome steps and drawings as the welcome popup. If the app is already opened from the home screen, it says so instead. Also fixed: a popup taller than the screen now scrolls, so its buttons can always be reached.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Welcome popup's Keep Citizens VCRM on your phone is now separate sections for iPhone Safari and iPhone Chrome (the browser in use first; Android shows its own). Each has a drawing of the browser bar with the button to tap circled in red. Safari: tap the three dots at the bottom, then Share, then Add to Home Screen (older Safari without the dots still gets the Share-at-the-bottom steps). Chrome on iPhone: tap Share at the top right, then Add to Home Screen.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Quiet hang-up after 15 seconds with no talking or tapping (was 23).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Change tracking: this log gains Requested by and Why columns, and every GitHub commit now ends with Requested by, Reason, Approved for live by and Conversation lines (explained in the repo's README). No change to the demo itself.",
+   "area": "Process"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Automatic updates: when a newer version is published, the page now loads it by itself (on opening, on coming back to the screen, and every 5 minutes while open), as long as no conversation is running and no draft is open. Otherwise it shows the Update bar as before. It tries once per version, so it can't get stuck reloading.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Fix: changing the voice or the assistant's name in Settings during a conversation didn't change how the assistant answered \"what is your name\", because Grok keeps its voice and what it already said for the whole conversation. Saving a new voice or name now ends the conversation, with the message \"Saved. Tap the mic to talk to <name>.\", and the next conversation uses the new voice and name.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "No repeated introduction: after someone says their name by voice, the assistant says \"Nice to meet you, <name>. Would you like me to tell you the kinds of things I can do for you?\" (or \"Thanks, <name>\" if they already asked for something) instead of introducing itself again. It is told to introduce itself only once per conversation.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Every opening hello now says the assistant's name and role, word for word. No name yet: \"Hi, I'm Ara, the Citizens Alliance VCRM voice assistant. What's your first name?\" Name known, mic tapped: \"Hi Sam, I'm Ara, the Citizens Alliance VCRM voice assistant. What would you like to do?\" (Before, both were in the assistant's own words.)",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "The assistant has a name. Settings > Voice assistant has an \"Assistant's name\" field; left blank, the name is the voice's (Ara by default). The greeting is now \"Hi <name>, I am Ara, the Citizens Alliance VCRM voice assistant. Would you like me to tell you the kinds of things I can do for you?\", and it gives its name when asked.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Adding a task: the due date is now required. The assistant always asks \"When is it due?\" if no date was said (it no longer offers to skip it), and Save task asks for the date if it's empty.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Process walkthrough introduction reworded to \"We have a six stage process for taking a person who may want to invest in our work from the qualification stage through receiving their investment.\" The assistant then explains the stages starting with Contact, as before.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Quiet hang-up time cut from 30 to 23 seconds (on-screen message says 23 seconds).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Quiet timeout: after 30 seconds with nobody speaking, the assistant not speaking, and no taps or typing in the app, the assistant says \"I'll hang up for now. Tap the mic when you need me.\" and the conversation ends, with a matching message on screen. Speaking or tapping during that line keeps the conversation open. Saves Grok minutes, which are billed while a conversation is open.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Home: the \"Hear how it works\" tile is replaced by the \"From first contact to Closed Won\" panel with the Hear the overview button. Its text links \"See the stages\" to the stages screen (there are no stages to tap on Home). Hear the overview, on Home and on the stages screen, starts the spoken overview straight away, with no hint card.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "The spoken process walkthrough now opens with an introduction before the Contact stage: \"We have a six stage process for taking a Contact, that's a person who may want to invest in our work, from the qualification stage through receiving their investment.\"",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "After the name screen (tapping Got it, tapping its mic, or saying the name to the assistant), the app shows the home screen, whatever screen was open before (for example Settings after Restart the demo).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "The what-I-can-do answer now adds \"or review our fundraising process\" after \"reviewing your open opportunities\", before \"and much more. What would you like to do today?\"",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Greeting now asks \"Would you like me to tell you the kinds of things I can do for you?\" On yes, the assistant says \"I can do things related to managing your contacts and opportunities, like reviewing your open tasks, creating a contact, hearing a contact's giving history, reviewing your open opportunities, and much more. What would you like to do today?\" This replaces the longer list (and its closing line about the investor process); the same answer is used whenever someone asks what it can do.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "The assistant's list of what it can do now starts with \"I can read you your open tasks\".",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Greeting after a name is entered: \"Hi <name>, I am the Citizens Alliance VCRM voice assistant. Would you like me to tell you what all I can do?\" On yes, the assistant lists what it can do (add a contact, log a meeting or call, add a task, schedule a meeting, call a contact, create an opportunity, plan and record an ask, record a pledge, gift or payment, read open tasks, tell a contact's history and giving, answer FAQ questions), ending \"Or I can also explain our process for working with investors.\" On no, it asks what they'd like to do today. The same list is used whenever someone asks what it can do.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Labelled examples preview (preview-examples.html), contact screen: all action buttons now sit together in Do something for <name> (Log a meeting, Add a task, Create opportunity when there's none, Call, Schedule), with \"Or tap the mic and say:\" and the example sentences underneath. Call dials as before; the other buttons open the hint card (example sentence, Start talking, Not now) instead of starting voice straight away.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Two preview options for what happens when you tap a voice option (Add a task, Log a meeting, the home examples). Hint card (preview-hint.html): tapping shows a card with an example sentence to say, plus Start talking and Not now; voice starts only on Start talking. Labelled examples only (preview-examples.html): the home panel becomes \"Try saying…\" and the options become quoted examples that can't be tapped; on a contact, the actions become example sentences; only the mic starts voice.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Preview fix: on a Mac, tapping Call ended the voice conversation and nothing else happened. The conversation now ends only when the call really starts (the phone hides the app, or FaceTime takes over). If nothing happens within 5 seconds, a message says the computer didn't start the call, shows the number to dial on a phone, and offers Log the call; Grok says the same. On a computer, the Call prompt explains that the call goes through FaceTime if the Mac is set up for iPhone calls. After FaceTime, returning to the app offers the call report.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Preview: after a first name is entered and Got it is tapped, the voice assistant starts and says \"Hi <name>, I am the Citizens Alliance VCRM voice assistant, what would you like to do today?\" When the name is given by voice instead, it uses the same greeting. Reopening the welcome with the same name doesn't start a conversation.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Preview fix: after Restart the demo, the browser was filling the first-name box with a name typed earlier. The name boxes now tell the browser not to autofill, and the welcome box is reset to blank after a restart.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Preview: Restart the demo also clears the first name. The welcome popup then asks for it again, or Grok asks if you tap the mic. The phone ID is kept, so the activity page shows the same phone under the new name.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Preview: a first name is required. The welcome popup can't be closed with Got it until one is entered, and Settings won't save a blank one. Tapping the blue mic in the welcome popup starts a conversation where Grok asks for the first name before anything else, saves it and then carries on. The Dana Rivera fallback is gone. Also: the Cloudflare Worker now has the activity log set up (logging confirmed on).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Preview: optional name in the welcome popup and Settings. The assistant calls the user by it, and the Home header shows it instead of Dana Rivera. Activity logging: each conversation (what was said, Grok's replies, steps taken and saves) is sent with a random phone ID and the name to the Cloudflare Worker, which adds the rough location and saves it in a D1 database for 90 days. A password-protected activity page lists phones and conversations. The welcome popup and Settings say what is saved, and phones that saw the old welcome see it once more. Logging stays off until the Worker is set up (Cloudflare setup - activity log.md).",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Preview: Review FAQ pill added to Say things like... on Home (grey, after Explain the process). Grok names a few topics the process FAQ covers, gives an example question and asks what the officer would like to know, then answers from the FAQ.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Preview: \"What are my open tasks?\" is the first voice example on Home, as a grey pill before Add a contact. Tapping it asks Grok to read your open tasks.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Preview: Grok reads your open tasks (\"What tasks do I have?\", \"What's overdue?\", \"What's due this week?\"), overdue first, and opens the Tasks screen. It also reads a contact's interaction history, newest first, and their open tasks, including tasks on their opportunity (\"What's my history with Ken?\", \"What do I have outstanding for Ruth?\"), and opens their record. It always reads from the records, never from memory.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Share this demo is live: Settings has Share link (phone share sheet, or copies the link) and Show QR code, and the welcome popup has a Share this demo button. It shares the live demo link.",
+   "area": "Sharing"
+  },
+  {
+   "date": "Oct 19, 2026",
+   "change": "Share this demo: a new Settings panel (Share link, Show QR code) and a Share this demo button in the welcome popup. On a phone it opens the share sheet; elsewhere it copies the demo link; the QR code opens the demo on another phone. Shares the live link, not the preview.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview fix: on iPhone the date box ran wider than its column and overlapped the red missing-field bar on Type; date and time boxes now stay inside their column. More space around checkboxes, and a soft shadow on the Save bar shows the form continues underneath.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview: all 16 items from the Voice demo UX review. App called Citizens VCRM throughout; Settings reworded (Voice assistant, capitalised voices, log under Troubleshooting); Needs attention driven by alerts (Awaiting response 14+ days, Ready for Cultivation, Pledge to record, ask within 7 days, tasks due within 7 days); example contacts get emails, past interactions, tasks and two booked meetings; Home adds Upcoming meetings and My goals (example goals $300,000 raised, 12 asks); Opportunities List | Board with List default and alerts; Interactions on the opportunity record; draft header names the person; contact header tidied (Texts), Ally - Do Not Solicit and Do Not Contact flags; pipeline label 'open opportunities'; return note after Google Calendar; shorter welcome; contact search; How it works title.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview: a meeting with Type Video call asks Google Calendar to attach a Google Meet link (unofficial link option; Add Google Meet video conferencing on the event is the fallback). The contact's email, when known, is added as a guest so Google offers to send the invite.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview: Schedule a meeting. \"Schedule a meeting with Ruth next Tuesday at 2\" (or the Schedule button on the contact) opens a draft with title, date, start time, length, type, where and notes. Add to Google Calendar opens Google Calendar with the meeting filled in; the officer taps Save there. The meeting shows under Upcoming meetings on the contact and in History.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview fix: contacts added by voice now default to Email and Calls permitted (the guide's default); before, both came out off, which hid the Call button. Contacts already added with both off are switched on once.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview: calling. Contacts with a mobile and Calls permitted get a Call button; \"Call Ruth\" by voice puts a Call prompt on screen. The phone places the call (History notes it). On return the app asks \"How did the call go?\" and Log the call opens an Interaction report set to Phone call and today, with Grok helping write it up. Example contacts now have fictional 555-01xx mobiles.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview: Grok opens the form as soon as the officer says what they want to do, then fills it in after each answer. The officer's own typing on the form is kept, and Grok asks them to tap the button only when nothing more is needed.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview: the screen stays on while a conversation runs (auto-lock returns when it ends). Locking the phone ends the conversation cleanly, and on unlock a message says to tap the mic to carry on.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview: removed the xAI API key field from Settings and the #xai= link option. Voice always goes through the Cloudflare key holder, and any key an older version saved on a phone is erased.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview only: the Home header shows \"Dana Rivera\" with \"You're the gift officer\" underneath in place of the word \"Home\", so demo users know the role they're playing. It takes no extra space.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview only: the voice pills are cut to two per color, with shorter wording: Add a contact, Log a meeting; Plan an ask, Record an ask; Record a pledge, Record a gift; What has Ruth given?, Elena's last gift?; Explain the process, My opportunities. The How it works tile's subtitle fits on one line (\"Spoken overview, contact to Closed Won\"). Home now fits on one phone screen down to My pipeline.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview only: the Citizens Alliance logo moves from above the home screen content into the center of the Home header, which is slightly taller (64px) to fit it. The page content starts about 140px higher. It builds on the colored pills preview.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview only: the home screen's \"Say things like…\" list becomes colored pills that flow one after another, grouped by color: people (blue), pipeline (green), money (amber), giving (purple), and look and learn (grey). Adds giving examples: What has Ruth given?, How much has Ken given this year?, When was Elena's last gift?, What's Ruth's lifetime giving?, and Move James to Cultivation.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Giving history. The Contact record has a Giving panel showing lifetime giving, this year (since January 1), the last gift with its date, and any open pledge balance. Ruth Abernathy, Ken Ito and Elena Vasquez have example past gifts. Recorded gifts and payments add to the history. Ask Grok \"What has Ruth given?\" and it opens the record and speaks the figures.",
+   "area": "Contacts"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Hearing the overview again in the same conversation now starts clean. The earlier walkthrough is removed from Grok's memory of the conversation, because real-Grok tests showed it carrying on from its old words and falling a stage behind on the second and third runs.",
+   "area": "How it works"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The caption in the call bar now scrolls along as Grok speaks, two lines at a time, instead of showing only the first two lines. When several replies are queued, it shows the one being heard.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Echo fix. the demo owner's voice log showed the phone's microphone hearing Grok's own voice (\"I'll open the\") and cutting Grok off. While Grok speaks, quiet sound from the mic is now sent as silence, and speaking up over Grok still interrupts it. The overview also starts straight on the Contact stage with no \"Opening the overview\" line. The voice log now records the mic level while Grok speaks and the length of each reply's audio.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "In the spoken overview, Grok now gets each stage's facts as it lights the stage up, and it starts by naming that stage. This cuts the leftover fragments of the previous stage that Grok sometimes said after \"yes\".",
+   "area": "How it works"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Settings has a Voice log that records the conversation's events on the phone, such as when Grok starts and stops talking, when the app hears the officer speak, and which steps Grok calls. Copy log lets the officer paste it to Claude to diagnose glitches like the cut-off \"Opening…\".",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "In the spoken overview, when the officer says yes, Grok goes straight to the next stage. It no longer repeats the end of its previous sentence first.",
+   "area": "How it works"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Grok is no longer cut off mid-sentence (for example \"Opening…\" at the start of the overview). The app now waits for Grok to finish speaking before it replies to a step or updates Grok's instructions. A meeting's Type now starts blank instead of defaulting to In person, so a missing type is flagged at Save.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "From live Grok tests: Grok must pass the meeting date and type, so \"yesterday\" and \"video call\" are no longer saved as today and In person. After a meeting, Grok's suggested next step now fits the stage (Move to Cultivation in Qualification, plan an ask in Cultivation).",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The spoken overview no longer stops after the Contact stage. After each stage Grok asks \"Shall I go on to the next stage?\" and continues on yes. Asking it to go straight through skips the questions.",
+   "area": "How it works"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The demo now follows seven more guide rules. An ask can be planned only in Cultivation. Move to Cultivation? opens a decision: move, or Defer with a reason and an optional Reconsider on date (the prompt returns on that date or after the next substantive interaction). Ask responses are Accepted, Countered, Awaiting and Declined. A declined ask needs a reason and closes the opportunity as Closed Lost. New Record gift (Ask Made, outright gift) and Record payment (Commitment) close the opportunity as Closed Won. The Make the ask reminder is due 7 days before the planned date. Accepted or Countered creates a Follow up on agreed pledge task (due in 10 days, a demo default while the interval is open). How it works and Grok's instructions updated to match.",
+   "area": "Rules"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "A substantive meeting needs a next step and its due date unless the outcome is Not interested or Referred elsewhere; an ask meeting needs one unless the investor said no. Grok asks for it and Save is blocked without it. The meeting report gains an Outcome field with the guide's six outcomes, and next-step tasks are filed on the opportunity.",
+   "area": "Rules"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Made live from the preview: the VoiceCRM - Hear How It Works tile and screen (Moving from first contact to 'Closed Won'...), each stage's rules for moving on with Try it buttons, the spoken overview, the link from each opportunity to its stage, \"Walk me through the process\" in Say things like, and Grok's detailed process FAQ with the don't-guess rule.",
+   "area": "New feature"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview only: the home screen tile is renamed VoiceCRM - Hear How It Works.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The demo checks for a newer version each time it is opened or brought back to the front, and offers a one-tap Update that skips the phone's saved copy. Settings shows the version date. Also in the preview.",
+   "area": "Fix"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview only: the How it works heading reads Moving from first contact to 'Closed Won'...",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview only: Grok gets a detailed process FAQ (209 questions and answers drawn from the guide) and a rule to answer process questions only from it, saying when something isn't covered instead of guessing. The back arrow on How it works returns to the opportunity you came from.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Preview only (separate preview page): How it works screen showing the path from first contact to Closed Won, with each stage's rules for moving on, Try it buttons, a spoken overview where Grok lights up each stage, and a link from each opportunity to its stage.",
+   "area": "Preview"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "When the officer taps a contact or opportunity on screen during a conversation, Grok is told and treats that person as the one they mean.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Tasks can be added by voice to a contact or to their open opportunity. \"Add a task\" is on the home screen list and on each contact; tasks show on the contact, the opportunity and the Tasks screen.",
+   "area": "New feature"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "A new contact needs an email or a mobile number. Grok asks for both and explains that one is required; Save contact is blocked without either. Also added to the guide.",
+   "area": "Rules"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Logo and icon files renamed so phones download the new logo instead of a saved old copy.",
+   "area": "Fix"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "New logo: the red mic in a black ring with black sparks, above the Citizens Alliance logo, on the home screen and as the phone icon. The home-screen icon is named CitizensCRM.",
+   "area": "Look"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Grok prompt tightened after live tests: it no longer asks about optional fields, says \"entity\" instead of \"fund\", and relays the one-open-opportunity rule.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Grok tells the officer the button's real label, such as \"tap Record pledge\" or \"tap Save contact\", instead of always saying Save.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Grok asks whether a meeting was in person, a phone call or a video call.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Font changed to Titillium Web, the font in the SpiceCRM deployment, with tighter line spacing.",
+   "area": "Look"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Citizens Alliance logo with a small red mic badge added to the home screen and as the phone icon.",
+   "area": "Look"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The demo code word is built into the page, so the plain link and the home-screen icon work with no code.",
+   "area": "Access"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The demo asks for the code word if it is missing or rejected.",
+   "area": "Access"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The welcome popup tells new users they are playing Dana Rivera, a gift officer.",
+   "area": "Welcome"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "\"Fund\" renamed \"Entity\" (C3, C4 and PAC - Citizens Alliance) and the new campaign list added, as in guide v1.5.",
+   "area": "Rules"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Ara made the default Grok voice.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The welcome popup shows the microphone icon instead of the word \"mic\".",
+   "area": "Welcome"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The welcome popup shows how to save the demo to the phone's home screen, for iPhone or Android.",
+   "area": "Welcome"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Any task for any contact, in any order: five example contacts with opportunities, one open opportunity per investor, and each phone keeps its own data (Settings, Restart the demo resets it).",
+   "area": "New feature"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Welcome popup, \"Say things like\" list and contacts list added.",
+   "area": "Welcome"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Fixed Record pledge silently failing when a date was missing.",
+   "area": "Fix"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The demo gets its Grok access through a small key-holder service, so the xAI key is never in the page.",
+   "area": "Access"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The demo became Grok-only.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Home-screen icon and web app settings added, so the demo can be saved to a phone like an app.",
+   "area": "Look"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "The officer can stop after any step in a conversation.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "Grok two-way conversation added: talk naturally, interrupt at any time.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 18, 2026",
+   "change": "First version of the voice demo published.",
+   "area": "New feature"
+  }
+ ]
+}

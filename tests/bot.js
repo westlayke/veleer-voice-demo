@@ -420,6 +420,19 @@ test("Ara: giving history and screens", async (p) => {
   ok(await titleOf(p) === "Contact", "Ruth's record did not open");
   await ara(p, "show_screen", { screen: "opportunities" }); ok(await titleOf(p) === "Opportunities", "show_screen did not open Opportunities");
 });
+test("Ara answers what changed in the demo, and passes a question she can't answer to the team", async (p) => {
+  await signIn(p);
+  const sent = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update").at(-1).session);
+  ok(sent.tools.some(t => t.name === "get_demo_changes") && sent.tools.some(t => t.name === "pass_question_to_team"), "Ara was not given the demo changes or pass-to-team tools");
+  ok(/Shall I pass that to the demo team\?/.test(sent.instructions), "Ara is not told to offer passing a question on");
+  const c = await ara(p, "get_demo_changes", { topic: "confetti balloons" });
+  ok(c.ok && c.total_changes > 100 && c.changes.length && /confetti/i.test(c.changes[0].change), "the change log lookup did not find the confetti change: " + JSON.stringify(c).slice(0, 160));
+  const latest = await ara(p, "get_demo_changes", {}); ok(latest.ok && latest.changes.length === 8, "the latest changes were not returned");
+  const q = await ara(p, "pass_question_to_team", { question: "Can the app show pledges by entity?" });
+  ok(q.ok, "the question was not passed on: " + JSON.stringify(q)); await p.waitForTimeout(4400);
+  const ev = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
+  ok(ev.includes("question: Can the app show pledges by entity?"), "the question did not reach the activity log: " + ev.slice(-4).join(" | "));
+});
 test("Ara: reads contact and opportunity details, with who can change each field", async (p) => {
   await signIn(p);
   const elena = (await state(p)).contacts.find(c => c.first === "Elena");
