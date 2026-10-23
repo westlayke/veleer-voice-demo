@@ -3,6 +3,16 @@
  "changes": [
   {
    "date": "Oct 22, 2026",
+   "change": "A + button at the top right of every main screen opens one menu to log a meeting or call, schedule a meeting, add a task, add a contact, create an opportunity, plan or record an ask, or record a pledge, gift or payment. On a contact or opportunity it is for that contact (with a Someone else option); elsewhere it asks which contact first, with a search box when the list is long.",
+   "area": "Screens"
+  },
+  {
+   "date": "Oct 22, 2026",
+   "change": "Ara can answer questions about the demo itself (what's new, when or why something changed) from this change log. When she can't answer something, she offers to pass the question to the demo team.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 22, 2026",
    "change": "Fix: when planning an ask, the form already had the opportunity's entity but Ara asked for it again. Ara is now told what is already on every form, including values from earlier steps, and never asks for them again. New test with the same steps (41 checks).",
    "area": "Preview"
   },

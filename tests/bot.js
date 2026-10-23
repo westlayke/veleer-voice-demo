@@ -116,6 +116,29 @@ test("New contact needs a name and an email or mobile, then saves", async (p) =>
   await p.fill("#f_email", "test.bot@example.org"); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.length === before + 1, "contact was not saved");
 });
+test("The + button on every screen opens one menu to log, add or record anything", async (p) => {
+  await signIn(p);
+  for (const t of ["Home", "Contacts", "Opportunities", "Tasks"]) { if (t !== "Home") await tab(p, t); ok(await p.locator("header.top .addbtn").isVisible(), `no + button on ${t}`); }
+  // from a list: pick the contact, then the form opens for them
+  await p.tap("header.top .addbtn"); await p.waitForTimeout(250);
+  for (const label of ["Log a meeting or call", "Schedule a meeting", "Add a task", "Add a contact", "Plan an ask", "Record a payment"]) ok(await p.locator(`[data-qa] >> text=${label}`).count(), "menu is missing " + label);
+  await p.tap("[data-qa=task]"); await p.waitForTimeout(250);
+  ok(await p.locator("#pkTitle").isVisible(), "Add a task did not ask who it is for");
+  await p.tap("[data-pick] >> text=Ken Ito"); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => /New task/.test(document.getElementById("overlay").textContent) && /Ken Ito/.test(document.getElementById("overlay").textContent)), "the task form did not open for Ken Ito");
+  await p.tap("[data-act=close]"); await p.waitForTimeout(200);
+  // on a contact: the menu is for that contact, with no picker
+  await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
+  await p.tap("header.top .addbtn"); await p.waitForTimeout(250);
+  ok(/For Ruth Abernathy/.test(await p.locator(".qa-for").textContent()), "the menu on Ruth's record is not for Ruth");
+  await p.tap("[data-qa=interaction]"); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => /Interaction report/.test(document.getElementById("overlay").textContent) && /Ruth Abernathy/.test(document.getElementById("overlay").textContent)), "Log a meeting did not open for Ruth");
+  await p.tap("[data-act=close]"); await p.waitForTimeout(200);
+  await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap("[data-qaany]"); await p.waitForTimeout(200);
+  ok(!(await p.locator(".qa-for").count()), "Someone else did not clear the contact");
+  await p.tap("[data-qa=contact]"); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => /New contact/.test(document.getElementById("overlay").textContent)), "Add a contact did not open the New contact form");
+});
 test("Adding a task from a contact puts it on the Tasks list", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("[data-contact] >> nth=0"); await p.waitForTimeout(400);
   await p.tap("[data-form=task]"); await p.waitForTimeout(300);
