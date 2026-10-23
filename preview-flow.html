@@ -808,22 +808,22 @@ function pickFor(action) {
   if (action === "contact") { openForm("contact"); return; }
   const ok = S.contacts.map(c => ({ c, t: resolveTarget(action, nameOf(c)) })).filter(x => !x.t.error || (action === "opportunity" && !openOpp(x.c.id))); // not ready yet: tapping shows what's missing
   const h = document.getElementById("modal"), A = ACTIONS[action], oppFirst = ["plan", "ask", "pledge", "gift", "payment"].includes(action);
-  // Record the ask takes three stages (guide): say why each is listed, the planned ones first
-  if (action === "ask") { const rank = { "Ask Planning": 0, "Ask Made": 1, "Cultivation": 2 }; ok.sort((a, b) => (rank[a.t.opp && a.t.opp.stage] ?? 3) - (rank[b.t.opp && b.t.opp.stage] ?? 3)); }
+  // A to Z by last name, then first name (the small label still says why each opportunity is listed)
+  ok.sort((a, b) => (a.c.last || "").localeCompare(b.c.last || "") || (a.c.first || "").localeCompare(b.c.first || ""));
   const why = (o) => { if (action === "gift") return o.stage === "Commitment" ? (o.pledge && o.pledge.outright ? "Commitment · agreed outright gift" : "Commitment · applied to the pledge") : "Ask Made · implied commitment";
     if (action !== "ask") return o.stage; const a = latestAsk(o);
     return o.stage === "Ask Planning" ? `Ask Planning · planned for ${a ? fmtDate(a.plannedDate) : "a set date"}` : o.stage === "Ask Made" ? (a && a.status === "Made" ? "Ask Made · record the answer" : "Ask Made · record another ask") : o.stage === "Cultivation" ? "Cultivation · unplanned ask" : o.stage; };
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="pkTitle">
     <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
     <h2 id="pkTitle">${esc(action === "ask" ? "Record the ask" : A.title)}: ${oppFirst ? "which opportunity?" : "who is it for?"}</h2>
-    ${ok.length ? `<div class="pick">${ok.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : nameOf(x.c))}${oppFirst && x.t.opp ? `<small>${esc(why(x.t.opp))}</small>` : x.t.gate ? "<small>Not ready yet</small>" : ""}</button>`).join("")}</div>`
+    ${ok.length ? `<div class="pick">${ok.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : `${x.c.last}, ${x.c.first}`)}${oppFirst && x.t.opp ? `<small>${esc(why(x.t.opp))}</small>` : x.t.gate ? "<small>Not ready yet</small>" : ""}</button>`).join("")}</div>`
       : `<p class="wl-hint">None of your ${oppFirst ? "opportunities is at the right stage" : "contacts can take this"} yet.</p>`}
     <button type="button" class="btn quiet" data-helpx="1">Cancel</button></div></div>`;
   h.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { h.innerHTML = ""; openForm(action, b.dataset.pick); });
-  // with more than six to choose from, a search box narrows the list
+  // a search box at the top narrows the list; every word typed must match ("ken ito" finds "Ito, Ken")
   const list = h.querySelector(".pick");
-  if (list && ok.length > 6) { const q = document.createElement("input"); q.type = "search"; q.className = "pick-q"; q.placeholder = "Search by name"; q.setAttribute("aria-label", "Search by name");
-    q.oninput = () => { const v = q.value.trim().toLowerCase(); list.querySelectorAll("[data-pick]").forEach(b => b.hidden = !!v && !b.textContent.toLowerCase().includes(v)); };
+  if (list) { const q = document.createElement("input"); q.type = "search"; q.className = "pick-q"; q.placeholder = "Search by name"; q.setAttribute("aria-label", "Search by name");
+    q.oninput = () => { const ws = q.value.trim().toLowerCase().split(/[\s,]+/).filter(Boolean); list.querySelectorAll("[data-pick]").forEach(b => { const t = b.textContent.toLowerCase(); b.hidden = ws.some(w => !t.includes(w)); }); };
     list.before(q); }
 }
 // the + button on every screen: one place to log, add or record anything
@@ -2641,7 +2641,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-23 07:14", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-23 07:37", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

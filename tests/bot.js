@@ -128,14 +128,20 @@ test("The + button on every screen opens one menu to log, add or record anything
   await p.tap("header.top .addbtn"); await p.waitForTimeout(250);
   for (const label of ["Log a meeting or call", "Schedule a meeting", "Add a task", "Add a contact", "Plan an ask", "Record a gift"]) ok(await p.locator(`[data-qa] >> text=${label}`).count(), "menu is missing " + label);
   ok(!(await p.locator("[data-qa] >> text=Record a payment").count()), "the menu still has a separate Record a payment");
-  // Record the ask lists Ask Planning first and says why each opportunity is there
+  // Record the ask says why each opportunity is there
   await p.tap("[data-qa=ask]"); await p.waitForTimeout(250);
   const askList = await p.evaluate(() => [...document.querySelectorAll("[data-pick] small")].map(s => s.textContent));
-  ok(/^Ask Planning · planned for/.test(askList[0]) && askList.includes("Ask Made · record the answer") && askList.includes("Cultivation · unplanned ask"), "Record the ask list doesn't say why: " + askList.join(" | "));
+  ok(askList.some(x => /^Ask Planning · planned for/.test(x)) && askList.includes("Ask Made · record the answer") && askList.includes("Cultivation · unplanned ask"), "Record the ask list doesn't say why: " + askList.join(" | "));
   await p.evaluate(() => document.getElementById("modal").innerHTML = ""); await p.tap("header.top .addbtn"); await p.waitForTimeout(250);
   await p.tap("[data-qa=task]"); await p.waitForTimeout(250);
   ok(await p.locator("#pkTitle").isVisible(), "Add a task did not ask who it is for");
-  await p.tap("[data-pick] >> text=Ken Ito"); await p.waitForTimeout(300);
+  // the list is A to Z by last name, shown "Last, First", with a search box at the top
+  const names = await p.evaluate(() => [...document.querySelectorAll("[data-pick]")].map(b => b.textContent.trim()));
+  ok(names.every(n => /^[^,]+, /.test(n)) && names.join("|") === names.slice().sort((a, b) => a.localeCompare(b)).join("|"), "the picker is not A to Z as Last, First: " + names.join(" | "));
+  ok(await p.isVisible(".pick-q"), "the picker has no search box");
+  await p.fill(".pick-q", "ken ito"); await p.waitForTimeout(100);
+  ok((await p.$$eval("[data-pick]", bs => bs.filter(b => !b.hidden).map(b => b.textContent.trim()))).join("|") === "Ito, Ken", "searching ken ito did not find just Ito, Ken");
+  await p.tap("[data-pick] >> text=Ito, Ken"); await p.waitForTimeout(300);
   ok(await p.evaluate(() => /New task/.test(document.getElementById("overlay").textContent) && /Ken Ito/.test(document.getElementById("overlay").textContent)), "the task form did not open for Ken Ito");
   await p.tap("[data-act=close]"); await p.waitForTimeout(200);
   // on a contact: the menu is for that contact, with no picker
