@@ -171,6 +171,18 @@ test("Every form shows all its fields, with no More details fold", async (p) => 
     await p.tap("[data-act=close]"); await p.waitForTimeout(200);
   }
 });
+test("An interaction report shows the contact's saved capacity rating", async (p) => {
+  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Add a contact"); await p.waitForTimeout(300);
+  await p.fill("#f_first", "Lee"); await p.fill("#f_last", "Park"); await p.fill("#f_email", "lee.park@example.org");
+  await p.selectOption("#f_capacity", "B"); await p.tap("text=Save contact"); await p.waitForTimeout(400);
+  await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap("[data-qa=interaction]"); await p.waitForTimeout(300);
+  ok(await p.inputValue("#f_capacity") === "B", "the interaction report shows no capacity rating for a contact rated B");
+  await p.fill("#f_summary", "Coffee to talk about the year"); await p.selectOption("#f_meetingType", "Phone call");
+  const count = () => p.evaluate(() => ({ rated: (JSON.stringify(window.__demo.state).match(/Capacity rated/g) || []).length, reports: window.__demo.state.interactions.length }));
+  const before = await count(); await p.tap("[data-act=save]"); await p.waitForTimeout(400); const after = await count();
+  ok(after.reports === before.reports + 1, "the interaction report did not save");
+  ok(after.rated === before.rated, "saving the report logged the unchanged rating again");
+});
 test("Adding a task from a contact puts it on the Tasks list", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("[data-contact] >> nth=0"); await p.waitForTimeout(400);
   await p.tap("[data-form=task]"); await p.waitForTimeout(300);

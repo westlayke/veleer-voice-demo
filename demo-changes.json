@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "Fix: the Interaction report's Capacity rating now shows the contact's saved rating (it showed empty, so a new contact rated on the New contact form looked unrated). Saving a report with the rating unchanged no longer logs it again in History.",
+   "area": "Rules"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Every form now shows all its fields. The \"More details\" fold that hid optional fields is gone from all forms (it had already been removed from New contact and New opportunity on Oct 22).",
    "area": "Screens"
   },
