@@ -238,7 +238,7 @@ details.othbr > summary { cursor: pointer; color: var(--brand); font-weight: 700
 .sh h3 { margin: 4px 0 0; font-size: 17px; } .sh .s { font-size: 13px; color: var(--muted); margin-top: 3px; }
 .vfill { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 42px; border-radius: 10px; border: 1.5px dashed var(--brand); background: var(--brand-soft); color: var(--brand-ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
 details.more { border-top: 1px solid var(--line); padding-top: 4px; } details.more > summary { cursor: pointer; color: var(--brand); font-weight: 700; font-size: 14px; padding: 8px 0; } details.more[open] > summary { margin-bottom: 4px; }
-.pick { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; } .pick .btn { justify-content: flex-start; text-align: left; } .pick .btn small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; }
+.pick { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; } .pick .btn { justify-content: flex-start; text-align: left; } .pick .btn:has(small) { flex-direction: column; align-items: flex-start; gap: 2px; } .pick .btn small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; }
 .vh { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--brand); }
 .x { margin-left: auto; border: 0; background: var(--surface2); width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; flex: none; color: var(--muted); }
 .sb { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
@@ -747,17 +747,13 @@ function fieldHTML(f, d, fromVoice) {
 function draftHTML() {
   const A = ACTIONS[V.action], d = V.data, fv = V.fromVoice;
   const paired = new Set((A.pairs || []).flat());
-  // required fields (and anything already filled in) first; the rest under "More details", except on a new contact or opportunity, where every field shows
-  const has = (f) => f.type === "bool" ? false : !(d[f.k] === null || d[f.k] === undefined || d[f.k] === "");
-  const main = (f) => f.req || f.fixed || has(f) || fv.has(f.k) || COND_REQ.includes(f.k) || ((V.action === "contact" || V.action === "editContact") && (f.k === "email" || f.k === "mobile" || f.opp)) || V.action === "contact" || V.action === "opportunity"; // a contact needs one of these, so they never hide under More details
-  let body = "", more = "", nMore = 0;
+  // every field shows, in form order (no "More details" fold)
+  let body = "";
   for (const f of A.fields) {
     let unit = [f];
     if (paired.has(f.k)) { const pair = A.pairs.find(p => p[0] === f.k); if (!pair) continue; unit = pair.map(k => A.fields.find(x => x.k === k)); }
-    const html = unit.length > 1 ? `<div class="two">${unit.map(x => fieldHTML(x, d, fv)).join("")}</div>` : fieldHTML(f, d, fv);
-    if (unit.some(main)) body += html; else { more += html; nMore += unit.length; }
+    body += unit.length > 1 ? `<div class="two">${unit.map(x => fieldHTML(x, d, fv)).join("")}</div>` : fieldHTML(f, d, fv);
   }
-  if (more) body += `<details class="more" ${V.moreOpen ? "open" : ""}><summary>More details (${nMore} optional)</summary>${more}</details>`;
   const typed = V.typed && !fv.size;
   const sub = V.action === "contact" ? `Contact · added by ${OFFICER}` : V.action === "editContact" ? esc(nameOf(V.target.contact)) : V.action === "opportunity" ? `For ${esc(nameOf(V.target.contact))}` : V.action === "task" ? `For ${esc(nameOf(V.target.contact))}${V.target.opp ? " · open opportunity " + esc(V.target.opp.name) : ""}` : (V.target.contact ? esc(nameOf(V.target.contact)) + (V.target.opp ? " · " + esc(V.target.opp.name) : "") : esc(V.target.opp ? V.target.opp.name : ""));
   let dupe = "";
@@ -765,7 +761,7 @@ function draftHTML() {
   return `<div class="grab"></div>
   <div class="sh"><div style="min-width:0">${typed ? `<div class="vh">${V.action === "editContact" ? "Change and save" : "Fill in and save"}</div>` : `<div class="vh">${mic(15)} Draft from voice · check and save</div>`}<h3>${esc(A.title)}</h3><div class="s">${sub}</div></div><button class="x" data-act="close" aria-label="Close">×</button></div>
   <div class="sb">
-    ${G.live ? "" : `<button type="button" class="vfill" data-act="voicefill">${mic(16)} Fill this in by voice</button>`}
+    ${G.live ? "" : `<button type="button" class="vfill" data-act="voicefill">${mic(16)} ${typed ? "Fill this in by voice" : "Continue by voice"}</button>`}
     <div class="left">${typed ? `Type the details, or let ${esc(botName())} fill them in by voice. Fields marked * are required.` : "Drafted from your conversation. Say a correction out loud, or edit here."}${V.action === "contact" ? ` Fields marked <span class="opptag">${OPP_MARK} For opportunity</span> are optional now but needed before you can create an opportunity.` : ""}</div>
     ${dupe}
     <form id="draftForm" novalidate>${body}</form>
@@ -786,7 +782,6 @@ function readDraft() {
 }
 // fields that become required by a rule (a substantive meeting needs a next step; a declined ask or a defer needs a reason)
 const COND_REQ = ["nextStep", "nextDue", "lostReason", "reason", "substantive", "outcome"]; // plus two that decide those rules
-document.getElementById("overlay").addEventListener("toggle", (e) => { if (V && e.target.matches && e.target.matches("details.more")) V.moreOpen = e.target.open; }, true);
 // a form opened by tapping: the officer types, or hands it to the assistant
 function openForm(action, cid, item) {
   let target = {};
@@ -810,10 +805,14 @@ function pickFor(action) {
   if (action === "contact") { openForm("contact"); return; }
   const ok = S.contacts.map(c => ({ c, t: resolveTarget(action, nameOf(c)) })).filter(x => !x.t.error || (action === "opportunity" && !openOpp(x.c.id))); // not ready yet: tapping shows what's missing
   const h = document.getElementById("modal"), A = ACTIONS[action], oppFirst = ["plan", "ask", "pledge", "gift", "payment"].includes(action);
+  // Record the ask takes three stages (guide): say why each is listed, the planned ones first
+  if (action === "ask") { const rank = { "Ask Planning": 0, "Ask Made": 1, "Cultivation": 2 }; ok.sort((a, b) => (rank[a.t.opp && a.t.opp.stage] ?? 3) - (rank[b.t.opp && b.t.opp.stage] ?? 3)); }
+  const why = (o) => { if (action !== "ask") return o.stage; const a = latestAsk(o);
+    return o.stage === "Ask Planning" ? `Ask Planning · planned for ${a ? fmtDate(a.plannedDate) : "a set date"}` : o.stage === "Ask Made" ? (a && a.status === "Made" ? "Ask Made · record the answer" : "Ask Made · record another ask") : o.stage === "Cultivation" ? "Cultivation · unplanned ask" : o.stage; };
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="pkTitle">
     <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
-    <h2 id="pkTitle">${esc(A.title)}: ${oppFirst ? "which opportunity?" : "who is it for?"}</h2>
-    ${ok.length ? `<div class="pick">${ok.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : nameOf(x.c))}${oppFirst && x.t.opp ? `<small>${esc(x.t.opp.stage)}</small>` : x.t.gate ? "<small>Not ready yet</small>" : ""}</button>`).join("")}</div>`
+    <h2 id="pkTitle">${esc(action === "ask" ? "Record the ask" : A.title)}: ${oppFirst ? "which opportunity?" : "who is it for?"}</h2>
+    ${ok.length ? `<div class="pick">${ok.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : nameOf(x.c))}${oppFirst && x.t.opp ? `<small>${esc(why(x.t.opp))}</small>` : x.t.gate ? "<small>Not ready yet</small>" : ""}</button>`).join("")}</div>`
       : `<p class="wl-hint">None of your ${oppFirst ? "opportunities is at the right stage" : "contacts can take this"} yet.</p>`}
     <button type="button" class="btn quiet" data-helpx="1">Cancel</button></div></div>`;
   h.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { h.innerHTML = ""; openForm(action, b.dataset.pick); });
@@ -1430,7 +1429,7 @@ async function startCall(opening) {
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
   if (!G.keepRecent) { G.recent = []; G.saves = []; } G.keepRecent = false;
-  G.live = true; G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
+  G.live = true; { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     G.t0 = Date.now(); G.passReady = !!TOK.p;
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1513,7 +1512,10 @@ function endCall() {
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
   vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended"); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = false; clearTimeout(G.qTimer);
-  paintCall(); render(); setTimeout(prefetchToken, 1000);
+  paintCall(); render();
+  // a form left open gets its voice button back, keeping what was filled in
+  if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
+  setTimeout(prefetchToken, 1000);
 }
 function tellPicked(kind) {
   if (!G.live) return;
@@ -2616,7 +2618,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "2026-10-23T03:07:18Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "2026-10-23T04:09:20Z", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
