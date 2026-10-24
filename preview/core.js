@@ -121,7 +121,7 @@ const ACTIONS = {
       { k: "forName", label: "Opportunity", fixed: true },
       ...F_WHEN(),
       { k: "amount", label: "Amount asked", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
-      { k: "response", label: "Response", type: "select", opts: RESPONSES, req: true },
+      { k: "response", label: "Response", type: "select", opts: ["", ...RESPONSES], req: true },
       { k: "agreedAmount", label: "Agreed or counter amount (verbal)", type: "money" }, { k: "lostReason", label: "Reason (if declined)" }, { k: "summary", label: "Summary", type: "area", req: true },
       ...F_NEXT() ],
     pairs: [["date", "meetingType"], ["amount", "fund"]],

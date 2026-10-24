@@ -39,6 +39,12 @@ function officerSummary() {
   t = t.replace(/,?\s+(uh|um|er),?\s+/gi, " ").trim(); if (!t) return null;
   t = t.charAt(0).toUpperCase() + t.slice(1); return /[.!?]$/.test(t) ? t : t + ".";
 }
+// an ask's answer said in everyday words ("he handed me the check"): Grok left it out and the form showed Awaiting (seen Oct 24)
+function officerResponse() {
+  const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9).toLowerCase().replace(/[’‘]/g, "'");
+  if (/\b(no|not|didn't|declined|turned (me|us|it) down|passed)\b/.test(t)) return null;
+  return /\b(handed (me|us|over)|gave (me|us) (a|the|his|her|their) check|wrote (me |us )?(a|the) check|said yes|agreed|accepted|committed|he's in|she's in|they're in|yes to)\b/.test(t) ? "Accepted" : null;
+}
 function normCap(v) {
   if (v == null) return null; const t = String(v).trim(); if (!t) return null;
   let m = t.match(/^([A-Ea-e])(?![a-z])/); if (m) return m[1].toUpperCase();
@@ -179,7 +185,7 @@ Editing saved records: show_contact_edit_draft (contact), show_interaction_edit_
 # Stage rules the app enforces
 An opportunity can be created only when the contact has a capacity rating, isn't Do Not Contact or an Ally - Do Not Solicit, and has no other open opportunity; if the app says they aren't ready, explain what's already true and what's still to do, and offer set_capacity_rating when the rating is missing. If the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 Qualification to Cultivation needs a capacity rating, a substantive interaction and the officer's confirmation (show_cultivation_decision), or a defer with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date.
-Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task. A yes to an OUTRIGHT ask moves the opportunity straight to Commitment, waiting for the gift; a pledge ask stays in Ask Made until the pledge is recorded with its schedule.
+Ask responses are Accepted, Countered, Awaiting or Declined. A gift or check handed over when asked, or any yes, is Accepted; Awaiting is only for "still thinking it over". Always send the response. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task. A yes to an OUTRIGHT ask moves the opportunity straight to Commitment, waiting for the gift; a pledge ask stays in Ask Made until the pledge is recorded with its schedule.
 Whenever money comes in, use show_gift_draft: in Ask Made a gift with no pledge is an implied commitment (it passes through Commitment and closes as Closed Won); in Commitment the gift is applied to the pledge and the first one closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity.
 
 # Looking things up (always call the tool; never answer from memory, since records change)
@@ -280,8 +286,8 @@ async function demoChanges() {
   try { const r = await fetch("demo-changes.json?b=" + encodeURIComponent(BUILD)); CHANGES = r.ok ? (await r.json()).changes || [] : []; } catch (e) { CHANGES = []; }
   if (!CHANGES.length) CHANGES = null; return CHANGES || [];
 }
-function act(role, text) {
-  if (!text) return; const session = G.session || visitId();
+function act(role, text, sess) {
+  if (!text) return; const session = sess || G.session || visitId();
   ACT.q.push({ at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session });
   clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, role === "end" ? 0 : 4000);
 }
@@ -334,7 +340,7 @@ const WORKLET_URL = URL.createObjectURL(new Blob([`class C extends AudioWorkletP
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
 const TOK = { p: null, at: 0 };
 function prefetchToken() {
-  if (G.live || document.visibilityState !== "visible" || (TOK.p && Date.now() - TOK.at < 180000)) return;
+  if (document.visibilityState !== "visible" || (TOK.p && Date.now() - TOK.at < 180000)) return; // during a call too, so a dropped line reconnects without waiting for a new pass
   TOK.at = Date.now(); TOK.p = mintToken(); TOK.p.catch(() => { TOK.p = null; TOK.at = 0; });
 }
 function getToken() { // each pass is used once; an old or failed one is replaced by a fresh fetch
@@ -504,21 +510,26 @@ function netInfo() {
   if (G.lastMsg) bits.push(`last word from the voice service ${Math.round((Date.now() - G.lastMsg) / 1000)} s ago`);
   return bits.join(", ");
 }
-function netLog(what) { act("step", `Connection: ${what}. ${netInfo()}`); }
+// iPhones only say "online", so the app times a tiny request to the key holder itself (the /log status check)
+async function pingMs() {
+  if (!tokenUrl()) return null; const t0 = performance.now(), ac = new AbortController(), to = setTimeout(() => ac.abort(), 8000);
+  try { await fetch(tokenUrl().replace(/\/$/, "") + "/log?ping=" + Date.now(), { cache: "no-store", signal: ac.signal }); return Math.round(performance.now() - t0); } catch (e) { return ac.signal.aborted ? "no answer in 8 s" : "failed"; } finally { clearTimeout(to); }
+}
+async function netLog(what) { const sess = G.session, info = netInfo(), ms = await pingMs(); act("step", `Connection: ${what}. ${info}${ms == null ? "" : typeof ms === "number" ? `, test request ${ms} ms` : `, test request ${ms}`}`, sess); }
 const MAX_DROPS = 3;
 // the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
 async function reconnect(why) {
   if (!G.live) return;
   if (G.drops >= MAX_DROPS) { voiceUnavailable(why); return; }
   G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
-  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearInterval(G.netTick); stopPlayback(); paintCall();
+  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {}
   if (G.drops === 1) cue("drop");
   vlog(`reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`); act("step", `Reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`);
   await new Promise(r => setTimeout(r, [0, 1000, 3000, 6000][G.drops] || 6000));
   if (navigator.onLine === false) await new Promise(r => { const t = setTimeout(r, 8000); window.addEventListener("online", () => { clearTimeout(t); r(); }, { once: true }); });
   if (!G.live) return;
-  let token; try { token = await getToken(); } catch (e) { netLog("Couldn't get a voice pass (" + String(e && e.message || e).slice(0, 80) + ")"); reconnect("no voice pass"); return; }
+  const ready = !!TOK.p, tp = Date.now(); let token; try { token = await getToken(); act("step", `Voice pass ${ready ? "was ready" : "fetched"} in ${Date.now() - tp} ms`); } catch (e) { netLog("Couldn't get a voice pass (" + String(e && e.message || e).slice(0, 80) + ")"); reconnect("no voice pass"); return; }
   if (!G.live) return;
   G.lastMsg = 0; openSocket(token, reconnectLine());
 }
@@ -534,11 +545,11 @@ function voiceUnavailable(why) {
 }
 // short tones (and a spoken line when the phone allows it) so a driver knows without looking
 function cue(kind) {
-  const notes = kind === "down" ? [660, 520, 390] : [520, 660];
+  const notes = kind === "down" ? [660, 520, 390] : kind === "wait" ? [880] : [520, 660];
   try { const ctx = G.ctx && G.ctx.state === "running" ? G.ctx : (typeof spkCtx !== "undefined" && spkCtx) || new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state !== "running") ctx.resume();
     notes.forEach((f, i) => { const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + i * 0.22;
-      o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(kind === "wait" ? 0.08 : 0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
       o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.22); }); } catch (e) {}
   if (kind !== "down") return;
   try { if (window.speechSynthesis) setTimeout(() => { const u = new SpeechSynthesisUtterance("The voice service isn't answering right now. Tap the mic to try again."); u.rate = 1; speechSynthesis.speak(u); }, 750); } catch (e) {}
@@ -579,7 +590,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -678,6 +689,9 @@ function ask(request) {
 }
 function onEvent(e) {
   const t = e.type || "";
+  if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
+  if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
+  if (t === "input_audio_buffer.speech_started") G.heardSinceRetry = true;
   if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
   else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
     if (t === "response.done" && G.idleEnding) { clearTimeout(G.idleTimer); const left = G.ctx ? Math.max(0, G.playHead - G.ctx.currentTime) : 0; G.idleTimer = setTimeout(idleHangUp, left * 1000 + 500); }
@@ -690,7 +704,10 @@ function onEvent(e) {
   if (t === "response.done") replyCheck(e.response || {});
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
-  else if (t === "response.created") { clearTimeout(G.askWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
+  else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
+    // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)
+    G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
+  else if (t === "response.created") { clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
   else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); if (G.status !== "Speaking") { G.status = "Speaking"; paintCall(); } }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
@@ -712,10 +729,12 @@ function flushQueued() {
 }
 // Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
-const MAX_ASKS = 3;
+const MAX_ASKS = 3, TICK_MS = 4000, ASK_AGAIN_MS = 10000; // Grok sometimes takes 6 to 10 s: a soft tick first, then ask again
 function askReply() {
-  send({ type: "response.create" }); G.asked = true;
-  clearTimeout(G.askWatch); G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, 5000);
+  send({ type: "response.create" }); G.asked = true; G.askedAt = Date.now();
+  clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
+  G.tickWatch = setTimeout(() => { if (G.live && G.asked) { cue("wait"); vlog("still waiting for Grok: tick"); } }, TICK_MS);
+  G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
 }
 function replyCheck(r) {
   if (!G.live || G.idleEnding) return;
@@ -727,7 +746,7 @@ function replyCheck(r) {
   vlog(`Grok gave ${why} (${G.retried} of ${MAX_ASKS})`);
   if (G.retried > MAX_ASKS) { act("step", `Grok gave ${why} after ${MAX_ASKS} more asks`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
   act("step", `Grok gave ${why}, asked again (${G.retried} of ${MAX_ASKS})`);
-  busy(); setTimeout(() => { if (G.live && !G.responding) askReply(); }, 300 * G.retried);
+  busy(); G.retriedAt = Date.now() + 300 * G.retried; G.heardSinceRetry = false; setTimeout(() => { if (G.live && !G.responding) askReply(); }, 300 * G.retried);
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;

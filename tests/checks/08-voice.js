@@ -287,4 +287,36 @@ test("Ara: a planned ask for an entity with a state campaign leaves the campaign
   ok(await p.inputValue("#f_campaign") === "", "the campaign was filled in without asking");
   ok((r.still_needed || r.missing || []).some(x => /Campaign/.test(x) && /National or Pennsylvania/.test(x)), "Ara wasn't told to ask National or Pennsylvania");
 });
+
+test("Ara: a slow reply gets a soft tick, a doubled reply is cut off, readings time a test request, and a voice pass stays ready during a call", async (p) => {
+  await signIn(p); await p.waitForTimeout(300);
+  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
+  await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
+  await p.evaluate(() => { window.__cues = []; const c = cue; window.cue = (k) => { __cues.push(k); }; });
+  await p.evaluate(() => notice("Ask the officer the next question."));
+  await p.waitForTimeout(4400);
+  ok(await p.evaluate(() => __cues.includes("wait")), "no soft tick after 4 seconds without a reply");
+  // the first ask comes back empty, the app asks again, then both answers arrive: the second is cut off
+  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(600);
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "Just to be sure?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  const n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Just to be sure again?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  const cut = await p.evaluate((n) => ({ cancel: __sent.slice(n).some(s => JSON.parse(s).type === "response.cancel"), said: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | ") }), n);
+  ok(cut.cancel && !/Just to be sure again/.test(cut.said) && /second answer to the same ask/.test(cut.said), "the doubled reply wasn't cut off");
+  await p.evaluate(() => netLog("Reading")); await p.waitForTimeout(300);
+  ok(/test request \d+ ms/.test(await p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "))), "the reading didn't time a test request");
+  await p.evaluate(() => { TOK.p = null; TOK.at = 0; prefetchToken(); }); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => G.live && !!TOK.p), "no voice pass was kept ready during the call");
+});
+test("Ara: \"he handed me the check\" records the ask as Accepted, and a new ask's response starts blank", async (p) => {
+  await signIn(p); await p.waitForTimeout(300);
+  const st = await state(p); const o = st.opps.find(x => x.stage === "Ask Planning"); const c = st.contacts.find(x => x.id === o.contactId);
+  const who = c.first + " " + c.last;
+  await ara(p, "show_ask_result_draft", { contact_name: who });
+  ok(await p.inputValue("#f_response") === "", "the response started as " + await p.inputValue("#f_response"));
+  await p.evaluate(() => recent(botName(), "What was his response?"));
+  await said(p, "He was enthusiastic and he, uh, handed me the check for one hundred thousand dollars.");
+  await ara(p, "show_ask_result_draft", { contact_name: who, summary: "Enthusiastic." });
+  ok(await p.inputValue("#f_response") === "Accepted", "a check handed over wasn't read as Accepted");
+});
 };
