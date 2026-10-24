@@ -59,4 +59,13 @@ test("Halloween: in October a spider, pumpkin or ghost crosses without blocking 
   else ok(!(await p.$("#spookyTgl")), "the Halloween switch should only show in October");
 });
 
+test("Halloween sounds: a visitor makes a sound after the first tap, but not during a conversation", async (p) => {
+  await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Contacts"); await p.waitForTimeout(300);
+  const a = await p.evaluate(() => { const n = window.__demo.spkPlayed; window.__demo.spookyOnce("ghost").dataset.t = "1"; return window.__demo.spkPlayed - n; });
+  ok(a === 1, "the ghost made no sound when no conversation was on");
+  await p.tap("nav >> text=Home"); await p.waitForTimeout(200); await p.tap("nav .micbtn"); await p.waitForTimeout(600);
+  const live = await p.isVisible(".cb-end");
+  const b = await p.evaluate(() => { const n = window.__demo.spkPlayed; window.__demo.spookyOnce("spider").dataset.t = "1"; return window.__demo.spkPlayed - n; });
+  ok(live, "no conversation started"); ok(b === 0, "a Halloween visitor made a sound during a conversation");
+});
 };

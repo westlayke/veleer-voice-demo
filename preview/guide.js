@@ -76,7 +76,7 @@ function settingsScreen() {
     <label for="botName">Assistant's name<input id="botName" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="${esc(botName())}" value="${esc(S.settings.botName || "")}"></label>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4;margin-top:-4px">The assistant introduces itself by this name. Leave it blank to use the voice's name.</div>
     <label class="hint-tgl" for="hintsTgl"><input type="checkbox" id="hintsTgl" ${S.settings.noHints ? "" : "checked"}> Show a hint when I tap an option under “Say things like…”</label>
-    ${spookySeason() ? `<label class="hint-tgl" for="spookyTgl"><input type="checkbox" id="spookyTgl" ${S.settings.noSpooky ? "" : "checked"}> Halloween: a spider, pumpkin or ghost crosses the screen now and then</label>` : ""}
+    ${spookySeason() ? `<label class="hint-tgl" for="spookyTgl"><input type="checkbox" id="spookyTgl" ${S.settings.noSpooky ? "" : "checked"}> Halloween: a spider, pumpkin or ghost crosses the screen now and then, with a spooky sound</label>` : ""}
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4">Changes on this screen save as soon as you make them.</div>
   </div></section>
   <section class="panel"><div class="ph"><h2>Share this proof of concept</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Send the proof of concept to someone, or show a QR code they can scan with their phone camera. Anyone with the link can use the voice assistant.</div>

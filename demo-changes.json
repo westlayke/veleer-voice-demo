@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "Halloween sounds: the ghost goes \"wooo\", the spider creaks and scuttles, and the pumpkin thumps as it rolls. The sounds are made by the phone, play quietly only after the first tap and never during a conversation with Ara, and the Halloween switch in Settings turns them off with the visitors.",
+   "area": "Look"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "Two fixes found while writing the tester guide: Ara no longer says the year of a past gift twice (\"Oct 2, 2025 2025\"), and a defer reason ending in a full stop no longer shows two full stops in History.",
    "area": "Fix"
   },
