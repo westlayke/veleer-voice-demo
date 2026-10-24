@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+  {"date": "2026-10-24", "change": "When Ara goes silent after the app asks her to speak (no reply, or an empty or failed one), the app asks her once more instead of leaving the officer in silence until the 12-second hang-up. Silent replies and voice service errors now go in the activity log.", "area": "Voice"},
     {"date": "2026-10-24", "change": "Ara understands entities said loosely (\"the C-3\", \"Idaho PAC\") and asks which one when it could be several; amounts in words (\"one hundred thousand\") are understood; a new opportunity now has a campaign of interest, asked when the entity has a state campaign (otherwise National is filled in) and carried to the planned ask.", "area": "Voice"},
     {"date": "2026-10-24", "change": "Tidy-up with no change in behaviour: Ara's voice code split into three files, old screenshots and an unused logo removed, Settings wording for Christmas mode updated, owl test made sturdier.", "area": "Code"},
     {"date": "2026-10-24", "change": "Opportunity record shows one next-step button: Move to Cultivation once every Qualification step is done, otherwise Log interaction (it used to show both).", "area": "Opportunities"},

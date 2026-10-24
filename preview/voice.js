@@ -515,7 +515,7 @@ function endCall() {
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended"); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = false; clearTimeout(G.qTimer);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended"); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = G.retried = false; clearTimeout(G.qTimer); clearTimeout(G.askWatch);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -623,15 +623,16 @@ function onEvent(e) {
   }
   if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript); }
   if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); }
+  if (t === "response.done") replyCheck(e.response || {});
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
-  else if (t === "response.created") { G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
+  else if (t === "response.created") { clearTimeout(G.askWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
   else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); if (G.status !== "Speaking") { G.status = "Speaking"; paintCall(); } }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
-  else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) toast("Voice: " + e.error.message); }
+  else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) act("step", "Grok error: " + e.error.message.slice(0, 300)); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) toast("Voice: " + e.error.message); }
   if (t === "conversation.item.added" && e.item && e.item.id) { if (e.item.type !== "function_call") (G.respItems = G.respItems || []).push(e.item.id); if (G.tour && e.item.type !== "function_call" && !G.tourItems.includes(e.item.id)) G.tourItems.push(e.item.id); }
 }
 // A new response or session update sent while Grok is still speaking cuts off what it was saying ("Opening the…"),
@@ -643,7 +644,24 @@ function flushQueued() {
     if (G.sentRules !== rulesKey()) send({ type: "session.update", session: { instructions: sentInstructions() } }); // the rules changed (hands-free, name)
     else { const c = ctxNow(); if (c !== G.sentCtx) { G.sentCtx = c; vlog("context update");
       send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(App notice, not spoken by the officer) Right now update, no reply needed:\n" + c }] } }); } } }
-  if (G.qCreate) { G.qCreate = false; send({ type: "response.create" }); }
+  if (G.qCreate) { G.qCreate = false; askReply(); }
+}
+// Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
+// which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
+function askReply() {
+  send({ type: "response.create" }); G.asked = true;
+  clearTimeout(G.askWatch); G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, 5000);
+}
+function replyCheck(r) {
+  if (!G.live || G.idleEnding) return;
+  const asked = r.status === "never started" || G.respAsked; G.respAsked = false;
+  const empty = !G.bot && !G.respTool && !G.audioSamples, failed = r.status === "failed" || r.status === "never started";
+  if (!asked || r.status === "cancelled" || (!empty && !failed)) { G.retried = false; return; }
+  const why = r.status === "never started" ? "no reply started" : r.status === "failed" ? "reply failed" + (r.status_details && r.status_details.error ? ": " + (r.status_details.error.message || r.status_details.error.type || "") : "") : "empty reply";
+  vlog("Grok gave " + why + (G.retried ? ", already asked again" : ", asking again"));
+  act("step", "Grok gave " + why + (G.retried ? " after a second ask" : ", asked again"));
+  if (G.retried) { G.retried = false; return; }
+  G.retried = true; busy(); setTimeout(() => { if (G.live && !G.responding) askReply(); }, 300);
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;

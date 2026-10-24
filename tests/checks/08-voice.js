@@ -251,4 +251,20 @@ test("Ara: an interaction's summary is taken from the officer's answer when Ara 
   ok(await p.evaluate(() => JSON.stringify(optParse("flags", "neither Ally - Do Not Solicit nor Do Not Contact")) === JSON.stringify({ ally: false, dnc: false }) && optParse("flags", "Ally - Do Not Solicit").ally === true && optParse("flags", "No, that's none of those").dnc === false), "\"neither\" was read as both flags");
 });
 
+
+test("Ara: when Grok goes silent after the app asks for a reply, the app asks once more and logs it; Grok errors are logged", async (p) => {
+  await signIn(p); await p.waitForTimeout(300);
+  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
+  const creates = () => p.evaluate(() => __sent.filter(s => JSON.parse(s).type === "response.create").length);
+  await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
+  await p.evaluate(() => notice("Ask the officer the next question."));
+  const c0 = await creates();
+  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(500);
+  ok(await creates() === c0 + 1, "an empty reply was not asked for again");
+  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(500);
+  ok(await creates() === c0 + 1, "the app kept asking after a second empty reply");
+  await fire([{ type: "error", error: { message: "Something broke upstream" } }]); await p.waitForTimeout(100);
+  const q = await p.evaluate(() => ACT.q.map(a => a.text).join(" | ") + " | " + __logs.map(l => JSON.stringify(l)).join(" "));
+  ok(/empty reply, asked again/.test(q) && /after a second ask/.test(q) && /Grok error: Something broke upstream/.test(q), "the silent replies or the Grok error were not logged");
+});
 };

@@ -251,7 +251,7 @@ const TOOL_HANDLERS = {
   },
 };
 function onTool(callId, name, args) {
-  busy();
+  busy(); G.respTool = true;
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
