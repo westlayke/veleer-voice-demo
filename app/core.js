@@ -16,6 +16,7 @@ const CAMPAIGNS = ["National", "Idaho", "North Dakota", "New Hampshire", "Pennsy
 const campaignsFor = (f) => ENTITY_STATE[f] === undefined ? CAMPAIGNS : ["National", ...(ENTITY_STATE[f] ? [ENTITY_STATE[f]] : [])];
 const ENTITY_RULE = FUNDS.map(f => `${f}: ${campaignsFor(f).join(" or ")}`).join("; ");
 const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
+const CAPACITY_LIST = Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", "); // "A = $250k and up, B = ..." for Ara
 const OUTCOMES = ["Interested, continue cultivation", "Ask made", "Ask accepted", "Not now, revisit", "Not interested", "Referred elsewhere"];
 const NO_NEXT_STEP = ["Not interested", "Referred elsewhere"];
 const RESPONSES = ["Awaiting", "Accepted", "Countered", "Declined"];
@@ -36,6 +37,11 @@ const YEAR = new Date().getFullYear();
 
 /* ---------- actions: what the officer can do by voice, in any order ---------- */
 const DURATIONS = ["30 minutes", "45 minutes", "1 hour", "90 minutes", "2 hours"];
+// fields that several forms share, defined once
+const F_WHEN = () => [{ k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: ["", ...MEET_TYPES], req: true }];
+const F_NEXT = () => [{ k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" }];
+const F_RECEIVED = () => [{ k: "date", label: "Received on", type: "date", req: true }, { k: "method", label: "Payment method", type: "select", opts: PAY_METHODS, req: true }];
+const HELP_X = '<button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>'; // the close button on help popups
 const ACTIONS = {
   contact: { title: "New contact", saved: "Contact saved", saveLabel: "Save contact",
     fields: [
@@ -51,11 +57,11 @@ const ACTIONS = {
   interaction: { title: "Interaction report", saved: "Interaction report saved", saveLabel: "Save",
     fields: [
       { k: "forName", label: "Contact", fixed: true },
-      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: ["", ...MEET_TYPES], req: true },
+      ...F_WHEN(),
       { k: "summary", label: "Summary", type: "area", req: true }, { k: "substantive", label: "Substantive interaction", type: "bool" },
       { k: "outcome", label: "Outcome", type: "select", opts: ["", ...OUTCOMES] },
       { k: "capacity", label: "Capacity rating", type: "select", opts: ["", ...Object.keys(CAPACITY)], fmt: (v) => v ? `${v} · ${CAPACITY[v]}` : "Not rated" },
-      { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
+      ...F_NEXT() ],
     pairs: [["date", "meetingType"]],
     left: "A substantive interaction needs a next step and its due date, unless the outcome is Not interested or Referred elsewhere." },
   meeting: { title: "Schedule a meeting", saved: "Meeting added. Finish in Google Calendar", saveLabel: "Add to Google Calendar",
@@ -88,11 +94,11 @@ const ACTIONS = {
   ask: { title: "Interaction report · the ask", saved: "Ask recorded", saveLabel: "Save",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: ["", ...MEET_TYPES], req: true },
+      ...F_WHEN(),
       { k: "amount", label: "Amount asked", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
       { k: "response", label: "Response", type: "select", opts: RESPONSES, req: true },
       { k: "agreedAmount", label: "Agreed or counter amount (verbal)", type: "money" }, { k: "lostReason", label: "Reason (if declined)" }, { k: "summary", label: "Summary", type: "area", req: true },
-      { k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" } ],
+      ...F_NEXT() ],
     pairs: [["date", "meetingType"], ["amount", "fund"]],
     left: "An ask meeting is substantive, so it needs a next step and its due date unless the investor declined. A declined ask closes the opportunity as Closed Lost and needs a reason. A yes to an outright ask moves it to Commitment, waiting for the gift; a pledge ask waits in Ask Made until Record pledge adds the schedule." },
   pledge: { title: "Record pledge", saved: "Pledge recorded", saveLabel: "Record pledge",
@@ -114,7 +120,7 @@ const ACTIONS = {
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
       { k: "amount", label: "Gift amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
-      { k: "date", label: "Received on", type: "date", req: true }, { k: "method", label: "Payment method", type: "select", opts: PAY_METHODS, req: true } ],
+      ...F_RECEIVED() ],
     pairs: [["amount", "fund"], ["date", "method"]],
     left: "A gift that arrives while the ask is open is an implied commitment: the opportunity passes through Commitment and closes as Closed Won." },
   // Record gift on an opportunity in Commitment: the gift is applied to the pledge (one button for money in, whatever the stage)
@@ -122,7 +128,7 @@ const ACTIONS = {
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
       { k: "amount", label: "Gift amount", type: "money", req: true },
-      { k: "date", label: "Received on", type: "date", req: true }, { k: "method", label: "Payment method", type: "select", opts: PAY_METHODS, req: true } ],
+      ...F_RECEIVED() ],
     pairs: [["date", "method"]],
     left: "This gift is applied to the commitment: the outright gift agreed at the ask, or the pledge. The first gift closes the opportunity as Closed Won; later installments are tracked on the pledge." }
 };

@@ -29,7 +29,7 @@ function sayList() {
 const APP_BTN = (px) => `<img src="apple-touch-icon-v5.png" alt="" class="appbtn" style="width:${px}px;height:${px}px">`;
 const SAVE_TITLE = `Add Citizens VCRM to your Home Screen`;
 function saveTip(inSettings) {
-  const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
+  const standalone = isStandalone();
   if (standalone) return inSettings ? `<div style="font-size:14px;color:var(--muted)">Citizens VCRM is already on your home screen. You're using it from there now.</div>` : "";
   const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
   // iPhone: a section for Safari and a separate one for Chrome, the browser in use first; Android: Chrome only
@@ -128,7 +128,7 @@ function showQR(copyFailed) {
 function helpModal() {
   const h = document.getElementById("modal");
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="hmTitle">
-    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    ${HELP_X}
     <h2 id="hmTitle">How to talk to ${esc(botName())}</h2>
     <ol class="hm-steps"><li>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> at the bottom of the screen.</li>
       <li>Say what you want, like <b>“Log a meeting with Ruth”</b> or <b>“What are my open tasks?”</b> You can interrupt at any time.</li>
@@ -182,13 +182,17 @@ const greetLine = (name) => `The officer just entered their first name and tappe
 
 const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
 const AWAIT_WARN_DAYS = 14; // tenant setting in the guide; demo default
+const daysAwaiting = (a) => Math.max(0, Math.round((new Date(todayISO()) - new Date(a.askedOn || todayISO())) / 864e5)); // days since the ask was made
+// the amount line on an opportunity's list row and board card
+const oppAmountText = (o, a) => o.pledge ? (o.pledge.implied ? "Committed " + money(o.pledge.amount) + " · implied" : o.pledge.outright ? "Committed " + money(o.pledge.amount) + " · gift to follow" : "Pledged " + money(o.pledge.amount)) : a ? (a.status === "Planned" ? "Planned ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
+const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone; // opened from the home screen icon
 function oppAlert(o) {
   const a = latestAsk(o), c = contactById(o.contactId);
   if (o.stage === "Closed") return o.closed === "Lost" ? { tone: "warn", text: "Closed Lost" } : { tone: "ok", text: "Closed Won" };
   if (readyForCultivation(o)) return { tone: "ok", text: "Ready for Cultivation", act: true };
   if (o.stage === "Ask Made" && agreed(a)) return { tone: "warn", text: "Pledge to record", act: true };
   if (o.stage === "Commitment" && o.pledge && o.pledge.outright) return { tone: "ok", text: "Gift to follow" };
-  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = Math.max(0, Math.round((new Date(todayISO()) - new Date(a.askedOn || todayISO())) / 864e5)); return { tone: days >= AWAIT_WARN_DAYS ? "warn" : "info", text: `Awaiting response · ${days} day${days === 1 ? "" : "s"}`, act: days >= AWAIT_WARN_DAYS }; }
+  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = daysAwaiting(a); return { tone: days >= AWAIT_WARN_DAYS ? "warn" : "info", text: `Awaiting response · ${days} day${days === 1 ? "" : "s"}`, act: days >= AWAIT_WARN_DAYS }; }
   if (o.stage === "Ask Planning" && a) { const days = Math.round((new Date(a.plannedDate) - new Date(todayISO())) / 864e5); return { tone: days <= 7 ? "warn" : "info", text: days < 0 ? `Ask date passed ${fmtDate(a.plannedDate)}` : `Ask planned for ${fmtDate(a.plannedDate)}`, act: days <= 7 }; }
   return null;
 }
@@ -293,7 +297,7 @@ function goalsPanel() {
 }
 // Home (last on the page): a slim card pointing to the add-to-home-screen steps in Settings; gone once the app is opened from the home screen, or when closed with ×
 function addBtnCard() {
-  const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
+  const standalone = isStandalone();
   if (standalone || S.settings.hideAddBtn) return "";
   return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add Citizens VCRM to your Home Screen</b><span>Open the demo like an app. Show me how</span></div><span class="chev">${CHEV}</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
 }
@@ -440,13 +444,17 @@ function contactScreen() {
 const STAGE_BTN = { Qualification: "Log interaction", Cultivation: "+ Add planned ask", "Ask Planning": "Record the ask", "Ask Made": "Record pledge", Commitment: "Record gift" };
 const STAGE_SAY = { Qualification: "Log a meeting", Cultivation: "Plan an ask", "Ask Planning": "Record the ask", "Ask Made": "Record a pledge", Commitment: "Record a gift" };
 const stageName = (o) => o.stage === "Closed" ? "Closed " + (o.closed || "Won") : o.stage;
+// the stage's main button: an outright ask that's out waits for a gift, not a pledge
+function stageAction(o, a) {
+  const outright = o.stage === "Ask Made" && a && a.askType === "Outright";
+  return { outright, label: outright ? "Record gift" : STAGE_BTN[o.stage], sayIt: outright ? "Record a gift" : STAGE_SAY[o.stage] };
+}
 // the one thing to do next on an opportunity: the same button its record shows
 function oppPrimary(o) {
   if (!o || o.stage === "Closed") return null;
   const c = contactById(o.contactId), a = latestAsk(o);
   if (readyForCultivation(o)) return { label: "Move to Cultivation", act2: "cultivate", oppId: o.id };
-  const outright = o.stage === "Ask Made" && a && a.askType === "Outright";
-  const label = outright ? "Record gift" : STAGE_BTN[o.stage], sayIt = outright ? "Record a gift" : STAGE_SAY[o.stage];
+  const { outright, label, sayIt } = stageAction(o, a);
   return label ? { label, form: FORM_FOR[sayIt] || "gift", cid: c.id, oppId: o.id } : null;
 }
 // the one next step on a contact's journey, from new contact to Closed Won: used by the What's next card, the contact record and the opportunity record
@@ -485,12 +493,11 @@ function oppScreen() {
   else if (met && o.defer) alert = `<span class="alert info">Deferred${o.defer.until ? " until " + fmtDate(o.defer.until) : ""}: ${esc(o.defer.reason)}</span>`;
   if (o.stage === "Ask Planning" && a) alert = `<span class="alert info">Ask planned for ${fmtDate(a.plannedDate)}</span>`;
   if (o.stage === "Ask Made" && agreed(a)) alert = `<span class="alert ok">Agreed, pledge to follow · ${money(a.amount)} verbal</span>`;
-  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = Math.max(0, Math.round((new Date(todayISO()) - new Date(a.askedOn || todayISO())) / 864e5)); alert = `<span class="alert ${days >= 14 ? "warn" : "info"}">Awaiting response · ${days} day${days === 1 ? "" : "s"}</span>`; }
+  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = daysAwaiting(a); alert = `<span class="alert ${days >= 14 ? "warn" : "info"}">Awaiting response · ${days} day${days === 1 ? "" : "s"}</span>`; }
   if (o.stage === "Closed") alert = o.closed === "Lost" ? `<span class="alert warn">Closed Lost${o.lostReason ? ": " + esc(o.lostReason) : ""}</span>` : `<span class="alert ok">Closed Won${o.gift ? " · gift of " + money(o.gift.amount) + " received" : o.pledge && o.pledge.implied ? " · implied commitment, gift received" : o.pledge && o.pledge.outright ? " · agreed gift received" : o.pledge && o.pledge.payments ? " · first gift on the pledge received" : ""}</span>`;
   if (o.stage === "Commitment" && o.pledge && !o.pledge.outright) alert = `<span class="alert ok">First payment of ${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</span>`;
   if (o.stage === "Commitment" && o.pledge && o.pledge.outright) alert = `<span class="alert ok">Agreed, gift to follow · ${money(o.pledge.amount)}</span>`;
-  const outright = o.stage === "Ask Made" && a && a.askType === "Outright";
-  const label = outright ? "Record gift" : STAGE_BTN[o.stage], sayIt = outright ? "Record a gift" : STAGE_SAY[o.stage];
+  const { outright, label, sayIt } = stageAction(o, a);
   const btn = (!label ? "" : `<button class="btn blue" data-form="${FORM_FOR[sayIt] || (outright ? "gift" : "")}" data-cid="${c.id}">${label}</button>`)
     + (o.stage === "Ask Made" && !outright ? `<button class="btn out" data-form="gift" data-cid="${c.id}">Record gift</button>` : ""); // money can arrive before a pledge: an implied commitment
   return topbar("Opportunity", "board") + `<main>
@@ -527,7 +534,7 @@ function oppListHTML() {
   if (!show.length) return `<div class="empty">Nothing here right now.</div>`;
   return STAGES.map(st => { const os = show.filter(o => o.stage === st); if (!os.length) return "";
     return `<div class="lgroup">${st} <span>${os.length}</span></div>` + os.map(o => { const a = latestAsk(o), c = contactById(o.contactId);
-      const amt = o.pledge ? (o.pledge.implied ? "Committed " + money(o.pledge.amount) + " · implied" : o.pledge.outright ? "Committed " + money(o.pledge.amount) + " · gift to follow" : "Pledged " + money(o.pledge.amount)) : a ? (a.status === "Planned" ? "Planned ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
+      const amt = oppAmountText(o, a);
       return `<div class="row tap" data-opp="${o.id}" data-name="${esc(oppSearchText(o))}"><div class="t"><span class="lnk">${esc(nameOf(c))}</span><div class="s">${amt} · ${esc(o.fund || "")}</div>${nextStep(o) ? `<div class="nextline${nextStep(o).warn ? " warn" : ""}">Next: ${esc(nextStep(o).line)}</div>` : ""}${oppAlert(o) ? `<div style="margin-top:5px">${alertPill(oppAlert(o))}</div>` : ""}</div><span class="chev">${CHEV}</span></div>`; }).join(""); }).join("");
 }
 function boardScreen() {
@@ -541,7 +548,7 @@ function boardScreen() {
   <div class="boardwrap"><div class="board">${(fk === "closed" ? ["Closed"] : STAGES.slice(0, 5)).map(s => {
     const os = show.filter(o => o.stage === s);
     return `<div class="col"><h3>${s} <span>${os.length}</span></h3><div style="display:flex;flex-direction:column;gap:6px">${os.map(o => { const a = latestAsk(o);
-      const amt = o.pledge ? (o.pledge.implied ? "Committed " + money(o.pledge.amount) + " · implied" : o.pledge.outright ? "Committed " + money(o.pledge.amount) + " · gift to follow" : "Pledged " + money(o.pledge.amount)) : a ? (a.status === "Planned" ? "Planned ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
+      const amt = oppAmountText(o, a);
       return `<div class="card ${o.example ? "" : "me"}" data-opp="${o.id}" data-name="${esc(oppSearchText(o))}"><b>${esc(o.name)}</b><span class="amt">${amt}</span>${alertPill(oppAlert(o))}${o.example ? "" : `<span class="via">${mic(11)} added by voice</span>`}</div>`; }).join("")}</div></div>`;
   }).join("")}</div></div>
   <div class="empty" style="font-size:12.5px">Cards move only when something is recorded. Swipe sideways to see every stage.</div></section></main>`;
@@ -568,7 +575,7 @@ function taskRow(t, showWhere) {
 function oppGate(c) {
   const h = document.getElementById("modal"), ch = oppChecks(c), canRate = !c.capacity;
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="ogTitle">
-    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    ${HELP_X}
     <h2 id="ogTitle">${esc(c.first)} isn't ready for an opportunity yet</h2>
     <p class="wl-hint">You can create an opportunity for a contact only when all of these are true:</p>
     <ul class="gate">${ch.map(x => `<li class="${x.ok ? "yes" : "no"}"><span class="gk" aria-hidden="true">${x.ok ? "✓" : "!"}</span><span>${esc(x.need)}<small>${x.ok ? esc(x.now) : "To do: " + esc(x.todo)}</small></span></li>`).join("")}</ul>
@@ -580,7 +587,7 @@ function oppGate(c) {
 function ratingPicker(c, thenOpp) {
   const h = document.getElementById("modal");
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="rtTitle">
-    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    ${HELP_X}
     <h2 id="rtTitle">Capacity rating</h2><p class="wl-hint">How much could ${esc(nameOf(c))} give?</p>
     <div class="tsopts">${Object.entries(CAPACITY).map(([k, v]) => `<button type="button" class="tsopt${k === c.capacity ? " cur" : ""}" data-rt="${k}">${k} · ${esc(v)}${k === c.capacity ? '<span class="tscur">Current</span>' : ""}</button>`).join("")}</div></div></div>`;
   h.querySelectorAll("[data-rt]").forEach(b => b.onclick = () => {
@@ -596,7 +603,7 @@ document.addEventListener("click", (e) => { const r = e.target.closest("[data-ra
 function statusPicker(t, pickWaiting) {
   const h = document.getElementById("modal"), st = taskStatus(t), dflt = t.due && t.due > todayISO() && st === "waiting" ? t.due : addDays(todayISO(), 7);
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="tsTitle">
-    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    ${HELP_X}
     <h2 id="tsTitle">Task status</h2><p class="wl-hint">${esc(t.text)}</p>
     <div class="tsopts">${Object.keys(TSTAT).map(k => `<button type="button" class="tsopt${k === st ? " cur" : ""}" data-ts="${k}"><span class="tdot s-${k}"></span>${TSTAT[k]}${k === st ? '<span class="tscur">Current</span>' : ""}</button>`).join("")}</div>
     <div class="tswait" ${pickWaiting ? "" : "hidden"}><label class="wl-name">Check back on<input type="date" id="tsUntil" value="${dflt}" min="${todayISO()}"></label><button type="button" class="btn blue" id="tsWaitGo">Save as Waiting</button></div></div></div>`;
