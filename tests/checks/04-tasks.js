@@ -10,6 +10,16 @@ test("Task circle marks Done, Undo brings it back", async (p) => {
   await p.tap("#undoBtn"); await p.waitForTimeout(300);
   ok(!(await state(p)).tasks.find(t => t.id === id).done, "Undo did not bring the task back");
 });
+test("Needs attention: the All count and the group counts drop when an item is resolved", async (p) => {
+  await signIn(p);
+  const counts = () => p.evaluate(() => { const b = [...document.querySelectorAll(".na-chips button")].map(x => [x.textContent.replace(/\s*\d+$/, "").trim(), +x.querySelector("b").textContent]); return { chips: Object.fromEntries(b), items: attentionItems().length }; });
+  const before = await counts();
+  const tid = await p.evaluate(() => { const t = S.tasks.find(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)); return t && t.id; });
+  ok(tid, "no task this week in Needs attention to resolve");
+  await tab(p, "Tasks"); await p.tap(`.trow[data-tid="${tid}"] .tcheck`); await p.waitForTimeout(300); await tab(p, "Home"); await p.waitForTimeout(200);
+  const after = await counts();
+  ok(after.chips.All === before.chips.All - 1 && after.chips.All === after.items && after.chips.Tasks === before.chips.Tasks - 1, `All went from ${before.chips.All} to ${after.chips.All} (${after.items} items), Tasks from ${before.chips.Tasks} to ${after.chips.Tasks}`);
+});
 test("Status picker sets Waiting with a check-back date", async (p) => {
   await signIn(p); await tab(p, "Tasks");
   const id = await p.$eval(".trow", r => r.dataset.tid);
