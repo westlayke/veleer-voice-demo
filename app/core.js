@@ -111,7 +111,7 @@ const ACTIONS = {
   plan: { title: "Add planned ask", saved: "Planned ask saved", saveLabel: "Save planned ask",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true }, { k: "campaign", label: "Campaign", type: "select", opts: (d) => campaignsFor(d.fund), req: true },
+      { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true }, { k: "campaign", label: "Campaign", type: "select", opts: (d) => { const c = campaignsFor(d.fund); return c.length > 1 ? ["", ...c] : c; }, req: true },
       { k: "plannedDate", label: "Planned ask date", type: "date", req: true }, { k: "amount", label: "Amount", type: "money", req: true },
       { k: "askType", label: "Ask type", type: "select", opts: ["Outright", "Pledge", "Planned gift"] },
       { k: "officer", label: "Gift officer", fixed: true }, { k: "participants", label: "Participants in the ask" } ],

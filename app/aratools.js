@@ -113,7 +113,7 @@ const TOOL_HANDLERS = {
     toolReply(callId, { ok: true }, false);
     G.status = "Ending…"; paintCall();
     const waitEnd = Date.now() + 8000;
-    const tick = () => { if (!G.live) return; const playing = G.ctx && G.playHead > G.ctx.currentTime; if (playing && Date.now() < waitEnd) setTimeout(tick, 300); else { endCall(); toast("Conversation ended. Tap the mic any time to carry on."); } };
+    const tick = () => { if (!G.live) return; const playing = G.ctx && G.playHead > G.ctx.currentTime; if (playing && Date.now() < waitEnd) setTimeout(tick, 300); else { endCall("Ara said goodbye"); toast("Conversation ended. Tap the mic any time to carry on."); } };
     setTimeout(tick, 1200); return;
   },
   call_contact(callId, data, name) {
