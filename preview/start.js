@@ -29,9 +29,21 @@ const spookyOn = () => spookySeason() && !S.settings.noSpooky;
 const calmMotion = () => !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 // spooky mode ("spooky mode" to the assistant, or Settings): night look, haunted-house host, spooky sounds on big moments, more visitors; ends by itself on Nov 1
 const spookyMode = () => spookySeason() && !!S.settings.spooky;
-function applySpooky() { document.documentElement.classList.toggle("spooky", spookyMode()); }
+/* ---------- Christmas (December; on the preview any time, to try it): snow, gifts, elves and reindeer come by; Christmas mode adds Santa's sleigh, a tree,
+   an evergreen look with a wreath and a nativity scene on Home, Ara as a warm Christmas host, sleigh bells and Santa's "ho ho ho"; ends by itself on Jan 1 ---------- */
+const ON_PREVIEW = VERSION_FILE === "preview-version.json";
+const xmasSeason = () => new Date().getMonth() === 11;
+const xmasAllowed = () => xmasSeason() || ON_PREVIEW;
+const xmasMode = () => xmasAllowed() && !!S.settings.xmas;
+const xmasOn = () => xmasMode() || (xmasSeason() && !S.settings.noXmas); // Christmas visitors
+const themeOn = () => xmasOn() || spookyOn(), themeMode = () => xmasMode() || spookyMode();
+function applySpooky() { document.documentElement.classList.toggle("spooky", spookyMode()); document.documentElement.classList.toggle("xmas", xmasMode()); }
+function setXmas(on) { // only one theme mode at a time
+  if (on) { S.settings.xmas = true; delete S.settings.noXmas; delete S.settings.spooky; } else delete S.settings.xmas;
+  save(); applySpooky(); render(); act("step", "Christmas mode " + (on ? "on" : "off")); spookyKick();
+}
 function setSpooky(on) {
-  if (on) { S.settings.spooky = true; delete S.settings.noSpooky; } else delete S.settings.spooky;
+  if (on) { S.settings.spooky = true; delete S.settings.noSpooky; delete S.settings.xmas; } else delete S.settings.spooky;
   save(); applySpooky(); render(); act("step", "spooky mode " + (on ? "on" : "off")); spookyKick();
 }
 // spooky sounds, made by the phone (no sound files): quiet, only after the first tap, never during a conversation with Ara
@@ -83,6 +95,31 @@ function spookySound(kind, retried) {
     g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(1, t0 + 0.08); g.gain.setValueAtTime(0.6, t0 + 0.5); g.gain.exponentialRampToValueAtTime(0.9, t0 + 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.4);
     n.connect(lp); lp.connect(g); g.connect(out); n.start(t0);
     hp.type = "highpass"; hp.frequency.value = 1800; env(kg, t0, 0.9, 0.25); k.connect(hp); hp.connect(kg); kg.connect(out); k.start(t0);
+  } else if (kind === "bells" || kind === "reindeer" || kind === "sleigh") { // sleigh bells: bright jingles in a trotting rhythm (reindeer: with soft hoof clops; sleigh: then Santa's "ho ho ho")
+    const n = kind === "bells" ? 10 : 14;
+    for (let i = 0; i < n; i++) { const at = t0 + i * 0.13 + (i % 2) * 0.03 + Math.random() * 0.02;
+      for (let k = 0; k < 3; k++) { const o = c.createOscillator(), g = c.createGain(); o.type = "sine"; o.frequency.value = 2600 + Math.random() * 2600; env(g, at + k * 0.012, 0.22, 0.16); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.2); }
+      const nz = noise(0.05), hp = c.createBiquadFilter(), ng = c.createGain(); hp.type = "highpass"; hp.frequency.value = 6000; env(ng, at, 0.25, 0.05); nz.connect(hp); hp.connect(ng); ng.connect(out); nz.start(at);
+      if (kind === "reindeer" && i % 2 === 0) { const cl = noise(0.04), bp = c.createBiquadFilter(), cg = c.createGain(); bp.type = "bandpass"; bp.frequency.value = 700; bp.Q.value = 3; env(cg, at, 0.9, 0.05); cl.connect(bp); bp.connect(cg); cg.connect(out); cl.start(at); } }
+    if (kind === "sleigh") setTimeout(() => spookySound("hohoho", true), 1500);
+  } else if (kind === "hohoho") { // Santa's "ho, ho, hooo": a deep voice shaped into an "oh" (two vowel resonances), each with a breathy "h"
+    [[0, 0.32], [0.42, 0.32], [0.84, 0.75]].forEach(([dt, len]) => { const at = t0 + dt;
+      const h = noise(0.08), hf = c.createBiquadFilter(), hg = c.createGain(); hf.type = "bandpass"; hf.frequency.value = 1100; hf.Q.value = 1; env(hg, at, 0.35, 0.08); h.connect(hf); hf.connect(hg); hg.connect(out); h.start(at);
+      const o = c.createOscillator(), vib = c.createOscillator(), vd = c.createGain(), g = c.createGain(); o.type = "sawtooth";
+      o.frequency.setValueAtTime(150, at + 0.05); o.frequency.linearRampToValueAtTime(118, at + len); vib.frequency.value = 5; vd.gain.value = 3; vib.connect(vd); vd.connect(o.frequency);
+      [[480, 6, 1], [820, 7, 0.7], [2600, 8, 0.12]].forEach(([f, q, v]) => { const bp = c.createBiquadFilter(), bv = c.createGain(); bp.type = "bandpass"; bp.frequency.value = f; bp.Q.value = q; bv.gain.value = v * 3; o.connect(bp); bp.connect(bv); bv.connect(g); });
+      env(g, at + 0.05, 0.9, len); g.connect(out); o.start(at + 0.05); vib.start(at + 0.05); o.stop(at + len + 0.1); vib.stop(at + len + 0.1); });
+  } else if (kind === "chime" || kind === "carol" || kind === "twinkle") { // bell tones: a two-note chime (Save, gifts), the opening of "Joy to the World" (Closed Won, then "ho ho ho"), or a soft twinkle (snow, the tree)
+    const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+    const notes = kind === "chime" ? [[0, 88, 1.2], [0.16, 93, 1.6]] : kind === "carol" ? [[0, 84, 0.7], [0.45, 83, 0.5], [0.75, 81, 0.4], [0.9, 79, 0.9], [1.5, 77, 0.4], [1.7, 76, 0.6], [2.1, 74, 0.6], [2.5, 72, 1.4]]
+      : Array.from({ length: 6 }, (_, i) => [i * 0.22 + Math.random() * 0.08, 96 + Math.floor(Math.random() * 8), 0.6]);
+    notes.forEach(([dt, m, len]) => { const at = t0 + dt; [[1, 1], [2.76, 0.35], [5.4, 0.12]].forEach(([mult, vol]) => { const o = c.createOscillator(), g = c.createGain();
+      o.type = "sine"; o.frequency.value = hz(m) * mult; g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime((kind === "twinkle" ? 0.25 : 0.6) * vol, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + len / mult + 0.1);
+      o.connect(g); g.connect(out); o.start(at); o.stop(at + len + 0.2); }); });
+    if (kind === "carol") setTimeout(() => spookySound("hohoho", true), 3300);
+  } else if (kind === "giggle") { // an elf's quick, high "hee-hee-hee"
+    for (let i = 0; i < 5; i++) { const at = t0 + 0.4 + i * 0.12, o = c.createOscillator(), g = c.createGain(), p = 1100 + i * 90;
+      o.type = "triangle"; o.frequency.setValueAtTime(p, at); o.frequency.linearRampToValueAtTime(p * 1.25, at + 0.08); env(g, at, 0.5, 0.1); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.12); }
   } else if (kind === "cackle") { // a witch's "ha-ha-ha-ha", falling
     for (let i = 0; i < 7; i++) { const at = t0 + i * 0.15, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(), p = 900 - i * 60;
       o.type = "sawtooth"; o.frequency.setValueAtTime(p * 1.15, at); o.frequency.linearRampToValueAtTime(p, at + 0.1);
@@ -98,8 +135,10 @@ function spookySound(kind, retried) {
   }
   spkPlayed++; return true;
 }
+const XMAS_SOUND = { snow: "twinkle", gift: "chime", elf: "giggle", reindeer: "reindeer", sleigh: "sleigh", tree: "twinkle" };
 function spookyOnce(kind) {
-  const kinds = spookyMode() ? ["spider", "pumpkin", "ghost", "bat", "owl"] : ["spider", "pumpkin", "ghost"];
+  const kinds = xmasOn() ? (xmasMode() ? ["snow", "gift", "elf", "reindeer", "sleigh", "tree"] : ["snow", "gift", "elf", "reindeer"])
+    : spookyMode() ? ["spider", "pumpkin", "ghost", "bat", "owl"] : ["spider", "pumpkin", "ghost"];
   kind = kind || kinds[Math.floor(Math.random() * kinds.length)];
   const el = document.createElement("div"); el.className = "spk spk-" + kind; el.setAttribute("aria-hidden", "true");
   const w = window.innerWidth, h = window.innerHeight, done = () => el.remove();
@@ -117,41 +156,63 @@ function spookyOnce(kind) {
     el.textContent = "🦉"; const fromLeft = Math.random() < 0.5, perchX = Math.round(w * (0.25 + Math.random() * 0.5)), y = Math.round(80 + Math.random() * h * 0.15);
     el.style.top = y + "px"; const a = fromLeft ? -70 : w + 20, b = fromLeft ? w + 20 : -70;
     el.animate([{ transform: `translate(${a}px, -60px)` }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.2 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.4 }, { transform: `translate(${perchX}px, 0) scaleY(0.85)`, offset: 0.43 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.46 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.75 }, { transform: `translate(${b}px, -50px)` }], { duration: 7000, easing: "ease-in-out" }).onfinish = done;
+  } else if (kind === "snow") { // a flurry of snowflakes drifting down
+    el.style.cssText = "left:0;top:0;width:100%;height:100%"; const calm = calmMotion();
+    for (let i = 0; i < 16; i++) { const f = document.createElement("i"), x = Math.round(Math.random() * (w - 24)), sz = 14 + Math.round(Math.random() * 14), dur = 6000 + Math.random() * 3000;
+      f.textContent = "❄️"; f.style.cssText = `left:${x}px;top:${calm ? Math.round(Math.random() * h * 0.7) : -40}px;font-size:${sz}px`; el.appendChild(f);
+      f.animate([{ transform: "translate(0, 0)" }, { transform: `translate(${Math.round(Math.random() * 60 - 30)}px, ${Math.round(h * 0.5)}px)` }, { transform: `translate(${Math.round(Math.random() * 60 - 30)}px, ${h + 60}px)` }], { duration: dur, delay: Math.random() * 1500 }); }
+    setTimeout(done, 10600);
+  } else if (kind === "gift") { // a wrapped present slides along the bottom with a little hop
+    el.textContent = "🎁";
+    el.animate([{ transform: `translate(${w + 20}px, 0)` }, { transform: `translate(${w * 0.6}px, -26px)`, offset: 0.3 }, { transform: `translate(${w * 0.45}px, 0)`, offset: 0.4 }, { transform: "translate(-70px, 0)" }], { duration: 6000, easing: "linear" }).onfinish = done;
+  } else if (kind === "elf") { // an elf peeks in from the side, waves, and ducks back out
+    el.innerHTML = "🧝<i>👋</i>"; el.style.top = Math.round(h * (0.3 + Math.random() * 0.3)) + "px";
+    el.animate([{ transform: "translateX(-90px)" }, { transform: "translateX(6px)", offset: 0.2 }, { transform: "translateX(6px) rotate(-6deg)", offset: 0.45 }, { transform: "translateX(6px) rotate(6deg)", offset: 0.65 }, { transform: "translateX(6px)", offset: 0.8 }, { transform: "translateX(-90px)" }], { duration: 5000, easing: "ease-in-out" }).onfinish = done;
+  } else if (kind === "reindeer") { // a reindeer trots along, bobbing
+    el.textContent = "🦌";
+    el.animate(Array.from({ length: 13 }, (_, i) => ({ transform: `translate(${w + 20 - (w + 100) * i / 12}px, ${i % 2 ? -14 : 0}px)` })), { duration: 6000, easing: "linear" }).onfinish = done;
+  } else if (kind === "sleigh") { // Santa's sleigh and reindeer fly across the top in an arc
+    el.innerHTML = "🦌🦌🛷<i>🎅</i>"; el.style.top = Math.round(70 + Math.random() * h * 0.12) + "px";
+    el.animate([{ transform: `translate(${w + 20}px, 40px)` }, { transform: `translate(${w * 0.5}px, -10px)`, offset: 0.5 }, { transform: "translate(-260px, 30px)" }], { duration: 6500, easing: "linear" }).onfinish = done;
+  } else if (kind === "tree") { // a Christmas tree appears in a corner and twinkles
+    el.innerHTML = "🎄<i>✨</i>"; el.style.left = (Math.random() < 0.5 ? 12 : w - 76) + "px";
+    el.animate([{ opacity: 0, transform: "scale(.6)" }, { opacity: 1, transform: "scale(1)", offset: 0.15 }, { opacity: 1, transform: "scale(1.05)", offset: 0.5 }, { opacity: 1, transform: "scale(1)", offset: 0.85 }, { opacity: 0, transform: "scale(.9)" }], { duration: 6000, easing: "ease-in-out" }).onfinish = done;
   } else { // floats across, bobbing
     el.textContent = "👻"; el.style.top = Math.round(h * (0.18 + Math.random() * 0.4)) + "px";
     el.animate([{ transform: "translate(-70px, 0)", opacity: 0 }, { transform: `translate(${w * 0.25}px, -18px)`, opacity: 0.9, offset: 0.25 }, { transform: `translate(${w * 0.5}px, 14px)`, offset: 0.5 }, { transform: `translate(${w * 0.75}px, -14px)`, opacity: 0.9, offset: 0.75 }, { transform: `translate(${w + 20}px, 0)`, opacity: 0 }], { duration: 9000, easing: "linear" }).onfinish = done;
   }
   document.body.appendChild(el);
-  if (calmMotion()) { el.getAnimations().forEach(a => a.cancel()); el.classList.add("spk-calm");
-    el.style.transform = `translate(${Math.round(w * (0.15 + Math.random() * 0.6))}px, ${kind === "spider" ? Math.round(h * 0.3) : 0}px)`;
+  if (calmMotion()) { el.getAnimations({ subtree: true }).forEach(a => a.cancel()); el.classList.add("spk-calm");
+    if (kind !== "snow") el.style.transform = `translate(${Math.round(w * (0.15 + Math.random() * 0.6))}px, ${kind === "spider" ? Math.round(h * 0.3) : 0}px)`;
     el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: 4500 }).onfinish = done; }
-  spookySound(kind); return el;
+  spookySound(XMAS_SOUND[kind] || kind); return el;
 }
 // a visitor every 40 to 90 seconds; in spooky mode every 15 to 20
 let spkLoopT = null;
-function spookyLoop(first) { clearTimeout(spkLoopT); spkLoopT = setTimeout(() => { if (spookyOn() && document.visibilityState === "visible") spookyOnce(); spookyLoop(false); }, first ? (spookyMode() ? 3000 : 8000) : spookyMode() ? 15000 + Math.random() * 5000 : 40000 + Math.random() * 50000); }
+function spookyLoop(first) { clearTimeout(spkLoopT); spkLoopT = setTimeout(() => { if (themeOn() && document.visibilityState === "visible") spookyOnce(); spookyLoop(false); }, first ? (themeMode() ? 3000 : 8000) : themeMode() ? 15000 + Math.random() * 5000 : 40000 + Math.random() * 50000); }
 const spookyKick = () => spookyLoop(true);
 spookyLoop(true); applySpooky();
 // In October phones only play sounds after a tap, so on every load that hasn't had a tap yet a big owl invites one ("Tap me to hear me hoot!"); the first tap anywhere sets him hooting and he flies off. A brand-new phone's welcome tap already turns sound on, so he still shows once after it.
 function owlHint(tries = 0) {
-  if (!spookyOn() || (spkCtx && S.settings.seenOwlHint) || document.querySelector(".owlhint")) return; // sound already on and he's been seen
+  if (!themeOn() || (spkCtx && S.settings.seenOwlHint) || document.querySelector(".owlhint")) return; // sound already on and he's been seen
   if (G.live || V || document.getElementById("modal").innerHTML.trim() || document.visibilityState !== "visible") { if (tries < 60) setTimeout(() => owlHint(tries + 1), 1000); return; } // wait for the welcome or a form to close
-  const el = document.createElement("div"); el.className = "owlhint"; el.setAttribute("role", "button"); el.setAttribute("aria-label", "Tap to turn on the Halloween sounds");
-  el.innerHTML = '<span class="owlhint-bubble">Tap me to hear me hoot!</span><span class="owlhint-owl" aria-hidden="true">🦉</span>';
+  const x = xmasOn(), el = document.createElement("div"); el.className = "owlhint"; el.setAttribute("role", "button"); el.setAttribute("aria-label", `Tap to turn on the ${x ? "Christmas" : "Halloween"} sounds`); // at Christmas, Santa asks
+  el.innerHTML = `<span class="owlhint-bubble">${x ? "Tap me to hear me ho ho ho!" : "Tap me to hear me hoot!"}</span><span class="owlhint-owl" aria-hidden="true">${x ? "🎅" : "🦉"}</span>`;
   document.body.appendChild(el);
   el.animate([{ transform: "translateX(140%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 900, easing: "cubic-bezier(.2,.8,.3,1.1)" });
   const go = (e) => { ["touchend", "click"].forEach(ev => document.removeEventListener(ev, go, true));
-    S.settings.seenOwlHint = true; save(); spookySound("hoot");
-    el.querySelector(".owlhint-bubble").textContent = "Hoo hoo! Sounds are on.";
+    S.settings.seenOwlHint = true; save(); spookySound(x ? "hohoho" : "hoot");
+    el.querySelector(".owlhint-bubble").textContent = x ? "Ho ho ho! Sounds are on." : "Hoo hoo! Sounds are on.";
     if (e && el.contains(e.target)) { e.preventDefault(); e.stopPropagation(); } // tapping the owl does nothing else
     setTimeout(() => el.animate([{ transform: "none", opacity: 1 }, { transform: "translate(-60vw, -70vh) scale(.6)", opacity: 0 }], { duration: 1400, easing: "ease-in" }).onfinish = () => el.remove(), 1600); };
   ["touchend", "click"].forEach(ev => document.addEventListener(ev, go, true));
 }
 setTimeout(owlHint, 1500);
 // spooky mode's big moments: a creaking door as a form opens, thunder on Save, the organ sting and a cackle on Closed Won
-function spookyCue(kind) { if (spookyMode()) spookySound(kind); }
+// Christmas mode's: sleigh bells as a form opens, a chime on Save, "Joy to the World" then "ho ho ho" on Closed Won
+function spookyCue(kind) { if (spookyMode()) spookySound(kind); else if (xmasMode()) spookySound({ creak: "bells", thunder: "chime", won: "carol" }[kind] || kind); }
 render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
 function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app" + (calmMotion() ? " (Reduce Motion is on)" : "")); }
 logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
-window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, setSpooky, owlHint, get spkPlayed() { return spkPlayed; } };
+window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, setSpooky, setXmas, owlHint, get spkPlayed() { return spkPlayed; } };

@@ -114,6 +114,62 @@ test("Spooky mode: Ara greets as the haunted-house host from her first words, an
   const hi2 = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" "), n2);
   ok(/Hi Sam, I'm/.test(hi2) && !/haunted/.test(hi2), "the normal greeting changed");
 });
+test("Christmas mode (preview any time, December in the app): look, wreath, nativity, Ara as a Christmas host, one theme at a time", async (p) => {
+  await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300);
+  if (!(await p.evaluate(() => xmasAllowed()))) return; // the live app only has Christmas in December
+  const n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => startCall()); await p.waitForTimeout(600);
+  const on = await ara(p, "set_christmas_mode", { on: true });
+  ok(on.ok && on.christmas, "Ara couldn't turn Christmas mode on");
+  await p.tap("nav >> text=Home").catch(() => {}); await p.waitForTimeout(300);
+  const look = await p.evaluate(() => ({ cls: document.documentElement.classList.contains("xmas"), spooky: document.documentElement.classList.contains("spooky"), wreath: !!document.querySelector(".top .wreath"), nat: !!document.querySelector("main .nativity") }));
+  ok(look.cls && !look.spooky, "the Christmas look didn't replace the others");
+  ok(look.wreath && look.nat, "no wreath by the logo or no nativity scene on Home");
+  const upd = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.instructions).at(-1), n);
+  ok(upd && /CHRISTMAS MODE IS ON/.test(upd.session.instructions) && !/SPOOKY MODE IS ON/.test(upd.session.instructions), "Ara wasn't given the Christmas rules");
+  const again = await ara(p, "set_christmas_mode", { on: true });
+  ok(again.already, "asking for Christmas mode again made Ara announce it a second time");
+  ok(/Welcome back, and Merry Christmas/.test(await p.evaluate(() => resumeLine({ lines: [], draft: "" }))), "Carry on's welcome back wasn't Christmassy");
+  await p.tap(".cb-end").catch(() => {});
+  const n2 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => startCall()); await p.waitForTimeout(600);
+  const hi = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" "), n2);
+  ok(/Merry Christmas, and welcome to the Christmas CRM/.test(hi), "Ara's greeting wasn't Christmassy");
+  if (await p.evaluate(() => spookySeason())) { await ara(p, "set_spooky_mode", { on: true });
+    ok(await p.evaluate(() => spookyMode() && !xmasMode()), "spooky mode and Christmas mode were on together"); await ara(p, "set_spooky_mode", { on: false }); }
+  await p.tap(".cb-end").catch(() => {});
+  await p.evaluate(() => window.__demo.setXmas(false));
+  ok(!(await p.evaluate(() => document.documentElement.classList.contains("xmas") || !!document.querySelector(".nativity"))), "the Christmas look stayed after normal mode");
+});
+test("Christmas mode: visitors and sounds (sleigh bells, ho ho ho, chime, carol), Santa asks for a tap, Settings switch", async (p) => {
+  await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300);
+  if (!(await p.evaluate(() => xmasAllowed()))) return;
+  await p.evaluate(() => window.__demo.setXmas(true));
+  await p.tap("nav >> text=Home").catch(() => {}); await p.waitForTimeout(200);
+  await p.evaluate(() => { spkCtx = null; delete window.__demo.state.settings.seenOwlHint; document.getElementById("modal").innerHTML = ""; window.__demo.owlHint(); });
+  await p.waitForTimeout(1000);
+  ok(await p.isVisible(".owlhint >> text=Tap me to hear me ho ho ho!"), "Santa didn't ask for a tap");
+  ok((await p.textContent(".owlhint-owl")).includes("🎅"), "it wasn't Santa");
+  const n = await p.evaluate(() => window.__demo.spkPlayed);
+  await p.tap(".owlhint-owl"); await p.waitForTimeout(500);
+  ok(await p.isVisible(".owlhint >> text=Ho ho ho! Sounds are on."), "Santa didn't say the sounds are on");
+  ok(await p.evaluate((n) => window.__demo.spkPlayed > n, n), "Santa didn't ho ho ho");
+  await p.waitForTimeout(3300);
+  const kinds = ["snow", "gift", "elf", "reindeer", "sleigh", "tree"];
+  const made = await p.evaluate((kinds) => kinds.map(k => { const before = window.__demo.spkPlayed, el = window.__demo.spookyOnce(k); return { k, el: !!el && el.isConnected, sound: window.__demo.spkPlayed > before }; }), kinds);
+  made.forEach(m => ok(m.el && m.sound, `the ${m.k} visitor didn't appear with its sound`));
+  const sounds = await p.evaluate(() => ["bells", "hohoho", "chime", "carol", "giggle", "twinkle"].map(k => spookySound(k)));
+  ok(sounds.every(Boolean), "a Christmas sound didn't play");
+  const cue = await p.evaluate(() => { const n = window.__demo.spkPlayed; openForm("contact"); return window.__demo.spkPlayed - n; });
+  ok(cue === 1, "no sleigh bells when a form opened in Christmas mode");
+  await p.evaluate(() => { V = null; renderOverlay(); });
+  const won = await p.evaluate(() => { const n = window.__demo.spkPlayed; celebrate(); const party = document.querySelector(".party"); return { played: window.__demo.spkPlayed - n, gifts: party.querySelectorAll(".bat").length, balloons: party.querySelectorAll(".bl").length, sleigh: !!document.querySelector(".spk-sleigh") }; });
+  ok(won.played >= 1 && won.gifts === 9 && !won.balloons && won.sleigh, "Closed Won wasn't celebrated with gifts, the sleigh and a carol");
+  await p.tap("header .setbtn"); await p.waitForTimeout(300);
+  ok(await p.isChecked("#xmasMode"), "Settings didn't show Christmas mode as on");
+  await p.uncheck("#xmasMode"); await p.waitForTimeout(300);
+  ok(!(await p.evaluate(() => xmasMode())), "Settings couldn't turn Christmas mode off");
+});
 test("Spooky mode: a creak when a form opens, thunder on Save, bats and a cackle on Closed Won, visitors more often", async (p) => {
   if (new Date().getMonth() !== 9) return;
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Contacts"); await p.waitForTimeout(300);

@@ -369,3 +369,29 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 .owlhint-bubble::after { content: ""; position: absolute; right: -9px; bottom: 12px; border: 8px solid transparent; border-left-color: var(--brand); border-right: 0; }
 @keyframes owlbob { 50% { transform: translateY(-6px) rotate(-4deg); } }
 @media (prefers-reduced-motion: reduce) { .owlhint-owl { animation: none; } }
+/* Christmas mode: an evergreen night with red and gold, snow along the header, pine trees in the top corners, a wreath by the logo, a still nativity scene on Home (labels unchanged) */
+:root.xmas {
+  --bg: #0c1d15; --surface: #13281e; --surface2: #1a3327; --line: #2b4a3a; --line-strong: #557c68; --fg: #f5f1e6; --muted: #bccbbf;
+  --brand: #c62f3b; --brand-soft: #3a1418; --brand-line: #8c2a31; --brand-ink: #ffb9bd; --bar: #10251a;
+  --ok: #8fdb9f; --ok-soft: #173020; --warn: #e8c15a; --warn-soft: #332a10; --warn-line: #a8862a; --bad: #ff7b81;
+  --pv: #e8c15a; --pv-soft: #2f2a12; --pv-line: #8a7426; --sl: #cfd8d0; --sl-soft: #1f2e26; --sl-line: #46604f;
+  --scrim: rgba(0,0,0,.65); --shadow: 0 6px 24px rgba(0,0,0,.55); color-scheme: dark; }
+:root.xmas body { background: radial-gradient(ellipse at 50% -10%, #1f4a33 0%, var(--bg) 55%) fixed var(--bg); }
+:root.xmas .app { background: transparent; }
+:root.xmas .top { border-bottom-color: #2f5a42; }
+:root.xmas .top::after { content: ""; position: absolute; left: 0; right: 0; bottom: -5px; height: 8px; pointer-events: none; opacity: .9;
+  background: radial-gradient(circle at 5px 2px, #fff 2.4px, transparent 3px) repeat-x 0 0 / 13px 8px, radial-gradient(circle at 3px 4px, #e9f1ff 1.6px, transparent 2.2px) repeat-x 7px 0 / 17px 8px; }
+:root.xmas .app::before, :root.xmas .app::after { content: "🌲"; position: fixed; top: calc(env(safe-area-inset-top, 0px) + 60px); font-size: 34px; line-height: 1; z-index: 19; pointer-events: none; opacity: .55; }
+:root.xmas .app::before { left: max(4px, calc(50% - 216px)); }
+:root.xmas .app::after { right: max(4px, calc(50% - 216px)); }
+.wreath { position: absolute; left: calc(50% + 48px); top: 50%; transform: translateY(-50%); line-height: 0; pointer-events: none; filter: drop-shadow(0 0 4px rgba(255,220,120,.35)); }
+.nativity { margin: 0 0 12px; padding: 10px 12px 8px; border-radius: 14px; border: 1px solid #5c4a1e; background: linear-gradient(#0a1530, #13281e 85%); text-align: center; animation: natin 1.6s ease-out both; }
+.nativity svg { display: block; max-width: 360px; margin: 0 auto; }
+.nat-cap { margin-top: 4px; font-weight: 700; font-size: 15px; letter-spacing: .04em; color: #ffe27a; }
+@keyframes natin { from { opacity: 0; } to { opacity: 1; } }
+.spk-gift, .spk-reindeer { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+.spk-snow i { position: absolute; font-style: normal; line-height: 1; opacity: .9; }
+.spk-elf { font-size: 46px; } .spk-elf i { font-style: normal; font-size: 26px; vertical-align: top; }
+.spk-sleigh { font-size: 34px; white-space: nowrap; } .spk-sleigh i { font-style: normal; display: inline-block; margin-left: -18px; transform: translateY(-8px); }
+.spk-tree { bottom: calc(90px + env(safe-area-inset-bottom, 0px)); font-size: 58px; } .spk-tree i { font-style: normal; position: absolute; top: -6px; right: -8px; font-size: 22px; animation: twk 1s infinite alternate; }
+@keyframes twk { from { opacity: .3; } to { opacity: 1; } }
