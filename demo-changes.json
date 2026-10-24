@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "More tidying with nothing changing on screen: each of Ara's lookup and app tools now has its own small function instead of one long one, eight old unused files were removed, and the logo image went from 52 KB to 9 KB.",
+   "area": "Maintenance"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "Repeated code was removed: 36 copies of the same snippets (form fields, the capacity rating list, opportunity amounts and buttons, help popup close buttons and more) now come from 12 shared pieces. Nothing on screen changes; a fix in one place now applies everywhere.",
    "area": "Maintenance"
   },

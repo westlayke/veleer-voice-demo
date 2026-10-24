@@ -630,13 +630,9 @@ function toolReply(callId, out, speak = true) {
   send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(out) } });
   if (speak) whenIdle("create");
 }
-function onTool(callId, name, args) {
-  busy();
-  if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
-  let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
-  act("step", name + " " + JSON.stringify(data));
-  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command. Follow the app notice." }); return; }
-  if (name === "set_user_name") {
+// Ara's lookup and app tools: one function each (the draft tools share draftTool below)
+const TOOL_HANDLERS = {
+  set_user_name(callId, data, name) {
     const v = String(data.first_name || "").trim().split(/\s+/)[0].replace(/\s+/g, " ").slice(0, 60);
     if (!v) { toolReply(callId, { ok: false, error: "No name given." }); return; }
     // names are easy to mishear (Matt came through as "Eve"): read it back, spelled, and save only once they say yes
@@ -646,8 +642,8 @@ function onTool(callId, name, args) {
     const wasAsking = !!document.getElementById("wlName"); // the name screen was open
     S.settings.userName = v; S.settings.seenPrivacy = true; S.settings.seenFormLog = true; S.seenWelcome = true; if (wasAsking) S.screen = "home"; save(); applyName(); welcomeModal(); render(); if (wasAsking) window.scrollTo(0, 0); whenIdle("instr");
     toolReply(callId, { ok: true, status: `Saved. You already introduced yourself, so don't say your name or role again. If they haven't asked for anything yet, say exactly: "Nice to meet you, ${v}. What would you like to do?" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Thanks, ${v}" and carry on with it.` }); return;
-  }
-  if (name === "set_capacity_rating") {
+  },
+  set_capacity_rating(callId, data, name) {
     const r = normCap(data.rating);
     // a contact still being added: the rating goes on the open New contact form and saves with it
     if (V && V.action === "contact") { const nm = norm(data.contact_name || ""), d = readDraft();
@@ -671,8 +667,8 @@ function onTool(callId, name, args) {
     c.capacity = r; log(`Capacity rated ${r} (${CAPACITY[r]})`, { contactId: c.id }); save(); render(); toast(`${nameOf(c)}: capacity ${r} · ${CAPACITY[r]}`);
     const g = resolveTarget("opportunity", nameOf(c));
     toolReply(callId, { ok: true, saved: true, say: `Confirm in one short sentence that it's saved.${!g.error ? " They can now have an opportunity: offer to create one if the officer was trying to." : ""}` }); return;
-  }
-  if (name === "set_task_status") {
+  },
+  set_task_status(callId, data, name) {
     const words = (data.task || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 2 && !["the", "and", "for", "task", "with", "about"].includes(w));
     const who = data.contact_name ? resolveTarget("interaction", data.contact_name) : null;
     let pool = S.tasks.filter(t => !who || who.error || t.contactId === who.contact.id);
@@ -689,21 +685,25 @@ function onTool(callId, name, args) {
     const undo = setTaskStatus(t, st, until); go("tasks"); toast(`${change}: ${t.text}`, undo);
     const meetingish = /follow|call|meet|visit|lunch|coffee|pledge|ask/i.test(t.text);
     toolReply(callId, { ok: true, saved: true, task: t.text, status: change, say: `Confirm in one short sentence that it's saved${st === "done" && meetingish ? ", then ask whether they'd like to log an interaction for it (for example a call or meeting report)" : ""}.` }); return;
-  }
-  if (name === "save_form") { hfSave(callId, data); return; }
-  if (name === "set_hands_free") { setHandsFree(!!data.on);
-    toolReply(callId, { ok: true, hands_free: G.hands, say: G.hands ? `Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `Say only "Hands-free is off. You'll tap Save yourself again."` }); return; }
-  if (name === "set_speaking_speed") {
+  },
+  save_form(callId, data, name) {
+    hfSave(callId, data); return;
+  },
+  set_hands_free(callId, data, name) {
+    setHandsFree(!!data.on);
+    toolReply(callId, { ok: true, hands_free: G.hands, say: G.hands ? `Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `Say only "Hands-free is off. You'll tap Save yourself again."` }); return;
+  },
+  set_speaking_speed(callId, data, name) {
     const now = talkSpeed(), next = data.change === "normal" ? 1 : SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, SPEEDS.indexOf(nearSpeed(now)) + (data.change === "faster" ? 1 : -1)))];
     S.settings.speed = next; save(); send({ type: "session.update", session: sessionCfg() });
     toolReply(callId, { ok: true, speed: next, status: next === now ? `You're already at the ${data.change === "faster" ? "fastest" : data.change === "slower" ? "slowest" : "normal"} speed. Say so in one short sentence.` : `Saved: you now talk at ${speedName(next)} speed, and it's remembered on this phone (also in Settings). Confirm in one short sentence, then carry on.` }); return;
-  }
-  if (name === "get_process_faq") {
+  },
+  get_process_faq(callId, data, name) {
     const hits = faqLookup(data.question || "");
     toolReply(callId, hits.length ? { ok: true, answers: hits.map(h => ({ topic: h.section, q: h.q, a: h.a })), say: "Answer in one to three spoken sentences from these only, using their exact names. If none of them answers the question, say it isn't covered in this demo and offer to pass it to the demo team." }
       : { ok: true, answers: [], say: "Nothing in the Process FAQ matches. Say it isn't covered in this demo and offer to pass the question to the demo team." }); return;
-  }
-  if (name === "get_demo_changes") {
+  },
+  get_demo_changes(callId, data, name) {
     demoChanges().then(all => {
       if (!all.length) { toolReply(callId, { ok: false, error: "The change list couldn't be loaded. Say you can't look that up right now and offer to pass the question to the demo team." }); return; }
       const words = String(data.topic || "").toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2).map(w => w.replace(/(es|s)$/, ""));
@@ -714,27 +714,27 @@ function onTool(callId, name, args) {
         changes: hits.map(x => ({ date: x.c.date, change: x.c.change })),
         say: hits.length ? "Answer the question from these in one to three sentences, with the date. They are newest first." : "Nothing in the change log matches. Say so and offer to pass the question to the demo team." });
     }); return;
-  }
-  if (name === "pass_question_to_team") {
+  },
+  pass_question_to_team(callId, data, name) {
     const q = String(data.question || "").trim();
     if (!q) { toolReply(callId, { ok: false, error: "No question given. Ask the officer what they'd like to pass on." }); return; }
     act("question", q); logReady().then(on => toolReply(callId, on ? { ok: true, status: "Passed to the demo team. Say so in one short sentence and ask what they'd like to do next." }
       : { ok: false, error: "The question couldn't be sent from this phone. Say so and suggest they tell the person who shared the demo." })); return;
-  }
-  if (name === "close_form") {
+  },
+  close_form(callId, data, name) {
     if (!V) { toolReply(callId, { ok: false, error: "No form is open, so there is nothing to close or clear. Say so in one short sentence." }); return; }
     if (data.change === "clear") { const what = restartForm(); act("step", "close_form clear"); toolReply(callId, { ok: true, status: `Cleared the ${what} form. Ask for the first detail again.` }); }
     else { const what = cancelForm(); act("step", "close_form close"); toolReply(callId, { ok: true, status: `Closed the ${what} form without saving. Say only "Cancelled, nothing was saved. What would you like to do?"` }); }
     return;
-  }
-  if (name === "stop_conversation") {
+  },
+  stop_conversation(callId, data, name) {
     toolReply(callId, { ok: true }, false);
     G.status = "Ending…"; paintCall();
     const waitEnd = Date.now() + 8000;
     const tick = () => { if (!G.live) return; const playing = G.ctx && G.playHead > G.ctx.currentTime; if (playing && Date.now() < waitEnd) setTimeout(tick, 300); else { endCall(); toast("Conversation ended. Tap the mic any time to carry on."); } };
     setTimeout(tick, 1200); return;
-  }
-  if (name === "call_contact") {
+  },
+  call_contact(callId, data, name) {
     const r = resolveTarget("interaction", data.contact_name);
     if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
     const c = r.contact; S.sel.contact = c.id; go("contact");
@@ -743,8 +743,8 @@ function onTool(callId, name, args) {
     if (!c.permCalls) { toolReply(callId, { ok: false, error: `Calls aren't permitted for ${nameOf(c)} (Calls permitted is off on the contact).` }); return; }
     callPromptModal(c); whenIdle("instr");
     toolReply(callId, { ok: true, status: `A Call button for ${nameOf(c)} is on screen. In one short sentence, tell the officer to tap Call, and that you'll help write up the call when they're back. Our conversation ends when the call starts.` }); return;
-  }
-  if (name === "get_contact_details") {
+  },
+  get_contact_details(callId, data, name) {
     const r = resolveTarget("interaction", data.contact_name);
     if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
     const c = r.contact; S.sel.contact = c.id; go("contact"); whenIdle("instr");
@@ -760,8 +760,8 @@ function onTool(callId, name, args) {
       gift_officer: F(OFFICER, "Only the Chief Gift Officer can reassign a contact"),
       added: F(fmtDate(c.added) || "Not known", "The system") },
       say: "Answer only what the officer asked, from these fields. If they ask to change a field, say who can change it; for fields they can change, offer to open Edit contact. Never claim to change a field that says only the system or the Chief Gift Officer can change it." }); return;
-  }
-  if (name === "get_opportunity_details") {
+  },
+  get_opportunity_details(callId, data, name) {
     const r = resolveTarget("interaction", data.contact_name);
     if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
     const c = r.contact, o = openOpp(c.id) || S.opps.filter(x => x.contactId === c.id).slice(-1)[0];
@@ -787,8 +787,8 @@ function onTool(callId, name, args) {
       closed: F(o.stage === "Closed" ? `${o.closed} on ${fmtDate(o.closedOn)}${o.lostReason ? ", reason: " + o.lostReason : ""}` : "Open", SYS),
       deferred: F(o.defer && deferActive(o) ? `Yes: ${o.defer.reason || "no reason given"}${o.defer.until ? ", reconsider on " + fmtDate(o.defer.until) : ""}` : "No", "You, with Defer on Ready for Cultivation") },
       say: "Answer only what the officer asked, from these fields. If they ask you to change a field the system controls (stage, asked amount, recorded asks, pledge, gift, payments, gift officer), don't change it and don't say it changed: say who can change it and offer the proper action instead, e.g. the next action button or recording what happened." }); return;
-  }
-  if (name === "get_giving") {
+  },
+  get_giving(callId, data, name) {
     const r = resolveTarget("interaction", data.contact_name);
     if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
     const c = r.contact, v = givingOf(c); S.sel.contact = c.id; go("contact"); whenIdle("instr");
@@ -796,8 +796,8 @@ function onTool(callId, name, args) {
       last_gift: v.last ? `${money(v.last.amount)} on ${fmtDate(v.last.date)}${v.last.date.slice(0, 4) !== todayISO().slice(0, 4) ? " " + v.last.date.slice(0, 4) : ""} to ${v.last.fund}` : "none",
       open_pledge_balance: v.pledgeLeft ? money(v.pledgeLeft) : "none",
       say: "Say these figures in one or two sentences, e.g. lifetime, then this year, then the last gift and its date. 'This year' means since January 1." }); return;
-  }
-  if (name === "show_list") {
+  },
+  show_list(callId, data, name) {
     const opp = data.list === "opportunities", F = opp ? OPP_F : TASK_F, v = F[data.view] ? data.view : "open";
     if (opp) { S.oFilter = v; S.oppView = S.oppView || "list"; } else S.tFilter = v;
     go(opp ? "board" : "tasks"); whenIdle("instr");
@@ -809,8 +809,8 @@ function onTool(callId, name, args) {
     toolReply(callId, { ok: true, showing: `${opp ? "Opportunities" : "Tasks"}: ${F[v][0]}${q ? ` matching "${q}"` : ""}`, count: shown.length,
       items: shown.slice(0, 8).map(x => opp ? `${x.name} (${x.stage})` : `${x.text} (${taskWhere(x)})`),
       say: `In one short sentence, say the ${F[v][0]} view is on screen and how many there are${shown.length ? "; name up to three if they ask" : ""}.` }); return;
-  }
-  if (name === "get_my_tasks") {
+  },
+  get_my_tasks(callId, data, name) {
     const T = todayISO(), which = data.which || "all";
     const open = S.tasks.filter(t => !t.done).sort((x, y) => (x.due || "9999").localeCompare(y.due || "9999"));
     const pick = open.filter(t => which === "overdue" ? t.due && t.due < T : which === "due_today" ? t.due && t.due <= T : which === "this_week" ? t.due && t.due <= addDays(T, 7) : which === "waiting" ? taskStatus(t) === "waiting" : which === "in_progress" ? taskStatus(t) === "doing" : true);
@@ -818,8 +818,8 @@ function onTool(callId, name, args) {
     toolReply(callId, { ok: true, open_tasks_total: open.length, overdue_total: open.filter(t => t.due && t.due < T).length, showing: which, count: pick.length,
       tasks: pick.map(t => ({ task: t.text, status: TSTAT[taskStatus(t)], for: taskWhere(t), due: t.due ? fmtDate(t.due) + (t.due.slice(0, 4) !== T.slice(0, 4) ? " " + t.due.slice(0, 4) : "") : "no due date", overdue: !!(t.due && t.due < T), due_today: t.due === T })),
       say: pick.length ? "Say how many there are, overdue ones first, then read each task briefly with who it's for and when it's due (say overdue, today, or the day). If there are more than five, read the first five and ask whether to go on. Then ask if they'd like to act on one, for example log the follow-up." : "Say there are no open tasks of that kind." }); return;
-  }
-  if (name === "get_contact_history") {
+  },
+  get_contact_history(callId, data, name) {
     const r = resolveTarget("interaction", data.contact_name);
     if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
     const c = r.contact, T = todayISO(), focus = data.focus || "history_and_tasks"; S.sel.contact = c.id; go("contact"); whenIdle("instr");
@@ -831,8 +831,8 @@ function onTool(callId, name, args) {
       interactions: focus === "tasks" ? undefined : ints.slice(0, 6).map(i => ({ date: fmtDate(i.date) + (i.date && i.date.slice(0, 4) !== T.slice(0, 4) ? " " + i.date.slice(0, 4) : ""), how: i.type, what: i.kind === "ask" ? "ask" : "interaction", substantive: !!i.substantive, outcome: i.outcome || undefined, summary: i.summary || "" })),
       open_tasks: focus === "history" ? undefined : tasks.map(t => ({ task: t.text, on: t.oppId ? "opportunity" : "contact", due: t.due ? fmtDate(t.due) : "no due date", overdue: !!(t.due && t.due < T) })),
       say: `Speak only what was asked. History: newest first, one short sentence each (when, how, and the gist of the summary); if there are more than three, give the latest three and offer the rest. ${focus === "history" ? "" : "Then the open tasks for this contact, overdue first, each with its due date; if none, say there are no open tasks for them."} Never add details that aren't in the records.` }); return;
-  }
-  if (name === "highlight_stage") {
+  },
+  highlight_stage(callId, data, name) {
     const i = flowIndex(data.stage); if (i < 0) { toolReply(callId, { ok: false, error: "Unknown stage." }); return; }
     if (i === 0) { // a new walkthrough: drop the earlier one from the conversation so Grok doesn't carry on from its old words
       const old = (G.tourItems || []).filter(id => !(G.respItems || []).includes(id));
@@ -844,14 +844,14 @@ function onTool(callId, name, args) {
     highlightStage(i); const f = FLOW[i], nx = FLOW[i + 1];
     const facts = `${f.means}${f.move.length ? " To move on: " + f.move.join(" ") : ""}${f.note ? " " + f.note : ""}`;
     toolReply(callId, { ok: true, summary: `${f.stage} is lit up on screen. ${i === 0 ? `First say exactly: "${PROCESS_INTRO}" Then talk` : "Your next words are"} about ${f.stage} only: start with "${f.stage}" and say one or two sentences based on this: ${facts} Say nothing about earlier stages and don't finish or repeat anything you said before. Then ${nx ? `ask "Shall I go on to ${nx.stage}?" and wait for the answer (unless they asked you to go straight through). When they say yes, call highlight_stage for ${nx.stage} before saying anything.` : "ask if they have questions or want to try a step."}` }); return;
-  }
-  if (name === "show_needs_attention") {
+  },
+  show_needs_attention(callId, data, name) {
     const k = { all: "all", overdue: "overdue", opportunities: "opps", tasks: "tasks", contacts: "contacts" }[data.filter] || "all";
     S.naFilter = k; save(); go("home");
     const xs = attentionItems().filter(NA_FILTERS[k][1]);
     toolReply(callId, { ok: true, filter: NA_FILTERS[k][0], count: xs.length, items: xs.slice(0, 8).map(x => x.say), status: xs.length ? "Shown on Home. Read out the first few briefly, most urgent first." : "Shown on Home: nothing in this list right now." }); return;
-  }
-  if (name === "show_screen") {
+  },
+  show_screen(callId, data, name) {
     const map = { home: "home", contacts: "contacts", opportunities: "board", tasks: "tasks", contact_record: "contact", opportunity_record: "opp", how_it_works: "flow" };
     const target = map[data.screen] || "home"; if (target !== "flow") G.tour = false;
     let summary = "Screen shown.";
@@ -866,7 +866,19 @@ function onTool(callId, name, args) {
     if (target === "flow") S.flowBack = "home";
     go(target); G.handled.size && whenIdle("instr");
     toolReply(callId, { ok: true, summary }); return;
-  }
+  },
+};
+function onTool(callId, name, args) {
+  busy();
+  if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
+  let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
+  act("step", name + " " + JSON.stringify(data));
+  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command. Follow the app notice." }); return; }
+  if (Object.hasOwn(TOOL_HANDLERS, name)) { TOOL_HANDLERS[name](callId, data, name); return; }
+  draftTool(callId, name, data);
+}
+// a draft tool: open or update the form on screen with what Ara heard
+function draftTool(callId, name, data) {
   G.tour = false; // the officer moved on to other work; keep it out of the walkthrough that gets dropped
   let tool = TOOLS.find(t => t.name === name && !t.hidden);
   if (!tool) { toolReply(callId, { ok: false, error: "Unknown tool." }); return; }
