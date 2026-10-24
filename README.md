@@ -21,6 +21,15 @@ GitHub shows the repository owner as the author of every commit; the person who 
 
 To list the history with who asked and why: `git log --format='%ad %s%n%(trailers:key=Requested-by,key=Reason,key=Approved-for-live-by)' --date=format:'%Y-%m-%d %H:%M'`
 
+## How it works
+
+A plain-language overview with a diagram, for anyone (not just developers): [How the Citizens VCRM Demo Works](https://claude.ai/artifact/R9ZhVgW5zeRsFo8uoX387s).
+
+- **The app** is a static web page (HTML, CSS, JavaScript, no framework or build step), served by GitHub Pages. All demo data is kept in the phone's `localStorage` under `veleer-voice-demo-v1`, with a `dataVersion` and numbered upgrade steps (`MIGRATIONS` in `core.js`).
+- **Voice** is xAI's Grok realtime API (`wss://api.x.ai/v1/realtime?model=grok-voice-latest`, voice Ara). The app sends Ara's instructions once per call (`grokInstructions` in `voice.js`), a summary of the phone's data, and about 35 tool definitions (`TOOLS`). Ara's tool calls arrive in `onTool`: lookups and app actions are in `TOOL_HANDLERS`, and form tools go through `draftTool`. After a save or a screen change the app sends a short "Right now" note instead of resending the instructions.
+- **The key holder** is the Cloudflare Worker in `worker/token-worker.js` (secrets `XAI_API_KEY`, `DEMO_CODE`, `ADMIN_PASSWORD`). `POST /` checks the page's Origin and the `X-Demo-Code` header, then returns a five-minute xAI client secret. `POST /log` stores activity events in the D1 database `veleer-activity` (table `events`, kept 90 days). `/activity` shows them behind Basic auth. Pushing changes under `worker/` deploys it through `.github/workflows/deploy-worker.yml`.
+- **Nothing secret is in this repository.** The xAI key exists only as a Cloudflare secret. The demo code is built into the page on purpose, so the plain link works.
+
 ## Files
 
 The page itself is short. Its styles and code are in a folder beside it, split by topic and loaded in this order (they share one scope, so a later file can use anything an earlier one defines):
