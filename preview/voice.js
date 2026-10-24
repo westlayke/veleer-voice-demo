@@ -406,6 +406,7 @@ function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall(
 document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
 document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
+  if (typeof spkSession === "function") { clearTimeout(spkSessT); spkSession(false); } // the Halloween sounds hand the audio back before the mic starts
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
   if (!G.keepRecent) { G.recent = []; G.saves = []; } G.keepRecent = false;

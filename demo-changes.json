@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "Fix: Halloween sounds on iPhone. The sounds now play with the silent switch on (only while a sound plays, and never near a conversation), and the sound engine wakes up again after the app has been in the background.",
+   "area": "Fix"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "Halloween sounds: the ghost goes \"wooo\", the spider creaks and scuttles, and the pumpkin thumps as it rolls. The sounds are made by the phone, play quietly only after the first tap and never during a conversation with Ara, and the Halloween switch in Settings turns them off with the visitors.",
    "area": "Look"
   },
