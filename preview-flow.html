@@ -568,26 +568,35 @@ try {
 (() => { const h = location.hash || ""; const c = /[#&]code=([^&]+)/.exec(h);
   delete S.settings.xaiKey; // the key lives only in Cloudflare; forget any key an older version saved on this phone
   try { if (c) S.settings.demoCode = decodeURIComponent(c[1]).trim(); } catch (e) {} })();
-// contacts added by voice before the permission defaults were fixed came out with email and calls off; the guide has them on
-if (!S.permFix1) { S.contacts.forEach(ct => { if (!ct.example && !ct.permEmail && !ct.permCalls) { ct.permEmail = true; ct.permCalls = true; } }); S.permFix1 = true; }
-// phones that started before the example activity existed get it once
-if (!S.seed2) { S.contacts.forEach(ct => { if (ct.example && !ct.email) ct.email = SEED_EMAILS[ct.first + " " + ct.last] || ""; }); seedActivity(S); S.seed2 = true; }
-// example contacts saved before they had mobile numbers get them now
-S.contacts.forEach(ct => { if (ct.example && !ct.mobile) ct.mobile = SEED_MOBILES[ct.first + " " + ct.last] || ""; });
-// earlier versions used funds and campaigns that the guide has since replaced
-(() => { const FIXC = { "Building campaign 2027": "Pennsylvania", "Scholars campaign 2026": "National" };
-  const OLDF = { "C3 - Citizens Alliance": "Citizens Alliance C3", "C4 - Citizens Alliance": "C.A. of America Action C4", "PAC - Citizens Alliance": "C.A. Fed PAC" };
-  const STATE_C4 = { Idaho: "C.A. Idaho C4", "North Dakota": "C.A. North Dakota C4", "New Hampshire": "C.A. New Hampshire C4", Pennsylvania: "C.A. Pennsylvania C4" };
-  const fx = (x) => { if (!x) return; if (x.fund && !FUNDS.includes(x.fund)) x.fund = OLDF[x.fund] || "Citizens Alliance C3";
-    if (x.campaign && !CAMPAIGNS.includes(x.campaign)) x.campaign = FIXC[x.campaign] || "National";
-    if (x.fund && x.campaign && !campaignsFor(x.fund).includes(x.campaign)) x.fund = STATE_C4[x.campaign] || x.fund; }; // Oct 20 entity list: a state campaign goes with that state's entity
-  S.opps.forEach(o => { (o.asks || []).forEach(fx); const a = (o.asks || [])[0]; fx(o); if (a && a.fund) o.fund = a.fund; fx(o.pledge); if (o.pledge && a && a.fund) o.pledge.fund = a.fund; fx(o.gift); });
-  S.contacts.forEach(c => (c.gifts || []).forEach(fx)); })();
-// earlier versions had no giving history
-S.contacts.forEach(c => { if (!c.gifts) c.gifts = c.example ? (SEED_GIFTS[c.first + " " + c.last] || []).map(x => Object.assign({}, x)) : []; });
-// earlier versions used the responses Yes / Counter-offer / Considering / No
-(() => { const ST = { Asked: "Made", Pledged: "Accepted" }, RS = { Yes: "Accepted", "Counter-offer": "Countered", Considering: "Awaiting", No: "Declined" };
-  S.opps.forEach(o => (o.asks || []).forEach(a => { if (ST[a.status]) a.status = ST[a.status]; if (RS[a.response]) a.response = RS[a.response]; })); })();
+// Data on each phone carries a version number. Each step below upgrades saved data by one version, in order;
+// on load only the steps above the phone's version run. Add new steps at the end, never change old ones.
+const MIGRATIONS = [
+  // 1: contacts added by voice before the permission defaults were fixed came out with email and calls off; the guide has them on
+  (S) => { if (!S.permFix1) { S.contacts.forEach(ct => { if (!ct.example && !ct.permEmail && !ct.permCalls) { ct.permEmail = true; ct.permCalls = true; } }); S.permFix1 = true; } },
+  // 2: phones that started before the example activity existed get it once
+  (S) => { if (!S.seed2) { S.contacts.forEach(ct => { if (ct.example && !ct.email) ct.email = SEED_EMAILS[ct.first + " " + ct.last] || ""; }); seedActivity(S); S.seed2 = true; } },
+  // 3: example contacts saved before they had mobile numbers get them now
+  (S) => { S.contacts.forEach(ct => { if (ct.example && !ct.mobile) ct.mobile = SEED_MOBILES[ct.first + " " + ct.last] || ""; }); },
+  // 4: earlier versions used funds and campaigns that the guide has since replaced
+  (S) => { const FIXC = { "Building campaign 2027": "Pennsylvania", "Scholars campaign 2026": "National" };
+    const OLDF = { "C3 - Citizens Alliance": "Citizens Alliance C3", "C4 - Citizens Alliance": "C.A. of America Action C4", "PAC - Citizens Alliance": "C.A. Fed PAC" };
+    const STATE_C4 = { Idaho: "C.A. Idaho C4", "North Dakota": "C.A. North Dakota C4", "New Hampshire": "C.A. New Hampshire C4", Pennsylvania: "C.A. Pennsylvania C4" };
+    const fx = (x) => { if (!x) return; if (x.fund && !FUNDS.includes(x.fund)) x.fund = OLDF[x.fund] || "Citizens Alliance C3";
+      if (x.campaign && !CAMPAIGNS.includes(x.campaign)) x.campaign = FIXC[x.campaign] || "National";
+      if (x.fund && x.campaign && !campaignsFor(x.fund).includes(x.campaign)) x.fund = STATE_C4[x.campaign] || x.fund; }; // Oct 20 entity list: a state campaign goes with that state's entity
+    S.opps.forEach(o => { (o.asks || []).forEach(fx); const a = (o.asks || [])[0]; fx(o); if (a && a.fund) o.fund = a.fund; fx(o.pledge); if (o.pledge && a && a.fund) o.pledge.fund = a.fund; fx(o.gift); });
+    S.contacts.forEach(c => (c.gifts || []).forEach(fx)); },
+  // 5: earlier versions had no giving history
+  (S) => { S.contacts.forEach(c => { if (!c.gifts) c.gifts = c.example ? (SEED_GIFTS[c.first + " " + c.last] || []).map(x => Object.assign({}, x)) : []; }); },
+  // 6: earlier versions used the responses Yes / Counter-offer / Considering / No
+  (S) => { const ST = { Asked: "Made", Pledged: "Accepted" }, RS = { Yes: "Accepted", "Counter-offer": "Countered", Considering: "Awaiting", No: "Declined" };
+    S.opps.forEach(o => (o.asks || []).forEach(a => { if (ST[a.status]) a.status = ST[a.status]; if (RS[a.response]) a.response = RS[a.response]; })); },
+];
+const DATA_VERSION = MIGRATIONS.length;
+// phones saved before versioning have no number and run every step once (each step is safe to repeat)
+(() => { const from = Number.isInteger(S.dataVersion) ? S.dataVersion : 0;
+  for (let i = from; i < DATA_VERSION; i++) { try { MIGRATIONS[i](S); } catch (e) { console.warn("Data upgrade " + (i + 1) + " failed", e); } }
+  S.dataVersion = DATA_VERSION; })();
 if (!S.settings.voicePicked) S.settings.voice = "ara"; // Ara is the default until someone picks a voice in Settings
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
@@ -2907,7 +2916,7 @@ document.addEventListener("change", (e) => { const id = e.target.id;
   else if (id === "speedSel") { S.settings.speed = Number(e.target.value); save(); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(`Saved. ${botName()} will talk at ${speedName(talkSpeed())} speed.`); }
   else if (id === "hintsTgl") { if (e.target.checked) delete S.settings.noHints; else S.settings.noHints = true; save(); toast(e.target.checked ? "Hints are on" : "Hints are off"); } });
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.target.id === "userName" || e.target.id === "botName")) e.target.blur(); });
-function doRestart() { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.settings.deviceId = keep.deviceId; S.settings.demoCode = keep.demoCode || ""; // a restart puts every setting back to its default (voice, assistant name, hints, first name); only the phone ID and code word stay
+function doRestart() { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.permFix1 = true; S.dataVersion = DATA_VERSION; S.settings.deviceId = keep.deviceId; S.settings.demoCode = keep.demoCode || ""; // a restart puts every setting back to its default (voice, assistant name, hints, first name); only the phone ID and code word stay
   save(); render(); welcomeModal(); toast("Demo restarted"); }
 function restartConfirm() {
   const h = document.getElementById("modal");
@@ -2920,7 +2929,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "Oct 23, 10:59 PM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "Oct 23, 11:05 PM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
