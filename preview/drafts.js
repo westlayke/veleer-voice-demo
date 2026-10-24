@@ -101,7 +101,7 @@ function prefill(action, d, t) {
   if (action === "payment") { if (out.amount == null && o.pledge) out.amount = o.pledge.firstAmount; if (!out.date) out.date = todayISO(); }
   if (action === "interaction" || action === "ask") { if (!out.date) out.date = todayISO(); }
   if (action === "opportunity") { out.name = `${c.last}, ${c.first} - ${YEAR}`; out.officer = OFFICER; }
-  if (action === "plan") { out.officer = OFFICER; if (!out.fund && o.fund) out.fund = o.fund; }
+  if (action === "plan") { out.officer = OFFICER; if (!out.fund && o.fund) out.fund = o.fund; if (!out.campaign && o.campaign && out.fund === o.fund) out.campaign = o.campaign; }
   if (action === "ask") { if (out.amount == null && a) out.amount = a.amount; if (!out.fund) out.fund = (a && a.fund) || o.fund || ""; }
   if (action === "pledge") {
     if (!out.fund) out.fund = (a && a.fund) || o.fund || "";
@@ -401,7 +401,7 @@ const APPLY = {
   },
   opportunity(d, t) {
     const c = t.contact;
-    const op = { id: uid(), contactId: c.id, name: `${c.last}, ${c.first} - ${YEAR}`, stage: "Qualification", fund: d.fund || null, potential: d.potential, notes: d.notes, asks: [], pledge: null, created: todayISO() };
+    const op = { id: uid(), contactId: c.id, name: `${c.last}, ${c.first} - ${YEAR}`, stage: "Qualification", fund: d.fund || null, campaign: d.campaign || null, potential: d.potential, notes: d.notes, asks: [], pledge: null, created: todayISO() };
     S.opps.push(op); log("Opportunity created in Qualification", { contactId: c.id, oppId: op.id });
     S.sel.opp = op.id; S.screen = "opp"; return { contact: c, opp: op };
   },

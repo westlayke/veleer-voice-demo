@@ -38,6 +38,28 @@ test("Ara: optional fields one at a time, filled in by the app (rating, how met,
   const c = (await state(p)).contacts.find(c => c.first === "Jack");
   ok(c && c.capacity === "D" && c.permText === true && /pumpkin/.test(c.howMet), "the answers weren't saved with the contact");
 });
+test("Ara: a new opportunity's optional fields understand \"the C-3\" and \"one hundred thousand\", and ask the campaign when there's a choice", async (p) => {
+  await signIn(p);
+  const who = "Noor Haddad";
+  let r = await ara(p, "show_contact_draft", { first: "Noor", last: "Haddad", email: "noor@example.org" });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  await p.evaluate(() => { S.contacts.find(c => c.first === "Noor").capacity = "B"; save(); render(); });
+  r = await ara(p, "show_opportunity_draft", { contact_name: who });
+  r = await ara(p, "optional_fields", { step: "start" });
+  ok(r.field === "fund", "the first question wasn't the entity");
+  r = await ara(p, "optional_fields", { step: "answer", value: "The C, the C-3." });
+  ok(r.ok !== false && (await p.inputValue("#f_fund")) === "Citizens Alliance C3", "\"The C, the C-3\" wasn't read as Citizens Alliance C3: " + JSON.stringify(r).slice(0, 200));
+  ok(/National campaign/.test(JSON.stringify(r)) && (await p.inputValue("#f_campaign")) === "National" && r.field === "potential", "the campaign wasn't filled in as National, or the amount didn't come next");
+  r = await ara(p, "optional_fields", { step: "answer", value: "One hundred thousand." });
+  ok(r.ok !== false && /100,000/.test(await p.inputValue("#f_potential")) && r.field === "notes", "\"One hundred thousand\" wasn't read as $100,000: " + JSON.stringify(r).slice(0, 200));
+  const idaho = await p.evaluate(() => { optSet("fund", "C.A. Idaho PAC"); optSet("campaign", ""); return [optNext() && optNext().k, optParse("campaign", "the state one"), optParse("campaign", "National"), matchEntity("Idaho").hits.length, matchEntity("C.A. Fed PAC").hits.join()]; });
+  ok(idaho[0] === "campaign" && idaho[1] === "Idaho" && idaho[2] === "National", "an Idaho entity didn't ask for its campaign: " + JSON.stringify(idaho));
+  ok(idaho[3] === 2 && idaho[4] === "C.A. Fed PAC", "entity matching is wrong: " + JSON.stringify(idaho));
+  await p.evaluate(() => optSet("fund", "Citizens Alliance C3"));
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  const o = (await state(p)).opps.find(o => o.name.startsWith(who.split(" ").slice(-1)[0]));
+  ok(o && o.campaign === "National" && o.potential === 100000, "the opportunity wasn't saved with its campaign and amount: " + JSON.stringify(o && { c: o.campaign, p: o.potential }));
+});
 test("Ara: texting permitted said by the officer reaches a new contact's form even when Ara leaves it out", async (p) => {
   await signIn(p);
   await ara(p, "show_contact_draft", { first: "Ivy", last: "Moss", email: "ivy@example.org", mobile: "(555) 010-0177" });

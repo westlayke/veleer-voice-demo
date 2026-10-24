@@ -14,6 +14,31 @@ const ENTITY_STATE = { "Citizens Alliance C3": "", "C.A. of America Action C4": 
 const FUNDS = Object.keys(ENTITY_STATE);
 const CAMPAIGNS = ["National", "Idaho", "North Dakota", "New Hampshire", "Pennsylvania"];
 const campaignsFor = (f) => ENTITY_STATE[f] === undefined ? CAMPAIGNS : ["National", ...(ENTITY_STATE[f] ? [ENTITY_STATE[f]] : [])];
+// a spoken amount -> a number: "one hundred thousand dollars", "250k", "$1.5 million", "a hundred and fifty thousand" (Oct 24: Ara couldn't record "one hundred thousand")
+const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+function spokenAmount(raw) {
+  const l = String(raw || "").toLowerCase().replace(/[$,]/g, "").replace(/half a million/g, "500 thousand").replace(/-/g, " ").replace(/[^a-z0-9. ]/g, " ").replace(/\.(?!\d)/g, " ");
+  const m = l.match(/(\d+(?:\.\d+)?)\s*(k|thousand|m|million)?\b/);
+  if (m) return Math.round(Number(m[1]) * (/^(k|thousand)$/.test(m[2] || "") ? 1000 : /^(m|million)$/.test(m[2] || "") ? 1e6 : 1));
+  let total = 0, cur = 0, any = false;
+  for (const w of l.split(/\s+/)) {
+    if (NUM_WORDS[w] !== undefined) { cur += NUM_WORDS[w]; any = true; }
+    else if (w === "hundred") { cur = (cur || 1) * 100; any = true; }
+    else if (w === "thousand" || w === "k") { total += (cur || 1) * 1000; cur = 0; any = true; }
+    else if (w === "million") { total += (cur || 1) * 1e6; cur = 0; any = true; }
+  }
+  const n = total + cur; return any && n > 1 ? n : null;
+}
+// a spoken entity -> one entity, or the few it could be: "the C-3", "Citizens Alliance C 3", "North Dakota Fed PAC" (Oct 24: "C-3" wasn't understood)
+const entityWords = (t) => String(t || "").toLowerCase().replace(/c\.a\.|\bca\b/g, "citizens alliance").replace(/\bc\s*-?\s*([34])\b/g, "c$1").replace(/[^a-z0-9 ]/g, " ")
+  .split(/\s+/).filter(w => w && !/^[a-z]$/.test(w) && !["the", "a", "an", "is", "it", "its", "it's", "one", "that", "this", "to", "for", "of", "let's", "lets", "go", "with", "please", "entity", "i", "think", "say", "make", "yes", "yeah"].includes(w));
+function matchEntity(t) {
+  const ws = entityWords(t); if (!ws.length) return { hits: [] };
+  const hits = FUNDS.filter(f => { const fw = entityWords(f); return ws.every(w => fw.includes(w)); });
+  const exact = hits.filter(f => entityWords(f).length === ws.length); // "C.A. Fed PAC" is that one, not also the North Dakota Fed PAC
+  return { hits: exact.length === 1 ? exact : hits };
+}
 const ENTITY_RULE = FUNDS.map(f => `${f}: ${campaignsFor(f).join(" or ")}`).join("; ");
 const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
 const CAPACITY_LIST = Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", "); // "A = $250k and up, B = ..." for Ara
@@ -81,7 +106,7 @@ const ACTIONS = {
   opportunity: { title: "New opportunity", saved: "Opportunity created", saveLabel: "Save",
     fields: [
       { k: "name", label: "Opportunity name", req: true, fixed: true }, { k: "officer", label: "Gift officer", fixed: true },
-      { k: "fund", label: "Entity of interest", type: "select", opts: ["", ...FUNDS] }, { k: "potential", label: "Potential amount", type: "money" },
+      { k: "fund", label: "Entity of interest", type: "select", opts: ["", ...FUNDS] }, { k: "campaign", label: "Campaign of interest", type: "select", opts: (d) => ["", ...campaignsFor(d.fund)] }, { k: "potential", label: "Potential amount", type: "money" },
       { k: "notes", label: "Notes", type: "area" } ] }, // moving to Cultivation is always its own step (Move to Cultivation?, or defer with a reason)
   plan: { title: "Add planned ask", saved: "Planned ask saved", saveLabel: "Save planned ask",
     fields: [
