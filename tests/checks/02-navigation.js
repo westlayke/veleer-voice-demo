@@ -31,4 +31,11 @@ test("No screen scrolls sideways on a phone", async (p) => {
   }
 });
 
+test("Top bar: the + button sits in the top-right corner, with Settings just to its left", async (p) => {
+  await signIn(p);
+  for (const t of ["Home", "Contacts", "Tasks"]) { if (t !== "Home") await tab(p, t);
+    const [a, g] = await p.evaluate(() => [".top .addbtn", ".top .setbtn"].map(s => document.querySelector(s).getBoundingClientRect().left));
+    ok(a > g, `on ${t} the + button is not to the right of Settings`);
+    ok(await p.evaluate(() => innerWidth - document.querySelector(".top .addbtn").getBoundingClientRect().right) < 24, `on ${t} the + button is not in the corner`); }
+});
 };

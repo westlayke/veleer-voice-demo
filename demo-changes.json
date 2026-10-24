@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "The + button and Settings swapped places: + now sits in the top-right corner, the easiest spot to reach with your thumb and where iPhone apps put their add button, with Settings just to its left.",
+   "area": "Look"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "The pumpkin now plays a short haunted-house organ sting (dun, dun, DUNNN) as it rolls in, instead of thumps.",
    "area": "Look"
   },
