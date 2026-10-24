@@ -57,6 +57,11 @@ function spookySound(kind, retried) {
   } else if (kind === "bat") { // a few high squeaks
     for (let i = 0; i < 5; i++) { const at = t0 + 0.3 + i * 0.16 + Math.random() * 0.05, o = c.createOscillator(), g = c.createGain(), f0 = 3200 + Math.random() * 1400;
       o.type = "sine"; o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f0 * 0.6, at + 0.07); env(g, at, 0.35, 0.08); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.1); }
+  } else if (kind === "owl") { // "hoo, hoo-hoooo": soft, breathy, pitched high enough for a phone speaker
+    [[1.6, 0.28], [2.05, 0.18], [2.3, 0.6]].forEach(([dt, len]) => { const at = t0 + dt;
+      [[1, "sine", 1], [2, "sine", 0.35], [3, "triangle", 0.12]].forEach(([mult, type, vol]) => { const o = c.createOscillator(), g = c.createGain();
+        o.type = type; o.frequency.setValueAtTime(560 * mult, at); o.frequency.linearRampToValueAtTime(600 * mult, at + len * 0.3); o.frequency.linearRampToValueAtTime(500 * mult, at + len);
+        env(g, at, 0.7 * vol, len); o.connect(g); g.connect(out); o.start(at); o.stop(at + len + 0.05); }); });
   } else if (kind === "creak") { // a slow creaking door as a form opens
     const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(), lfo = c.createOscillator(), dep = c.createGain();
     o.type = "sawtooth"; o.frequency.setValueAtTime(95, t0); o.frequency.linearRampToValueAtTime(150, t0 + 0.5); o.frequency.linearRampToValueAtTime(80, t0 + 1.1);
@@ -85,7 +90,7 @@ function spookySound(kind, retried) {
   spkPlayed++; return true;
 }
 function spookyOnce(kind) {
-  const kinds = spookyMode() ? ["spider", "pumpkin", "ghost", "bat"] : ["spider", "pumpkin", "ghost"];
+  const kinds = spookyMode() ? ["spider", "pumpkin", "ghost", "bat", "owl"] : ["spider", "pumpkin", "ghost"];
   kind = kind || kinds[Math.floor(Math.random() * kinds.length)];
   const el = document.createElement("div"); el.className = "spk spk-" + kind; el.setAttribute("aria-hidden", "true");
   const w = window.innerWidth, h = window.innerHeight, done = () => el.remove();
@@ -99,6 +104,10 @@ function spookyOnce(kind) {
   } else if (kind === "bat") { // a few bats flap across the top of the screen, left to right
     el.innerHTML = '<i>🦇</i><i>🦇</i><i>🦇</i>'; el.style.top = Math.round(70 + Math.random() * h * 0.2) + "px";
     el.animate([{ transform: "translate(-140px, 0)" }, { transform: `translate(${w * 0.3}px, 30px)`, offset: 0.3 }, { transform: `translate(${w * 0.6}px, -10px)`, offset: 0.6 }, { transform: `translate(${w + 40}px, 20px)` }], { duration: 5000, easing: "linear" }).onfinish = done;
+  } else if (kind === "owl") { // glides down to a perch near the top, blinks, hoots, then flies off the other side
+    el.textContent = "🦉"; const fromLeft = Math.random() < 0.5, perchX = Math.round(w * (0.25 + Math.random() * 0.5)), y = Math.round(80 + Math.random() * h * 0.15);
+    el.style.top = y + "px"; const a = fromLeft ? -70 : w + 20, b = fromLeft ? w + 20 : -70;
+    el.animate([{ transform: `translate(${a}px, -60px)` }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.2 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.4 }, { transform: `translate(${perchX}px, 0) scaleY(0.85)`, offset: 0.43 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.46 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.75 }, { transform: `translate(${b}px, -50px)` }], { duration: 7000, easing: "ease-in-out" }).onfinish = done;
   } else { // floats across, bobbing
     el.textContent = "👻"; el.style.top = Math.round(h * (0.18 + Math.random() * 0.4)) + "px";
     el.animate([{ transform: "translate(-70px, 0)", opacity: 0 }, { transform: `translate(${w * 0.25}px, -18px)`, opacity: 0.9, offset: 0.25 }, { transform: `translate(${w * 0.5}px, 14px)`, offset: 0.5 }, { transform: `translate(${w * 0.75}px, -14px)`, opacity: 0.9, offset: 0.75 }, { transform: `translate(${w + 20}px, 0)`, opacity: 0 }], { duration: 9000, easing: "linear" }).onfinish = done;

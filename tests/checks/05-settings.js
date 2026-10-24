@@ -95,6 +95,8 @@ test("Spooky mode: a creak when a form opens, thunder on Save, bats and a cackle
   ok(won.played === 1 && won.bats > 0 && won.balloons === 0, "Closed Won didn't bring bats and the organ sting instead of balloons");
   const bat = await p.evaluate(() => { const n = window.__demo.spkPlayed; const el = window.__demo.spookyOnce("bat"); return { played: window.__demo.spkPlayed - n, bats: el.querySelectorAll("i").length }; });
   ok(bat.played === 1 && bat.bats === 3, "the bats didn't fly over with a squeak");
+  const owl = await p.evaluate(() => { const n = window.__demo.spkPlayed; const el = window.__demo.spookyOnce("owl"); return { played: window.__demo.spkPlayed - n, owl: el.textContent }; });
+  ok(owl.played === 1 && owl.owl === "🦉", "the owl didn't come by with a hoot");
   const thunder = await p.evaluate(() => { const n = window.__demo.spkPlayed; spookyCue("thunder"); return window.__demo.spkPlayed - n; });
   ok(thunder === 1, "no thunder");
   await p.uncheck("#spookyMode"); await p.waitForTimeout(300);

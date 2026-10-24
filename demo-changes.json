@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+  {"date": "Oct 24, 2026", "change": "Spooky mode (preview): an owl now visits too. It glides down to a perch near the top, blinks, hoots \"hoo, hoo-hoooo\" and flies off.", "area": "Halloween"},
   {"date": "Oct 24, 2026", "change": "Fix (preview), second try: the page no longer changes the iPhone's audio mode at all, as before 7:27 AM, so Ara can be heard again. Halloween sounds may now be silent when the phone's silent switch is on.", "area": "Voice"},
   {"date": "Oct 24, 2026", "change": "Fix (preview): Ara's voice was silent on iPhones since the Halloween sound fix at 7:27 AM, because the page asked the phone for plain playback. A conversation now asks for talk-and-listen audio, and the app goes back to normal when it ends.", "area": "Voice"},
   {"date": "Oct 24, 2026", "change": "Spooky mode (preview): say \"spooky mode\" to Ara, or tick it in Settings, for a night look (orange and purple, cobwebs, a flickering candle by the logo), Ara as a slightly slower haunted-house host with spooky asides (facts and save rules unchanged), a creaking door when a form opens, thunder on Save, an organ sting and a cackle with bats on Closed Won, and a visitor every 15 to 20 seconds, now with bats. \"Normal mode\" turns it off; it ends by itself on Nov 1. Sounds never play during a conversation.", "area": "Halloween"},
