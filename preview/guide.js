@@ -61,11 +61,11 @@ function settingsScreen() {
   return topbar("Settings", "home") + `<main>
   <section class="panel" id="setSave"><div class="ph"><h2>${SAVE_TITLE}</h2></div><div class="sb set">
     <div class="appbtn-tile">${APP_BTN(60)}<span>Citizens VCRM</span></div>
-    <div style="font-size:13.5px;color:var(--muted);line-height:1.45;text-align:center">This is the button you'll get. Tap it to open the demo like an app, with the mic ready.</div>
+    <div style="font-size:13.5px;color:var(--muted);line-height:1.45;text-align:center">This is the button you'll get. Tap it to open Citizens VCRM like an app, with the mic ready.</div>
     ${saveTip(true)}</div></section>
   <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
     <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" enterkeyhint="done" value="${esc(S.settings.userName || "")}"></label>
-    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This demo saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This proof of concept saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, with your first name, a random ID for this phone and your rough location (city), to improve the proof of concept. No audio is kept. Kept for 90 days.</div>
   </div></section>
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
@@ -79,11 +79,11 @@ function settingsScreen() {
     ${spookySeason() ? `<label class="hint-tgl" for="spookyTgl"><input type="checkbox" id="spookyTgl" ${S.settings.noSpooky ? "" : "checked"}> Halloween: a spider, pumpkin or ghost crosses the screen now and then</label>` : ""}
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4">Changes on this screen save as soon as you make them.</div>
   </div></section>
-  <section class="panel"><div class="ph"><h2>Share this demo</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Send the demo to someone, or show a QR code they can scan with their phone camera. Anyone with the link can use the voice assistant.</div>
+  <section class="panel"><div class="ph"><h2>Share this proof of concept</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Send the proof of concept to someone, or show a QR code they can scan with their phone camera. Anyone with the link can use the voice assistant.</div>
     <button class="btn blue" data-act2="share">Share link</button><button class="btn out" data-act2="qr">Show QR code</button></div></section>
-  <section class="panel"><div class="ph"><h2>Version</h2><span class="meta">${esc(buildLabel())}</span></div><div class="sb"><div style="font-size:14px;color:var(--muted)">The demo updates itself to the newest version when you open it.</div></div></section>
-  <section class="panel"><div class="ph"><h2>Restart the demo and reset all settings</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities. All settings go back to how they started: your first name, the voice, the assistant's name and hints. You'll be asked for a first name again.</div><button class="btn danger" data-act2="restartask">Restart the demo</button></div></section>
-  <details class="panel trouble"><summary class="ph"><h2>For support</h2><span class="meta">voice log</span></summary><div class="sb set"><div style="font-size:14px;color:var(--muted)">If the voice misbehaves, tap Copy log and send it to your demo contact.</div>
+  <section class="panel"><div class="ph"><h2>Version</h2><span class="meta">${esc(buildLabel())}</span></div><div class="sb"><div style="font-size:14px;color:var(--muted)">The proof of concept updates itself to the newest version when you open it.</div></div></section>
+  <section class="panel"><div class="ph"><h2>Restart the proof of concept and reset all settings</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Removes everything you've added and puts back the example contacts and opportunities. All settings go back to how they started: your first name, the voice, the assistant's name and hints. You'll be asked for a first name again.</div><button class="btn danger" data-act2="restartask">Restart the proof of concept</button></div></section>
+  <details class="panel trouble"><summary class="ph"><h2>For support</h2><span class="meta">voice log</span></summary><div class="sb set"><div style="font-size:14px;color:var(--muted)">If the voice misbehaves, tap Copy log and send it to your project contact.</div>
     <textarea id="vlogTxt" readonly style="font:12px/1.35 ui-monospace,Menlo,monospace;height:160px;white-space:pre">${esc(VLOG.slice(-150).join("\n"))}</textarea>
     <button class="btn out" data-act2="copylog">Copy log</button><button class="btn quiet" data-act2="clearlog">Clear log</button></div></details>
   </main>`;
@@ -170,11 +170,11 @@ document.addEventListener("change", (e) => { const id = e.target.id;
   else if (id === "hintsTgl") { if (e.target.checked) delete S.settings.noHints; else S.settings.noHints = true; save(); toast(e.target.checked ? "Hints are on" : "Hints are off"); } });
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.target.id === "userName" || e.target.id === "botName")) e.target.blur(); });
 function doRestart() { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.permFix1 = true; S.dataVersion = DATA_VERSION; S.settings.deviceId = keep.deviceId; S.settings.demoCode = keep.demoCode || ""; // a restart puts every setting back to its default (voice, assistant name, hints, first name); only the phone ID and code word stay
-  save(); render(); welcomeModal(); toast("Demo restarted"); }
+  save(); render(); welcomeModal(); toast("Proof of concept restarted"); }
 function restartConfirm() {
   const h = document.getElementById("modal");
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="rsTitle">
-    <h2 id="rsTitle">Restart the demo?</h2>
+    <h2 id="rsTitle">Restart the proof of concept?</h2>
     <p class="wl-hint">Everything you've added is removed and all settings go back to how they started. This can't be undone.</p>
     <button type="button" class="btn red" id="rsGo">Yes, restart</button><button type="button" class="btn quiet" data-helpx="1">Cancel</button></div></div>`;
   document.getElementById("rsGo").onclick = () => { h.innerHTML = ""; doRestart(); };

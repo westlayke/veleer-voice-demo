@@ -8,8 +8,8 @@ test("Settings: speaking speed saves, Restart asks first", async (p) => {
   await p.selectOption("#speedSel", { index: 3 }); await p.waitForTimeout(200);
   ok((await state(p)).settings.speed > 1, "speed not saved");
   const n = (await state(p)).tasks.length;
-  await p.tap("text=Restart the demo >> nth=-1"); await p.waitForTimeout(300);
-  ok(await p.isVisible("text=Restart the demo?"), "Restart did not ask first");
+  await p.tap("text=Restart the proof of concept >> nth=-1"); await p.waitForTimeout(300);
+  ok(await p.isVisible("text=Restart the proof of concept?"), "Restart did not ask first");
   await p.tap("[data-helpx] >> text=Cancel"); await p.waitForTimeout(200);
   ok((await state(p)).tasks.length === n, "Cancel still restarted");
 });

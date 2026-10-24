@@ -4,7 +4,7 @@ module.exports = ({ test, ok, fresh, signIn, state, tab, ara, said, titleOf, PAG
 test("First visit shows the big mic and the short privacy line", async (p) => {
   ok(await p.isVisible("text=Meet your new voice assistant!"), "welcome heading missing");
   ok(await p.isVisible(".wl-mic.big"), "big mic missing");
-  ok(await p.isVisible("text=Conversations and taps are saved to improve the demo"), "short privacy line missing");
+  ok(await p.isVisible("text=Conversations and taps are saved to improve the proof of concept"), "short privacy line missing");
 });
 test("Typing a name saves it, shows the full privacy notice, and starts Ara", async (p) => {
   await p.tap("text=I'd rather type my name");

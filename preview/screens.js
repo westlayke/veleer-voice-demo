@@ -87,7 +87,7 @@ function saveSteps(kind) {
 function codeModal(opening) {
   const h = document.getElementById("modal");
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="cmTitle">
-    <h2 id="cmTitle">Enter the demo code word</h2>
+    <h2 id="cmTitle">Enter the code word</h2>
     <p>${S.settings.demoCode ? "That code word didn't work." : "This copy of the demo doesn't have its code word yet."} It's the word after <b>#code=</b> in the demo link you were sent.</p>
     <input id="codeIn" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Code word" style="font:inherit;font-size:16px;padding:11px 12px;border:1px solid var(--line);border-radius:10px">
     <button class="btn blue" id="codeGo">Save and start</button><button class="btn quiet" id="codeX">Cancel</button></div></div>`;
@@ -103,7 +103,7 @@ function copyShareLink() {
 }
 function shareDemo() {
   if (navigator.share) {
-    navigator.share({ title: "Citizens VCRM voice demo", text: "Try the Citizens VCRM voice demo: talk to the CRM like a colleague.", url: SHARE_URL })
+    navigator.share({ title: "Citizens VCRM voice proof of concept", text: "Try the Citizens VCRM voice proof of concept: talk to the CRM like a colleague.", url: SHARE_URL })
       .catch((e) => { if (!e || e.name !== "AbortError") copyShareLink(); });
   } else copyShareLink();
 }
@@ -112,10 +112,10 @@ function showQR(copyFailed) {
   const draw = () => {
     const q = qrcode(0, "M"); q.addData(SHARE_URL); q.make();
     h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="qrTitle" style="align-items:center;text-align:center">
-      <h2 id="qrTitle">Scan to open the demo</h2>
+      <h2 id="qrTitle">Scan to open the proof of concept</h2>
       <p style="color:var(--muted)">Point a phone camera at the code.</p>
       <div style="background:#fff;padding:10px;border-radius:12px;line-height:0">${q.createSvgTag({ cellSize: 6, margin: 2, scalable: true }).replace("<svg ", '<svg style="width:240px;height:240px" ')}</div>
-      <input readonly value="${SHARE_URL}" onclick="this.select()" aria-label="Demo link" style="width:100%;font:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;text-align:center">
+      <input readonly value="${SHARE_URL}" onclick="this.select()" aria-label="Link" style="width:100%;font:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;text-align:center">
       ${copyFailed ? `<p style="font-size:13px;color:var(--muted)">Copying isn't available here. Tap the link above to select it, then copy it.</p>` : ""}
       <button class="btn blue" id="qrClose" style="width:100%">Done</button></div></div>`;
     document.getElementById("qrClose").onclick = () => { h.innerHTML = ""; welcomeModal(); };
@@ -151,7 +151,7 @@ function welcomeModal() {
       <p>You're a gift officer at Citizens Alliance. Tap the mic and ${esc(botName())} will introduce itself and ask your first name.</p>
       <button type="button" class="wl-mic big" data-act4="voice" aria-label="Tap to start talking">${mic(40)}</button>
       <div class="wl-tap">Tap to start</div>
-      <p class="wl-priv">Conversations and taps are saved to improve the demo. Details in Settings.</p>
+      <p class="wl-priv">Conversations and taps are saved to improve the proof of concept. Details in Settings.</p>
       <button type="button" class="btn quiet" data-act5="typename">I'd rather type my name</button></div></div>`;
     return;
   }
@@ -162,8 +162,8 @@ function welcomeModal() {
     <input id="wlName" class="wl-input" aria-label="Your first name" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}">
     <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
     <button class="btn blue" data-act4="welcome-ok">Start</button>
-    <p class="wl-priv">This demo saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, with your first name, a random ID for this phone and your rough location (city), to improve the demo. No audio is kept. Kept for 90 days.</p>
-    <div class="wl-links"><button type="button" class="linkbtn" data-act4="voice">${mic(14)} Say it instead</button><button type="button" class="linkbtn" data-act2="share">Share this demo</button></div></div></div>`;
+    <p class="wl-priv">This proof of concept saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, with your first name, a random ID for this phone and your rough location (city), to improve the proof of concept. No audio is kept. Kept for 90 days.</p>
+    <div class="wl-links"><button type="button" class="linkbtn" data-act4="voice">${mic(14)} Say it instead</button><button type="button" class="linkbtn" data-act2="share">Share this proof of concept</button></div></div></div>`;
   setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a && a.dataset.act4 === "voice") { const el = document.getElementById("wlName"), v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : "";
@@ -299,7 +299,7 @@ function goalsPanel() {
 function addBtnCard() {
   const standalone = isStandalone();
   if (standalone || S.settings.hideAddBtn) return "";
-  return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add Citizens VCRM to your Home Screen</b><span>Open the demo like an app. Show me how</span></div><span class="chev">${CHEV}</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
+  return `<div class="addbtn-card" role="button" tabindex="0" data-act2="addbtn">${APP_BTN(40)}<div class="t"><b>Add Citizens VCRM to your Home Screen</b><span>Open Citizens VCRM like an app. Show me how</span></div><span class="chev">${CHEV}</span><button type="button" class="x" data-act2="addbtnx" aria-label="Hide this">×</button></div>`;
 }
 function homeScreen() {
   const open = myOpen(), asked = open.reduce((n, o) => n + (o.stage === "Commitment" ? 0 : askedOf(o)), 0), pledged = open.reduce((n, o) => n + (o.pledge ? o.pledge.amount : 0), 0);

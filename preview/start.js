@@ -12,7 +12,7 @@ async function checkUpdate() {
     let tried = ""; try { tried = sessionStorage.getItem("vcrm-auto-update") || ""; } catch (e) {}
     if (!G.live && !V && tried !== j.build) { try { sessionStorage.setItem("vcrm-auto-update", j.build); } catch (e) {} location.replace(location.pathname + "?v=" + encodeURIComponent(j.build) + location.hash); return; }
     const bar = document.createElement("div"); bar.id = "updbar"; bar.className = "updbar";
-    bar.innerHTML = `<b>A new version of the demo is ready.</b><button type="button" class="upd-go">Update</button><button type="button" class="upd-x" aria-label="Not now" style="background:none;color:#fff;padding:8px 4px">×</button>`;
+    bar.innerHTML = `<b>A new version of the proof of concept is ready.</b><button type="button" class="upd-go">Update</button><button type="button" class="upd-x" aria-label="Not now" style="background:none;color:#fff;padding:8px 4px">×</button>`;
     bar.querySelector(".upd-x").onclick = () => bar.remove();
     bar.querySelector(".upd-go").onclick = () => { if (G.live) endCall(); location.replace(location.pathname + "?v=" + encodeURIComponent(j.build)); };
     document.body.appendChild(bar);

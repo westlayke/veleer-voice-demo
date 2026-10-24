@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "The demo is now called a proof of concept everywhere people see or hear it: on screen, in the privacy notice, in Settings and in what Ara says. Questions Ara can't answer now go to the project team. The web address stays the same.",
+   "area": "Wording"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "Halloween: during October, every minute or so a spider drops in on its thread, a pumpkin rolls along the bottom, or a ghost floats across. They never get in the way of a tap, and Settings has a switch to turn them off. They stop on their own on November 1.",
    "area": "Look"
   },
