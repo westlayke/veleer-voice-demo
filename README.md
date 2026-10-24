@@ -32,4 +32,4 @@ To publish: `tools/publish.sh preview` stamps the preview with the time, and `to
 
 ## Test bot
 
-`tests/bot.js` taps through the app like a person (screens, back buttons, typed forms, task statuses, Settings) and plays Ara's side of a conversation with a pretend voice line, so it never calls xAI. Run it with `node tests/bot.js` (preview) or `PAGE=index.html node tests/bot.js` (live). GitHub runs it on every push to main and every morning (Actions tab, "Test bot"); failures save screenshots.
+`tests/bot.js` (with its checks in `tests/checks/`, one file per area: first visit, moving around, forms, tasks, Settings, saved data, opportunities, voice, hands-free, replays, live page) taps through the app like a person (screens, back buttons, typed forms, task statuses, Settings) and plays Ara's side of a conversation with a pretend voice line, so it never calls xAI. Run it with `node tests/bot.js` (preview) or `PAGE=index.html node tests/bot.js` (live). GitHub runs it on every push to main and every morning (Actions tab, "Test bot"); failures save screenshots.

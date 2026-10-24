@@ -22,8 +22,13 @@ jobs:
       - name: Test the live page
         if: always()
         run: |
-          git show "$(git log -1 --format=%H -- index.html)":tests/bot.js > tests/live-bot.js
-          PAGE=index.html node tests/live-bot.js
+          rm -rf tests-live && mkdir tests-live
+          git archive "$(git log -1 --format=%H -- index.html)" tests | tar -x --strip-components=1 -C tests-live
+          PAGE=index.html node tests-live/bot.js
       - uses: actions/upload-artifact@v4
         if: failure()
-        with: { name: failure-screenshots, path: tests/results/ }
+        with:
+          name: failure-screenshots
+          path: |
+            tests/results/
+            tests-live/results/
