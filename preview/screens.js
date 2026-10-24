@@ -176,7 +176,7 @@ function welcomeModal() {
     <input id="wlName" class="wl-input" aria-label="Your first name" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}">
     <div class="wl-err" id="wlErr" hidden>Please enter your first name.</div>
     <button class="btn blue" data-act4="welcome-ok">Start</button>
-    <p class="wl-priv">This proof of concept saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, with your first name, a random ID for this phone and your rough location (city), to improve the proof of concept. No audio is kept. Kept for 90 days.</p>
+    <p class="wl-priv">This proof of concept saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, how well your connection to the voice service holds up during a conversation, with your first name, a random ID for this phone and your rough location (city), to improve the proof of concept. No audio is kept. Kept for 90 days.</p>
     <div class="wl-links"><button type="button" class="linkbtn" data-act4="voice">${mic(14)} Say it instead</button><button type="button" class="linkbtn" data-act2="share">Share this proof of concept</button></div></div></div>`;
   setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }

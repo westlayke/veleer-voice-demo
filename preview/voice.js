@@ -252,7 +252,7 @@ function paintCall() {
   document.body.classList.toggle("incall", G.live);
   el.hidden = !G.live;
   if (!G.live) return;
-  el.innerHTML = `<div class="cb-in"><span class="dot ${G.status === "Connecting…" ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div>${G.saveCheck ? `<div class="cb-yes">Say “yes” to save</div>` : ""}</div><button class="btn quiet cb-hf${G.hands ? " on" : ""}" data-act3="hands" aria-pressed="${!!G.hands}" title="Hands-free: Ara saves when you say yes">${CAR} ${G.hands ? "Hands-free on" : "Hands-free"}</button><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
+  el.innerHTML = `<div class="cb-in"><span class="dot ${/^(Connecting|Reconnecting)/.test(G.status) ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div>${G.saveCheck ? `<div class="cb-yes">Say “yes” to save</div>` : ""}</div><button class="btn quiet cb-hf${G.hands ? " on" : ""}" data-act3="hands" aria-pressed="${!!G.hands}" title="Hands-free: Ara saves when you say yes">${CAR} ${G.hands ? "Hands-free on" : "Hands-free"}</button><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
   capTick();
 }
 const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
@@ -415,7 +415,7 @@ const sessionCfg = () => ({ voice: S.settings.voice || "ara", instructions: sent
 const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
 const busy = () => { G.lastAct = Date.now(); };
 function idleCheck() {
-  if (!G.live || G.idleEnding || G.status === "Connecting…") return;
+  if (!G.live || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
   const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
   if (Date.now() - (G.lastAct || Date.now()) < IDLE_MS) return;
@@ -423,7 +423,7 @@ function idleCheck() {
   notice(`Nobody has spoken or tapped anything for 12 seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
   G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
 }
-function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall(); toast("Hung up after 12 seconds of quiet. Tap the mic when you need me."); }
+function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall("12 seconds of quiet"); toast("Hung up after 12 seconds of quiet. Tap the mic when you need me."); }
 document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
 document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
@@ -446,38 +446,102 @@ async function startCall(opening) {
     // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
     const ctx = G.ctx; ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") interrupted("audio " + ctx.state); };
     G.stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && G.status !== "Connecting…") interrupted("mic muted"); }; tr.onended = () => { if (G.live) interrupted("mic ended"); }; });
-    G.ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
-    G.ws.onopen = () => {
-      send({ type: "session.update", session: sessionCfg() });
-      const srcNode = G.ctx.createMediaStreamSource(G.stream);
-      const onPcm = (f32) => {
-        if (!G.ctx) return;
-        // Echo guard: while Grok's voice is playing, the phone's mic can hear the speaker and Grok cuts itself off.
-        // Quiet sound during playback is sent as silence; speaking up over Grok still interrupts it.
-        if (G.playHead > G.ctx.currentTime + 0.03) {
-          let sq = 0; for (let i = 0; i < f32.length; i++) sq += f32[i] * f32[i];
-          const rms = Math.sqrt(sq / f32.length); G.echoPeak = Math.max(G.echoPeak || 0, rms);
-          if (rms < BARGE_RMS) f32 = new Float32Array(f32.length); else G.barge = (G.barge || 0) + 1;
-        }
-        G.buf.push(downsample(f32, G.ctx.sampleRate));
-        const total = G.buf.reduce((n, a) => n + a.length, 0);
-        if (total < 2400) return; // ~100 ms
-        const i16 = new Int16Array(total); let o = 0;
-        G.buf.forEach(a => { for (let i = 0; i < a.length; i++) { const v = Math.max(-1, Math.min(1, a[i])); i16[o++] = v < 0 ? v * 0x8000 : v * 0x7fff; } }); G.buf = [];
-        send({ type: "input_audio_buffer.append", audio: b64FromInt16(i16) });
-      };
-      if (worklet) { G.node = new AudioWorkletNode(G.ctx, "cap"); G.node.port.onmessage = (ev) => onPcm(ev.data); }
-      else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
-      srcNode.connect(G.node);
-      const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
-      const boo = spookyMode() ? "Mwahaha... welcome to the haunted CRM. " : xmasMode() ? "Ho ho ho... Merry Christmas, and welcome to the Christmas CRM. " : "", how = spookyMode() ? " In your haunted-house host voice, say exactly" : xmasMode() ? " In your warm Christmas host voice, say exactly" : " Say exactly"; // Christmas mode the same, as a jolly Christmas host // spooky mode: Ara is the haunted-house host from her very first words
-      notice(S.settings.userName ? (opening || `The officer just opened the conversation.${how} "${boo}Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, what would you like to do?" and nothing more.`) : (opening ? opening + ` But you don't know their name yet: first${how.replace(" Say", " say").replace(" In", " in")} "${boo}Hi, I'm ${botName()}, what's your first name?", then call set_user_name, then help with that.` : `The officer just opened the conversation and you don't know their name yet.${how} "${boo}Hi, I'm ${botName()}, what's your first name?" and nothing more.`));
-      G.status = "Listening"; paintCall(); vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
+    const srcNode = G.ctx.createMediaStreamSource(G.stream);
+    const onPcm = (f32) => {
+      if (!G.ctx) return;
+      // Echo guard: while Grok's voice is playing, the phone's mic can hear the speaker and Grok cuts itself off.
+      // Quiet sound during playback is sent as silence; speaking up over Grok still interrupts it.
+      if (G.playHead > G.ctx.currentTime + 0.03) {
+        let sq = 0; for (let i = 0; i < f32.length; i++) sq += f32[i] * f32[i];
+        const rms = Math.sqrt(sq / f32.length); G.echoPeak = Math.max(G.echoPeak || 0, rms);
+        if (rms < BARGE_RMS) f32 = new Float32Array(f32.length); else G.barge = (G.barge || 0) + 1;
+      }
+      G.buf.push(downsample(f32, G.ctx.sampleRate));
+      const total = G.buf.reduce((n, a) => n + a.length, 0);
+      if (total < 2400) return; // ~100 ms
+      const i16 = new Int16Array(total); let o = 0;
+      G.buf.forEach(a => { for (let i = 0; i < a.length; i++) { const v = Math.max(-1, Math.min(1, a[i])); i16[o++] = v < 0 ? v * 0x8000 : v * 0x7fff; } }); G.buf = [];
+      send({ type: "input_audio_buffer.append", audio: b64FromInt16(i16) });
     };
-    G.ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
-    G.ws.onclose = (ev) => { vlog("connection closed " + (ev && ev.code)); if (G.live && document.visibilityState === "hidden") { interrupted("connection closed while away"); return; } if (G.live) { const was = G.status; endCall(); if (was === "Connecting…") toast("Couldn't connect to Grok voice. Try again in a moment."); } };
-    G.ws.onerror = () => {};
+    if (worklet) { G.node = new AudioWorkletNode(G.ctx, "cap"); G.node.port.onmessage = (ev) => onPcm(ev.data); }
+    else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
+    srcNode.connect(G.node);
+    const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
+    const boo = spookyMode() ? "Mwahaha... welcome to the haunted CRM. " : xmasMode() ? "Ho ho ho... Merry Christmas, and welcome to the Christmas CRM. " : "", how = spookyMode() ? " In your haunted-house host voice, say exactly" : xmasMode() ? " In your warm Christmas host voice, say exactly" : " Say exactly"; // Christmas mode the same, as a jolly Christmas host // spooky mode: Ara is the haunted-house host from her very first words
+    const first = S.settings.userName ? (opening || `The officer just opened the conversation.${how} "${boo}Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, what would you like to do?" and nothing more.`) : (opening ? opening + ` But you don't know their name yet: first${how.replace(" Say", " say").replace(" In", " in")} "${boo}Hi, I'm ${botName()}, what's your first name?", then call set_user_name, then help with that.` : `The officer just opened the conversation and you don't know their name yet.${how} "${boo}Hi, I'm ${botName()}, what's your first name?" and nothing more.`);
+    G.drops = 0; openSocket(token, first);
   } catch (e) { endCall(); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); }
+}
+/* ---------- the voice line: opened at the start, and opened again when it drops (a phone in a car loses signal) ---------- */
+function openSocket(token, first) {
+  const ws = G.ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
+  const t0 = Date.now();
+  ws.onopen = () => {
+    if (G.ws !== ws) return;
+    send({ type: "session.update", session: sessionCfg() }); notice(first);
+    G.status = "Listening"; G.lastMsg = Date.now(); busy(); paintCall();
+    vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
+    netLog(`Voice line open in ${Date.now() - t0} ms${G.drops ? ` (reconnect ${G.drops} of ${MAX_DROPS})` : ""}`);
+    clearInterval(G.netTick); G.netTick = setInterval(() => { if (G.live && G.ws === ws) netLog("Reading"); }, 30000);
+  };
+  ws.onmessage = (m) => { if (G.ws !== ws) return; G.lastMsg = Date.now(); let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
+  ws.onclose = (ev) => {
+    if (G.ws !== ws || !G.live) return;
+    vlog("connection closed " + (ev && ev.code));
+    const opened = !!G.lastMsg && G.status !== "Connecting…";
+    netLog(`Voice line closed (code ${ev && ev.code}${ev && ev.reason ? ", " + String(ev.reason).slice(0, 120) : ""})${opened ? "" : " before it opened"}`);
+    if (document.visibilityState === "hidden") { interrupted("connection closed while away"); return; }
+    if (!opened && !G.drops) { endCall("couldn't connect"); toast("Couldn't connect to Grok voice. Try again in a moment."); return; }
+    reconnect("the voice line dropped");
+  };
+  ws.onerror = () => {};
+}
+// what the phone says about its connection; iPhones don't report the network type or speed, only online or offline
+function netInfo() {
+  const c = navigator.connection, bits = [navigator.onLine === false ? "offline" : "online"];
+  if (c) { if (c.type) bits.push(c.type); if (c.effectiveType) bits.push(c.effectiveType); if (c.downlink != null) bits.push(c.downlink + " Mbps"); if (c.rtt != null) bits.push("round trip " + c.rtt + " ms"); }
+  else bits.push("network type not reported by this browser");
+  if (G.lastMsg) bits.push(`last word from the voice service ${Math.round((Date.now() - G.lastMsg) / 1000)} s ago`);
+  return bits.join(", ");
+}
+function netLog(what) { act("step", `Connection: ${what}. ${netInfo()}`); }
+const MAX_DROPS = 3;
+// the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
+async function reconnect(why) {
+  if (!G.live) return;
+  if (G.drops >= MAX_DROPS) { voiceUnavailable(why); return; }
+  G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
+  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearInterval(G.netTick); stopPlayback(); paintCall();
+  const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {}
+  if (G.drops === 1) cue("drop");
+  vlog(`reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`); act("step", `Reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`);
+  await new Promise(r => setTimeout(r, [0, 1000, 3000, 6000][G.drops] || 6000));
+  if (navigator.onLine === false) await new Promise(r => { const t = setTimeout(r, 8000); window.addEventListener("online", () => { clearTimeout(t); r(); }, { once: true }); });
+  if (!G.live) return;
+  let token; try { token = await getToken(); } catch (e) { netLog("Couldn't get a voice pass (" + String(e && e.message || e).slice(0, 80) + ")"); reconnect("no voice pass"); return; }
+  if (!G.live) return;
+  G.lastMsg = 0; openSocket(token, reconnectLine());
+}
+const reconnectLine = () => { const d = draftSummary(), l = G.recent || [];
+  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${d ? d + " " : ""}Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} Then, if the last thing said was a question to the officer, ask it again; otherwise ask the next question needed to finish. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
+// after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
+function voiceUnavailable(why) {
+  netLog("Voice service unavailable after " + MAX_DROPS + " tries (" + why + ")");
+  G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "" };
+  cue("down");
+  endCall("voice service unavailable");
+  toast("The voice service isn't answering. Your form is still here. Tap the mic to try again.");
+}
+// short tones (and a spoken line when the phone allows it) so a driver knows without looking
+function cue(kind) {
+  const notes = kind === "down" ? [660, 520, 390] : [520, 660];
+  try { const ctx = G.ctx && G.ctx.state === "running" ? G.ctx : (typeof spkCtx !== "undefined" && spkCtx) || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state !== "running") ctx.resume();
+    notes.forEach((f, i) => { const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + i * 0.22;
+      o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.22); }); } catch (e) {}
+  if (kind !== "down") return;
+  try { if (window.speechSynthesis) setTimeout(() => { const u = new SpeechSynthesisUtterance("The voice service isn't answering right now. Tap the mic to try again."); u.rate = 1; speechSynthesis.speak(u); }, 750); } catch (e) {}
 }
 /* ---------- interrupted conversations: a phone call, timer, Siri or locking the phone cuts the mic and speaker ---------- */
 // keep the last few lines said, so a new conversation can pick up where the old one stopped
@@ -493,7 +557,7 @@ function interrupted(why) {
   if (!G.live || G.interrupting) return; G.interrupting = true;
   vlog("conversation interrupted: " + why);
   G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "" };
-  endCall(); G.interrupting = false;
+  endCall("interrupted: " + why); G.interrupting = false;
   if (document.visibilityState === "visible") resumeModal(); else G.endedByLock = true;
 }
 function resumeModal() {
@@ -509,13 +573,13 @@ function resumeModal() {
   document.getElementById("rsmGo").onclick = () => { h.innerHTML = ""; const r2 = G.resume; G.resume = null; G.recent = r2.lines.slice(); G.keepRecent = true; startCall(resumeLine(r2)); };
 }
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
-function endCall() {
-  clearInterval(G.idleTick); clearTimeout(G.idleTimer); G.idleEnding = false;
+function endCall(why) {
+  clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; G.hands = false; G.saveCheck = null; stopPlayback(); letSleep();
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended"); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = G.retried = false; clearTimeout(G.qTimer); clearTimeout(G.askWatch);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -648,6 +712,7 @@ function flushQueued() {
 }
 // Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
+const MAX_ASKS = 3;
 function askReply() {
   send({ type: "response.create" }); G.asked = true;
   clearTimeout(G.askWatch); G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, 5000);
@@ -656,12 +721,13 @@ function replyCheck(r) {
   if (!G.live || G.idleEnding) return;
   const asked = r.status === "never started" || G.respAsked; G.respAsked = false;
   const empty = !G.bot && !G.respTool && !G.audioSamples, failed = r.status === "failed" || r.status === "never started";
-  if (!asked || r.status === "cancelled" || (!empty && !failed)) { G.retried = false; return; }
+  if (!asked || r.status === "cancelled" || (!empty && !failed)) { G.retried = 0; if (!empty && G.drops) G.drops = 0; return; }
   const why = r.status === "never started" ? "no reply started" : r.status === "failed" ? "reply failed" + (r.status_details && r.status_details.error ? ": " + (r.status_details.error.message || r.status_details.error.type || "") : "") : "empty reply";
-  vlog("Grok gave " + why + (G.retried ? ", already asked again" : ", asking again"));
-  act("step", "Grok gave " + why + (G.retried ? " after a second ask" : ", asked again"));
-  if (G.retried) { G.retried = false; return; }
-  G.retried = true; busy(); setTimeout(() => { if (G.live && !G.responding) askReply(); }, 300);
+  G.retried = (G.retried || 0) + 1;
+  vlog(`Grok gave ${why} (${G.retried} of ${MAX_ASKS})`);
+  if (G.retried > MAX_ASKS) { act("step", `Grok gave ${why} after ${MAX_ASKS} more asks`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
+  act("step", `Grok gave ${why}, asked again (${G.retried} of ${MAX_ASKS})`);
+  busy(); setTimeout(() => { if (G.live && !G.responding) askReply(); }, 300 * G.retried);
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;

@@ -65,7 +65,7 @@ function settingsScreen() {
     ${saveTip(true)}</div></section>
   <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
     <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" enterkeyhint="done" value="${esc(S.settings.userName || "")}"></label>
-    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This proof of concept saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, with your first name, a random ID for this phone and your rough location (city), to improve the proof of concept. No audio is kept. Kept for 90 days.</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This proof of concept saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, how well your connection to the voice service holds up during a conversation, with your first name, a random ID for this phone and your rough location (city), to improve the proof of concept. No audio is kept. Kept for 90 days.</div>
   </div></section>
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
@@ -129,7 +129,7 @@ document.addEventListener("click", (e) => {
   const g = e.target.closest("[data-go]"); if (g) { if (g.dataset.go === "hfcheck") { go("home"); hfCheckModal(); return; } go(g.dataset.go); return; }
   const a = e.target.closest("[data-act2]"); if (!a) return;
   const act = a.dataset.act2;
-  if (act === "mic") { if (G.live) endCall(); else ask(null); }
+  if (act === "mic") { if (G.live) endCall("officer tapped the mic"); else ask(null); }
   else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
   else if (act === "cfilt") { S.cFilter = a.dataset.v; save(); render(); }

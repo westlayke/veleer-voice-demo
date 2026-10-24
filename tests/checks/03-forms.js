@@ -56,6 +56,7 @@ test("The + button on every screen opens one menu to log, add or record anything
 });
 test("Ending a conversation with a form open brings back the voice button, keeping what was filled in", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Ito, Ken"); await p.waitForTimeout(300);
+  if (await p.evaluate(() => G.live)) { await p.tap(".cb-end"); await p.waitForTimeout(300); } // the welcome conversation may still be open
   await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap("[data-qa=meeting]"); await p.waitForTimeout(300);
   await p.tap("[data-act=voicefill]"); await p.waitForTimeout(600);
   ok(!(await p.locator(".vfill").count()), "the voice button stayed during the conversation");

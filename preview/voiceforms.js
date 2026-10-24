@@ -78,7 +78,7 @@ function grokSaved(action, r, d = {}) {
   notice(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see that's saved: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who.split(" ")[0] : ""}."), even if the officer has started talking; then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (!a) return;
-  if (a.dataset.act3 === "end") endCall();
+  if (a.dataset.act3 === "end") endCall("officer tapped End");
   else if (a.dataset.act3 === "hands") { setHandsFree(!G.hands);
     notice(G.hands ? `The officer tapped Hands-free, so hands-free mode is on. Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `The officer tapped to turn hands-free mode off. Say only "Hands-free is off. You'll tap Save yourself again."`); } });
 // Hands-free (driving) mode: Ara saves a finished form after reading it back and hearing the officer's own yes. It lasts until the call ends.

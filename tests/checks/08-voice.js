@@ -252,19 +252,39 @@ test("Ara: an interaction's summary is taken from the officer's answer when Ara 
 });
 
 
-test("Ara: when Grok goes silent after the app asks for a reply, the app asks once more and logs it; Grok errors are logged", async (p) => {
+test("Ara: when Grok goes silent after the app asks for a reply, the app asks up to 3 more times, then reconnects; Grok errors are logged", async (p) => {
   await signIn(p); await p.waitForTimeout(300);
   const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
   const creates = () => p.evaluate(() => __sent.filter(s => JSON.parse(s).type === "response.create").length);
   await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
   await p.evaluate(() => notice("Ask the officer the next question."));
-  const c0 = await creates();
-  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(500);
-  ok(await creates() === c0 + 1, "an empty reply was not asked for again");
-  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(500);
-  ok(await creates() === c0 + 1, "the app kept asking after a second empty reply");
+  const c0 = await creates(), ws0 = await p.evaluate(() => { window.__ws0 = __ws; return true; });
+  for (let i = 1; i <= 3; i++) { await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300 * i + 200);
+    ok(await creates() === c0 + i, `empty reply ${i} was not asked for again`); }
   await fire([{ type: "error", error: { message: "Something broke upstream" } }]); await p.waitForTimeout(100);
+  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => __ws !== __ws0 && G.live), "after 3 more silent replies the app did not open a new voice line");
   const q = await p.evaluate(() => ACT.q.map(a => a.text).join(" | ") + " | " + __logs.map(l => JSON.stringify(l)).join(" "));
-  ok(/empty reply, asked again/.test(q) && /after a second ask/.test(q) && /Grok error: Something broke upstream/.test(q), "the silent replies or the Grok error were not logged");
+  ok(/empty reply, asked again \(1 of 3\)/.test(q) && /after 3 more asks/.test(q) && /Reconnecting \(1 of 3\)/.test(q) && /Grok error: Something broke upstream/.test(q), "the silent replies, the reconnect or the Grok error were not logged");
+});
+test("Ara: a dropped voice line reconnects and picks up where it left off; after 3 failed tries the phone says the voice service is unavailable", async (p) => {
+  await signIn(p); await p.waitForTimeout(300);
+  await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
+  await p.evaluate(() => recent(botName(), "Which entity is the ask for?"));
+  await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1200);
+  const back = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, sorry: __sent.some(s => s.includes("Sorry, I lost you") && s.includes("Which entity is the ask for?")) }));
+  ok(back.newLine && back.live && back.sorry, "the dropped line wasn't reopened with the last question and the open form");
+  ok(await p.evaluate(() => !!document.getElementById("draftForm")), "the planned ask form closed when the line dropped");
+  await p.evaluate(() => { window.speechSynthesis.speak = (u) => { window.__spoke = u.text; }; });
+  await p.evaluate(() => { G.drops = 3; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
+  const out = await p.evaluate(() => ({ live: G.live, spoke: window.__spoke || "", log: ACT.q.map(a => a.text).join(" | ") + __logs.map(l => JSON.stringify(l)).join(" ") }));
+  ok(!out.live && /isn't answering/.test(out.spoke), "after the tries ran out the call didn't end with a spoken line");
+  ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 3 tries/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
+});
+test("Ara: a planned ask for an entity with a state campaign leaves the campaign blank so Ara asks for it", async (p) => {
+  await signIn(p); await p.waitForTimeout(300);
+  const r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "C.A. Pennsylvania C4" });
+  ok(await p.inputValue("#f_campaign") === "", "the campaign was filled in without asking");
+  ok((r.still_needed || r.missing || []).some(x => /Campaign/.test(x) && /National or Pennsylvania/.test(x)), "Ara wasn't told to ask National or Pennsylvania");
 });
 };
