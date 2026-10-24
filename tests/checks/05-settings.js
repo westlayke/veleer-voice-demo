@@ -195,8 +195,8 @@ test("Halloween: an owl asks for a tap so sounds can play, hoots when tapped, an
   if (new Date().getMonth() !== 9) return;
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Home"); await p.waitForTimeout(300);
   await p.evaluate(() => { spkCtx = null; delete window.__demo.state.settings.seenOwlHint; document.getElementById("modal").innerHTML = ""; window.__demo.owlHint(); });
-  await p.waitForTimeout(1000);
-  ok(await p.isVisible(".owlhint >> text=Tap me to hear me hoot!"), "the owl with its speech bubble didn't appear");
+  const seen = await p.waitForSelector(".owlhint >> text=Tap me to hear me hoot!", { timeout: 5000 }).then(() => true, () => false); // waits as long as a busy machine needs
+  ok(seen, "the owl with its speech bubble didn't appear");
   const n = await p.evaluate(() => window.__demo.spkPlayed);
   await p.tap(".owlhint-owl"); await p.waitForTimeout(500);
   ok(await p.isVisible(".owlhint >> text=Sounds are on"), "the owl didn't say the sounds are on");
