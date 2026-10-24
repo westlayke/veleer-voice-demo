@@ -11,6 +11,7 @@ const OPT_STEPS = {
     { k: "flags", q: (who) => `Last one: should ${who} be marked Ally - Do Not Solicit, or Do Not Contact? Most people are neither.` } ],
   opportunity: [
     { k: "fund", q: () => `Which entity are they most likely to give to? For example Citizens Alliance C3, or one of the C4s or PACs.` },
+    { k: "campaign", when: (d) => !!d.fund && campaignsFor(d.fund).length > 1, q: () => { const f = readDraft().fund; return `Which campaign: National, or ${ENTITY_STATE[f]}?`; } },
     { k: "potential", q: () => `What's the potential amount?` },
     { k: "notes", q: () => `Any notes to add?` } ] };
 const optEmpty = (v) => v === null || v === undefined || String(v).trim() === "";
@@ -28,10 +29,10 @@ function optParse(k, raw) { // the officer's answer in their words -> the field'
     if (/\b(neither|nor|none)\b/.test(l) || (/^(no|nope|nah)\b/.test(l) && !/\bally\b|contact|solicit/.test(l))) return { ally: false, dnc: false }; // "neither Ally - Do Not Solicit nor Do Not Contact" named both but meant neither (Oct 24)
     const ally = /\bally\b|do not solicit|don't ask|do not ask/.test(l) && !/\bnot (an )?ally\b/.test(l), dnc = /do not contact|don't contact|\bdnc\b/.test(l) && !/\bnot do not contact\b/.test(l);
     if (ally || dnc) return { ally, dnc }; return none ? { ally: false, dnc: false } : null; }
-  if (k === "fund") { const n = l.replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(); if (!n) return null;
-    const hits = FUNDS.filter(f => { const fl = f.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " "); return fl === n || fl.includes(n) || n.includes(fl); });
-    return hits.length === 1 ? hits[0] : null; }
-  if (k === "potential") { const m = l.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*(k|thousand|m|million)?/); if (!m) return null; return Math.round(Number(m[1]) * (/^(k|thousand)$/.test(m[2] || "") ? 1000 : /^(m|million)$/.test(m[2] || "") ? 1e6 : 1)); }
+  if (k === "fund") { const { hits } = matchEntity(t); return hits.length === 1 ? hits[0] : null; }
+  if (k === "campaign") { const f = readDraft().fund, ok = campaignsFor(f), st = ENTITY_STATE[f];
+    if (/\bnational\b/.test(l)) return "National"; if (st && (l.includes(st.toLowerCase()) || /\bstate\b/.test(l))) return st; return null; }
+  if (k === "potential") return spokenAmount(t);
   return t || null; // how we met, texting source, notes: their words
 }
 function optAsk(callId, lead) { // say the next question, or wrap up
@@ -49,10 +50,10 @@ function optStep(callId, data) {
   if (step === "skip") { V.opt.done.push(k); act("step", "optional field skipped: " + k); optAsk(callId, "Skip it and move on."); return; }
   const v = optParse(k, data.value);
   if (v === null) { const st = OPT_STEPS[V.action].find(s => s.k === k);
-    toolReply(callId, { ok: false, field: k, error: `The app couldn't read "${data.value || ""}" as an answer to this question.`, say: k === "fund" ? `Say you didn't catch which entity, and read the choices: ${FUNDS.join(", ")}.` : `Say in a few words that you didn't catch that, then ask again: "${st.q(optWho())}"` }); return; }
+    toolReply(callId, { ok: false, field: k, error: `The app couldn't read "${data.value || ""}" as an answer to this question.`, say: k === "fund" ? (() => { const { hits } = matchEntity(data.value); return hits.length > 1 ? `Ask which one they mean: ${hits.join(", or ")}.` : `Say you didn't catch which entity. Give the short version: Citizens Alliance C3, C.A. of America Action C4, C.A. Fed PAC, or a state C4 or PAC in Idaho, North Dakota, New Hampshire or Pennsylvania. Ask which.`; })() : `Say in a few words that you didn't catch that, then ask again: "${st.q(optWho())}"` }); return; }
   if (k === "flags") { optSet("ally", v.ally); optSet("dnc", v.dnc); } else optSet(k, v);
   V.opt.done.push(k); act("step", "optional field " + k + ": " + JSON.stringify(v));
-  const heard = k === "capacity" ? `Rating ${v} is on the form.` : k === "permText" ? (v ? "Texting is now permitted on the form." : "Texting stays off.") : k === "flags" ? (v.ally || v.dnc ? `${[v.ally && "Ally - Do Not Solicit", v.dnc && "Do Not Contact"].filter(Boolean).join(" and ")} is now on the form.` : "Neither flag is set.") : k === "potential" ? `${money(v)} is on the form.` : "That's on the form.";
+  const heard = k === "capacity" ? `Rating ${v} is on the form.` : k === "permText" ? (v ? "Texting is now permitted on the form." : "Texting stays off.") : k === "flags" ? (v.ally || v.dnc ? `${[v.ally && "Ally - Do Not Solicit", v.dnc && "Do Not Contact"].filter(Boolean).join(" and ")} is now on the form.` : "Neither flag is set.") : k === "potential" ? `${money(v)} is on the form.` : k === "fund" ? (campaignsFor(v).length === 1 ? `${v} is on the form, with the National campaign, its only campaign.` : `${v} is on the form.`) : k === "campaign" ? `The ${v} campaign is on the form.` : "That's on the form.";
   optAsk(callId, `${heard} Acknowledge it in two or three words.`);
 }
 // a few words of human reaction to what was just saved (good news, a setback), said before Ara confirms the save

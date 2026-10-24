@@ -161,7 +161,7 @@ const TOOL_HANDLERS = {
       stage: F(o.stage === "Closed" ? `Closed ${o.closed || ""}`.trim() : o.stage, "The system moves the stage only when something is recorded (an ask, pledge, gift or payment). The only manual move is Move to Cultivation, or Defer with a reason. Nobody sets the stage directly."),
       next_action_button: F(o.stage === "Closed" ? "None, it's closed" : NEXT[o.stage], "Follows the stage"),
       gift_officer: F(OFFICER, "Only the Chief Gift Officer can reassign an opportunity"),
-      potential: F(money(o.potential), "You (the gift officer)"), entity: F(o.fund, "You (the gift officer)"),
+      potential: F(money(o.potential), "You (the gift officer)"), entity: F(o.fund, "You (the gift officer)"), campaign: F(o.campaign || "", "You (the gift officer)"),
       asked_tile: F(askedOf(o) ? money(askedOf(o)) : "Nothing asked yet", "Calculated by the system: the latest revised ask"),
       asks: F(asks.length ? asks : "No asks yet", "See each ask"),
       pledge: F(p ? { type: p.implied ? "Implied commitment (a gift arrived while the ask was open)" : p.outright ? "Outright gift agreed at the ask, waiting for the gift" : "Pledge", amount: money(p.amount), entity: p.fund, confirmed_by: p.confirmedBy, confirmed_on: fmtDate(p.confirmedDate), installments: p.installments, frequency: p.frequency || "", first_payment: money(p.firstAmount), first_due: p.firstDue ? fmtDate(p.firstDue) : "", paid: money(paid), balance: money(Math.max(0, p.amount - paid)), status: p.status || "Open" } : "None", p ? MONEY : "Recorded with Record pledge"),

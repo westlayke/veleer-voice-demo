@@ -92,7 +92,7 @@ const TOOLS = [
     text: { type: "string", description: "What to do, as a short imperative, e.g. Send Ruth the annual report" }, due: S_DATE,
     onOpp: { type: "boolean", description: "True if the officer wants the task on the contact's opportunity (or is looking at it); false for the contact only" } }) },
   { action: "opportunity", name: "show_opportunity_draft", description: "Show a new Opportunity draft for a contact.", req: ["contact_name"], props: Object.assign({}, FOR, {
-    fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, potential: { type: "number", description: "Dollars" }, notes: { type: "string" } }) },
+    fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, campaign: { type: "string", enum: CAMPAIGNS, description: "Campaign of interest. Must suit the entity: National, or the entity's own state. " + ENTITY_RULE }, potential: { type: "number", description: "Dollars" }, notes: { type: "string" } }) },
   { action: "plan", name: "show_ask_plan_draft", description: "Show a planned Ask draft (Add planned ask) on the contact's open opportunity.", req: ["contact_name", "fund", "campaign", "plannedDate", "amount"], props: Object.assign({}, FOR, {
     fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, campaign: { type: "string", enum: CAMPAIGNS, description: "Must suit the entity: National, or the entity's own state. " + ENTITY_RULE }, plannedDate: S_DATE, amount: { type: "number" },
     askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
