@@ -37,6 +37,7 @@ let spkCtx = null, spkPlayed = 0;
 // iPhones only allow sound after a tap: start the sound engine in the tap (touchend and click count on an iPhone, pointerdown doesn't) and play a silent blip.
 // The page never changes the phone's audio mode: doing that left Ara silent on iPhones (Oct 24)
 function spkUnlock() {
+  if (G.live) return; // never touch a second sound engine during a conversation: on an iPhone that paused Ara's audio or muted the mic (Oct 24)
   try { if (!spkCtx) { spkCtx = new (window.AudioContext || window.webkitAudioContext)(); const b = spkCtx.createBufferSource(); b.buffer = spkCtx.createBuffer(1, 1, 22050); b.connect(spkCtx.destination); b.start(0); }
     if (spkCtx.state !== "running") spkCtx.resume(); } catch (e) {}
 }
