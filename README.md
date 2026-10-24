@@ -21,6 +21,15 @@ GitHub shows the repository owner as the author of every commit; the person who 
 
 To list the history with who asked and why: `git log --format='%ad %s%n%(trailers:key=Requested-by,key=Reason,key=Approved-for-live-by)' --date=format:'%Y-%m-%d %H:%M'`
 
+## Files
+
+The page itself is short. Its styles and code are in a folder beside it, split by topic and loaded in this order (they share one scope, so a later file can use anything an earlier one defines):
+
+- `preview/` is the preview's copy, used by `preview-flow.html`; `app/` is the live copy, used by `index.html`. Change only `preview/`.
+- `app.css` styles; `core.js` lists, settings, example data and saved data (with its numbered upgrade steps); `drafts.js` finding contacts, draft forms and saves; `voice.js` the conversation with Ara; `screens.js` screens, phone calls and task statuses; `guide.js` the process overview and Process FAQ; `start.js` updates and start-up.
+
+To publish: `tools/publish.sh preview` stamps the preview with the time, and `tools/publish.sh live` copies the preview to `index.html` and `app/`. Run the test bot after either one, and commit only when every check passes.
+
 ## Test bot
 
 `tests/bot.js` taps through the app like a person (screens, back buttons, typed forms, task statuses, Settings) and plays Ara's side of a conversation with a pretend voice line, so it never calls xAI. Run it with `node tests/bot.js` (preview) or `PAGE=index.html node tests/bot.js` (live). GitHub runs it on every push to main and every morning (Actions tab, "Test bot"); failures save screenshots.

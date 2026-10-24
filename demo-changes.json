@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "The demo's one large file was split into a short page plus a styles file and six code files by topic (lists and saved data, forms, the conversation with Ara, screens, the process guide, start-up). Nothing on screen changes; each part is now easier to find and change.",
+   "area": "Maintenance"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "The data saved on each phone now carries a version number. When the demo is updated, a phone upgrades its saved contacts, opportunities and settings one step at a time from its own version, so phones that haven't opened the demo in a while keep working.",
    "area": "Maintenance"
   },
