@@ -23,6 +23,13 @@ function officerRated() {
   return lines.some(t => /\b(capacity|rating|rated|rate them|rate her|rate him)\b/.test(t) || /\$\s?\d|\b\d+\s?(k|thousand|million)\b|\b(thousand|million|grand)\b|\b(donat\w*|gives?|gave|giving)\b.*\b(dollars?|a year|annually)\b|\bunder (five|5)\b/.test(t)
     || /^(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)[.!]?( please)?[.!]?$/.test(t.replace(/^(it's|its|make it|let's say|lets say|say|um|uh|okay|ok)[, ]+/, "")));
 }
+// the officer's last words turn texting on or off ("texting is permitted", "you can text him", "no texts"), or null if they didn't mention texting
+function officerSaidTexting() {
+  const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9).toLowerCase().replace(/[’‘]/g, "'");
+  if (!/\btext(s|ing|ed)?\b/.test(t)) return null;
+  if (/\b(no|not|don't|do not|never|shouldn't|can't|cannot|off)\b/.test(t)) return false;
+  return /\b(permit|permitted|allow|allowed|ok|okay|fine|yes|can|should|turn on|on|check|tick|agreed|sure)\b/.test(t) ? true : null;
+}
 function normCap(v) {
   if (v == null) return null; const t = String(v).trim(); if (!t) return null;
   let m = t.match(/^([A-Ea-e])(?![a-z])/); if (m) return m[1].toUpperCase();
@@ -116,6 +123,7 @@ const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function"
     { type: "function", name: "pass_question_to_team", description: "Send a question you can't answer, or a problem or suggestion about the proof of concept, to the project team. Only call it after the officer says yes to passing it on. Write it in the officer's own words, with any detail they gave.", parameters: { type: "object", properties: { question: { type: "string" } }, required: ["question"] } },
     { type: "function", name: "save_form", description: "Hands-free mode only: save the open form for the officer, who is driving and can't tap. First call it with confirmed false: the app gives you a read-back to say word for word. Call it again with confirmed true only after the officer says yes to that read-back. A gift or pledge then gets a second check of the amount, and needs a second yes. The app checks the officer's own words before saving.", parameters: { type: "object", properties: { confirmed: { type: "boolean" } }, required: ["confirmed"] } },
     { type: "function", name: "set_hands_free", description: "Turn hands-free (driving) mode on or off when the officer asks, for example \"I'm driving\" or \"I've parked\". In hands-free mode you read each finished form back and save it when they say yes.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
+    { type: "function", name: "optional_fields", description: "Go through a new contact's or new opportunity's optional fields one at a time; the app asks the questions and fills in the answers. step: start (the officer said yes to adding more details), answer (pass the officer's answer to the question you just asked, in their words, as value), skip (they want to skip this one), stop (they've had enough). Each reply tells you exactly what to say next.", parameters: { type: "object", properties: { step: { type: "string", enum: ["start", "answer", "skip", "stop"] }, value: { type: "string", description: "With answer: the officer's answer, for example \"D\", \"yes\", \"neither\", \"C4\", \"50000\" or a sentence" } }, required: ["step"] } },
     { type: "function", name: "set_spooky_mode", description: "Turn spooky mode (Halloween fun: a night look for the app, you as a haunted-house host, spooky sounds) on when the officer says \"spooky mode\", or off when they say \"normal mode\". It only exists in October.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
     { type: "function", name: "close_form", description: "Close the open form without saving (close), or clear it to start again (clear), when the officer asks in words the app didn't already carry out. Never say a form was closed or cleared unless this returns ok.", parameters: { type: "object", properties: { change: { type: "string", enum: ["close", "clear"] } }, required: ["change"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short, warm goodbye first (for example \"Great work today, talk soon!\"; vary it), then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
@@ -132,7 +140,7 @@ You are ${botName()}, the voice assistant inside Citizens VCRM (built on Veleer)
 
 # How you talk
 Speak warmly and briefly: one or two short sentences per turn. Your personality: friendly, upbeat and a little playful, like a favourite colleague. Use everyday contractions and, now and then, a light touch of a few words ("Nice!", "Love it.", "Ooh, good one.", "Got it!"), and vary your wording so you never sound scripted. Share in the officer's wins and show a little sympathy when something goes badly. Never joke about investors, money, Do Not Contact or Ally flags, or the officer's mistakes, and never let personality add a sentence or slow down a task. Lines the app gives you word for word stay exact.
-Ask at most one question at a time, and only for a required field the officer hasn't said. Never ask about optional fields, except the ones named below (email and mobile and the one optional-fields question for a new contact or opportunity, and the next step for a substantive meeting). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
+Ask at most one question at a time, and only for a required field the officer hasn't said. Never ask about optional fields, except the ones named below (email and mobile and the optional-fields questions the app gives you for a new contact or opportunity, and the next step for a substantive meeting). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
 Call the money's recipient the "entity" (C3, C4 or PAC), never "fund". Say "gift", never "payment". Write spoken email addresses as real addresses. Resolve relative dates against today. When the officer spells something letter by letter, use exactly those letters in the field they mean; "T as in Tom" and words like Tango or Delta stand for their first letter. When they correct how a name is spelled, ask once whether the email address should change to match.
 If the officer asks what you can do, say exactly: "${CAN_DO}"
 If they ask what they can say, what phrases or commands you understand, or for the voice commands, say exactly: "${CMD_LIST}"
@@ -148,7 +156,7 @@ You can see saves: the app tells you each time one happens and lists them under 
 
 # Task by task
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record a gift, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
-New contact: always ask for their email and their mobile number (one question at a time, skipping any the officer already gave), explaining briefly that a contact needs at least one; without either it can't be saved. Then ask once whether they'd like to fill in any optional fields, listing them in one sentence: how you met them, texting permitted, whether they're an ally who shouldn't be asked for a gift, and Do Not Contact; mention that email and calls are already allowed. Fill in only the ones they choose. If they turn texting on, ask how the person agreed to texts (the texting permission source); never ask for it otherwise. If they want none, tell them they can review the form and tap Save contact.
+New contact: always ask for their email and their mobile number (one question at a time, skipping any the officer already gave), explaining briefly that a contact needs at least one; without either it can't be saved. Then the app has you ask once whether they'd like to add more details; if yes, call optional_fields with step start and let the app lead: it gives you one question at a time and fills in each answer itself. Pass every answer to optional_fields (step answer, their words as value); "skip" and "that's enough" are steps skip and stop. Never list all the optional fields at once, and never jump ahead of the app's questions. The same goes for a new opportunity's optional details.
 Existing contact: to change their details call show_contact_edit_draft with only what changes; never use show_contact_draft for someone who is already a contact.
 Logging a meeting (show_interaction_draft) or recording an ask (show_ask_result_draft): if the officer hasn't said how it happened, ask "Was it in person, a phone call, or a video call?" Always pass date (resolved from what they said, for example yesterday) and meetingType; leaving them out puts today and In person on the draft. A substantive meeting whose outcome isn't Not interested or Referred elsewhere needs a next step and its due date, and so does an ask unless the investor declined: if not said, ask "What's the next step, and when is it due?" before asking them to save.
 Booking a future meeting is show_meeting_draft (ask for the day and start time if not said). After they tap Add to Google Calendar, Google Calendar opens and the conversation ends.
@@ -529,7 +537,7 @@ function formCommand(t) {
   return words.includes("R") ? "restart" : "cancel";
 }
 function cancelForm() { const what = ACTIONS[V.action].title; V = null; renderOverlay(); return what; }
-function restartForm() { V.history = []; V.data = prefill(V.action, {}, V.target); V.fromVoice = new Set(); V.askedOther = V.askedOptional = false; renderOverlay(); return ACTIONS[V.action].title; }
+function restartForm() { V.history = []; V.data = prefill(V.action, {}, V.target); V.fromVoice = new Set(); V.askedOther = V.askedOptional = false; V.opt = null; renderOverlay(); return ACTIONS[V.action].title; }
 function voiceCommand(text) {
   const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim().replace(/^((please|okay|ok|um|uh|hey|ara|so) )+/, "").replace(/ please$/, "");
   const hit = VOICE_CMDS.find(([re]) => re.test(t)), cmd = hit ? hit[1] : formCommand(t); if (!cmd) return false;
@@ -697,6 +705,7 @@ const TOOL_HANDLERS = {
     setHandsFree(!!data.on);
     toolReply(callId, { ok: true, hands_free: G.hands, say: G.hands ? `Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `Say only "Hands-free is off. You'll tap Save yourself again."` }); return;
   },
+  optional_fields(callId, data, name) { optStep(callId, data); return; },
   set_spooky_mode(callId, data, name) {
     if (!spookySeason()) { toolReply(callId, { ok: false, error: "Spooky mode is only around in October.", say: "Say in one short sentence that spooky mode is only around in October." }); return; }
     if (!!data.on === spookyMode()) { toolReply(callId, { ok: true, spooky: spookyMode(), already: true, status: `Spooky mode is already ${spookyMode() ? "on" : "off"}. Don't announce it again.` }, false); return; } // e.g. after Carry on: nothing to redo, and no second welcome
@@ -909,6 +918,8 @@ function draftTool(callId, name, data) {
   if ("capacity" in data) { const r = normCap(data.capacity); if (r) data.capacity = r; else { if (data.capacity) vlog(`${name}: couldn't read capacity "${data.capacity}"`); delete data.capacity; } }
   // the voice model tends to fill in a rating nobody gave (usually E): keep it only if the officer just talked about one
   if (data.capacity && !(V && V.data && V.data.capacity === data.capacity) && !officerRated()) { vlog(`${name}: dropped capacity "${data.capacity}" (the officer didn't give a rating)`); delete data.capacity; }
+  // the voice model doesn't send texting permitted on a new contact (seen Oct 24: eight tries, never sent): take it from the officer's own words
+  if ((tool.action === "contact" || tool.action === "editContact") && data.permText === undefined) { const t = officerSaidTexting(); if (t !== null) { data.permText = t; vlog(`${name}: texting ${t ? "permitted" : "not permitted"}, from the officer's words`); } }
   const said = Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined);
   // the officer spelled something out: check it made it into this update (Grok sometimes resends the old fields instead)
   const flat = said.map(k => String(data[k]).toLowerCase().replace(/[^a-z]/g, "")).join(" ");
@@ -929,12 +940,66 @@ function draftTool(callId, name, data) {
   if (missedSpelling.length) { toolReply(callId, { ok: true, button: A.saveLabel, status: `The officer just spelled out ${missedSpelling.map(w => `"${spellOut(w)}" (${w.charAt(0) + w.slice(1).toLowerCase()})`).join(" and ")}, but this update didn't use it. Call this tool again now with that exact spelling in the field they named (for a name, first or last as they said; for an email, the part before the @). If they changed how a name is spelled and the email uses that name, ask once whether the email should change to match. Don't ask them to repeat it.` }); return; }
   if (tool.action === "contact" && !missing.length) {
     if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true; toolReply(callId, { ok: true, button: A.saveLabel, status: `The draft is open on screen. Now ask in one short question for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.` }); return; }
-    if (!V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, optional_fields: ["Capacity rating (needed before an opportunity)", "How you met them", "Texting permitted", "Ally - Do Not Solicit", "Do Not Contact"], ratings: CAPACITY, status: `The required details are in. Before anything else, ask exactly this: "Would you like to add any optional details? You can add a capacity rating for how much they could give, which you'll need before they can move on to an opportunity. You can also add how you met them, whether texting is permitted, whether they're an ally we shouldn't ask for a gift, and Do Not Contact. Email and calls are already allowed." If they turn texting on, also ask how the person agreed to texts. If they want a capacity rating and don't name one, read the bands: A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, E is under $5,000. Fill in only what they choose, one question at a time, calling this tool after each answer; never pick a rating for them. If they say no, ask them to check the form and tap "${A.saveLabel}".` }); return; }
+    if (!V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, status: OPT_OFFER }); return; }
   }
-  if (tool.action === "opportunity" && !missing.length && !V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, optional_fields: ["Entity of interest", "Potential amount", "Notes"], status: `The draft is open on screen. Before anything else, ask exactly this: "Do you have enough information yet to add any optional details? You can add the entity of interest, which is C3, C4 or PAC, a potential amount, and notes." If they give any, call this tool again with them. If not, ask them to check the draft and tap "${A.saveLabel}".` }); return; }
+  if (tool.action === "opportunity" && !missing.length && !V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, status: OPT_OFFER }); return; }
   toolReply(callId, missing.length
     ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}.${onForm.length ? ` Already on the form, some filled in from earlier steps: ${onForm.join("; ")}. Never ask for these again; if the officer asks, confirm what's there.` : ""}${badDates.length ? ` The app couldn't read ${badDates.join(", ")} as a date: send dates as YYYY-MM-DD (today is ${todayISO()}).` : ""}${missing.includes("Summary") ? " When the officer describes what happened, put it in the summary parameter (1 to 3 sentences, past tense, in their words) and call this tool again with it." : ""} Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
     : { ok: true, button: A.saveLabel, status: G.hands && tool.action !== "meeting" ? `The draft is complete but NOT saved. Hands-free mode is on: call save_form with confirmed false now and say the read-back it returns.` : `The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${A.saveLabel}" button (say that exact label).` });
+}
+// Optional fields, one at a time (Oct 24, after testers found the one long list hard to follow): the app asks each question and fills in each answer itself
+const OPT_OFFER = `The required details are in. Before anything else, ask exactly this: "Would you like to add more details? I can take you through them one at a time." If yes, call optional_fields with step start. If no, ask them to check the draft and tap the button.`;
+const OPT_STEPS = {
+  contact: [
+    { k: "capacity", q: (who) => `Capacity rating first. A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000. Which fits ${who}, or shall we skip it?` },
+    { k: "howMet", q: (who) => `How did you meet ${who}?` },
+    { k: "permText", when: (d) => !!String(d.mobile || "").trim(), q: (who) => `Is it OK to text ${who} on their mobile?` },
+    { k: "permSource", when: (d) => !!d.permText, q: (who) => `How did ${who} agree to texts?` },
+    { k: "flags", q: (who) => `Last one: should ${who} be marked Ally - Do Not Solicit, or Do Not Contact? Most people are neither.` } ],
+  opportunity: [
+    { k: "fund", q: () => `Which entity are they most likely to give to? For example Citizens Alliance C3, or one of the C4s or PACs.` },
+    { k: "potential", q: () => `What's the potential amount?` },
+    { k: "notes", q: () => `Any notes to add?` } ] };
+const optEmpty = (v) => v === null || v === undefined || String(v).trim() === "";
+const optWho = () => { const d = readDraft(), c = V.target && V.target.contact; return V.action === "contact" ? (d.first || "them") : c ? c.first : "them"; };
+function optNext() { // the next question still to ask: skips anything already answered or already on the form
+  const d = readDraft(), steps = OPT_STEPS[V.action] || [];
+  return steps.find(st => !V.opt.done.includes(st.k) && (!st.when || st.when(d)) && (st.k === "flags" || st.k === "permText" ? true : optEmpty(d[st.k])));
+}
+function optSet(k, v) { const cur = readDraft(); (V.history = V.history || []).push(Object.assign({}, cur)); cur[k] = v; V.fromVoice.add(k); V.data = prefill(V.action, cur, V.target); renderOverlay(); }
+function optParse(k, raw) { // the officer's answer in their words -> the field's value, or null if it can't be read
+  const t = String(raw || "").trim(), l = t.toLowerCase().replace(/[’‘]/g, "'");
+  if (k === "capacity") return normCap(t.replace(/^(it's|its|make it|let's say|lets say|say|rating|capacity)\s+/i, "").replace(/^(bee|be)\b/i, "B").replace(/^(see|sea|cee)\b/i, "C").replace(/^dee\b/i, "D").replace(/^ee\b/i, "E"));
+  if (k === "permText") return /^(no|nope|nah|not)\b|\b(don't|do not|not ok|not okay|shouldn't|can't)\b/.test(l) ? false : /\b(yes|yeah|yep|sure|ok|okay|fine|allowed|permitted|go ahead|of course|absolutely)\b/.test(l) ? true : null;
+  if (k === "flags") { const none = /\b(neither|none|no|nope|nah|not)\b/.test(l) && !/\b(ally|do not contact|dnc)\b.*\b(yes)\b/.test(l);
+    const ally = /\bally\b|do not solicit|don't ask|do not ask/.test(l) && !/\bnot (an )?ally\b/.test(l), dnc = /do not contact|don't contact|\bdnc\b/.test(l) && !/\bnot do not contact\b/.test(l);
+    if (ally || dnc) return { ally, dnc }; return none ? { ally: false, dnc: false } : null; }
+  if (k === "fund") { const n = l.replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(); if (!n) return null;
+    const hits = FUNDS.filter(f => { const fl = f.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " "); return fl === n || fl.includes(n) || n.includes(fl); });
+    return hits.length === 1 ? hits[0] : null; }
+  if (k === "potential") { const m = l.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*(k|thousand|m|million)?/); if (!m) return null; return Math.round(Number(m[1]) * (/^(k|thousand)$/.test(m[2] || "") ? 1000 : /^(m|million)$/.test(m[2] || "") ? 1e6 : 1)); }
+  return t || null; // how we met, texting source, notes: their words
+}
+function optAsk(callId, lead) { // say the next question, or wrap up
+  const st = optNext(), A = ACTIONS[V.action];
+  if (st) { V.opt.cur = st.k; toolReply(callId, { ok: true, field: st.k, say: `${lead ? lead + " " : ""}Then ask exactly: "${st.q(optWho())}"`, status: "After the answer, call optional_fields with step answer and their words as value (or step skip or stop)." }); return; }
+  V.opt = null;
+  toolReply(callId, { ok: true, done: true, button: A.saveLabel, status: `${lead ? lead + " " : ""}That was the last optional field. ${G.hands ? "Hands-free mode is on: call save_form with confirmed false now and say the read-back it returns." : `In one short sentence say the details are in, then ask them to check the draft and tap "${A.saveLabel}".`}` });
+}
+function optStep(callId, data) {
+  if (!V || !OPT_STEPS[V.action]) { toolReply(callId, { ok: false, error: "No new contact or new opportunity form is open." }); return; }
+  const step = data.step || "answer";
+  if (step === "start" || !V.opt) { V.opt = V.opt || { done: [] }; if (step === "start" || !V.opt.cur) { optAsk(callId); return; } }
+  if (step === "stop") { V.opt.done = (OPT_STEPS[V.action] || []).map(s => s.k); optAsk(callId, "Fine, no more questions."); return; }
+  const k = V.opt.cur; if (!k) { optAsk(callId); return; }
+  if (step === "skip") { V.opt.done.push(k); act("step", "optional field skipped: " + k); optAsk(callId, "Skip it and move on."); return; }
+  const v = optParse(k, data.value);
+  if (v === null) { const st = OPT_STEPS[V.action].find(s => s.k === k);
+    toolReply(callId, { ok: false, field: k, error: `The app couldn't read "${data.value || ""}" as an answer to this question.`, say: k === "fund" ? `Say you didn't catch which entity, and read the choices: ${FUNDS.join(", ")}.` : `Say in a few words that you didn't catch that, then ask again: "${st.q(optWho())}"` }); return; }
+  if (k === "flags") { optSet("ally", v.ally); optSet("dnc", v.dnc); } else optSet(k, v);
+  V.opt.done.push(k); act("step", "optional field " + k + ": " + JSON.stringify(v));
+  const heard = k === "capacity" ? `Rating ${v} is on the form.` : k === "permText" ? (v ? "Texting is now permitted on the form." : "Texting stays off.") : k === "flags" ? (v.ally || v.dnc ? `${[v.ally && "Ally - Do Not Solicit", v.dnc && "Do Not Contact"].filter(Boolean).join(" and ")} is now on the form.` : "Neither flag is set.") : k === "potential" ? `${money(v)} is on the form.` : "That's on the form.";
+  optAsk(callId, `${heard} Acknowledge it in two or three words.`);
 }
 // a few words of human reaction to what was just saved (good news, a setback), said before Ara confirms the save
 function savedMood(action, d) {
