@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+    {"date": "2026-10-24", "change": "After opening a fix link from Check your hands-free saves, Back (or closing or saving the form) returns to the check list.", "area": "Hands-free"},
     {"date": "2026-10-24", "change": "Christmas mode can now be turned on any time (Settings, or say \"Christmas mode\"), not just in December. The Christmas visitors on their own still start December 1.", "area": "Christmas"},
     {"date": "2026-10-24", "change": "Check your hands-free saves: each save now has a link to fix it (Edit the contact, Edit the report, Edit the task, Edit the planned ask, or Open the opportunity).", "area": "Hands-free"},
     {"date": "2026-10-24", "change": "Christmas mode: Santa's \"Merry Christmas, ho ho ho\" is now a real recording, replacing the computer voice.", "area": "Christmas"},

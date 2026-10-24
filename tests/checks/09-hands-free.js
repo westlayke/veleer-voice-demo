@@ -60,7 +60,14 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   const kinds = await p.evaluate(() => { const c = S.contacts[0], i = S.interactions.find(i => i.contactId === c.id && i.kind !== "ask");
     return [hfFix({ contactId: c.id, text: "Contact added by X" }), i && hfFix({ contactId: c.id, text: `Interaction report: ${i.type}, ${fmtDate(i.date)}` })].map(f => f && f.form); });
   ok(kinds[0] === "editContact" && (kinds[1] === undefined || kinds[1] === "editInteraction"), "contact or report saves do not open their edit form: " + JSON.stringify(kinds));
-  await tab(p, "Home"); await p.tap("[data-act2=hfcheck]"); await p.waitForTimeout(300);
+  // Back from the record, and closing a fix form, return to the check list
+  await p.tap("header .back"); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => S.screen === "home" && !!document.querySelector("#modal .wmodal")), "Back from the opportunity did not return to the check list");
+  await p.evaluate(() => { S.history.unshift({ at: new Date().toISOString(), text: "Contact added by Test", contactId: S.contacts[0].id, hf: true }); hfCheckModal(); });
+  await p.tap(".hf-fix >> text=Edit the contact"); await p.waitForTimeout(300);
+  ok(await p.isVisible("#overlay .sheet"), "Edit the contact did not open the form");
+  await p.tap("#overlay [data-act=close]"); await p.waitForTimeout(300);
+  ok(await p.isVisible("text=Check your hands-free saves"), "closing the fix form did not return to the check list");
   await p.tap("#hfOk"); await p.waitForTimeout(300);
   ok(!(await p.isVisible("text=Check 1 hands-free save")), "the check did not clear");
 });

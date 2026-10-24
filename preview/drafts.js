@@ -246,6 +246,7 @@ function quickAdd(anyone) {
   h.querySelectorAll("[data-qa]").forEach(b => b.onclick = () => { const a = b.dataset.qa; h.innerHTML = ""; if (a === "contact") openForm("contact"); else if (c) openForm(a, c.id); else pickFor(a); });
 }
 function renderOverlay() {
+  if (!V && G.hfForm) { G.hfForm = false; setTimeout(() => { if (!V && hfUnchecked().length) hfCheckModal(); }, 0); } // a fix opened from the hands-free check returns to it
   const host = document.getElementById("overlay");
   host.innerHTML = V ? `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(ACTIONS[V.action].title)}">${draftHTML()}</div></div>` : "";
 }

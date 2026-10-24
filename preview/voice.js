@@ -1125,6 +1125,6 @@ function hfCheckModal() {
     <button class="btn blue" id="hfOk">They're right</button><button class="btn quiet" id="hfX">Not now</button></div></div>`;
   document.getElementById("hfX").onclick = () => { h.innerHTML = ""; };
   h.querySelectorAll("[data-hf]").forEach(b => { b.onclick = () => { const f = hfFix(xs[+b.dataset.hf]); if (!f) return; h.innerHTML = "";
-    if (f.contact) S.sel.contact = f.contact; if (f.opp) S.sel.opp = f.opp; go(f.screen); if (f.form) openForm(f.form, f.contact, f.item); }; });
+    if (f.contact) S.sel.contact = f.contact; if (f.opp) S.sel.opp = f.opp; G.hfBack = true; go(f.screen); if (f.form) { openForm(f.form, f.contact, f.item); if (V) G.hfForm = true; } }; });
   document.getElementById("hfOk").onclick = () => { xs.forEach(x => { x.hfChecked = true; }); save(); h.innerHTML = ""; render(); toast("Hands-free saves checked"); };
 }
