@@ -24,7 +24,9 @@ setInterval(() => { if (document.visibilityState === "visible") checkUpdate(); }
 if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
 /* ---------- Halloween: now and then a spider, pumpkin or ghost crosses the screen (October only; Settings can turn it off) ---------- */
 const spookySeason = () => new Date().getMonth() === 9;
-const spookyOn = () => spookySeason() && !S.settings.noSpooky && !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+const spookyOn = () => spookySeason() && !S.settings.noSpooky;
+// phones with Reduce Motion on still get the visitors and their sounds, but they fade in and out in one spot instead of moving across (Tiffany saw none, Oct 24)
+const calmMotion = () => !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 // spooky mode ("spooky mode" to the assistant, or Settings): night look, haunted-house host, spooky sounds on big moments, more visitors; ends by itself on Nov 1
 const spookyMode = () => spookySeason() && !!S.settings.spooky;
 function applySpooky() { document.documentElement.classList.toggle("spooky", spookyMode()); }
@@ -119,7 +121,11 @@ function spookyOnce(kind) {
     el.textContent = "👻"; el.style.top = Math.round(h * (0.18 + Math.random() * 0.4)) + "px";
     el.animate([{ transform: "translate(-70px, 0)", opacity: 0 }, { transform: `translate(${w * 0.25}px, -18px)`, opacity: 0.9, offset: 0.25 }, { transform: `translate(${w * 0.5}px, 14px)`, offset: 0.5 }, { transform: `translate(${w * 0.75}px, -14px)`, opacity: 0.9, offset: 0.75 }, { transform: `translate(${w + 20}px, 0)`, opacity: 0 }], { duration: 9000, easing: "linear" }).onfinish = done;
   }
-  document.body.appendChild(el); spookySound(kind); return el;
+  document.body.appendChild(el);
+  if (calmMotion()) { el.getAnimations().forEach(a => a.cancel()); el.classList.add("spk-calm");
+    el.style.transform = `translate(${Math.round(w * (0.15 + Math.random() * 0.6))}px, ${kind === "spider" ? Math.round(h * 0.3) : 0}px)`;
+    el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: 4500 }).onfinish = done; }
+  spookySound(kind); return el;
 }
 // a visitor every 40 to 90 seconds; in spooky mode every 15 to 20
 let spkLoopT = null;
@@ -146,6 +152,6 @@ setTimeout(owlHint, 1500);
 function spookyCue(kind) { if (spookyMode()) spookySound(kind); }
 render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
-function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app"); }
+function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app" + (calmMotion() ? " (Reduce Motion is on)" : "")); }
 logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
 window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, setSpooky, owlHint, get spkPlayed() { return spkPlayed; } };
