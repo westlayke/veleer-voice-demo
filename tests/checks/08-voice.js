@@ -252,20 +252,29 @@ test("Ara: an interaction's summary is taken from the officer's answer when Ara 
 });
 
 
-test("Ara: when Grok goes silent after the app asks for a reply, the app asks up to 3 more times, then reconnects; Grok errors are logged", async (p) => {
+test("Ara: when Grok goes silent after the app asks for a reply, the app asks once more on a healthy line, then opens a fresh line; on a slow line it goes straight to a fresh line; Grok errors are logged", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
   const creates = () => p.evaluate(() => __sent.filter(s => JSON.parse(s).type === "response.create").length);
+  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
   await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
   await p.evaluate(() => notice("Ask the officer the next question."));
-  const c0 = await creates(), ws0 = await p.evaluate(() => { window.__ws0 = __ws; return true; });
-  for (let i = 1; i <= 3; i++) { await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300 * i + 200);
-    ok(await creates() === c0 + i, `empty reply ${i} was not asked for again`); }
+  const c0 = await creates(); await p.evaluate(() => { window.__ws0 = __ws; });
+  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(600);
+  ok(await creates() === c0 + 1 && await p.evaluate(() => __ws === __ws0), "an empty reply on a healthy line was not asked for again");
   await fire([{ type: "error", error: { message: "Something broke upstream" } }]); await p.waitForTimeout(100);
   await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(1500);
-  ok(await p.evaluate(() => __ws !== __ws0 && G.live), "after 3 more silent replies the app did not open a new voice line");
-  const q = await p.evaluate(() => ACT.q.map(a => a.text).join(" | ") + " | " + __logs.map(l => JSON.stringify(l)).join(" "));
-  ok(/empty reply, asked again \(1 of 3\)/.test(q) && /after 3 more asks/.test(q) && /Reconnecting \(1 of 3\)/.test(q) && /Grok error: Something broke upstream/.test(q), "the silent replies, the reconnect or the Grok error were not logged");
+  ok(await p.evaluate(() => __ws !== __ws0 && G.live), "a second silent reply did not open a fresh line");
+  const q = await logged();
+  ok(/empty reply, asked again/.test(q) && /after asking again/.test(q) && /Reconnecting \(1 of 3\)/.test(q) && /Grok error: Something broke upstream/.test(q), "the silent replies, the reconnect or the Grok error were not logged");
+  // a slow line: no asking again, a fresh line straight away
+  await p.waitForFunction(() => G.status === "Listening", null, { timeout: 5000 });
+  await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise(res => setTimeout(() => res(new Response("{}")), 2500)) : f(u, o); window.__ws1 = __ws; G.drops = 0; });
+  await p.evaluate(() => notice("Ask the officer the next question."));
+  const c1 = await creates();
+  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(4000);
+  ok(await p.evaluate(() => __ws !== __ws1) && await creates() >= c1, "a silent reply on a slow line didn't go straight to a fresh line");
+  ok(/on a slow line \(test request \d+ ms\): fresh line/.test(await logged()), "the slow-line reconnect wasn't logged");
 });
 test("Ara: a dropped voice line reconnects and picks up where it left off; after 3 failed tries the phone says the voice service is unavailable", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -318,5 +327,11 @@ test("Ara: \"he handed me the check\" records the ask as Accepted, and a new ask
   await said(p, "He was enthusiastic and he, uh, handed me the check for one hundred thousand dollars.");
   await ara(p, "show_ask_result_draft", { contact_name: who, summary: "Enthusiastic." });
   ok(await p.inputValue("#f_response") === "Accepted", "a check handed over wasn't read as Accepted");
+});
+
+test("Ara: her instructions list the entities by state, so she can't invent one", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 });
+  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.session && e.session.instructions).map(e => e.session.instructions).at(-1));
+  ok(/Pennsylvania: C\.A\. Pennsylvania C4, C\.A\. Pennsylvania State PAC[;.]/.test(instr) && /Never name any other/.test(instr), "the entities by state aren't in Ara's instructions");
 });
 };

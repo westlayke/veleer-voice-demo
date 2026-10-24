@@ -41,6 +41,8 @@ function matchEntity(t) {
   return { hits: exact.length === 1 ? exact : hits };
 }
 const ENTITY_RULE = FUNDS.map(f => `${f}: ${campaignsFor(f).join(" or ")}`).join("; ");
+// by state, so Ara never invents one (seen Oct 24: "C.A. Pennsylvania Fed PAC", which doesn't exist)
+const ENTITIES_BY_STATE = () => { const by = {}; FUNDS.forEach(f => { const st = ENTITY_STATE[f] || "National"; (by[st] = by[st] || []).push(f); }); return Object.entries(by).map(([st, fs]) => `${st}: ${fs.join(", ")}`).join("; "); };
 const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
 const CAPACITY_LIST = Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", "); // "A = $250k and up, B = ..." for Ara
 const OUTCOMES = ["Interested, continue cultivation", "Ask made", "Ask accepted", "Not now, revisit", "Not interested", "Referred elsewhere"];
