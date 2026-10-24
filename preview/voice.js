@@ -1101,13 +1101,30 @@ async function hfSave(callId, data) {
 }
 // hands-free saves wait in Needs attention until the officer has looked at them
 const hfUnchecked = () => S.history.filter(x => x.hf && !x.hfChecked);
+// where to correct a hands-free save: the edit form when there is one, otherwise the record it belongs to
+function hfFix(x) {
+  const c = contactById(x.contactId), o = x.oppId ? oppById(x.oppId) : null, t = x.text || "";
+  if (!c) return null;
+  const base = { contact: c.id, screen: "contact" };
+  if (/^Interaction report/.test(t)) { const i = S.interactions.find(i => i.contactId === c.id && i.kind !== "ask" && t.startsWith(`Interaction report: ${i.type}, ${fmtDate(i.date)}`))
+    || S.interactions.find(i => i.contactId === c.id && i.kind !== "ask");
+    if (i) return { ...base, form: "editInteraction", item: i.id, label: "Edit the report" }; }
+  if (/^Task (added|edited)/.test(t)) { const k = S.tasks.find(k => k.contactId === c.id && !k.done && t.includes(k.text)) || S.tasks.find(k => k.contactId === c.id && !k.done);
+    if (k) return { ...base, form: "editTask", item: k.id, label: "Edit the task" }; }
+  if (/^(Ask planned|Planned ask edited)/.test(t) && o && o.asks.some(a => a.status === "Planned")) return { ...base, opp: o.id, screen: "opp", form: "editPlan", label: "Edit the planned ask" };
+  if (o) return { ...base, opp: o.id, screen: "opp", label: "Open the opportunity" };
+  if (/^Meeting scheduled/.test(t)) return { ...base, label: `Open ${c.first}` };
+  return { ...base, form: "editContact", label: "Edit the contact" };
+}
 function hfCheckModal() {
   const xs = hfUnchecked(), h = document.getElementById("modal"); if (!xs.length) return;
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="hfTitle">
     <h2 id="hfTitle">Check your hands-free saves</h2>
-    <p>${esc(botName())} saved these while you were hands-free. If one is wrong, open the record and use Edit. A gift or pledge is corrected by the Chief Gift Officer.</p>
-    <div class="hf-list">${xs.map(x => `<div class="row"><div class="t" style="font-size:14px">${esc(x.text)}<div class="s">${new Date(x.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div></div></div>`).join("")}</div>
+    <p>${esc(botName())} saved these while you were hands-free. If one is wrong, tap the link under it to fix it. A gift or pledge is corrected by the Chief Gift Officer.</p>
+    <div class="hf-list">${xs.map((x, n) => { const f = hfFix(x); return `<div class="row"><div class="t" style="font-size:14px">${esc(x.text)}<div class="s">${new Date(x.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>${f ? `<button type="button" class="hf-fix" data-hf="${n}">${esc(f.label)} <span aria-hidden="true">›</span></button>` : ""}</div></div>`; }).join("")}</div>
     <button class="btn blue" id="hfOk">They're right</button><button class="btn quiet" id="hfX">Not now</button></div></div>`;
   document.getElementById("hfX").onclick = () => { h.innerHTML = ""; };
+  h.querySelectorAll("[data-hf]").forEach(b => { b.onclick = () => { const f = hfFix(xs[+b.dataset.hf]); if (!f) return; h.innerHTML = "";
+    if (f.contact) S.sel.contact = f.contact; if (f.opp) S.sel.opp = f.opp; go(f.screen); if (f.form) openForm(f.form, f.contact, f.item); }; });
   document.getElementById("hfOk").onclick = () => { xs.forEach(x => { x.hfChecked = true; }); save(); h.innerHTML = ""; render(); toast("Hands-free saves checked"); };
 }

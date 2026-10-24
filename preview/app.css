@@ -284,6 +284,7 @@ details.said summary { font-style: normal; color: var(--brand); font-weight: 600
 .cb-hf.on { background: var(--brand); color: #fff; border-color: var(--brand); }
 .cb-yes { margin-top: 4px; font-size: 17px; font-weight: 700; color: var(--brand); }
 .hf-list { max-height: 40vh; overflow: auto; text-align: left; margin: 8px 0 12px; }
+.hf-fix { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 8px 0; min-height: 44px; background: none; border: 0; color: var(--brand); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 body.incall .app { padding-top: 70px; }
 body.incall .top { top: calc(env(safe-area-inset-top, 0px) + 70px); }
 body.incall::before { height: calc(env(safe-area-inset-top, 0px) + 70px); background: var(--bg); }

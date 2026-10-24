@@ -52,6 +52,15 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   ok(await p.isVisible("text=Check 1 hands-free save"), "Needs attention does not list the hands-free save");
   await p.tap("[data-act2=hfcheck]"); await p.waitForTimeout(300);
   ok(await p.isVisible("text=Check your hands-free saves"), "the check list did not open");
+  // each save links to where it can be corrected
+  const fixes = await p.evaluate(() => [...document.querySelectorAll(".hf-fix")].map(b => b.textContent.trim()));
+  ok(fixes.length >= 1 && fixes.every(t => /Open the opportunity/.test(t)), "the gift has no link to its opportunity: " + JSON.stringify(fixes));
+  await p.tap(".hf-fix"); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => S.screen === "opp" && !document.querySelector("#modal .wmodal")), "the link did not open the opportunity");
+  const kinds = await p.evaluate(() => { const c = S.contacts[0], i = S.interactions.find(i => i.contactId === c.id && i.kind !== "ask");
+    return [hfFix({ contactId: c.id, text: "Contact added by X" }), i && hfFix({ contactId: c.id, text: `Interaction report: ${i.type}, ${fmtDate(i.date)}` })].map(f => f && f.form); });
+  ok(kinds[0] === "editContact" && (kinds[1] === undefined || kinds[1] === "editInteraction"), "contact or report saves do not open their edit form: " + JSON.stringify(kinds));
+  await tab(p, "Home"); await p.tap("[data-act2=hfcheck]"); await p.waitForTimeout(300);
   await p.tap("#hfOk"); await p.waitForTimeout(300);
   ok(!(await p.isVisible("text=Check 1 hands-free save")), "the check did not clear");
 });

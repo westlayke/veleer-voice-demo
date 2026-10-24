@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+    {"date": "2026-10-24", "change": "Check your hands-free saves: each save now has a link to fix it (Edit the contact, Edit the report, Edit the task, Edit the planned ask, or Open the opportunity).", "area": "Hands-free"},
     {"date": "2026-10-24", "change": "Christmas mode: Santa's \"Merry Christmas, ho ho ho\" is now a real recording, replacing the computer voice.", "area": "Christmas"},
     {"date": "2026-10-24", "change": "Christmas mode: real sleigh bells (a recording) now play for the sleigh, reindeer, gifts and opening forms, replacing the made-up bell sound.", "area": "Christmas"},
     {"date": "Oct 24, 2026", "change": "Interaction reports by voice: when Ara never sends the summary, the app now takes it from what the officer said when she asked what was talked about. A next-step due date that is really the meeting date is dropped. Answering \"neither\" to Ally or Do Not Contact no longer ticks both. The hands-free read-back no longer says \". .\" when a form has nothing else to read.", "area": "Voice"},
