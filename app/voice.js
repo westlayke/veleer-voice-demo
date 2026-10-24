@@ -145,8 +145,9 @@ const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function"
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short, warm goodbye first (for example \"Great work today, talk soon!\"; vary it), then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
 function crmSnapshot() {
-  return S.contacts.map(c => { const o = openOpp(c.id), a = latestAsk(o);
-    return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") + (nextStep(o) ? `, next step: ${nextStep(o).line}` : "") : oppReady(c) ? ": no open opportunity, ready for one" : ": no open opportunity"}`; }).join("; ");
+  const Y = todayISO().slice(0, 4);
+  return S.contacts.map(c => { const o = openOpp(c.id), a = latestAsk(o), done = S.opps.filter(x => x.contactId === c.id && x.stage === "Closed" && String(x.closedOn || "").slice(0, 4) === Y);
+    return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") + (nextStep(o) ? `, next step: ${nextStep(o).line}` : "") : oppReady(c) ? ": no open opportunity, ready for one" : ": no open opportunity"}${done.length ? `; closed this year: ${done.map(x => `Closed ${x.closed} on ${fmtDate(x.closedOn)}`).join(", ")}` : ""}`; }).join("; ");
 }
 const SPOOKY_RULES = `SPOOKY MODE IS ON. The officer asked for some Halloween fun, so play a warm, theatrical haunted-house host: speak a little slower, with relish, and now and then (not every turn, at most one per turn) add a short spooky aside about the house itself, such as "Mind the cobwebs.", "The candles flicker in approval.", "Ooh, I heard the floorboards creak." or "Welcome back to the haunted CRM.". Vary them. Everything else is unchanged: every fact, name, number, date and question is exactly as normal, any words you're told to say exactly are said exactly, and all the saving rules apply. The asides are never about investors, money, giving, flags or the officer's mistakes. If they say "normal mode", call set_spooky_mode with on false.`;
 const XMAS_RULES = `CHRISTMAS MODE IS ON. The officer asked for some Christmas cheer, so be a warm, jolly, traditional Christmas host: cheerful and kind, and now and then (not every turn, at most one per turn) add a short festive aside about the season, such as "The tree lights are twinkling.", "I can hear sleigh bells.", "Fresh snow on the rooftops tonight." or "The elves are busy in the workshop.". Vary them. Everything else is unchanged: every fact, name, number, date and question is exactly as normal, any words you're told to say exactly are said exactly, and all the saving rules apply. The asides are never about investors, money, giving, flags or the officer's mistakes, and never joke about the nativity, Jesus or anyone's faith. If they say "normal mode", call set_christmas_mode with on false; if they say "spooky mode", call set_spooky_mode with on true.`;
@@ -199,7 +200,7 @@ What's next for an opportunity: read its next step from the contacts below.
 Questions about who can do what, rules, flags, alerts, settings or terms: call get_process_faq with the question, then answer only from what it returns and the stages below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't there, say plainly that it isn't covered in this proof of concept and offer to pass the question to the project team; if the FAQ says something is still open with the customer, say that. If two answers seem to disagree, give the more specific one.
 If the officer says "Review FAQ" or asks what they can ask about, name four or five of these topics in one or two sentences, give one example question, and ask what they'd like to know: ${faqTopics().join(", ")}.
 Questions about the proof of concept itself (what's new, what changed, when or why): call get_demo_changes with a few keywords and answer in one to three sentences with the date. Don't read the whole list out.
-When you can't answer from the FAQ, the list of changes or their data, or the officer reports a problem or makes a suggestion about the proof of concept, say so briefly and ask "Shall I pass that to the project team?" Only after they say yes, call pass_question_to_team with it in their words, then say the team will see it. Never promise when or how the team will reply.
+When you can't answer from the FAQ, the list of changes or their data, or the officer reports a problem or makes a suggestion about the proof of concept, say so briefly and ask "Shall I pass that to the project team?" Only after they say yes, call pass_question_to_team with it in their words, then say the team will see it. A yes in any words ("sure", "do that", "go ahead") counts, even when they ask for something else in the same breath: call pass_question_to_team first, then help with the new request. Never promise when or how the team will reply.
 
 # The process overview
 If the officer asks how the process works, for an overview, or to be walked through it (not how to do one task): call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first, then open with the short introduction the tool reply gives you and give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
@@ -498,17 +499,26 @@ async function startCall(opening) {
   } catch (e) { endCall(); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); }
 }
 /* ---------- the voice line: opened at the start, and opened again when it drops (a phone in a car loses signal) ---------- */
-function openSocket(token, first) {
-  const ws = G.ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
+function openSocket(token, first, second) {
+  const ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
+  if (second) G.tries.add(ws); else { G.ws = ws; G.tries = new Set([ws]); }
   const t0 = Date.now();
-  // in a dead spot the line can neither open nor fail: give it 10 s, then count it as a failed try
-  if (G.drops) setTimeout(() => { if (G.live && G.ws === ws && ws.readyState === 0) { netLog("Voice line didn't open in 10 s"); reconnect("the line didn't open"); } }, 10000);
+  if (G.drops && !second) {
+    // not open after 5 s: try a second line alongside, and keep whichever opens first (seen Oct 24: the first try hung for 10 s)
+    setTimeout(async () => { if (!G.live || G.ws !== ws || ws.readyState !== 0) return;
+      act("step", `Voice line not open after ${SECOND_LINE_MS / 1000} s: trying a second line alongside`);
+      let tk; try { tk = await getToken(); } catch (e) { return; }
+      if (G.live && G.ws === ws && ws.readyState === 0 && G.tries) openSocket(tk, first, true); }, SECOND_LINE_MS);
+    // in a dead spot the line can neither open nor fail: give it 10 s, then count it as a failed try
+    setTimeout(() => { if (G.live && G.ws === ws && ws.readyState === 0) { netLog("Voice line didn't open in 10 s"); reconnect("the line didn't open"); } }, 10000);
+  }
   ws.onopen = () => {
-    if (G.ws !== ws) return;
+    if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
+    if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws;
     send({ type: "session.update", session: sessionCfg() }); notice(first);
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
-    netLog(`Voice line open in ${Date.now() - t0} ms${G.drops ? ` (reconnect ${G.drops} of ${MAX_DROPS})` : ""}`);
+    netLog(`Voice line open in ${Date.now() - t0} ms${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops} of ${MAX_DROPS})` : ""}`);
     if (G.drops) setTimeout(prefetchToken, 2000); // the ready pass was used: have the next one ready for another drop (seen Oct 24: 7 s to fetch one)
     clearInterval(G.netTick); G.netTick = setInterval(() => { if (G.live && G.ws === ws) netLog("Reading"); }, 30000);
   };
@@ -524,6 +534,7 @@ function openSocket(token, first) {
   };
   ws.onerror = () => {};
 }
+function closeTries() { if (G.tries) G.tries.forEach(o => { if (o !== G.ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; }
 // what the phone says about its connection; iPhones don't report the network type or speed, only online or offline
 function netInfo() {
   const c = navigator.connection, bits = [navigator.onLine === false ? "offline" : "online"];
@@ -538,14 +549,14 @@ async function pingMs(limit = 8000) {
   try { await fetch(tokenUrl().replace(/\/$/, "") + "/log?ping=" + Date.now(), { cache: "no-store", signal: ac.signal }); return Math.round(performance.now() - t0); } catch (e) { return ac.signal.aborted ? `no answer in ${limit / 1000} s` : "failed"; } finally { clearTimeout(to); }
 }
 async function netLog(what, known) { const sess = G.session, info = netInfo(), ms = known !== undefined ? known : await pingMs(); act("step", `Connection: ${what}. ${info}${ms == null ? "" : typeof ms === "number" ? `, test request ${ms} ms` : `, test request ${ms}`}`, sess); }
-const MAX_DROPS = 3;
+const MAX_DROPS = 3, SECOND_LINE_MS = 5000;
 // the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
 async function reconnect(why) {
   if (!G.live) return;
   if (G.drops >= MAX_DROPS) { voiceUnavailable(why); return; }
   G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
-  const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {}
+  const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
   if (G.drops === 1) cue("drop");
   vlog(`reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`); act("step", `Reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`);
   await new Promise(r => setTimeout(r, [0, 1000, 4000, 10000][G.drops] || 10000)); // spread out, so a short dead spot can pass
@@ -558,7 +569,7 @@ async function reconnect(why) {
 }
 const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "";
-  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${d ? d + " " : ""}${G.spokeInGap ? "The officer was talking while the line was down and you didn't hear it: right after the sorry line, ask them to say that again. " : G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}If they ask whether you're there, say yes in two words and carry on with what you were doing; never ask "what would you like to do" while a form is open, and don't say "welcome back". Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} Then, if the last thing said was a question to the officer, ask it again; otherwise ask the next question needed to finish. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
+  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${d ? d + " " : ""}${G.spokeInGap ? "The officer was talking while the line was down and you didn't hear it: right after the sorry line, ask them to say that again. " : G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}If they ask whether you're there, say yes in two words and carry on with what you were doing; never ask "what would you like to do" while a form is open, and don't say "welcome back". Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} with no ${spookyMode() ? "spooky" : xmasMode() ? "festive" : "other"} aside in this reply. Then ask just one question: if the last thing said was a question to the officer and they haven't answered it in the lines above, ask it again; otherwise ask the next question needed to finish. If the officer's answer is in the lines above, use it (call the draft tool with it) instead of asking. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {
   netLog("Voice service unavailable after " + MAX_DROPS + " tries (" + why + ")");
@@ -611,7 +622,7 @@ const resumeLine = (r) => `The officer's last conversation with you was cut off 
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; G.hands = false; G.saveCheck = null; stopPlayback(); letSleep();
-  try { G.ws && G.ws.close(); } catch (e) {}
+  try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
   vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
@@ -756,11 +767,17 @@ function flushQueued() {
 }
 // Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
-const MAX_ASKS = 1, TICK_MS = 4000, ASK_AGAIN_MS = 10000; // Grok sometimes takes 6 to 10 s: a soft tick first, then ask again
+const MAX_ASKS = 1, TICK_MS = 4000, ASK_AGAIN_MS = 10000, EARLY_PING_MS = 2500; // Grok sometimes takes 6 to 10 s: a soft tick first, then ask again
 function askReply() {
   send({ type: "response.create" }); G.asked = true; G.askedAt = Date.now();
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
   G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
+  // no reply at the first tick: test the line then, so a bad line gets a fresh one about 9 s sooner (seen Oct 24: 13 s to notice)
+  const ws = G.ws; G.tickWatch = setTimeout(() => { if (!G.live || !G.asked || G.ws !== ws) return;
+    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || !G.asked || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+      if (typeof ms === "number" && ms <= 2000) return; // a healthy line: Grok is just slow, keep waiting
+      clearTimeout(G.askWatch); G.askWatch = null; G.asked = false;
+      act("step", `No reply started after ${TICK_MS / 1000} s on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); }); }, TICK_MS);
 }
 function replyCheck(r) {
   if (!G.live || G.idleEnding) return;
