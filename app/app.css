@@ -35,7 +35,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .top h1 { margin: 0; font-size: 18px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .top:not(.withlogo) h1 { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: calc(100% - 196px); text-align: center; line-height: 1.35; padding: 2px 0 3px; pointer-events: none; } .top:not(.withlogo) h1 + * { margin-left: auto; } /* iPhone style: title centred in the bar */
 .back { border: 0; background: none; display: inline-flex; align-items: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 0 6px 0 4px; margin-left: -4px; font: inherit; font-size: 16px; font-weight: 600; color: var(--brand); cursor: pointer; flex: none; } .back svg { flex: none; }
 .iconbtn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
-.top .addbtn { margin-left: auto; } .top button.chip { border: 1px solid var(--line); padding: 0; cursor: pointer; font-family: inherit; }
+.top .setbtn { margin-left: auto; } .top button.chip { border: 1px solid var(--line); padding: 0; cursor: pointer; font-family: inherit; }
 .addbtn { background: var(--brand); border-color: var(--brand); color: #fff; width: 40px; height: 40px; }
 .qa-for { margin: -4px 0 10px; color: var(--muted); font-size: 14px; } .qa-for button { border: 0; background: none; color: var(--brand); font: inherit; font-weight: 600; padding: 6px 4px; min-height: 36px; cursor: pointer; }
 .qa-h { margin: 12px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }

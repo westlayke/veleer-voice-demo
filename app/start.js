@@ -26,27 +26,40 @@ if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.path
 const spookySeason = () => new Date().getMonth() === 9;
 const spookyOn = () => spookySeason() && !S.settings.noSpooky && !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 // spooky sounds, made by the phone (no sound files): quiet, only after the first tap, never during a conversation with Ara
-let spkCtx = null, spkPlayed = 0;
-document.addEventListener("pointerdown", () => { try { spkCtx = spkCtx || new (window.AudioContext || window.webkitAudioContext)(); if (spkCtx.state === "suspended") spkCtx.resume(); } catch (e) {} }, { capture: true });
-function spookySound(kind) {
-  const c = spkCtx; if (!c || c.state !== "running" || G.live) return false;
+let spkCtx = null, spkPlayed = 0, spkSessT = null;
+function spkUnlock() { // iPhones only allow sound after a tap: start the sound engine in the tap and play a silent blip
+  try { if (!spkCtx) { spkCtx = new (window.AudioContext || window.webkitAudioContext)(); const b = spkCtx.createBufferSource(); b.buffer = spkCtx.createBuffer(1, 1, 22050); b.connect(spkCtx.destination); b.start(0); }
+    if (spkCtx.state !== "running") spkCtx.resume(); } catch (e) {}
+}
+["pointerdown", "touchend", "click"].forEach(ev => document.addEventListener(ev, spkUnlock, { capture: true, passive: true }));
+// on an iPhone the silent switch mutes web sounds unless the page asks to play like media; ask only while a sound plays, never near the mic
+function spkSession(on) { try { if (navigator.audioSession) navigator.audioSession.type = on ? "playback" : "auto"; } catch (e) {} }
+function spookySound(kind, retried) {
+  const c = spkCtx; if (!c || G.live) return false;
+  if (c.state !== "running") { if (!retried) c.resume().then(() => { if (c.state === "running") spookySound(kind, true); }).catch(() => {}); return false; }
+  spkSession(true); clearTimeout(spkSessT); spkSessT = setTimeout(() => spkSession(false), 2500);
   const t0 = c.currentTime + 0.05, out = c.createGain(); out.gain.value = 0.18; out.connect(c.destination);
   const env = (g, at, peak, len) => { g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(peak, at + Math.min(0.3, len / 4)); g.gain.exponentialRampToValueAtTime(0.0001, at + len); };
   const noise = (len) => { const b = c.createBuffer(1, Math.ceil(c.sampleRate * len), c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; const n = c.createBufferSource(); n.buffer = b; return n; };
-  if (kind === "ghost") { // a wavering "wooo" that rises and falls
+  if (kind === "ghost") { // a wavering "wooo" that rises and falls, pitched high enough for a phone speaker; starts as the ghost fades in
+    const at = t0 + 1.2;
     [0, 7].forEach(detune => { const o = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), dep = c.createGain();
-      o.type = "sine"; o.frequency.setValueAtTime(260, t0); o.frequency.linearRampToValueAtTime(520, t0 + 0.7); o.frequency.linearRampToValueAtTime(240, t0 + 1.8); o.detune.value = detune * 10;
-      lfo.frequency.value = 6; dep.gain.value = 14; lfo.connect(dep); dep.connect(o.frequency); env(g, t0, 0.5, 1.9);
-      o.connect(g); g.connect(out); o.start(t0); lfo.start(t0); o.stop(t0 + 2); lfo.stop(t0 + 2); });
+      o.type = "triangle"; o.frequency.setValueAtTime(520, at); o.frequency.linearRampToValueAtTime(1040, at + 0.9); o.frequency.linearRampToValueAtTime(470, at + 2.4); o.detune.value = detune * 10;
+      lfo.frequency.value = 6; dep.gain.value = 28; lfo.connect(dep); dep.connect(o.frequency); env(g, at, 0.8, 2.5);
+      o.connect(g); g.connect(out); o.start(at); lfo.start(at); o.stop(at + 2.6); lfo.stop(at + 2.6); });
   } else if (kind === "spider") { // a creak, then a quick scuttle of tiny clicks
     const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
     o.type = "sawtooth"; o.frequency.setValueAtTime(70, t0); o.frequency.linearRampToValueAtTime(130, t0 + 0.6); f.type = "bandpass"; f.frequency.value = 900; f.Q.value = 8;
     env(g, t0, 0.6, 0.7); o.connect(f); f.connect(g); g.connect(out); o.start(t0); o.stop(t0 + 0.75);
     for (let i = 0; i < 12; i++) { const at = t0 + 0.8 + i * 0.05 + Math.random() * 0.02, n = noise(0.02), hp = c.createBiquadFilter(), ng = c.createGain();
       hp.type = "highpass"; hp.frequency.value = 3000; env(ng, at, 0.5, 0.02); n.connect(hp); hp.connect(ng); ng.connect(out); n.start(at); }
-  } else { // a hollow pumpkin rolling: three low thumps
-    for (let i = 0; i < 3; i++) { const at = t0 + i * 0.38, o = c.createOscillator(), g = c.createGain();
-      o.type = "sine"; o.frequency.setValueAtTime(120, at); o.frequency.exponentialRampToValueAtTime(50, at + 0.25); env(g, at, 0.9, 0.3); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.32); }
+  } else { // a haunted-house organ sting as the pumpkin rolls in: dun, dun, DUNNN
+    const hz = (m) => 440 * Math.pow(2, (m - 69) / 12), lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2600; lp.connect(out);
+    [[0, 0.22, [60, 63, 67]], [0.28, 0.22, [60, 63, 67]], [0.58, 1.5, [59, 62, 65, 68]]].forEach(([dt, len, notes]) => notes.forEach(m => {
+      const at = t0 + dt, g = c.createGain(); env(g, at, 0.22, len); g.connect(lp);
+      [[1, "square", 0.5], [2, "sine", 0.6], [4, "sine", 0.25]].forEach(([mult, type, vol]) => { const o = c.createOscillator(), v = c.createGain();
+        o.type = type; o.frequency.value = hz(m) * mult; v.gain.value = vol; o.connect(v); v.connect(g); o.start(at); o.stop(at + len + 0.05); });
+    }));
   }
   spkPlayed++; return true;
 }
