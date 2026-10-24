@@ -300,6 +300,10 @@ details.said summary { font-style: normal; color: var(--brand); font-weight: 600
 .cb-t { flex: 1; min-width: 0; font-size: 14px; } .cb-cap { color: var(--muted); font-size: 13px; line-height: 18px; margin-top: 2px; max-height: 36px; overflow: hidden; scroll-behavior: smooth; }
 .cb-cap[hidden] { display: none; }
 .cb-end { min-height: 36px; padding: 0 14px; font-size: 14px; color: var(--bad); }
+.cb-hf { min-height: 36px; padding: 0 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.cb-hf.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.cb-yes { margin-top: 4px; font-size: 17px; font-weight: 700; color: var(--brand); }
+.hf-list { max-height: 40vh; overflow: auto; text-align: left; margin: 8px 0 12px; }
 body.incall .app { padding-top: 70px; }
 body.incall .top { top: calc(env(safe-area-inset-top, 0px) + 70px); }
 body.incall::before { height: calc(env(safe-area-inset-top, 0px) + 70px); background: var(--bg); }
@@ -784,7 +788,7 @@ function draftHTML() {
     ${A.left ? `<div class="left">${esc(A.left)}</div>` : ""}
     <div class="err" id="draftErr" hidden></div>
   </div>
-  <div class="savebar"><button class="btn blue" data-act="save">${A.saveLabel}</button><small>Nothing is saved until you tap ${A.saveLabel}</small></div>`;
+  <div class="savebar"><button class="btn blue" data-act="save">${A.saveLabel}</button><small>${G.hands && V.action !== "meeting" ? `Hands-free: ${esc(botName())} reads it back and saves when you say yes` : `Nothing is saved until you tap ${A.saveLabel}`}</small></div>`;
 }
 function readDraft() {
   const out = Object.assign({}, V.data);
@@ -868,6 +872,8 @@ document.getElementById("overlay").addEventListener("click", (e) => {
   else if (a.dataset.act === "voicefill") voiceFill();
   else if (a.dataset.act === "save") saveDraft();
 });
+// while Ara saves hands-free, what's wrong with the form goes back in her tool reply instead of as a notice
+function hfNotice(text) { if (G.hfTry) G.hfTry.msg = text; else notice(text); }
 function saveDraft() {
   const d = readDraft(), A = ACTIONS[V.action];
   const miss = A.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));
@@ -878,7 +884,7 @@ function saveDraft() {
       const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
       const first = document.getElementById(need[0] === "Next step" ? "f_nextStep" : "f_nextDue"); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
       toast(msg);
-      if (G.live) notice(`The officer tapped ${A.saveLabel} but the draft has no ${need.join(" or ").toLowerCase()}. Explain in one sentence that a substantive interaction needs a next step and its due date, ask what it is and when it's due, then call the draft tool again.`);
+      if (G.live) hfNotice(`The officer tapped ${A.saveLabel} but the draft has no ${need.join(" or ").toLowerCase()}. Explain in one sentence that a substantive interaction needs a next step and its due date, ask what it is and when it's due, then call the draft tool again.`);
       return;
     }
   }
@@ -888,7 +894,7 @@ function saveDraft() {
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = ruleMsg[1];
     const first = document.getElementById("f_" + ruleMsg[0]); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
     toast(ruleMsg[1]);
-    if (G.live) notice(`The officer tapped ${A.saveLabel} but ${ruleMsg[2]}, then call the draft tool again.`);
+    if (G.live) hfNotice(`The officer tapped ${A.saveLabel} but ${ruleMsg[2]}, then call the draft tool again.`);
     return;
   }
   if (!miss.length && (V.action === "contact" || V.action === "editContact") && !String(d.email || "").trim() && !String(d.mobile || "").trim()) {
@@ -896,7 +902,7 @@ function saveDraft() {
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
     const first = document.getElementById("f_email"); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
     toast(msg);
-    if (G.live) notice(`The officer tapped ${A.saveLabel} but the contact has no email or mobile number. Explain that a contact needs at least one, ask for it, then call the draft tool again.`);
+    if (G.live) hfNotice(`The officer tapped ${A.saveLabel} but the contact has no email or mobile number. Explain that a contact needs at least one, ask for it, then call the draft tool again.`);
     return;
   }
   if (miss.length) {
@@ -904,12 +910,13 @@ function saveDraft() {
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
     const first = document.getElementById("f_" + miss[0].k); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
     toast(msg);
-    if (G.live) notice(`The officer tapped ${A.saveLabel} but the draft is missing: ${miss.map(f => f.label).join(", ")}. Ask for it in one short question, then call the draft tool again with everything filled in.`);
+    if (G.live) hfNotice(`The officer tapped ${A.saveLabel} but the draft is missing: ${miss.map(f => f.label).join(", ")}. Ask for it in one short question, then call the draft tool again with everything filled in.`);
     return;
   }
   const undo = JSON.stringify(S), action = V.action, t = V.target;
   try { act("form", formLog(A, d, V.fromVoice, V.typed)); } catch (e) {}
   const result = APPLY[action](d, t);
+  G.lastSave = { undo, at: Date.now(), action, hf: !!G.hfTry }; // a hands-free save can be taken back by saying "undo"
   save(); V = null; renderOverlay(); render(); window.scrollTo(0, 0);
   setWhatNext(action, result, t); if (G.whatNext) render();
   toast(A.saved, () => { S = JSON.parse(undo); G.whatNext = null; save(); render(); });
@@ -1218,6 +1225,8 @@ const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function"
     { type: "function", name: "set_speaking_speed", description: "Change how fast you talk when the officer asks you to speak faster or slower (or normally). The choice is remembered on this phone.", parameters: { type: "object", properties: { change: { type: "string", enum: ["faster", "slower", "normal"] } }, required: ["change"] } },
     { type: "function", name: "get_demo_changes", description: "Look up what has changed in this demo app since it was first released on Oct 18, 2026, from its change log: what's new, when something changed, or why it works the way it does. Pass a few keywords as topic (for example \"task status\" or \"confetti\"), or leave topic out for the latest changes.", parameters: { type: "object", properties: { topic: { type: "string" } }, required: [] } },
     { type: "function", name: "pass_question_to_team", description: "Send a question you can't answer, or a problem or suggestion about the demo, to the demo team. Only call it after the officer says yes to passing it on. Write it in the officer's own words, with any detail they gave.", parameters: { type: "object", properties: { question: { type: "string" } }, required: ["question"] } },
+    { type: "function", name: "save_form", description: "Hands-free mode only: save the open form for the officer, who is driving and can't tap. First call it with confirmed false: the app gives you a read-back to say word for word. Call it again with confirmed true only after the officer says yes to that read-back. A gift or pledge then gets a second check of the amount, and needs a second yes. The app checks the officer's own words before saving.", parameters: { type: "object", properties: { confirmed: { type: "boolean" } }, required: ["confirmed"] } },
+    { type: "function", name: "set_hands_free", description: "Turn hands-free (driving) mode on or off when the officer asks, for example \"I'm driving\" or \"I've parked\". In hands-free mode you read each finished form back and save it when they say yes.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
     { type: "function", name: "close_form", description: "Close the open form without saving (close), or clear it to start again (clear), when the officer asks in words the app didn't already carry out. Never say a form was closed or cleared unless this returns ok.", parameters: { type: "object", properties: { change: { type: "string", enum: ["close", "clear"] } }, required: ["change"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short, warm goodbye first (for example \"Great work today, talk soon!\"; vary it), then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
@@ -1225,6 +1234,7 @@ function crmSnapshot() {
   return S.contacts.map(c => { const o = openOpp(c.id), a = latestAsk(o);
     return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") + (nextStep(o) ? `, next step: ${nextStep(o).line}` : "") : oppReady(c) ? ": no open opportunity, ready for one" : ": no open opportunity"}`; }).join("; ");
 }
+const HF_RULES = `HANDS-FREE MODE IS ON. The officer is probably driving and can't look at or tap the screen, so this overrides "You never save anything" and every "tap the button". Keep each turn short and never describe what's on screen. When a draft has everything it needs, don't ask them to tap: call save_form with confirmed false and say the read-back it gives you, word for word. Call save_form with confirmed true only right after the officer says yes to that read-back; the app checks their words too. If they change something, update the draft and read it back again. Scheduling a meeting needs Google Calendar on screen, so keep it as a draft for when they've parked. If they say they've parked or want to tap themselves, call set_hands_free with on false.`;
 function grokInstructions() {
   const f = focusContact();
   return `You are ${botName()}, the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. Your name is ${botName()}; if asked your name, say it. Introduce yourself by name only once per conversation, and keep the greeting to the exact words you are given. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say "Hi, I'm ${botName()}, what's your first name?" When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
@@ -1234,7 +1244,7 @@ Call the money's recipient the "entity" (C3, C4 or PAC), never "fund".
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record a gift (outright, with no pledge, or on a pledge), phone a contact, schedule a meeting in their Google Calendar, or see a screen.
 To change an existing contact's details, call show_contact_edit_draft with only what changes; never use show_contact_draft for someone who is already a contact. When the officer asks what's next for an opportunity, read its next step from the summary of contacts below. Stage rules the app enforces: an opportunity can be created only when the contact has a capacity rating, isn't Do Not Contact or an Ally - Do Not Solicit, and has no other open opportunity; if the app says they aren't ready, explain what's already true and what's still to do, and offer set_capacity_rating when the rating is missing. an opportunity moves from Qualification to Cultivation only when the contact has a capacity rating and a substantive interaction and the officer confirms (show_cultivation_decision), or defers with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date. Ask responses are Accepted, Countered, Awaiting or Declined. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task; then record the pledge. A yes (Accepted or Countered) to an OUTRIGHT ask moves the opportunity straight to Commitment, waiting for the gift; a pledge ask stays in Ask Made until the pledge is recorded with its schedule. Whenever money comes in, use show_gift_draft: in Ask Made a gift with no pledge is an implied commitment (it passes through Commitment and closes as Closed Won); in Commitment the gift is applied to the pledge and the first one closes it as Closed Won. There is no separate payment button; say "gift", not "payment". A closed opportunity is final; the next gift starts a new opportunity. If a tool returns a stage error, relay it and offer the step it suggests. Each contact has at most one open opportunity: if the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 You never save anything. As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen from the start, before asking anything. Then ask for what is still needed one question at a time, and after each answer call the tool again so the form fills in as they talk. When the tool says nothing more is needed, ask the officer to check the draft and tap the button at the bottom of it, using its exact label: ${TOOLS.filter(t => !t.hidden).map(t => t.name + " → \"" + ACTIONS[t.action].saveLabel + "\"").join(", ")}. For example say "tap Record pledge", never "tap Save" when the button says something else. If they correct something, call the tool again. Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix.
-After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
+${G.hands ? HF_RULES + "\n" : ""}After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 You can see saves: the app tells you each time the officer taps a save button. ${(G.saves || []).length ? `Saved so far in this conversation: ${G.saves.join("; ")}.` : "Nothing has been saved yet in this conversation."} If the officer asks whether something saved, answer from that; never say you can't see saves.
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.` : ""}
 Contacts and opportunities: ${crmSnapshot()}.
@@ -1286,7 +1296,7 @@ function paintCall() {
   document.body.classList.toggle("incall", G.live);
   el.hidden = !G.live;
   if (!G.live) return;
-  el.innerHTML = `<div class="cb-in"><span class="dot ${G.status === "Connecting…" ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div></div><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
+  el.innerHTML = `<div class="cb-in"><span class="dot ${G.status === "Connecting…" ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div>${G.saveCheck ? `<div class="cb-yes">Say “yes” to save</div>` : ""}</div><button class="btn quiet cb-hf${G.hands ? " on" : ""}" data-act3="hands" aria-pressed="${!!G.hands}" title="Hands-free: Ara saves when you say yes">${CAR} ${G.hands ? "Hands-free on" : "Hands-free"}</button><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
   capTick();
 }
 const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
@@ -1542,7 +1552,7 @@ function resumeModal() {
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " " : ""}Say "Welcome back" and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in.`;
 function endCall() {
   clearInterval(G.idleTick); clearTimeout(G.idleTimer); G.idleEnding = false;
-  G.live = false; stopPlayback(); letSleep();
+  G.live = false; G.hands = false; G.saveCheck = null; stopPlayback(); letSleep();
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
@@ -1564,6 +1574,8 @@ function tellPicked(kind) {
 const VOICE_CMDS = [
   [/^(undo( that| it)?|undo (the )?last (change|one))$/, "undo"],
   [/^(go back|back|take me back)$/, "back"],
+  [/^((turn on |switch on |start |use )?(hands ?free|driving)( mode)?( on)?|(i'm|i am) driving( now)?)$/, "hfon"],
+  [/^((turn off |switch off |stop |end )(hands ?free|driving)( mode)?|(hands ?free|driving)( mode)? off|(i'm|i am|i've|i have) (parked|stopped driving)( now)?)$/, "hfoff"],
   [/^(say (that|it) again|repeat( that| it)?|what did you say|come again)$/, "repeat"],
 ];
 // Cancel and start over are said many ways ("let's cancel this contact and start a new one"): the sentence counts when,
@@ -1585,6 +1597,10 @@ function voiceCommand(text) {
   const who = botName() + ": "; let say;
   if (cmd === "repeat") { const last = (G.recent || []).filter(l => l.startsWith(who)).slice(-1)[0]; if (!last) return false; say = `The officer asked you to repeat. Say again exactly: "${last.slice(who.length)}"`; }
   else if (cmd === "cancel") { if (!V) return false; const what = cancelForm(); say = `The officer said "cancel". The app closed the ${what} form without saving. Say only "Cancelled, nothing was saved. What would you like to do?"`; }
+  else if (cmd === "hfon" || cmd === "hfoff") { setHandsFree(cmd === "hfon"); say = G.hands ? `The officer turned on hands-free mode. Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `The officer turned off hands-free mode. Say only "Hands-free is off. You'll tap Save yourself again."`; }
+  else if (cmd === "undo" && !(V && (V.history || []).length) && G.lastSave && G.lastSave.hf && Date.now() - G.lastSave.at < 5 * 60e3) {
+    const what = ACTIONS[G.lastSave.action].saved; S = JSON.parse(G.lastSave.undo); G.lastSave = null; if (G.saves) G.saves.pop(); save(); render(); whenIdle("instr");
+    say = `The officer said "undo". The app took back the hands-free save (${what}), so it is no longer saved. Say only "Undone, that's not saved. What would you like to do?"`; }
   else if (cmd === "undo") { if (!V || !(V.history || []).length) say = `The officer said "undo", but there is no change on an open form to undo. Say so in one short sentence; a saved record is changed with Edit.`;
     else { V.data = V.history.pop(); renderOverlay(); say = `The officer said "undo". The app put the ${ACTIONS[V.action].title} form back the way it was before your last change. Say in a few words what changed back, then carry on.`; } }
   else if (cmd === "restart") { if (!V) return false; say = `The officer said "start over". The app cleared the ${restartForm()} form. Ask for the first detail again.`; }
@@ -1646,7 +1662,7 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript); }
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript); }
   if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
@@ -1735,6 +1751,9 @@ function onTool(callId, name, args) {
     const meetingish = /follow|call|meet|visit|lunch|coffee|pledge|ask/i.test(t.text);
     toolReply(callId, { ok: true, saved: true, task: t.text, status: change, say: `Confirm in one short sentence that it's saved${st === "done" && meetingish ? ", then ask whether they'd like to log an interaction for it (for example a call or meeting report)" : ""}.` }); return;
   }
+  if (name === "save_form") { hfSave(callId, data); return; }
+  if (name === "set_hands_free") { setHandsFree(!!data.on);
+    toolReply(callId, { ok: true, hands_free: G.hands, say: G.hands ? `Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `Say only "Hands-free is off. You'll tap Save yourself again."` }); return; }
   if (name === "set_speaking_speed") {
     const now = talkSpeed(), next = data.change === "normal" ? 1 : SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, SPEEDS.indexOf(nearSpeed(now)) + (data.change === "faster" ? 1 : -1)))];
     S.settings.speed = next; save(); send({ type: "session.update", session: sessionCfg() });
@@ -1936,7 +1955,7 @@ function onTool(callId, name, args) {
   if (tool.action === "opportunity" && !missing.length && !V.askedOptional) { V.askedOptional = true; toolReply(callId, { ok: true, button: A.saveLabel, optional_fields: ["Entity of interest", "Potential amount", "Notes"], status: `The draft is open on screen. Before anything else, ask exactly this: "Do you have enough information yet to add any optional details? You can add the entity of interest, which is C3, C4 or PAC, a potential amount, and notes." If they give any, call this tool again with them. If not, ask them to check the draft and tap "${A.saveLabel}".` }); return; }
   toolReply(callId, missing.length
     ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}.${onForm.length ? ` Already on the form, some filled in from earlier steps: ${onForm.join("; ")}. Never ask for these again; if the officer asks, confirm what's there.` : ""}${badDates.length ? ` The app couldn't read ${badDates.join(", ")} as a date: send dates as YYYY-MM-DD (today is ${todayISO()}).` : ""}${missing.includes("Summary") ? " When the officer describes what happened, put it in the summary parameter (1 to 3 sentences, past tense, in their words) and call this tool again with it." : ""} Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
-    : { ok: true, button: A.saveLabel, status: `The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${A.saveLabel}" button (say that exact label).` });
+    : { ok: true, button: A.saveLabel, status: G.hands && tool.action !== "meeting" ? `The draft is complete but NOT saved. Hands-free mode is on: call save_form with confirmed false now and say the read-back it returns.` : `The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${A.saveLabel}" button (say that exact label).` });
 }
 // a few words of human reaction to what was just saved (good news, a setback), said before Ara confirms the save
 function savedMood(action, d) {
@@ -1956,9 +1975,73 @@ function grokSaved(action, r, d = {}) {
   (G.saves = G.saves || []).push(`${ACTIONS[action].saved}${who ? " for " + who : ""}${closed ? " (Closed " + o.closed + ")" : ""}`);
   const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? (hasOpp.stage === "Qualification" ? "for example move the opportunity to Cultivation if it's ready, or log another meeting" : hasOpp.stage === "Cultivation" ? "for example plan an ask or log another meeting" : "for example add a task or log another meeting") : "for example create an opportunity or log another meeting") : "";
   whenIdle("instr");
+  if (G.hfTry) { G.hfTry.say = `Saved: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Say"} in a few words that it's saved, then say "Say undo if that's wrong." and ask what they'd like to do next, or whether to stop here.`; return; }
   notice(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see that's saved: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who.split(" ")[0] : ""}."), even if the officer has started talking; then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
 }
-document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (a && a.dataset.act3 === "end") endCall(); });
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (!a) return;
+  if (a.dataset.act3 === "end") endCall();
+  else if (a.dataset.act3 === "hands") { setHandsFree(!G.hands);
+    notice(G.hands ? `The officer tapped Hands-free, so hands-free mode is on. Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `The officer tapped to turn hands-free mode off. Say only "Hands-free is off. You'll tap Save yourself again."`); } });
+// Hands-free (driving) mode: Ara saves a finished form after reading it back and hearing the officer's own yes. It lasts until the call ends.
+const CAR = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14v-5l-2-5H7l-2 5z"/><path d="M5 12h14"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>';
+const HF_MONEY = ["pledge", "gift", "payment"];
+const HF_YES = /\b(yes|yeah|yep|yup|ya|correct|right|sure|save|go ahead|do it|confirm|confirmed|sounds good|perfect|ok|okay|absolutely|definitely)\b/;
+const HF_NO = /\b(no|nope|not|don't|dont|do not|wait|hold on|stop|change|wrong|actually|cancel|isn't|that's off)\b/;
+const hfYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " "); return HF_YES.test(t) && !HF_NO.test(t); };
+function setHandsFree(on) {
+  G.hands = !!on && G.live; G.saveCheck = null; act("step", "hands-free " + (G.hands ? "on" : "off")); vlog("hands-free " + (G.hands ? "on" : "off"));
+  if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); } // the form's save note changes
+  paintCall(); whenIdle("instr"); toast(G.hands ? "Hands-free on: Ara saves when you say yes" : "Hands-free off: tap Save yourself");
+}
+// what Ara reads back before saving: the form, who it's for, and each filled-in field (long text cut short)
+function hfReadback() {
+  const A = ACTIONS[V.action], d = readDraft(), who = V.target && V.target.contact ? nameOf(V.target.contact) : "";
+  const parts = A.fields.filter(f => !f.fixed).map(f => { const v = d[f.k];
+    if (v === null || v === undefined || v === "") return "";
+    if (f.type === "bool") return v ? f.label : "";
+    let x = f.type === "money" ? money(v) : f.type === "date" ? fmtDate(v) : String(v); const w = x.split(/\s+/); if (w.length > 14) x = w.slice(0, 14).join(" ") + "…";
+    return `${f.label}: ${x}`; }).filter(Boolean);
+  return `${A.title}${who ? " for " + who : ""}. ${parts.join("; ")}.`;
+}
+// the officer's next words after Ara's question (the transcript can land a moment after her tool call)
+function hfHeardAfter(n, ms = 2500) { return new Promise(res => { const t0 = Date.now(); (function poll() { if ((G.heardN || 0) > n) return res(G.lastHeard); if (Date.now() - t0 > ms) return res(null); setTimeout(poll, 100); })(); }); }
+async function hfSave(callId, data) {
+  if (!V) { toolReply(callId, { ok: false, saved: false, error: "No form is open, so there's nothing to save." }); return; }
+  const A = ACTIONS[V.action];
+  if (!G.hands) { toolReply(callId, { ok: false, saved: false, error: `Hands-free mode is off, so you can't save. Ask the officer to check the draft and tap "${A.saveLabel}". If they're driving, they can say "hands-free mode".` }); return; }
+  if (V.action === "meeting") { toolReply(callId, { ok: false, saved: false, error: "Scheduling a meeting finishes in Google Calendar, which needs the screen. Say it's kept as a draft for when they've parked." }); return; }
+  const key = V.action + JSON.stringify(readDraft()), c = G.saveCheck;
+  if (data.confirmed !== true || !c || c.key !== key) {
+    G.saveCheck = { key, step: "read", n: G.heardN || 0 }; paintCall();
+    toolReply(callId, { ok: true, saved: false, say: `Not saved yet. Say exactly: "${hfReadback()} Shall I save it?" Then wait. Only if they say yes, call save_form again with confirmed true. If they want a change, update the draft first.` }); return;
+  }
+  const heard = await hfHeardAfter(c.n);
+  if (!V || G.saveCheck !== c) { toolReply(callId, { ok: false, saved: false, error: "The form changed while waiting. Nothing was saved." }); return; }
+  if (!heard) { toolReply(callId, { ok: false, saved: false, error: "Not saved: the officer hasn't answered yet. Wait for them to say yes, then call save_form with confirmed true." }); return; }
+  if (!hfYes(heard.text)) { G.saveCheck = null; paintCall(); toolReply(callId, { ok: false, saved: false, error: `Not saved: the officer said "${heard.text}", which isn't a clear yes. Ask what they'd like to change, or whether to save it.` }); return; }
+  if (HF_MONEY.includes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; paintCall();
+    toolReply(callId, { ok: true, saved: false, say: `Money gets a second check. Say exactly: "Just to be sure, the amount is ${money(readDraft().amount)}. Is that right?" Then wait, and only if they say yes, call save_form again with confirmed true.` }); return; }
+  const before = S.history.length, action = V.action; G.hfTry = {};
+  try { saveDraft(); } catch (e) { G.hfTry.msg = String(e); }
+  const r = G.hfTry; G.hfTry = null; G.saveCheck = null;
+  if (V && V.action === action) { paintCall(); const el = document.getElementById("draftErr");
+    toolReply(callId, { ok: false, saved: false, error: `Not saved. ${r.msg || (el && el.textContent) || "The form isn't complete."} Ask for what's missing in one short question, update the draft, then read it back again.` }); return; }
+  S.history.slice(0, S.history.length - before).forEach(x => { x.hf = true; }); save(); render(); paintCall();
+  act("step", "hands-free save: " + A.saved);
+  toolReply(callId, { ok: true, saved: true, say: r.say || `Say it's saved, then "Say undo if that's wrong."` });
+}
+// hands-free saves wait in Needs attention until the officer has looked at them
+const hfUnchecked = () => S.history.filter(x => x.hf && !x.hfChecked);
+function hfCheckModal() {
+  const xs = hfUnchecked(), h = document.getElementById("modal"); if (!xs.length) return;
+  h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="hfTitle">
+    <h2 id="hfTitle">Check your hands-free saves</h2>
+    <p>${esc(botName())} saved these while you were hands-free. If one is wrong, open the record and use Edit. A gift or pledge is corrected by the Chief Gift Officer.</p>
+    <div class="hf-list">${xs.map(x => `<div class="row"><div class="t" style="font-size:14px">${esc(x.text)}<div class="s">${new Date(x.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div></div></div>`).join("")}</div>
+    <button class="btn blue" id="hfOk">They're right</button><button class="btn quiet" id="hfX">Not now</button></div></div>`;
+  document.getElementById("hfX").onclick = () => { h.innerHTML = ""; };
+  document.getElementById("hfOk").onclick = () => { xs.forEach(x => { x.hfChecked = true; }); save(); h.innerHTML = ""; render(); toast("Hands-free saves checked"); };
+}
 
 /* ---------- screens ---------- */
 const go = (s) => { G.whatNext = null; S.screen = s; save(); render(); window.scrollTo(0, 0); };
@@ -2213,11 +2296,14 @@ function attentionItems() {
   S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).forEach(t => { const al = taskAlert(t);
     items.push({ kind: "task", overdue: !!al, rank: al ? 0 : 3, due: t.due, name: t.text, say: `Task "${t.text}" for ${nameOf(contactById(t.contactId))}, due ${fmtDate(t.due)}${al ? " (overdue)" : ""}`,
       html: `<div class="row tap" data-go="tasks"><div class="t">${alertPill(al)}<div class="${al ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">${CHEV}</span></div>` }); });
+  const hf = hfUnchecked();
+  if (hf.length) items.push({ kind: "hf", overdue: false, rank: 1, name: "hands-free", say: `${hf.length} hands-free save${hf.length > 1 ? "s" : ""} to check`,
+    html: `<div class="row tap" data-act2="hfcheck"><div class="t"><span class="alert warn">Hands-free</span><div class="na-do">Check ${hf.length} hands-free save${hf.length > 1 ? "s" : ""}</div><div class="s">Saved by voice after you said yes. Make sure they're right.</div></div><span class="chev">${CHEV}</span></div>` });
   // most urgent first: overdue, then waiting too long (amber), then ready to move (green); tasks by due date
   return items.sort((a, b) => a.rank - b.rank || (a.due || "").localeCompare(b.due || "") || a.name.localeCompare(b.name));
 }
 const NA_FILTERS = { all: ["All", () => true], overdue: ["Overdue", x => x.overdue], opps: ["Opportunities", x => x.kind === "opp"], tasks: ["Tasks", x => x.kind === "task"], contacts: ["Contacts", x => x.kind === "contact"] };
-const NA_GROUPS = [["overdue", "Overdue", x => x.overdue], ["opps", "Move an opportunity forward", x => !x.overdue && x.kind === "opp"], ["tasks", "Tasks this week", x => !x.overdue && x.kind === "task"], ["contacts", "Ready for an opportunity", x => x.kind === "contact"]];
+const NA_GROUPS = [["hf", "Hands-free saves", x => x.kind === "hf"], ["overdue", "Overdue", x => x.overdue], ["opps", "Move an opportunity forward", x => !x.overdue && x.kind === "opp"], ["tasks", "Tasks this week", x => !x.overdue && x.kind === "task"], ["contacts", "Ready for an opportunity", x => x.kind === "contact"]];
 const NA_SHOW = 5;
 function needsAttention() {
   const items = attentionItems(), fk = NA_FILTERS[S.naFilter] ? S.naFilter : "all";
@@ -2285,7 +2371,7 @@ function contactsScreen() {
 }
 function historyPanel(filter) {
   const h = S.history.filter(filter); if (!h.length) return "";
-  return `<section class="panel"><div class="ph"><h2>History</h2></div>${h.slice(0, 8).map(x => `<div class="row"><div class="t" style="font-size:14px">${esc(x.text)}<div class="s">${new Date(x.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${OFFICER}${x.via ? " · via voice" : ""}</div></div></div>`).join("")}</section>`;
+  return `<section class="panel"><div class="ph"><h2>History</h2></div>${h.slice(0, 8).map(x => `<div class="row"><div class="t" style="font-size:14px">${esc(x.text)}<div class="s">${new Date(x.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${OFFICER}${x.hf ? " · hands-free" : x.via ? " · via voice" : ""}</div></div></div>`).join("")}</section>`;
 }
 function givingPanel(c) {
   const v = givingOf(c);
@@ -2684,6 +2770,7 @@ document.addEventListener("click", (e) => {
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
   else if (act === "cfilt") { S.cFilter = a.dataset.v; save(); render(); }
   else if (act === "nafilt") { S.naFilter = a.dataset.v; save(); render(); }
+  else if (act === "hfcheck") hfCheckModal();
   else if (act === "namore") { G.naOpen = G.naOpen || {}; G.naOpen[a.dataset.v] = true; render(); }
   else if (act === "flowhome") { S.flowBack = "home"; go("flow"); }
   else if (act === "flowstep") { const i = Number(a.dataset.i); S.flowAt = S.flowAt === i ? -1 : i; save(); render(); }
@@ -2731,7 +2818,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "Oct 23, 5:12 PM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "Oct 23, 8:21 PM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {

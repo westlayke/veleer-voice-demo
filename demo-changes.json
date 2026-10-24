@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "New hands-free (driving) mode. Say \"I'm driving\" or \"hands-free mode\", or tap Hands-free on the call bar, and Ara can save a finished form for you: she reads it back and saves only after you say yes, and a gift or pledge needs a second yes on the amount. Say \"undo\" to take back the last save. Hands-free saves are marked in History and listed in Needs attention for checking. Saying \"I've parked\" or ending the call turns it off. Scheduling a meeting still needs a tap.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "The field mics in Summary and Next step have been removed, because the wait before they started listening was too long. The Next step box stays three lines tall. \"Fill this in by voice\" at the top of the form and the phone keyboard's own mic still work.",
    "area": "Voice"
   },
