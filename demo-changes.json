@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+    {"date": "2026-10-24", "change": "Christmas mode now has a white background, with evergreen, Christmas red and gold touches (was a dark evergreen night).", "area": "Christmas"},
     {"date": "2026-10-24", "change": "Fix links on Check your hands-free saves now name who or what they are for, e.g. \"Edit Ruth Abernathy's contact\" or \"Open the opportunity: Vasquez, Elena - 2026\".", "area": "Hands-free"},
     {"date": "2026-10-24", "change": "After opening a fix link from Check your hands-free saves, Back (or closing or saving the form) returns to the check list.", "area": "Hands-free"},
     {"date": "2026-10-24", "change": "Christmas mode can now be turned on any time (Settings, or say \"Christmas mode\"), not just in December. The Christmas visitors on their own still start December 1.", "area": "Christmas"},
