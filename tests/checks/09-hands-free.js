@@ -65,6 +65,7 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   ok(await p.evaluate(() => S.screen === "home" && !!document.querySelector("#modal .wmodal")), "Back from the opportunity did not return to the check list");
   await p.evaluate(() => { S.history.unshift({ at: new Date().toISOString(), text: "Contact added by Test", contactId: S.contacts[0].id, hf: true }); hfCheckModal(); });
   ok(await p.evaluate(() => { const c = S.contacts[0]; return [...document.querySelectorAll(".hf-fix")].some(b => b.textContent.includes(`Edit ${c.first} ${c.last}'s contact`)); }), "the fix link does not name the contact");
+  ok(await p.evaluate(() => { const c = S.contacts[0]; return document.querySelector(".hf-list .row .t").textContent.startsWith(`${c.first} ${c.last} added as a contact by Test`); }), "the save's first line does not start with the contact's name");
   await p.tap(".hf-fix >> text=contact"); await p.waitForTimeout(300);
   ok(await p.isVisible("#overlay .sheet"), "Edit the contact did not open the form");
   await p.tap("#overlay [data-act=close]"); await p.waitForTimeout(300);

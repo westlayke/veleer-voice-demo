@@ -1101,6 +1101,14 @@ async function hfSave(callId, data) {
 }
 // hands-free saves wait in Needs attention until the officer has looked at them
 const hfUnchecked = () => S.history.filter(x => x.hf && !x.hfChecked);
+// the save in words that start with whose it was, e.g. "George Bertie's capacity rated B ($100k to $250k)"
+function hfLine(x) {
+  const c = contactById(x.contactId), t = x.text || ""; if (!c) return t;
+  const who = `${c.first} ${c.last}`, lc = t.charAt(0).toLowerCase() + t.slice(1);
+  if (/^Contact added/.test(t)) return `${who} added as a contact${t.slice(13)}`;
+  if (/^(Capacity|Ally|Do Not Contact|Task|Interaction report|Planned ask|Meeting)\b/.test(t) || / changed from /.test(t)) return `${who}'s ${lc}`;
+  return `${who}: ${t}`;
+}
 // where to correct a hands-free save: the edit form when there is one, otherwise the record it belongs to
 function hfFix(x) {
   const c = contactById(x.contactId), o = x.oppId ? oppById(x.oppId) : null, t = x.text || "";
@@ -1121,7 +1129,7 @@ function hfCheckModal() {
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="hfTitle">
     <h2 id="hfTitle">Check your hands-free saves</h2>
     <p>${esc(botName())} saved these while you were hands-free. If one is wrong, tap the link under it to fix it. A gift or pledge is corrected by the Chief Gift Officer.</p>
-    <div class="hf-list">${xs.map((x, n) => { const f = hfFix(x); return `<div class="row"><div class="t" style="font-size:14px">${esc(x.text)}<div class="s">${new Date(x.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>${f ? `<button type="button" class="hf-fix" data-hf="${n}">${esc(f.label)} <span aria-hidden="true">›</span></button>` : ""}</div></div>`; }).join("")}</div>
+    <div class="hf-list">${xs.map((x, n) => { const f = hfFix(x); return `<div class="row"><div class="t" style="font-size:14px">${esc(hfLine(x))}<div class="s">${new Date(x.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>${f ? `<button type="button" class="hf-fix" data-hf="${n}">${esc(f.label)} <span aria-hidden="true">›</span></button>` : ""}</div></div>`; }).join("")}</div>
     <button class="btn blue" id="hfOk">They're right</button><button class="btn quiet" id="hfX">Not now</button></div></div>`;
   document.getElementById("hfX").onclick = () => { h.innerHTML = ""; };
   h.querySelectorAll("[data-hf]").forEach(b => { b.onclick = () => { const f = hfFix(xs[+b.dataset.hf]); if (!f) return; h.innerHTML = "";
