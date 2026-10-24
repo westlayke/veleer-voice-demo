@@ -158,7 +158,7 @@ You are ${botName()}, the voice assistant inside Citizens VCRM (built on Veleer)
 # How you talk
 Speak warmly and briefly: one or two short sentences per turn. Your personality: friendly, upbeat and a little playful, like a favourite colleague. Use everyday contractions and, now and then, a light touch of a few words ("Nice!", "Love it.", "Ooh, good one.", "Got it!"), and vary your wording so you never sound scripted. Share in the officer's wins and show a little sympathy when something goes badly. Never joke about investors, money, Do Not Contact or Ally flags, or the officer's mistakes, and never let personality add a sentence or slow down a task. Lines the app gives you word for word stay exact.
 Ask at most one question at a time, and only for a required field the officer hasn't said. Never ask about optional fields, except the ones named below (email and mobile and the optional-fields questions the app gives you for a new contact or opportunity, and the next step for a substantive meeting). Never make up details: leave out anything the officer didn't say, such as a capacity rating.
-Call the money's recipient the "entity" (C3, C4 or PAC), never "fund". Say "gift", never "payment". Write spoken email addresses as real addresses. Resolve relative dates against today. When the officer spells something letter by letter, use exactly those letters in the field they mean; "T as in Tom" and words like Tango or Delta stand for their first letter. When they correct how a name is spelled, ask once whether the email address should change to match.
+Call the money's recipient the "entity" (C3, C4 or PAC), never "fund". The only entities, by state: ${ENTITIES_BY_STATE()}. Never name any other; when asked about a state, list exactly those. Say "gift", never "payment". Write spoken email addresses as real addresses. Resolve relative dates against today. When the officer spells something letter by letter, use exactly those letters in the field they mean; "T as in Tom" and words like Tango or Delta stand for their first letter. When they correct how a name is spelled, ask once whether the email address should change to match.
 If the officer asks what you can do, say exactly: "${CAN_DO}"
 If they ask what they can say, what phrases or commands you understand, or for the voice commands, say exactly: "${CMD_LIST}"
 When the officer asks you to talk faster, slower or at normal speed, call set_speaking_speed; it is remembered on this phone.
@@ -423,6 +423,8 @@ const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
 const busy = () => { G.lastAct = Date.now(); };
 const STALL_MS = 5000, SPEAK_RMS = 0.04; // officer's voice on the mic for 5 s with no word from the voice service means the line may be dead
 function idleCheck() {
+  // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
+  if (G.live && ((G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS) || /^Reconnecting/.test(G.status)) && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); cue("wait"); vlog("still working: tick"); }
   if (!G.live || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
   const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
@@ -478,7 +480,7 @@ async function startCall(opening) {
         if (rms < BARGE_RMS) f32 = new Float32Array(f32.length); else G.barge = (G.barge || 0) + 1;
       }
       if (!(G.playHead > G.ctx.currentTime + 0.03)) { let sq = 0; for (let i = 0; i < f32.length; i += 4) sq += f32[i] * f32[i]; const lvl = Math.sqrt(sq / (f32.length / 4));
-      if (lvl > SPEAK_RMS) { if (!G.speechSince) G.speechSince = Date.now(); G.loudAt = Date.now(); } else if (G.speechSince && Date.now() - (G.loudAt || 0) > 8000) G.speechSince = 0; }
+      if (lvl > SPEAK_RMS) { if (!G.speechSince) G.speechSince = Date.now(); G.loudAt = Date.now(); if (/^Reconnecting/.test(G.status)) G.spokeInGap = true; } else if (G.speechSince && Date.now() - (G.loudAt || 0) > 8000) G.speechSince = 0; }
     G.buf.push(downsample(f32, G.ctx.sampleRate));
       const total = G.buf.reduce((n, a) => n + a.length, 0);
       if (total < 2400) return; // ~100 ms
@@ -504,9 +506,10 @@ function openSocket(token, first) {
   ws.onopen = () => {
     if (G.ws !== ws) return;
     send({ type: "session.update", session: sessionCfg() }); notice(first);
-    G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; }, 0);
+    G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     netLog(`Voice line open in ${Date.now() - t0} ms${G.drops ? ` (reconnect ${G.drops} of ${MAX_DROPS})` : ""}`);
+    if (G.drops) setTimeout(prefetchToken, 2000); // the ready pass was used: have the next one ready for another drop (seen Oct 24: 7 s to fetch one)
     clearInterval(G.netTick); G.netTick = setInterval(() => { if (G.live && G.ws === ws) netLog("Reading"); }, 30000);
   };
   ws.onmessage = (m) => { if (G.ws !== ws) return; G.lastMsg = Date.now(); let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
@@ -550,11 +553,12 @@ async function reconnect(why) {
   if (!G.live) return;
   const ready = !!TOK.p, tp = Date.now(); let token; try { token = await getToken(); act("step", `Voice pass ${ready ? "was ready" : "fetched"} in ${Date.now() - tp} ms`); } catch (e) { netLog("Couldn't get a voice pass (" + String(e && e.message || e).slice(0, 80) + ")"); reconnect("no voice pass"); return; }
   if (!G.live) return;
+  if (G.spokeInGap) act("step", "The officer talked while the line was down: Ara will ask them to repeat it");
   G.lastMsg = 0; openSocket(token, reconnectLine());
 }
 const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "";
-  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${d ? d + " " : ""}${G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} Then, if the last thing said was a question to the officer, ask it again; otherwise ask the next question needed to finish. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
+  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${d ? d + " " : ""}${G.spokeInGap ? "The officer was talking while the line was down and you didn't hear it: right after the sorry line, ask them to say that again. " : G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}If they ask whether you're there, say yes in two words and carry on with what you were doing; never ask "what would you like to do" while a form is open, and don't say "welcome back". Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} Then, if the last thing said was a question to the officer, ask it again; otherwise ask the next question needed to finish. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {
   netLog("Voice service unavailable after " + MAX_DROPS + " tries (" + why + ")");
@@ -610,7 +614,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -752,11 +756,10 @@ function flushQueued() {
 }
 // Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
-const MAX_ASKS = 3, TICK_MS = 4000, ASK_AGAIN_MS = 10000; // Grok sometimes takes 6 to 10 s: a soft tick first, then ask again
+const MAX_ASKS = 1, TICK_MS = 4000, ASK_AGAIN_MS = 10000; // Grok sometimes takes 6 to 10 s: a soft tick first, then ask again
 function askReply() {
   send({ type: "response.create" }); G.asked = true; G.askedAt = Date.now();
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
-  G.tickWatch = setTimeout(() => { if (G.live && G.asked) { cue("wait"); vlog("still waiting for Grok: tick"); } }, TICK_MS);
   G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
 }
 function replyCheck(r) {
@@ -767,9 +770,14 @@ function replyCheck(r) {
   const why = r.status === "never started" ? "no reply started" : r.status === "failed" ? "reply failed" + (r.status_details && r.status_details.error ? ": " + (r.status_details.error.message || r.status_details.error.type || "") : "") : "empty reply";
   G.retried = (G.retried || 0) + 1;
   vlog(`Grok gave ${why} (${G.retried} of ${MAX_ASKS})`);
-  if (G.retried > MAX_ASKS) { act("step", `Grok gave ${why} after ${MAX_ASKS} more asks`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
-  act("step", `Grok gave ${why}, asked again (${G.retried} of ${MAX_ASKS})`);
-  busy(); G.retriedAt = Date.now() + 300 * G.retried; G.heardSinceRetry = false; setTimeout(() => { if (G.live && !G.responding) askReply(); }, 300 * G.retried);
+  if (G.retried > MAX_ASKS) { act("step", `Grok gave ${why} after asking again`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
+  // asking again on a slow line only piles up late answers (seen Oct 24: six "I'm here"s at once): test the line first, and on a slow one start a fresh line
+  const ws = G.ws; busy();
+  pingMs(3000).then(ms => { if (!G.live || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+    const slow = typeof ms !== "number" || ms > 2000;
+    if (slow) { act("step", `Grok gave ${why} on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); return; }
+    act("step", `Grok gave ${why}, asked again`);
+    G.retriedAt = Date.now(); G.heardSinceRetry = false; if (!G.responding) askReply(); });
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;
