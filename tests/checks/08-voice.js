@@ -8,13 +8,42 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(/mobile number/.test(r.status), "Ara was not asked for the mobile too");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
-  ok(/optional details/.test(r.status) && r.optional_fields && r.optional_fields.length >= 5 && /turn texting on/.test(r.status) && /Capacity rating/.test(r.optional_fields[0]) && /opportunity/.test(r.status), "Ara was not told to offer the optional fields with the capacity rating first");
+  ok(/add more details\? I can take you through them one at a time/.test(r.status), "Ara was not told to offer the optional fields one at a time");
   ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
   await said(p, "C.");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
-  ok(/tap/.test(r.status) && !/optional details/.test(r.status), "a question repeated");
+  ok(/tap/.test(r.status) && !/more details/.test(r.status), "a question repeated");
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Maya").capacity === "C", "the rating was not saved with the contact");
+});
+test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
+  await signIn(p);
+  let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });
+  ok(/one at a time/.test(r.status), "Ara was not told to offer the optional fields one at a time");
+  r = await ara(p, "optional_fields", { step: "start" });
+  ok(r.field === "capacity" && /Capacity rating first/.test(r.say) && /under \$5,000/.test(r.say), "the first question wasn't the capacity rating with its bands");
+  r = await ara(p, "optional_fields", { step: "answer", value: "D" });
+  ok((await p.inputValue("#f_capacity")) === "D" && r.field === "howMet" && /How did you meet Jack/.test(r.say), "the rating wasn't filled in, or How we met didn't come next");
+  r = await ara(p, "optional_fields", { step: "answer", value: "In the pumpkin patch" });
+  ok(/pumpkin patch/.test(await p.inputValue("#f_howMet")) && r.field === "permText", "How we met wasn't filled in, or texting didn't come next");
+  r = await ara(p, "optional_fields", { step: "answer", value: "Yes, that's fine" });
+  ok(await p.isChecked("#f_permText") && r.field === "permSource", "texting wasn't turned on, or its source wasn't asked next");
+  r = await ara(p, "optional_fields", { step: "skip" });
+  ok(r.field === "flags" && /Most people are neither/.test(r.say), "the flags question didn't come last");
+  r = await ara(p, "optional_fields", { step: "answer", value: "maybe" });
+  ok(r.ok === false && /didn't catch/.test(r.say), "an unclear answer wasn't asked again");
+  r = await ara(p, "optional_fields", { step: "answer", value: "Neither" });
+  ok(r.done && /tap "Save contact"/.test(r.status) && !(await p.isChecked("#f_ally")) && !(await p.isChecked("#f_dnc")), "the steps didn't finish by asking to tap Save contact");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  const c = (await state(p)).contacts.find(c => c.first === "Jack");
+  ok(c && c.capacity === "D" && c.permText === true && /pumpkin/.test(c.howMet), "the answers weren't saved with the contact");
+});
+test("Ara: texting permitted said by the officer reaches a new contact's form even when Ara leaves it out", async (p) => {
+  await signIn(p);
+  await ara(p, "show_contact_draft", { first: "Ivy", last: "Moss", email: "ivy@example.org", mobile: "(555) 010-0177" });
+  await said(p, "Sure, texting should be permitted.");
+  await ara(p, "show_contact_draft", { first: "Ivy", last: "Moss", email: "ivy@example.org", mobile: "(555) 010-0177" });
+  ok(await p.isChecked("#f_permText"), "texting permitted didn't reach the form");
 });
 test("Ara has a friendly personality and congratulates the officer when a pledge is recorded", async (p) => {
   await signIn(p);

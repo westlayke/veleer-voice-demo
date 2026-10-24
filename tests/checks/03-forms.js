@@ -115,9 +115,17 @@ test("New contact and new opportunity forms show every field, and Ara offers the
   const ready = "Ana Ruiz";
   let r = await ara(p, "show_opportunity_draft", { contact_name: ready });
   ok(!(await p.isVisible("details.more")) && (await p.isVisible("#f_potential")) && (await p.isVisible("#f_notes")), "the new opportunity form still hides fields under More details");
-  ok(/enough information yet/.test(r.status) && /entity of interest/.test(r.status) && /potential amount/.test(r.status), "Ara was not told to offer the opportunity's optional fields");
+  ok(/one at a time/.test(r.status), "Ara was not told to offer the opportunity's optional fields");
+  r = await ara(p, "optional_fields", { step: "start" });
+  ok(r.field === "fund", "the opportunity's first optional question wasn't the entity");
+  r = await ara(p, "optional_fields", { step: "answer", value: "Citizens Alliance C3" });
+  ok(r.field === "potential" && (await p.inputValue("#f_fund")) === "Citizens Alliance C3", "the entity wasn't filled in, or the potential amount didn't come next");
+  r = await ara(p, "optional_fields", { step: "answer", value: "50k" });
+  ok(r.field === "notes", "notes didn't come last");
+  r = await ara(p, "optional_fields", { step: "stop" });
+  ok(r.done && /tap/.test(r.status), "stop didn't end the questions");
   r = await ara(p, "show_opportunity_draft", { contact_name: ready, potential: 50000 });
-  ok(/tap/.test(r.status) && !/enough information yet/.test(r.status), "the optional-fields question repeated");
+  ok(/tap/.test(r.status) && !/one at a time/.test(r.status), "the optional-fields question repeated");
 });
 test("Interaction report: Next step is a three-line box, and Summary and Next step have no field mics", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
