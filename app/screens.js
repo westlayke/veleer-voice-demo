@@ -5,7 +5,7 @@ const go = (s) => { G.whatNext = null; S.screen = s; save(); render(); window.sc
 const CHEV = '<svg width="8" height="13" viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5l-5 5"/></svg>'; // iPhone-style row chevron
 const BACK_NAMES = { home: "Home", opp: "Opportunity", contact: "Contact", contacts: "Contacts", board: "Opportunities", opps: "Opportunities", tasks: "Tasks", settings: "Settings" }; // iPhone-style back button shows where it goes
 function topbar(title, back, logo) {
-  return `<header class="top${logo ? " withlogo" : ""}">${!logo && !back ? `<button class="chip" data-act2="editname" aria-label="${esc(OFFICER)}: change your name">${OFFICER_INITIALS}</button>` : ""}${logo ? '<img class="top-logo" src="logo-v5.png" alt="Citizens Alliance" width="82" height="50">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back to ${BACK_NAMES[back] || "previous screen"}"><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2 2 10l8 8"/></svg><span>${(BACK_NAMES[back] || "").length > 9 ? "Back" : (BACK_NAMES[back] || "Back")}</span></button>` : ""}${logo ? `<button class="who" data-act2="editname" aria-label="Change your name"><b>${OFFICER}</b><span>You're the gift officer</span></button>` : `<h1>${esc(title)}</h1>`}
+  return `<header class="top${logo ? " withlogo" : ""}">${!logo && !back ? `<button class="chip" data-act2="editname" aria-label="${esc(OFFICER)}: change your name">${OFFICER_INITIALS}</button>` : ""}${logo ? '<img class="top-logo" src="logo-v6.png" alt="Citizens Alliance" width="82" height="50">' : ""}${back ? `<button class="back" data-go="${back}" aria-label="Back to ${BACK_NAMES[back] || "previous screen"}"><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2 2 10l8 8"/></svg><span>${(BACK_NAMES[back] || "").length > 9 ? "Back" : (BACK_NAMES[back] || "Back")}</span></button>` : ""}${logo ? `<button class="who" data-act2="editname" aria-label="Change your name"><b>${OFFICER}</b><span>You're the gift officer</span></button>` : `<h1>${esc(title)}</h1>`}
   ${title === "Settings" ? "" : `<button class="iconbtn addbtn" data-act2="quickadd" aria-label="Add or log something"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`}
   ${title === "Settings" ? "" : `<button class="iconbtn" data-go="settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>`}
 </header>`;
@@ -146,7 +146,7 @@ function welcomeModal() {
   // first visit: one big mic, so the first tap starts the assistant, which asks for the first name (phones need a tap before sound or the mic)
   if (!S.settings.userName && !WELCOME_FULL) {
     h.innerHTML = `<div class="scrim center"><div class="wmodal wl-start" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
-      <img src="logo-v5.png" alt="Citizens Alliance" class="wl-logo">
+      <img src="logo-v6.png" alt="Citizens Alliance" class="wl-logo">
       <h2 id="wmTitle">Meet your new voice assistant!</h2>
       <p>You're a gift officer at Citizens Alliance. Tap the mic and ${esc(botName())} will introduce itself and ask your first name.</p>
       <button type="button" class="wl-mic big" data-act4="voice" aria-label="Tap to start talking">${mic(40)}</button>
@@ -156,7 +156,7 @@ function welcomeModal() {
     return;
   }
   h.innerHTML = `<div class="scrim center"><div class="wmodal wl-type" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
-    <img src="logo-v5.png" alt="Citizens Alliance" class="wl-logo">
+    <img src="logo-v6.png" alt="Citizens Alliance" class="wl-logo">
     <h2 id="wmTitle">What's your first name?</h2>
     <p class="wl-sub">${esc(botName())} will use it. You're a gift officer at Citizens Alliance, working with example contacts.</p>
     <input id="wlName" class="wl-input" aria-label="Your first name" name="vcrm-first-name-x" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" value="${esc(S.settings.userName || "")}">
