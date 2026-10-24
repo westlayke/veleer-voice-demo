@@ -33,8 +33,7 @@ const spookyMode = () => spookySeason() && !!S.settings.spooky;
    an evergreen look with a wreath and a nativity scene on Home, Ara as a warm Christmas host, sleigh bells and Santa's "ho ho ho"; ends by itself on Jan 1 ---------- */
 const ON_PREVIEW = VERSION_FILE === "preview-version.json";
 const xmasSeason = () => new Date().getMonth() === 11;
-const xmasAllowed = () => true; // Christmas mode can be switched on any time (Carverhill, Oct 24); the visitors on their own still wait for December
-const xmasMode = () => xmasAllowed() && !!S.settings.xmas;
+const xmasMode = () => !!S.settings.xmas; // Christmas mode can be switched on any time (Carverhill, Oct 24); the visitors on their own still wait for December
 const xmasOn = () => xmasMode() || (xmasSeason() && !S.settings.noXmas); // Christmas visitors
 const themeOn = () => xmasOn() || spookyOn(), themeMode = () => xmasMode() || spookyMode();
 function applySpooky() { document.documentElement.classList.toggle("spooky", spookyMode()); document.documentElement.classList.toggle("xmas", xmasMode()); }
