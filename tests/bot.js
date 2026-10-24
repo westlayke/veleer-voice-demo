@@ -748,6 +748,18 @@ test("Ara's instructions stay short and the Process FAQ is looked up with get_pr
   r = await ara(p, "get_process_faq", { question: "zebra xylophone" });
   ok(r.ok && !r.answers.length && /isn't covered/.test(r.say), "an unmatched question returned answers");
 });
+test("During a call, changes reach Ara as short Right now notes; the full instructions go again only when her rules change", async (p) => {
+  await signIn(p);
+  const full = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).length);
+  const notes = () => p.evaluate(() => __sent.filter(s => s.includes("Right now update")).length);
+  const f0 = await full(), n0 = await notes();
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  ok(await full() === f0, "a save sent the full instructions again");
+  ok(await notes() > n0 && await p.evaluate(() => __sent.some(s => s.includes("Right now update") && s.includes("Task added"))), "the save was not sent as a Right now note");
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  ok(await full() === f0 + 1, "turning on hands-free did not send the new rules");
+});
 test("Ara: talk faster is remembered", async (p) => {
   await signIn(p); const before = (await state(p)).settings.speed || 1;
   await ara(p, "set_speaking_speed", { change: "faster" });

@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "Ara gets her full instructions once per call. After a save or a change of screen she now gets a short \"Right now\" note instead of all the instructions again; they are only resent when her rules change, such as turning hands-free on.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Ara's instructions were tidied: grouped by topic, with repeated rules merged, and cut from about 55,000 to about 16,000 characters so she starts faster. The Process FAQ is no longer sent whole; Ara looks the answer up when asked a process question.",
    "area": "Voice"
   },
