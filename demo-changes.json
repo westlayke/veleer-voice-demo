@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+  {"date": "Oct 24, 2026", "change": "Fix (preview): on iPhones, tapping during a conversation woke the Halloween sound engine, which could pause Ara's audio or mute the mic and end the conversation; it now rests during conversations. After Carry on, Ara no longer turns spooky mode on a second time and announces it again.", "area": "Voice"},
   {"date": "Oct 24, 2026", "change": "Fix (preview): Halloween sounds play on iPhones again. The sound engine starts on the tap events an iPhone accepts and plays a silent blip, as at 7:27 AM, still without changing the phone's audio mode, so Ara stays audible.", "area": "Halloween"},
   {"date": "Oct 24, 2026", "change": "Spooky mode (preview): an owl now visits too. It glides down to a perch near the top, blinks, hoots \"hoo, hoo-hoooo\" and flies off.", "area": "Halloween"},
   {"date": "Oct 24, 2026", "change": "Fix (preview), second try: the page no longer changes the iPhone's audio mode at all, as before 7:27 AM, so Ara can be heard again. Halloween sounds may now be silent when the phone's silent switch is on.", "area": "Voice"},

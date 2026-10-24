@@ -79,6 +79,10 @@ test("Spooky mode: Ara turns it on and off, with the night look, slower host voi
   const upd = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.audio).at(-1), n);
   ok(upd && /SPOOKY MODE IS ON/.test(upd.session.instructions), "Ara wasn't given the spooky rules");
   ok(Math.abs(upd.session.audio.output.speed - 0.9) < 0.001, "Ara's voice didn't slow down a touch");
+  const n2 = await p.evaluate(() => __sent.length);
+  const again = await ara(p, "set_spooky_mode", { on: true });
+  const spoke = await p.evaluate((n) => __sent.slice(n).some(s => JSON.parse(s).type === "response.create"), n2);
+  ok(again.already && !spoke, "asking for spooky mode again (as after Carry on) made Ara announce it a second time");
   const off = await ara(p, "set_spooky_mode", { on: false });
   ok(off.ok && !off.spooky, "Ara couldn't turn spooky mode off");
   ok(!(await p.evaluate(() => document.documentElement.classList.contains("spooky"))), "the night look stayed on after normal mode");
