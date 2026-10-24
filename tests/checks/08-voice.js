@@ -215,4 +215,18 @@ test("Ara: a rating said while the contact's Edit form is open goes on the form,
   ok((await state(p)).contacts.find(c => c.first === "Ken").capacity === want, "Save changes did not save the rating");
 });
 
+
+test("Ara: an interaction's summary is taken from the officer's answer when Ara never sends it; a misplaced next-step date is dropped; \"neither\" flags", async (p) => {
+  await signIn(p);
+  await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", meetingType: "Phone call" });
+  await p.evaluate(() => recent(botName(), "Date is October twenty-first now. What was the gist of the call?"));
+  await said(p, "Uh, we talked about the alliance and how he liked our work");
+  const r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: "2026-10-21", meetingType: "Phone call", nextStep: "", nextDue: "2026-10-21" });
+  ok(await p.inputValue("#f_summary") === "We talked about the alliance and how he liked our work.", "the officer's answer didn't become the summary");
+  ok(!(r.still_needed || []).some(x => /summary/i.test(x)), "the summary was still listed as needed");
+  ok(!(await p.inputValue("#f_nextDue").catch(() => "")), "the meeting date was kept as a next-step due date");
+  await p.tap(".cb-end").catch(() => {});
+  ok(await p.evaluate(() => JSON.stringify(optParse("flags", "neither Ally - Do Not Solicit nor Do Not Contact")) === JSON.stringify({ ally: false, dnc: false }) && optParse("flags", "Ally - Do Not Solicit").ally === true && optParse("flags", "No, that's none of those").dnc === false), "\"neither\" was read as both flags");
+});
+
 };
