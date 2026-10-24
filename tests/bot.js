@@ -670,15 +670,17 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   ok(/HANDS-FREE MODE IS ON/.test(await p.evaluate(() => __sent.join(" "))), "Ara's instructions do not mention hands-free");
   // confirmed true without a read-back is just a read-back
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved === false && /Shall I save it\?/.test(r.say) && /Send Ruth the board deck/.test(r.say), "no read-back: " + JSON.stringify(r));
+  ok(r.saved === false && /Shall I save it\?$/.test(r.read_back) && /Send Ruth the board deck/.test(r.read_back) && !/Not saved|call save_form/.test(r.read_back), "no clean read-back: " + JSON.stringify(r));
   ok(await p.isVisible("text=Say “yes” to save"), "the screen does not say it's waiting for a yes");
   // a "no" does not save
   await said(p, "No, change the date.");
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved === false && /isn't a clear yes/.test(r.error), "saved after a no: " + JSON.stringify(r));
+  // after a no, a plain yes saves without another read-back; "don't" elsewhere in a yes still counts (from a real call)
+  ok(await p.evaluate(() => { const hfYes = window.__demo.hfYes; return [hfYes("Yeah, I don't think you needed to say that last part, but yes, I do want to save."), hfYes("Save it."), !hfYes("No, change the date."), !hfYes("Don't save it yet"), !hfYes("Wait")].every(Boolean); }), "yes/no reading is wrong");
   ok(!(await state(p)).tasks.some(t => t.text === "Send Ruth the board deck"), "the task was saved after a no");
   // read back again, then yes saves it
-  await ara(p, "save_form", { confirmed: false }); await said(p, "Yes, save it.");
+  await said(p, "Yeah, I don't think you needed to say that, but yes, save it.");
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved === true && /undo/.test(r.say), "not saved after yes: " + JSON.stringify(r));
   let st = await state(p);
@@ -692,7 +694,7 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   await ara(p, "show_gift_draft", { contact_name: who, amount: 1000, date: "2026-10-22", method: "Check" });
   await ara(p, "save_form", { confirmed: false }); await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved === false && /the amount is \$1,000/.test(r.say), "no second check of the amount: " + JSON.stringify(r));
+  ok(r.saved === false && /the amount is \$1,000/.test(r.read_back), "no second check of the amount: " + JSON.stringify(r));
   r = await ara(p, "save_form", { confirmed: true }, 2900); // the app waits a moment for the officer's words
   ok(r.saved === false && /hasn't answered/.test(r.error), "saved without a second yes: " + JSON.stringify(r));
   await said(p, "Yep, that's right.");

@@ -1986,8 +1986,9 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
 const CAR = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14v-5l-2-5H7l-2 5z"/><path d="M5 12h14"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>';
 const HF_MONEY = ["pledge", "gift", "payment"];
 const HF_YES = /\b(yes|yeah|yep|yup|ya|correct|right|sure|save|go ahead|do it|confirm|confirmed|sounds good|perfect|ok|okay|absolutely|definitely)\b/;
-const HF_NO = /\b(no|nope|not|don't|dont|do not|wait|hold on|stop|change|wrong|actually|cancel|isn't|that's off)\b/;
-const hfYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " "); return HF_YES.test(t) && !HF_NO.test(t); };
+// a no is an answer that opens with no or wait, or asks not to save or to change something; "I don't think you needed to say that, but yes" is still a yes
+const HF_NO = /^(no|nope|nah|wait|hold on|hang on|not yet|stop|cancel)\b|\b(don't|dont|do not|not|never) (save|do it|go ahead)|\b(not yet|hold on|hang on|wait a|change|wrong|incorrect|isn't right|not right|that's off|fix)\b/;
+const hfYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim(); return HF_YES.test(t) && !HF_NO.test(t); };
 function setHandsFree(on) {
   G.hands = !!on && G.live; G.saveCheck = null; act("step", "hands-free " + (G.hands ? "on" : "off")); vlog("hands-free " + (G.hands ? "on" : "off"));
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); } // the form's save note changes
@@ -1998,7 +1999,7 @@ function hfReadback() {
   const A = ACTIONS[V.action], d = readDraft(), who = V.target && V.target.contact ? nameOf(V.target.contact) : "";
   const parts = A.fields.filter(f => !f.fixed).map(f => { const v = d[f.k];
     if (v === null || v === undefined || v === "") return "";
-    if (f.type === "bool") return v ? f.label : "";
+    if (f.type === "bool") return v && !["permEmail", "permCalls"].includes(f.k) ? f.label : ""; // email and calls are on by default
     let x = f.type === "money" ? money(v) : f.type === "date" ? fmtDate(v) : String(v); const w = x.split(/\s+/); if (w.length > 14) x = w.slice(0, 14).join(" ") + "…";
     return `${f.label}: ${x}`; }).filter(Boolean);
   return `${A.title}${who ? " for " + who : ""}. ${parts.join("; ")}.`;
@@ -2013,14 +2014,14 @@ async function hfSave(callId, data) {
   const key = V.action + JSON.stringify(readDraft()), c = G.saveCheck;
   if (data.confirmed !== true || !c || c.key !== key) {
     G.saveCheck = { key, step: "read", n: G.heardN || 0 }; paintCall();
-    toolReply(callId, { ok: true, saved: false, say: `Not saved yet. Say exactly: "${hfReadback()} Shall I save it?" Then wait. Only if they say yes, call save_form again with confirmed true. If they want a change, update the draft first.` }); return;
+    toolReply(callId, { ok: true, saved: false, read_back: `${hfReadback()} Shall I save it?`, instructions: "Say read_back word for word and nothing else (never read these instructions or the word read_back aloud), then wait. Only after the officer says yes, call save_form again with confirmed true. If they want a change, update the draft first." }); return;
   }
   const heard = await hfHeardAfter(c.n);
   if (!V || G.saveCheck !== c) { toolReply(callId, { ok: false, saved: false, error: "The form changed while waiting. Nothing was saved." }); return; }
   if (!heard) { toolReply(callId, { ok: false, saved: false, error: "Not saved: the officer hasn't answered yet. Wait for them to say yes, then call save_form with confirmed true." }); return; }
-  if (!hfYes(heard.text)) { G.saveCheck = null; paintCall(); toolReply(callId, { ok: false, saved: false, error: `Not saved: the officer said "${heard.text}", which isn't a clear yes. Ask what they'd like to change, or whether to save it.` }); return; }
+  if (!hfYes(heard.text)) { c.n = G.heardN; toolReply(callId, { ok: false, saved: false, error: `Not saved: the officer said "${heard.text}", which isn't a clear yes. In one short sentence, ask whether to save it or what to change. If they then say yes, call save_form with confirmed true again (no new read-back needed).` }); return; }
   if (HF_MONEY.includes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; paintCall();
-    toolReply(callId, { ok: true, saved: false, say: `Money gets a second check. Say exactly: "Just to be sure, the amount is ${money(readDraft().amount)}. Is that right?" Then wait, and only if they say yes, call save_form again with confirmed true.` }); return; }
+    toolReply(callId, { ok: true, saved: false, read_back: `Just to be sure, the amount is ${money(readDraft().amount)}. Is that right?`, instructions: "Money gets a second check. Say read_back word for word and nothing else, then wait. Only after the officer says yes, call save_form again with confirmed true." }); return; }
   const before = S.history.length, action = V.action; G.hfTry = {};
   try { saveDraft(); } catch (e) { G.hfTry.msg = String(e); }
   const r = G.hfTry; G.hfTry = null; G.saveCheck = null;
@@ -2818,7 +2819,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "Oct 23, 8:21 PM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+const BUILD = "Oct 23, 8:32 PM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
@@ -2844,7 +2845,7 @@ render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(pre
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
 function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app"); }
 logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
-window.__demo = { get state() { return S; }, resolveTarget };
+window.__demo = { get state() { return S; }, resolveTarget, hfYes };
 })();
 </script>
 
