@@ -34,8 +34,13 @@ function setSpooky(on) {
 }
 // spooky sounds, made by the phone (no sound files): quiet, only after the first tap, never during a conversation with Ara
 let spkCtx = null, spkPlayed = 0;
-// iPhones only allow sound after a tap: start the sound engine in a tap. The page never changes the phone's audio mode (doing that left Ara silent on iPhones)
-document.addEventListener("pointerdown", () => { try { spkCtx = spkCtx || new (window.AudioContext || window.webkitAudioContext)(); if (spkCtx.state === "suspended") spkCtx.resume(); } catch (e) {} }, { capture: true });
+// iPhones only allow sound after a tap: start the sound engine in the tap (touchend and click count on an iPhone, pointerdown doesn't) and play a silent blip.
+// The page never changes the phone's audio mode: doing that left Ara silent on iPhones (Oct 24)
+function spkUnlock() {
+  try { if (!spkCtx) { spkCtx = new (window.AudioContext || window.webkitAudioContext)(); const b = spkCtx.createBufferSource(); b.buffer = spkCtx.createBuffer(1, 1, 22050); b.connect(spkCtx.destination); b.start(0); }
+    if (spkCtx.state !== "running") spkCtx.resume(); } catch (e) {}
+}
+["pointerdown", "touchend", "click"].forEach(ev => document.addEventListener(ev, spkUnlock, { capture: true, passive: true }));
 function spookySound(kind, retried) {
   const c = spkCtx; if (!c || G.live) return false;
   if (c.state !== "running") { if (!retried) c.resume().then(() => { if (c.state === "running") spookySound(kind, true); }).catch(() => {}); return false; }
