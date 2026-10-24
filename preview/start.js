@@ -40,7 +40,7 @@ function spkUnlock() { // iPhones only allow sound after a tap: start the sound 
 }
 ["pointerdown", "touchend", "click"].forEach(ev => document.addEventListener(ev, spkUnlock, { capture: true, passive: true }));
 // on an iPhone the silent switch mutes web sounds unless the page asks to play like media; ask only while a sound plays, never near the mic
-function spkSession(on) { try { if (navigator.audioSession) navigator.audioSession.type = on ? "playback" : "auto"; } catch (e) {} }
+function spkSession(on) { try { if (navigator.audioSession) navigator.audioSession.type = on ? "playback" : G.live ? "play-and-record" : "auto"; } catch (e) {} }
 function spookySound(kind, retried) {
   const c = spkCtx; if (!c || G.live) return false;
   if (c.state !== "running") { if (!retried) c.resume().then(() => { if (c.state === "running") spookySound(kind, true); }).catch(() => {}); return false; }
