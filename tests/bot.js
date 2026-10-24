@@ -710,6 +710,34 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   await p.tap("#hfOk"); await p.waitForTimeout(300);
   ok(!(await p.isVisible("text=Check 1 hands-free save")), "the check did not clear");
 });
+test("Opportunities and Tasks have search and filter chips like Contacts, and Ara can open a view", async (p) => {
+  await signIn(p);
+  await tab(p, "Opportunities");
+  ok(await p.isVisible("#oSearch"), "Opportunities has no search box");
+  for (const c of ["Open", "Needs attention", "Asks this quarter", "Pledges to record", "Closed this year"]) ok(await p.isVisible(`.cfilt button:has-text("${c}")`), "missing chip " + c);
+  const openN = await p.evaluate(() => window.__demo.state.opps.filter(o => o.stage !== "Closed").length);
+  ok((await p.$$("main [data-opp]")).length === openN, "Open view doesn't list every open opportunity");
+  await p.fill("#oSearch", "ruth"); await p.waitForTimeout(150);
+  const vis = await p.$$eval("main [data-opp]", rs => rs.filter(r => r.style.display !== "none").map(r => r.textContent));
+  ok(vis.length === 1 && /Ruth/.test(vis[0]), "search didn't narrow to Ruth: " + vis.length);
+  await p.tap('.cfilt button:has-text("Pledges to record")'); await p.waitForTimeout(250);
+  const want = await p.evaluate(() => window.__demo.state.opps.filter(o => o.stage === "Ask Made" && o.asks && o.asks[0] && (o.asks[0].status === "Accepted" || /Agreed/.test(o.asks[0].status))).length);
+  ok((await p.$$("main [data-opp]")).length === want, "Pledges to record shows the wrong opportunities");
+  await p.tap('.seg button:has-text("Board")'); await p.waitForTimeout(250);
+  ok((await p.$$("main .card[data-opp]")).length === want, "Board doesn't follow the chip");
+  // Tasks
+  await tab(p, "Tasks");
+  ok(await p.isVisible("#tSearch"), "Tasks has no search box");
+  for (const c of ["Open", "Overdue", "This week", "Waiting", "Done"]) ok(await p.isVisible(`.cfilt button:has-text("${c}")`), "missing task chip " + c);
+  ok(!(await p.isVisible(".ph h2:has-text('Done')")), "the separate Done panel is still there");
+  await p.tap('.cfilt button:has-text("Overdue")'); await p.waitForTimeout(250);
+  const od = await p.evaluate(() => window.__demo.state.tasks.filter(t => !t.done && t.due && t.due < new Date().toISOString().slice(0, 10)).length);
+  ok((await p.$$("main .trow")).length === od, "Overdue shows the wrong tasks");
+  // Ara opens a view
+  const r = await ara(p, "show_list", { list: "tasks", view: "done" });
+  ok(r.ok && /Done/.test(r.showing), "show_list failed: " + JSON.stringify(r));
+  ok((await state(p)).tFilter === "done" && await p.isVisible(".cfilt button.on:has-text('Done')"), "Ara didn't open the Done view");
+});
 test("Ara: talk faster is remembered", async (p) => {
   await signIn(p); const before = (await state(p)).settings.speed || 1;
   await ara(p, "set_speaking_speed", { change: "faster" });
