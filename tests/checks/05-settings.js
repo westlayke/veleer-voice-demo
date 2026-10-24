@@ -59,6 +59,15 @@ test("Halloween: in October a spider, pumpkin or ghost crosses without blocking 
   else ok(!(await p.$("#spookyTgl")), "the Halloween switch should only show in October");
 });
 
+test("Halloween: with Reduce Motion on, visitors still come with their sounds, fading in and out in one spot", async (p) => {
+  if (new Date().getMonth() !== 9) return;
+  await p.emulateMedia({ reducedMotion: "reduce" });
+  await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => spookyOn()), "visitors were turned off by Reduce Motion");
+  const r = await p.evaluate(() => { const el = window.__demo.spookyOnce ? window.__demo.spookyOnce("ghost") : spookyOnce("ghost"); const a = el.getAnimations(); return { calm: el.classList.contains("spk-calm"), n: a.length, kf: a[0] && a[0].effect.getKeyframes().map(k => k.transform || "").join("") }; });
+  ok(r.calm && r.n === 1 && !r.kf, "the visitor still moved across the screen with Reduce Motion on");
+  ok(/Reduce Motion is on/.test(await p.evaluate(() => "Opened the app" + (calmMotion() ? " (Reduce Motion is on)" : ""))), "the activity log wouldn't show Reduce Motion");
+});
 test("Halloween sounds: a visitor makes a sound after the first tap, but not during a conversation", async (p) => {
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Contacts"); await p.waitForTimeout(300);
   const a = await p.evaluate(() => { const n = window.__demo.spkPlayed; window.__demo.spookyOnce("ghost").dataset.t = "1"; return window.__demo.spkPlayed - n; });

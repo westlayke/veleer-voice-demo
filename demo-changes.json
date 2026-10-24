@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+    {"date": "Oct 24, 2026", "change": "Phones with Reduce Motion turned on now get the Halloween visitors and their sounds too (they fade in and out in one spot instead of moving across). Before, Reduce Motion hid them all, along with the tap-me owl.", "area": "Halloween"},
     {"date": "Oct 24, 2026", "change": "In spooky mode Ara starts every conversation as the haunted-house host: \"Mwahaha... welcome to the haunted CRM. Hi Dana, I'm Ara, what would you like to do?\" After Carry on she says \"Welcome back to the haunted CRM\".", "area": "Halloween"},
     {"date": "Oct 24, 2026", "change": "The Halloween owl now pops up every time the app opens until someone taps, since sounds stay silent until a tap. Before, he showed only once per phone.", "area": "Halloween"},
     {"date": "Oct 24, 2026", "change": "First time the app opens in October, a big owl pops up saying \"Tap me to hear me hoot!\" so people know to touch the screen to turn on the Halloween sounds. It hoots when tapped and flies away. Shown once per phone.", "area": "Halloween"},
