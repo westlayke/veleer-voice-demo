@@ -87,6 +87,24 @@ test("Spooky mode: Ara turns it on and off, with the night look, slower host voi
   ok(off.ok && !off.spooky, "Ara couldn't turn spooky mode off");
   ok(!(await p.evaluate(() => document.documentElement.classList.contains("spooky"))), "the night look stayed on after normal mode");
 });
+test("Spooky mode: Ara greets as the haunted-house host from her first words, and welcomes back the same way", async (p) => {
+  if (new Date().getMonth() !== 9) return;
+  await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300);
+  await p.evaluate(() => window.__demo.setSpooky(true));
+  const n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => startCall()); await p.waitForTimeout(700);
+  const sent = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)), n);
+  const cfg = sent.find(e => e.type === "session.update" && e.session.instructions);
+  ok(cfg && /SPOOKY MODE IS ON/.test(cfg.session.instructions), "a new conversation in spooky mode didn't start with the spooky rules");
+  const hi = sent.filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" ");
+  ok(/haunted-house host voice/.test(hi) && /welcome to the haunted CRM/.test(hi), "Ara's greeting wasn't spooky");
+  ok(/Welcome back to the haunted CRM/.test(await p.evaluate(() => resumeLine({ lines: [], draft: "" }))), "Carry on's welcome back wasn't spooky");
+  await p.tap(".cb-end").catch(() => {}); await p.evaluate(() => window.__demo.setSpooky(false));
+  const n2 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => startCall()); await p.waitForTimeout(700);
+  const hi2 = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" "), n2);
+  ok(/Hi Sam, I'm/.test(hi2) && !/haunted/.test(hi2), "the normal greeting changed");
+});
 test("Spooky mode: a creak when a form opens, thunder on Save, bats and a cackle on Closed Won, visitors more often", async (p) => {
   if (new Date().getMonth() !== 9) return;
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Contacts"); await p.waitForTimeout(300);
