@@ -160,6 +160,9 @@ test("Christmas mode: visitors and sounds (sleigh bells, ho ho ho, chime, carol)
   made.forEach(m => ok(m.el && m.sound, `the ${m.k} visitor didn't appear with its sound`));
   const sounds = await p.evaluate(() => ["bells", "hohoho", "chime", "carol", "giggle", "twinkle"].map(k => spookySound(k)));
   ok(sounds.every(Boolean), "a Christmas sound didn't play");
+  await p.evaluate(() => ["merry", "jingle"].forEach(k => spookySound(k)));
+  const files = await p.evaluate(async () => (await Promise.all(["merry", "bells", "hohoho", "jingle"].map(k => xmasDec[k]))).map(b => !!b && b.duration > 0.5));
+  ok(files.every(Boolean), "a Christmas sound file (Santa's voice or the sleigh bells) didn't load");
   const cue = await p.evaluate(() => { const n = window.__demo.spkPlayed; openForm("contact"); return window.__demo.spkPlayed - n; });
   ok(cue === 1, "no sleigh bells when a form opened in Christmas mode");
   await p.evaluate(() => { V = null; renderOverlay(); });
