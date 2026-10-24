@@ -85,6 +85,10 @@ function resolveTarget(action, spoken, sel = {}) {
 }
 
 /* ---------- drafts ---------- */
+// show the officer the first field that still needs something
+function focusField(el) { if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); try { el.focus({ preventScroll: true }); } catch (x) {} } }
+// a recorded pledge or gift settles the contact's "Follow up on agreed pledge" tasks
+const doneAgreedPledgeTasks = (c) => S.tasks.forEach(k => { if (k.contactId === c.id && /^Follow up on agreed pledge/.test(k.text)) k.done = true; });
 let V = null; // { action, data, fromVoice, target }
 function prefill(action, d, t) {
   const out = Object.assign({}, d);
@@ -214,7 +218,7 @@ function pickFor(action) {
   const planned = ok.filter(x => x.t.opp && x.t.opp.stage === "Ask Planning");
   const groups = action === "ask" && planned.length && planned.length < ok.length ? [["Planned asks (Ask Planning)", planned], ["Other opportunities", ok.filter(x => !planned.includes(x))]] : [["", ok]];
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="pkTitle">
-    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    ${HELP_X}
     <h2 id="pkTitle">${esc(action === "ask" ? "Record the ask" : A.title)}: ${oppFirst ? "which opportunity?" : "who is it for?"}</h2>
     ${ok.length ? groups.map(([head, xs]) => `${head ? `<div class="qa-h">${head}</div>` : ""}<div class="pick">${xs.map(x => `<button type="button" class="btn quiet" data-pick="${x.c.id}">${esc(oppFirst && x.t.opp ? x.t.opp.name : `${x.c.last}, ${x.c.first}`)}${oppFirst && x.t.opp ? `<small>${esc(why(x.t.opp))}</small>` : x.t.gate ? "<small>Not ready yet</small>" : ""}</button>`).join("")}</div>`).join("")
       : `<p class="wl-hint">None of your ${oppFirst ? "opportunities is at the right stage" : "contacts can take this"} yet.</p>`}
@@ -233,7 +237,7 @@ const QUICK = [["People and meetings", [["interaction", "Log a meeting or call"]
 function quickAdd(anyone) {
   const c = anyone ? null : focusContact(), h = document.getElementById("modal");
   h.innerHTML = `<div class="scrim center" data-helpx="1"><div class="wmodal hmodal" role="dialog" aria-modal="true" aria-labelledby="qaTitle">
-    <button type="button" class="hm-x" data-helpx="1" aria-label="Close">×</button>
+    ${HELP_X}
     <h2 id="qaTitle">What would you like to do?</h2>
     ${c ? `<p class="qa-for">For ${esc(nameOf(c))} · <button type="button" data-qaany="1">Someone else</button></p>` : ""}
     ${QUICK.map(([head, items]) => `<div class="qa-h">${head}</div><div class="pick">${items.map(([a, label]) => `<button type="button" class="btn quiet" data-qa="${a}">${label}</button>`).join("")}</div>`).join("")}
@@ -261,7 +265,7 @@ function saveDraft() {
     if (need.length) {
       const msg = `Add the ${need.join(" and ").toLowerCase()} before saving. A substantive interaction needs a next step and its due date.`;
       const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
-      const first = document.getElementById(need[0] === "Next step" ? "f_nextStep" : "f_nextDue"); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+      const first = document.getElementById(need[0] === "Next step" ? "f_nextStep" : "f_nextDue"); focusField(first);
       toast(msg);
       if (G.live) hfNotice(`The officer tapped ${A.saveLabel} but the draft has no ${need.join(" or ").toLowerCase()}. Explain in one sentence that a substantive interaction needs a next step and its due date, ask what it is and when it's due, then call the draft tool again.`);
       return;
@@ -271,7 +275,7 @@ function saveDraft() {
     : V.action === "cultivate" && d.decision === "Defer" && !String(d.reason || "").trim() ? ["reason", "Add a reason before saving. Deferring needs a reason, which the Chief Gift Officer can see.", "they chose Defer without a reason. Explain that a defer needs a reason the Chief Gift Officer can see, ask for it"] : "";
   if (ruleMsg) {
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = ruleMsg[1];
-    const first = document.getElementById("f_" + ruleMsg[0]); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+    const first = document.getElementById("f_" + ruleMsg[0]); focusField(first);
     toast(ruleMsg[1]);
     if (G.live) hfNotice(`The officer tapped ${A.saveLabel} but ${ruleMsg[2]}, then call the draft tool again.`);
     return;
@@ -279,7 +283,7 @@ function saveDraft() {
   if (!miss.length && (V.action === "contact" || V.action === "editContact") && !String(d.email || "").trim() && !String(d.mobile || "").trim()) {
     const msg = "Add an email or a mobile number before saving. A contact needs at least one.";
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
-    const first = document.getElementById("f_email"); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+    const first = document.getElementById("f_email"); focusField(first);
     toast(msg);
     if (G.live) hfNotice(`The officer tapped ${A.saveLabel} but the contact has no email or mobile number. Explain that a contact needs at least one, ask for it, then call the draft tool again.`);
     return;
@@ -287,7 +291,7 @@ function saveDraft() {
   if (miss.length) {
     const msg = "Fill in " + miss.map(f => f.label).join(", ") + " before saving.";
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = msg;
-    const first = document.getElementById("f_" + miss[0].k); if (first) { first.scrollIntoView({ block: "center", behavior: "smooth" }); try { first.focus({ preventScroll: true }); } catch (x) {} }
+    const first = document.getElementById("f_" + miss[0].k); focusField(first);
     toast(msg);
     if (G.live) hfNotice(`The officer tapped ${A.saveLabel} but the draft is missing: ${miss.map(f => f.label).join(", ")}. Ask for it in one short question, then call the draft tool again with everything filled in.`);
     return;
@@ -437,7 +441,7 @@ const APPLY = {
     if (!a) { a = { fund: d.fund, campaign: "National", amount: d.amount, askType: "Pledge", plannedDate: d.confirmedDate }; o.asks.unshift(a); }
     a.status = "Accepted";
     o.stage = "Commitment"; c.status = "Investor";
-    S.tasks.forEach(k => { if (k.contactId === c.id && /^Follow up on agreed pledge/.test(k.text)) k.done = true; });
+    doneAgreedPledgeTasks(c);
     log(`Pledge recorded: ${money(d.amount)}, confirmed by ${String(d.confirmedBy).toLowerCase()} on ${fmtDate(d.confirmedDate)}. Moved to Commitment`, { contactId: c.id, oppId: o.id });
     S.sel.opp = o.id; S.screen = "opp"; return t;
   },
@@ -452,7 +456,7 @@ const APPLY = {
     if (!a) { a = { fund: d.fund, campaign: "National", amount: d.amount, askType: "Outright", plannedDate: d.date }; o.asks.unshift(a); }
     a.status = "Accepted";
     o.stage = "Closed"; o.closed = "Won"; o.closedOn = d.date; c.status = "Investor";
-    S.tasks.forEach(k => { if (k.contactId === c.id && /^Follow up on agreed pledge/.test(k.text)) k.done = true; });
+    doneAgreedPledgeTasks(c);
     log(`Implied commitment of ${money(d.amount)} from gift received. Moved to Commitment`, { contactId: c.id, oppId: o.id });
     log(`Gift recorded: ${money(d.amount)} to ${d.fund} by ${String(d.method).toLowerCase()}, ${fmtDate(d.date)}. Closed Won`, { contactId: c.id, oppId: o.id });
     S.sel.opp = o.id; S.screen = "opp"; return t;

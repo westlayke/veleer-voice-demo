@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "Repeated code was removed: 36 copies of the same snippets (form fields, the capacity rating list, opportunity amounts and buttons, help popup close buttons and more) now come from 12 shared pieces. Nothing on screen changes; a fix in one place now applies everywhere.",
+   "area": "Maintenance"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "The demo's one large file was split into a short page plus a styles file and six code files by topic (lists and saved data, forms, the conversation with Ara, screens, the process guide, start-up). Nothing on screen changes; each part is now easier to find and change.",
    "area": "Maintenance"
   },
