@@ -54,7 +54,7 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   ok(await p.isVisible("text=Check your hands-free saves"), "the check list did not open");
   // each save links to where it can be corrected
   const fixes = await p.evaluate(() => [...document.querySelectorAll(".hf-fix")].map(b => b.textContent.trim()));
-  ok(fixes.length >= 1 && fixes.every(t => /Open the opportunity/.test(t)), "the gift has no link to its opportunity: " + JSON.stringify(fixes));
+  ok(fixes.length >= 1 && fixes.every(t => /Open the opportunity: \S/.test(t)), "the gift has no link to its opportunity: " + JSON.stringify(fixes));
   await p.tap(".hf-fix"); await p.waitForTimeout(300);
   ok(await p.evaluate(() => S.screen === "opp" && !document.querySelector("#modal .wmodal")), "the link did not open the opportunity");
   const kinds = await p.evaluate(() => { const c = S.contacts[0], i = S.interactions.find(i => i.contactId === c.id && i.kind !== "ask");
@@ -64,7 +64,8 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   await p.tap("header .back"); await p.waitForTimeout(300);
   ok(await p.evaluate(() => S.screen === "home" && !!document.querySelector("#modal .wmodal")), "Back from the opportunity did not return to the check list");
   await p.evaluate(() => { S.history.unshift({ at: new Date().toISOString(), text: "Contact added by Test", contactId: S.contacts[0].id, hf: true }); hfCheckModal(); });
-  await p.tap(".hf-fix >> text=Edit the contact"); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => { const c = S.contacts[0]; return [...document.querySelectorAll(".hf-fix")].some(b => b.textContent.includes(`Edit ${c.first} ${c.last}'s contact`)); }), "the fix link does not name the contact");
+  await p.tap(".hf-fix >> text=contact"); await p.waitForTimeout(300);
   ok(await p.isVisible("#overlay .sheet"), "Edit the contact did not open the form");
   await p.tap("#overlay [data-act=close]"); await p.waitForTimeout(300);
   ok(await p.isVisible("text=Check your hands-free saves"), "closing the fix form did not return to the check list");

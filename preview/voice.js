@@ -1105,16 +1105,16 @@ const hfUnchecked = () => S.history.filter(x => x.hf && !x.hfChecked);
 function hfFix(x) {
   const c = contactById(x.contactId), o = x.oppId ? oppById(x.oppId) : null, t = x.text || "";
   if (!c) return null;
-  const base = { contact: c.id, screen: "contact" };
+  const base = { contact: c.id, screen: "contact" }, who = `${c.first} ${c.last}`;
   if (/^Interaction report/.test(t)) { const i = S.interactions.find(i => i.contactId === c.id && i.kind !== "ask" && t.startsWith(`Interaction report: ${i.type}, ${fmtDate(i.date)}`))
     || S.interactions.find(i => i.contactId === c.id && i.kind !== "ask");
-    if (i) return { ...base, form: "editInteraction", item: i.id, label: "Edit the report" }; }
+    if (i) return { ...base, form: "editInteraction", item: i.id, label: `Edit ${who}'s interaction report` }; }
   if (/^Task (added|edited)/.test(t)) { const k = S.tasks.find(k => k.contactId === c.id && !k.done && t.includes(k.text)) || S.tasks.find(k => k.contactId === c.id && !k.done);
-    if (k) return { ...base, form: "editTask", item: k.id, label: "Edit the task" }; }
-  if (/^(Ask planned|Planned ask edited)/.test(t) && o && o.asks.some(a => a.status === "Planned")) return { ...base, opp: o.id, screen: "opp", form: "editPlan", label: "Edit the planned ask" };
-  if (o) return { ...base, opp: o.id, screen: "opp", label: "Open the opportunity" };
-  if (/^Meeting scheduled/.test(t)) return { ...base, label: `Open ${c.first}` };
-  return { ...base, form: "editContact", label: "Edit the contact" };
+    if (k) return { ...base, form: "editTask", item: k.id, label: `Edit ${who}'s task` }; }
+  if (/^(Ask planned|Planned ask edited)/.test(t) && o && o.asks.some(a => a.status === "Planned")) return { ...base, opp: o.id, screen: "opp", form: "editPlan", label: `Edit the planned ask: ${o.name}` };
+  if (o) return { ...base, opp: o.id, screen: "opp", label: `Open the opportunity: ${o.name}` };
+  if (/^Meeting scheduled/.test(t)) return { ...base, label: `Open ${who}` };
+  return { ...base, form: "editContact", label: `Edit ${who}'s contact` };
 }
 function hfCheckModal() {
   const xs = hfUnchecked(), h = document.getElementById("modal"); if (!xs.length) return;
