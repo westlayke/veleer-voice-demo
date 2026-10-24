@@ -114,9 +114,8 @@ test("Spooky mode: Ara greets as the haunted-house host from her first words, an
   const hi2 = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" "), n2);
   ok(/Hi Sam, I'm/.test(hi2) && !/haunted/.test(hi2), "the normal greeting changed");
 });
-test("Christmas mode (preview any time, December in the app): look, wreath, nativity, Ara as a Christmas host, one theme at a time", async (p) => {
+test("Christmas mode (any time): look, wreath, nativity, Ara as a Christmas host, one theme at a time", async (p) => {
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300);
-  if (!(await p.evaluate(() => xmasAllowed()))) return; // the live app only has Christmas in December
   const n = await p.evaluate(() => __sent.length);
   await p.evaluate(() => startCall()); await p.waitForTimeout(600);
   const on = await ara(p, "set_christmas_mode", { on: true });
@@ -143,7 +142,6 @@ test("Christmas mode (preview any time, December in the app): look, wreath, nati
 });
 test("Christmas mode: visitors and sounds (sleigh bells, ho ho ho, chime, carol), Santa asks for a tap, Settings switch", async (p) => {
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300);
-  if (!(await p.evaluate(() => xmasAllowed()))) return;
   await p.evaluate(() => window.__demo.setXmas(true));
   await p.tap("nav >> text=Home").catch(() => {}); await p.waitForTimeout(200);
   await p.evaluate(() => { spkCtx = null; delete window.__demo.state.settings.seenOwlHint; document.getElementById("modal").innerHTML = ""; window.__demo.owlHint(); });
