@@ -408,9 +408,6 @@ function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall(
 document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
 document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
-  // a conversation needs the phone's talk-and-listen audio; the Halloween sounds switch the page to plain playback, which on an iPhone left Ara silent
-  if (typeof spkSession === "function") clearTimeout(spkSessT);
-  try { if (navigator.audioSession) navigator.audioSession.type = "play-and-record"; } catch (e) {}
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
   if (navigator.audioSession) vlog("audio session: " + navigator.audioSession.type);
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
@@ -494,7 +491,6 @@ const resumeLine = (r) => `The officer's last conversation with you was cut off 
 function endCall() {
   clearInterval(G.idleTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; G.hands = false; G.saveCheck = null; stopPlayback(); letSleep();
-  try { if (navigator.audioSession) navigator.audioSession.type = "auto"; } catch (e) {}
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}

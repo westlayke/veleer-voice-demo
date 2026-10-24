@@ -33,18 +33,12 @@ function setSpooky(on) {
   save(); applySpooky(); render(); act("step", "spooky mode " + (on ? "on" : "off")); spookyKick();
 }
 // spooky sounds, made by the phone (no sound files): quiet, only after the first tap, never during a conversation with Ara
-let spkCtx = null, spkPlayed = 0, spkSessT = null;
-function spkUnlock() { // iPhones only allow sound after a tap: start the sound engine in the tap and play a silent blip
-  try { if (!spkCtx) { spkCtx = new (window.AudioContext || window.webkitAudioContext)(); const b = spkCtx.createBufferSource(); b.buffer = spkCtx.createBuffer(1, 1, 22050); b.connect(spkCtx.destination); b.start(0); }
-    if (spkCtx.state !== "running") spkCtx.resume(); } catch (e) {}
-}
-["pointerdown", "touchend", "click"].forEach(ev => document.addEventListener(ev, spkUnlock, { capture: true, passive: true }));
-// on an iPhone the silent switch mutes web sounds unless the page asks to play like media; ask only while a sound plays, never near the mic
-function spkSession(on) { try { if (navigator.audioSession) navigator.audioSession.type = on ? "playback" : G.live ? "play-and-record" : "auto"; } catch (e) {} }
+let spkCtx = null, spkPlayed = 0;
+// iPhones only allow sound after a tap: start the sound engine in a tap. The page never changes the phone's audio mode (doing that left Ara silent on iPhones)
+document.addEventListener("pointerdown", () => { try { spkCtx = spkCtx || new (window.AudioContext || window.webkitAudioContext)(); if (spkCtx.state === "suspended") spkCtx.resume(); } catch (e) {} }, { capture: true });
 function spookySound(kind, retried) {
   const c = spkCtx; if (!c || G.live) return false;
   if (c.state !== "running") { if (!retried) c.resume().then(() => { if (c.state === "running") spookySound(kind, true); }).catch(() => {}); return false; }
-  spkSession(true); clearTimeout(spkSessT); spkSessT = setTimeout(() => spkSession(false), 2500);
   const t0 = c.currentTime + 0.05, out = c.createGain(); out.gain.value = 0.18; out.connect(c.destination);
   const env = (g, at, peak, len) => { g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(peak, at + Math.min(0.3, len / 4)); g.gain.exponentialRampToValueAtTime(0.0001, at + len); };
   const noise = (len) => { const b = c.createBuffer(1, Math.ceil(c.sampleRate * len), c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; const n = c.createBufferSource(); n.buffer = b; return n; };
