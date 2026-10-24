@@ -128,7 +128,7 @@ const spookyKick = () => spookyLoop(true);
 spookyLoop(true); applySpooky();
 // First open in October: phones only play sounds after a tap, so a big owl invites one ("Tap me to hear me hoot!"); the first tap anywhere sets him hooting and he flies off. Once per phone.
 function owlHint(tries = 0) {
-  if (!spookyOn() || S.settings.seenOwlHint || spkCtx || document.querySelector(".owlhint")) return; // sound already on (someone tapped), or seen before
+  if (!spookyOn() || S.settings.seenOwlHint || document.querySelector(".owlhint")) return; // once per phone, even if a tap already turned sound on (closing the welcome counts)
   if (G.live || V || document.getElementById("modal").innerHTML.trim() || document.visibilityState !== "visible") { if (tries < 60) setTimeout(() => owlHint(tries + 1), 1000); return; } // wait for the welcome or a form to close
   const el = document.createElement("div"); el.className = "owlhint"; el.setAttribute("role", "button"); el.setAttribute("aria-label", "Tap to turn on the Halloween sounds");
   el.innerHTML = '<span class="owlhint-bubble">Tap me to hear me hoot!</span><span class="owlhint-owl" aria-hidden="true">🦉</span>';
