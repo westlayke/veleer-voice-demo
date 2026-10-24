@@ -1,6 +1,6 @@
 // Test bot for the Citizens VCRM demo: taps through the app like a person and plays Ara's
 // side of a conversation with a pretend voice line (no xAI calls, no cost).
-// Run: node tests/bot.js            (tests preview-flow.html and a smoke test of index.html)
+// Run: node tests/bot.js            (tests preview-flow.html and a smoke test of index.html; JOBS=1 runs one check at a time)
 //      PAGE=index.html node tests/bot.js   (full run against the live page)
 const http = require("http"), fs = require("fs"), path = require("path");
 let chromium; try { ({ chromium } = require("playwright")); } catch (e) { ({ chromium } = require("/opt/node-tools/node_modules/playwright")); }
@@ -804,14 +804,18 @@ test("Live page loads as Citizens VCRM and checks version.json", async (p) => {
   browser = await chromium.launch(Object.assign({ args }, process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : fs.existsSync("/opt/pw-browsers/chromium") ? { executablePath: "/opt/pw-browsers/chromium" } : {}));
   fs.mkdirSync(OUT, { recursive: true });
   const run = tests.filter(t => PAGE === "preview-flow.html" || !t.opts.page || t.opts.always).filter(t => !process.env.ONLY || t.name.includes(process.env.ONLY));
-  let failed = 0; const lines = [];
-  for (const t of run) {
-    const p = await fresh(t.opts.page || PAGE); const t0 = Date.now();
-    try { await t.fn(p); ok(!p.errors.length, "page error: " + p.errors[0]); lines.push(`✓ ${t.name}`); }
-    catch (e) { failed++; const shot = path.join(OUT, t.name.replace(/[^\w]+/g, "-").slice(0, 60) + ".png"); await p.screenshot({ path: shot }).catch(() => {}); lines.push(`✗ ${t.name}\n    ${e.message.split("\n")[0]}\n    screenshot: tests/results/${path.basename(shot)}`); }
-    console.log(lines.at(-1), `(${Date.now() - t0} ms)`);
+  // checks run side by side (JOBS at a time, default 4) in separate browser windows; results print in the usual order
+  let failed = 0; const lines = new Array(run.length); let next = 0, printed = 0; const done = new Array(run.length);
+  const flush = () => { while (printed < run.length && done[printed]) console.log(done[printed++]); };
+  async function one(i) {
+    const t = run[i], p = await fresh(t.opts.page || PAGE), t0 = Date.now();
+    try { await t.fn(p); ok(!p.errors.length, "page error: " + p.errors[0]); lines[i] = `✓ ${t.name}`; }
+    catch (e) { failed++; const shot = path.join(OUT, t.name.replace(/[^\w]+/g, "-").slice(0, 60) + ".png"); await p.screenshot({ path: shot }).catch(() => {}); lines[i] = `✗ ${t.name}\n    ${e.message.split("\n")[0]}\n    screenshot: tests/results/${path.basename(shot)}`; }
+    done[i] = `${lines[i]} (${Date.now() - t0} ms)`; flush();
     await p.context().close();
   }
+  const jobs = Math.max(1, Number(process.env.JOBS) || 4);
+  await Promise.all(Array.from({ length: Math.min(jobs, run.length) }, async () => { while (next < run.length) await one(next++); }));
   const summary = `${run.length - failed} of ${run.length} checks passed on ${PAGE}` + (failed ? `, ${failed} failed` : "");
   console.log("\n" + summary);
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Test bot: ${summary}\n\n\`\`\`\n${lines.join("\n")}\n\`\`\`\n`);
