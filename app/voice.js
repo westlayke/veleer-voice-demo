@@ -30,6 +30,15 @@ function officerSaidTexting() {
   if (/\b(no|not|don't|do not|never|shouldn't|can't|cannot|off)\b/.test(t)) return false;
   return /\b(permit|permitted|allow|allowed|ok|okay|fine|yes|can|should|turn on|on|check|tick|agreed|sure)\b/.test(t) ? true : null;
 }
+// the voice model sometimes never sends an interaction's summary (seen Oct 24: twelve tries, same fields each time): when Ara has just asked what was talked about, take the officer's answer
+function officerSummary() {
+  const r = G.recent || []; let i = r.length - 1; while (i >= 0 && !r[i].startsWith("Officer: ")) i--; if (i < 1) return null;
+  const said = r[i].slice(9).trim(), asked = r.slice(0, i).reverse().find(l => !l.startsWith("Officer: ")) || "";
+  if (!/talk(ed)? about|gist|summar|discuss|what happened|how did (it|the \w+) go|what came up|cover/i.test(asked) || said.split(/\s+/).length < 4 || /\?$/.test(said)) return null;
+  let t = said; for (let k = 0; k < 3; k++) t = t.replace(/^(uh|um|er|so|well|okay|ok|yeah|yes|oh)\b[,.]?\s*/i, "");
+  t = t.replace(/,?\s+(uh|um|er),?\s+/gi, " ").trim(); if (!t) return null;
+  t = t.charAt(0).toUpperCase() + t.slice(1); return /[.!?]$/.test(t) ? t : t + ".";
+}
 function normCap(v) {
   if (v == null) return null; const t = String(v).trim(); if (!t) return null;
   let m = t.match(/^([A-Ea-e])(?![a-z])/); if (m) return m[1].toUpperCase();
@@ -125,6 +134,7 @@ const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function"
     { type: "function", name: "set_hands_free", description: "Turn hands-free (driving) mode on or off when the officer asks, for example \"I'm driving\" or \"I've parked\". In hands-free mode you read each finished form back and save it when they say yes.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
     { type: "function", name: "optional_fields", description: "Go through a new contact's or new opportunity's optional fields one at a time; the app asks the questions and fills in the answers. step: start (the officer said yes to adding more details), answer (pass the officer's answer to the question you just asked, in their words, as value), skip (they want to skip this one), stop (they've had enough). Each reply tells you exactly what to say next.", parameters: { type: "object", properties: { step: { type: "string", enum: ["start", "answer", "skip", "stop"] }, value: { type: "string", description: "With answer: the officer's answer, for example \"D\", \"yes\", \"neither\", \"C4\", \"50000\" or a sentence" } }, required: ["step"] } },
     { type: "function", name: "set_spooky_mode", description: "Turn spooky mode (Halloween fun: a night look for the app, you as a haunted-house host, spooky sounds) on when the officer says \"spooky mode\", or off when they say \"normal mode\". It only exists in October.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
+    { type: "function", name: "set_christmas_mode", description: "Turn Christmas mode (Christmas cheer: an evergreen look with a nativity scene, you as a warm Christmas host, sleigh bells and Santa's \"ho ho ho\") on when the officer says \"Christmas mode\", or off when they say \"normal mode\". It exists in December (and any time on the preview).", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
     { type: "function", name: "close_form", description: "Close the open form without saving (close), or clear it to start again (clear), when the officer asks in words the app didn't already carry out. Never say a form was closed or cleared unless this returns ok.", parameters: { type: "object", properties: { change: { type: "string", enum: ["close", "clear"] } }, required: ["change"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short, warm goodbye first (for example \"Great work today, talk soon!\"; vary it), then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
@@ -133,6 +143,7 @@ function crmSnapshot() {
     return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") + (nextStep(o) ? `, next step: ${nextStep(o).line}` : "") : oppReady(c) ? ": no open opportunity, ready for one" : ": no open opportunity"}`; }).join("; ");
 }
 const SPOOKY_RULES = `SPOOKY MODE IS ON. The officer asked for some Halloween fun, so play a warm, theatrical haunted-house host: speak a little slower, with relish, and now and then (not every turn, at most one per turn) add a short spooky aside about the house itself, such as "Mind the cobwebs.", "The candles flicker in approval.", "Ooh, I heard the floorboards creak." or "Welcome back to the haunted CRM.". Vary them. Everything else is unchanged: every fact, name, number, date and question is exactly as normal, any words you're told to say exactly are said exactly, and all the saving rules apply. The asides are never about investors, money, giving, flags or the officer's mistakes. If they say "normal mode", call set_spooky_mode with on false.`;
+const XMAS_RULES = `CHRISTMAS MODE IS ON. The officer asked for some Christmas cheer, so be a warm, jolly, traditional Christmas host: cheerful and kind, and now and then (not every turn, at most one per turn) add a short festive aside about the season, such as "The tree lights are twinkling.", "I can hear sleigh bells.", "Fresh snow on the rooftops tonight." or "The elves are busy in the workshop.". Vary them. Everything else is unchanged: every fact, name, number, date and question is exactly as normal, any words you're told to say exactly are said exactly, and all the saving rules apply. The asides are never about investors, money, giving, flags or the officer's mistakes, and never joke about the nativity, Jesus or anyone's faith. If they say "normal mode", call set_christmas_mode with on false; if they say "spooky mode", call set_spooky_mode with on true.`;
 const HF_RULES = `HANDS-FREE MODE IS ON. The officer is probably driving and can't look at or tap the screen, so this overrides "You never save anything" and every "tap the button". Keep each turn short and never describe what's on screen. When a draft has everything it needs, don't ask them to tap: call save_form with confirmed false and say the read-back it gives you, word for word. Call save_form with confirmed true only right after the officer says yes to that read-back; the app checks their words too. If they change something, update the draft and read it back again. Scheduling a meeting needs Google Calendar on screen, so keep it as a draft for when they've parked. If they say they've parked or want to tap themselves, call set_hands_free with on false.`;
 function grokInstructions() {
   return `# Who you are
@@ -151,7 +162,7 @@ You never save anything. As soon as the officer says what they want to do (and f
 When the tool reply says nothing more is needed, ask the officer to check the draft and tap the button named in the reply's "button", using that exact label (say "tap Record pledge", never "tap Save" when the button says something else).
 Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix or the step it suggests.
 The officer can say "cancel", "undo", "go back", "start over" or "say that again" at any time: the app carries these out itself and sends you a notice, so follow the notice and don't act on those words yourself. If they ask in other words to close, cancel or clear the open form and no notice came, call close_form. Never say a form was closed, cancelled, cleared or reset unless an app notice or a tool reply says so.
-${G.hands ? HF_RULES + "\n" : ""}${spookyMode() ? SPOOKY_RULES + "\n" : ""}After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
+${G.hands ? HF_RULES + "\n" : ""}${spookyMode() ? SPOOKY_RULES + "\n" : ""}${xmasMode() ? XMAS_RULES + "\n" : ""}After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 You can see saves: the app tells you each time one happens and lists them under Right now. If the officer asks whether something saved, answer from that; never say you can't see saves.
 
 # Task by task
@@ -199,7 +210,7 @@ function ctxNow() {
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.\n` : ""}Contacts and opportunities: ${crmSnapshot()}.`;
 }
 // what changes Ara's rules, so the full instructions go again only when one of these does
-const rulesKey = () => JSON.stringify([!!G.hands, S.settings.userName || "", botName(), spookyMode()]);
+const rulesKey = () => JSON.stringify([!!G.hands, S.settings.userName || "", botName(), spookyMode(), xmasMode()]);
 // The Process FAQ is looked up with get_process_faq instead of being sent whole with every set of instructions
 let FAQ_CACHE = null; // built on first use, since FAQ_TEXT is defined further down the page
 const faqPairs = () => FAQ_CACHE || (FAQ_CACHE = (() => { const out = []; let sec = "";
@@ -459,7 +470,7 @@ async function startCall(opening) {
       else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
       srcNode.connect(G.node);
       const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
-      const boo = spookyMode() ? "Mwahaha... welcome to the haunted CRM. " : "", how = spookyMode() ? " In your haunted-house host voice, say exactly" : " Say exactly"; // spooky mode: Ara is the haunted-house host from her very first words
+      const boo = spookyMode() ? "Mwahaha... welcome to the haunted CRM. " : xmasMode() ? "Ho ho ho... Merry Christmas, and welcome to the Christmas CRM. " : "", how = spookyMode() ? " In your haunted-house host voice, say exactly" : xmasMode() ? " In your warm Christmas host voice, say exactly" : " Say exactly"; // Christmas mode the same, as a jolly Christmas host // spooky mode: Ara is the haunted-house host from her very first words
       notice(S.settings.userName ? (opening || `The officer just opened the conversation.${how} "${boo}Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, what would you like to do?" and nothing more.`) : (opening ? opening + ` But you don't know their name yet: first${how.replace(" Say", " say").replace(" In", " in")} "${boo}Hi, I'm ${botName()}, what's your first name?", then call set_user_name, then help with that.` : `The officer just opened the conversation and you don't know their name yet.${how} "${boo}Hi, I'm ${botName()}, what's your first name?" and nothing more.`));
       G.status = "Listening"; paintCall(); vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     };
@@ -497,7 +508,7 @@ function resumeModal() {
   document.getElementById("rsmX").onclick = () => { G.resume = null; h.innerHTML = ""; };
   document.getElementById("rsmGo").onclick = () => { h.innerHTML = ""; const r2 = G.resume; G.resume = null; G.recent = r2.lines.slice(); G.keepRecent = true; startCall(resumeLine(r2)); };
 }
-const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
+const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
 function endCall() {
   clearInterval(G.idleTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; G.hands = false; G.saveCheck = null; stopPlayback(); letSleep();
@@ -713,6 +724,12 @@ const TOOL_HANDLERS = {
     setSpooky(!!data.on); send({ type: "session.update", session: sessionCfg() }); // new rules and a slower voice straight away
     toolReply(callId, { ok: true, spooky: spookyMode(), say: spookyMode() ? `In your haunted-house host voice, say one short welcome, such as "Mwahaha... spooky mode is on. Welcome to the haunted CRM!", then ask what they'd like to do.` : `Say only "Back to normal. The ghosts have gone home."` }); return;
   },
+  set_christmas_mode(callId, data) {
+    if (!xmasAllowed()) { toolReply(callId, { ok: false, error: "Christmas mode is only around in December.", say: "Say in one short sentence that Christmas mode is only around in December." }); return; }
+    if (!!data.on === xmasMode()) { toolReply(callId, { ok: true, christmas: xmasMode(), already: true, status: `Christmas mode is already ${xmasMode() ? "on" : "off"}. Don't announce it again.` }, false); return; } // e.g. after Carry on: no second welcome
+    setXmas(!!data.on); send({ type: "session.update", session: sessionCfg() }); // new rules straight away
+    toolReply(callId, { ok: true, christmas: xmasMode(), say: xmasMode() ? `In your warm Christmas host voice, say one short welcome, such as "Ho ho ho! Christmas mode is on. Merry Christmas, and welcome to the Christmas CRM!", then ask what they'd like to do.` : `Say only "Back to normal. Merry Christmas!"` }); return;
+  },
   set_speaking_speed(callId, data, name) {
     const now = talkSpeed(), next = data.change === "normal" ? 1 : SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, SPEEDS.indexOf(nearSpeed(now)) + (data.change === "faster" ? 1 : -1)))];
     S.settings.speed = next; save(); send({ type: "session.update", session: sessionCfg() });
@@ -921,6 +938,11 @@ function draftTool(callId, name, data) {
   if (data.capacity && !(V && V.data && V.data.capacity === data.capacity) && !officerRated()) { vlog(`${name}: dropped capacity "${data.capacity}" (the officer didn't give a rating)`); delete data.capacity; }
   // the voice model doesn't send texting permitted on a new contact (seen Oct 24: eight tries, never sent): take it from the officer's own words
   if ((tool.action === "contact" || tool.action === "editContact") && data.permText === undefined) { const t = officerSaidTexting(); if (t !== null) { data.permText = t; vlog(`${name}: texting ${t ? "permitted" : "not permitted"}, from the officer's words`); } }
+  if ((tool.action === "interaction" || tool.action === "ask") && !String(data.summary || "").trim() && !(V && V.action === tool.action && V.data && String(V.data.summary || "").trim())) {
+    const t = officerSummary(); if (t) { data.summary = t; vlog(`${name}: summary taken from the officer's words`); } }
+  // a next-step due date with no next step, on the meeting's own day or earlier, is the meeting date filed in the wrong place (seen Oct 24)
+  if (tool.action === "interaction" && data.nextDue && !String(data.nextStep || "").trim() && !(V && V.data && String(V.data.nextStep || "").trim())) { const nd = normDate(data.nextDue);
+    if (nd && (nd <= todayISO() || nd === normDate(data.date || ""))) { vlog(`${name}: dropped next-step due date "${data.nextDue}" (no next step, not in the future)`); delete data.nextDue; } }
   const said = Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined);
   // the officer spelled something out: check it made it into this update (Grok sometimes resends the old fields instead)
   const flat = said.map(k => String(data[k]).toLowerCase().replace(/[^a-z]/g, "")).join(" ");
@@ -973,6 +995,7 @@ function optParse(k, raw) { // the officer's answer in their words -> the field'
   if (k === "capacity") return normCap(t.replace(/^(it's|its|make it|let's say|lets say|say|rating|capacity)\s+/i, "").replace(/^(bee|be)\b/i, "B").replace(/^(see|sea|cee)\b/i, "C").replace(/^dee\b/i, "D").replace(/^ee\b/i, "E"));
   if (k === "permText") return /^(no|nope|nah|not)\b|\b(don't|do not|not ok|not okay|shouldn't|can't)\b/.test(l) ? false : /\b(yes|yeah|yep|sure|ok|okay|fine|allowed|permitted|go ahead|of course|absolutely)\b/.test(l) ? true : null;
   if (k === "flags") { const none = /\b(neither|none|no|nope|nah|not)\b/.test(l) && !/\b(ally|do not contact|dnc)\b.*\b(yes)\b/.test(l);
+    if (/\b(neither|nor|none)\b/.test(l) || (/^(no|nope|nah)\b/.test(l) && !/\bally\b|contact|solicit/.test(l))) return { ally: false, dnc: false }; // "neither Ally - Do Not Solicit nor Do Not Contact" named both but meant neither (Oct 24)
     const ally = /\bally\b|do not solicit|don't ask|do not ask/.test(l) && !/\bnot (an )?ally\b/.test(l), dnc = /do not contact|don't contact|\bdnc\b/.test(l) && !/\bnot do not contact\b/.test(l);
     if (ally || dnc) return { ally, dnc }; return none ? { ally: false, dnc: false } : null; }
   if (k === "fund") { const n = l.replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(); if (!n) return null;
@@ -1047,7 +1070,7 @@ function hfReadback() {
     if (f.type === "bool") return v && !["permEmail", "permCalls"].includes(f.k) ? f.label : ""; // email and calls are on by default
     let x = f.type === "money" ? money(v) : f.type === "date" ? fmtDate(v) : String(v); const w = x.split(/\s+/); if (w.length > 14) x = w.slice(0, 14).join(" ") + "…";
     return `${f.label}: ${x}`; }).filter(Boolean);
-  return `${A.title}${who ? " for " + who : ""}. ${parts.join("; ")}.`;
+  return `${A.title}${who ? " for " + who : ""}.${parts.length ? " " + parts.join("; ") + "." : ""}`;
 }
 // the officer's next words after Ara's question (the transcript can land a moment after her tool call)
 function hfHeardAfter(n, ms = 2500) { return new Promise(res => { const t0 = Date.now(); (function poll() { if ((G.heardN || 0) > n) return res(G.lastHeard); if (Date.now() - t0 > ms) return res(null); setTimeout(poll, 100); })(); }); }

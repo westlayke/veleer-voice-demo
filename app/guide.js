@@ -78,6 +78,8 @@ function settingsScreen() {
     <label class="hint-tgl" for="hintsTgl"><input type="checkbox" id="hintsTgl" ${S.settings.noHints ? "" : "checked"}> Show a hint when I tap an option under “Say things like…”</label>
     ${spookySeason() ? `<label class="hint-tgl" for="spookyTgl"><input type="checkbox" id="spookyTgl" ${S.settings.noSpooky ? "" : "checked"}> Halloween: a spider, pumpkin or ghost crosses the screen now and then, with a spooky sound</label>
     <label class="hint-tgl" for="spookyMode"><input type="checkbox" id="spookyMode" ${spookyMode() ? "checked" : ""}> Spooky mode: a night look, ${esc(botName())} as a haunted-house host, spooky sounds on big moments and more visitors. You can also say “spooky mode” or “normal mode”. Ends on Nov 1.</label>` : ""}
+    ${xmasSeason() ? `<label class="hint-tgl" for="xmasTgl"><input type="checkbox" id="xmasTgl" ${S.settings.noXmas ? "" : "checked"}> Christmas: snow, a gift, an elf or a reindeer comes by now and then, with a Christmas sound</label>` : ""}
+    ${xmasAllowed() ? `<label class="hint-tgl" for="xmasMode"><input type="checkbox" id="xmasMode" ${xmasMode() ? "checked" : ""}> Christmas mode: an evergreen look with a wreath and a nativity scene on Home, ${esc(botName())} as a warm Christmas host, sleigh bells and Santa's “ho ho ho” on big moments, and more visitors. You can also say “Christmas mode” or “normal mode”. ${xmasSeason() ? "Ends on Jan 1." : "On the preview you can try it any time; in the app it's for December."}</label>` : ""}
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4">Changes on this screen save as soon as you make them.</div>
   </div></section>
   <section class="panel"><div class="ph"><h2>Share this proof of concept</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Send the proof of concept to someone, or show a QR code they can scan with their phone camera. Anyone with the link can use the voice assistant.</div>
@@ -168,6 +170,8 @@ document.addEventListener("change", (e) => { const id = e.target.id;
   else if (id === "voiceSel" || id === "botName") saveVoice();
   else if (id === "speedSel") { S.settings.speed = Number(e.target.value); save(); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(`Saved. ${botName()} will talk at ${speedName(talkSpeed())} speed.`); }
   else if (id === "spookyMode") { setSpooky(e.target.checked); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(e.target.checked ? "Spooky mode is on. Mwahaha! 🦇" : "Back to normal"); }
+  else if (id === "xmasMode") { setXmas(e.target.checked); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(e.target.checked ? "Christmas mode is on. Ho ho ho! 🎄" : "Back to normal"); }
+  else if (id === "xmasTgl") { if (e.target.checked) delete S.settings.noXmas; else S.settings.noXmas = true; save(); toast(e.target.checked ? "Merry Christmas! 🎄" : "Christmas visitors are off"); }
   else if (id === "spookyTgl") { if (e.target.checked) delete S.settings.noSpooky; else S.settings.noSpooky = true; save(); toast(e.target.checked ? "Happy Halloween! 🎃" : "Halloween visitors are off"); }
   else if (id === "hintsTgl") { if (e.target.checked) delete S.settings.noHints; else S.settings.noHints = true; save(); toast(e.target.checked ? "Hints are on" : "Hints are off"); } });
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.target.id === "userName" || e.target.id === "botName")) e.target.blur(); });
