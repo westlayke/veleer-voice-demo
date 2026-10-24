@@ -1240,7 +1240,6 @@ function crmSnapshot() {
 }
 const HF_RULES = `HANDS-FREE MODE IS ON. The officer is probably driving and can't look at or tap the screen, so this overrides "You never save anything" and every "tap the button". Keep each turn short and never describe what's on screen. When a draft has everything it needs, don't ask them to tap: call save_form with confirmed false and say the read-back it gives you, word for word. Call save_form with confirmed true only right after the officer says yes to that read-back; the app checks their words too. If they change something, update the draft and read it back again. Scheduling a meeting needs Google Calendar on screen, so keep it as a draft for when they've parked. If they say they've parked or want to tap themselves, call set_hands_free with on false.`;
 function grokInstructions() {
-  const f = focusContact();
   return `# Who you are
 You are ${botName()}, the voice assistant inside Citizens VCRM (built on Veleer), the fundraising CRM used by Citizens Alliance. Your name is ${botName()}; if asked your name, say it. Introduce yourself by name only once per conversation, and keep the greeting to the exact words you are given. ${S.settings.userName ? `You are talking with ${OFFICER}, a gift officer, on their phone; call them ${OFFICER.split(" ")[0]}.` : `You are talking with a gift officer on their phone, and you don't know their name yet. Before anything else, even if they already asked for something, say "Hi, I'm ${botName()}, what's your first name?" When they answer, call set_user_name straight away, then carry on with what they asked.`} Today is ${longToday()} (${todayISO()}).
 
@@ -1258,7 +1257,7 @@ When the tool reply says nothing more is needed, ask the officer to check the dr
 Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix or the step it suggests.
 The officer can say "cancel", "undo", "go back", "start over" or "say that again" at any time: the app carries these out itself and sends you a notice, so follow the notice and don't act on those words yourself. If they ask in other words to close, cancel or clear the open form and no notice came, call close_form. Never say a form was closed, cancelled, cleared or reset unless an app notice or a tool reply says so.
 ${G.hands ? HF_RULES + "\n" : ""}After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
-You can see saves: the app tells you each time one happens. ${(G.saves || []).length ? `Saved so far in this conversation: ${G.saves.join("; ")}.` : "Nothing has been saved yet in this conversation."} If the officer asks whether something saved, answer from that; never say you can't see saves.
+You can see saves: the app tells you each time one happens and lists them under Right now. If the officer asks whether something saved, answer from that; never say you can't see saves.
 
 # Task by task
 The officer can do any of these, in any order, for any contact: add a contact, log a meeting, add a task to a contact or their opportunity, create an opportunity, move it to Cultivation (or defer that), plan an ask, record an ask and the response, record a pledge, record a gift, phone a contact, schedule a meeting in their Google Calendar, or see a screen.
@@ -1295,8 +1294,17 @@ If the officer asks how the process works, for an overview, or to be walked thro
 ${flowScript()}
 
 # Right now
+The app sends a "Right now" update as a notice whenever this changes; the latest one replaces this section.
+${ctxNow()}`;
+}
+// what changes during a call (saves, the screen, the records); sent as a short notice instead of all the instructions again
+function ctxNow() {
+  const f = focusContact();
+  return `${(G.saves || []).length ? `Saved so far in this conversation: ${G.saves.join("; ")}.` : "Nothing has been saved yet in this conversation."}
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.\n` : ""}Contacts and opportunities: ${crmSnapshot()}.`;
 }
+// what changes Ara's rules, so the full instructions go again only when one of these does
+const rulesKey = () => JSON.stringify([!!G.hands, S.settings.userName || "", botName()]);
 // The Process FAQ is looked up with get_process_faq instead of being sent whole with every set of instructions
 let FAQ_CACHE = null; // built on first use, since FAQ_TEXT is defined further down the page
 const faqPairs = () => FAQ_CACHE || (FAQ_CACHE = (() => { const out = []; let sec = "";
@@ -1496,7 +1504,7 @@ const SPEEDS = [0.85, 1, 1.15, 1.3], SPEED_NAMES = { 0.85: "Slower", 1: "Normal"
 const nearSpeed = (v) => SPEEDS.reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a, 1);
 const talkSpeed = () => nearSpeed(Number(S.settings.speed) || 1);
 // the whole session setup; sent again in full when the speed changes mid-call, so nothing else is reset
-const sessionCfg = () => ({ voice: S.settings.voice || "ara", instructions: grokInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
+const sessionCfg = () => ({ voice: S.settings.voice || "ara", instructions: sentInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
   audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() } } });
 const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
 const busy = () => { G.lastAct = Date.now(); };
@@ -1719,9 +1727,13 @@ function onEvent(e) {
 }
 // A new response or session update sent while Grok is still speaking cuts off what it was saying ("Opening the…"),
 // so both wait until the current response is done.
+function sentInstructions() { G.sentRules = rulesKey(); G.sentCtx = ctxNow(); return grokInstructions(); }
 function flushQueued() {
   clearTimeout(G.qTimer); G.qTimer = null;
-  if (G.qInstr) { G.qInstr = false; send({ type: "session.update", session: { instructions: grokInstructions() } }); }
+  if (G.qInstr) { G.qInstr = false;
+    if (G.sentRules !== rulesKey()) send({ type: "session.update", session: { instructions: sentInstructions() } }); // the rules changed (hands-free, name)
+    else { const c = ctxNow(); if (c !== G.sentCtx) { G.sentCtx = c; vlog("context update");
+      send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(App notice, not spoken by the officer) Right now update, no reply needed:\n" + c }] } }); } } }
   if (G.qCreate) { G.qCreate = false; send({ type: "response.create" }); }
 }
 function whenIdle(kind) {
@@ -2908,7 +2920,7 @@ function restartConfirm() {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[role=button][tabindex]")) { e.preventDefault(); e.target.click(); } });
 
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const BUILD = "Oct 23, 10:26 PM ET", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
+const BUILD = "Oct 23, 10:59 PM ET", VERSION_FILE = "version.json"; // BUILD is stamped at publish time
 const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 let updChecked = 0;
 async function checkUpdate() {
