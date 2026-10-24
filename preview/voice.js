@@ -410,7 +410,8 @@ document.addEventListener("visibilitychange", () => {
   else if (document.visibilityState === "visible" && G.endedByLock) { G.endedByLock = false; resumeModal(); }
 });
 // Grok bills for every minute a conversation is open, so hang up after 12 seconds with no talking and no taps
-const IDLE_MS = 12000;
+const IDLE_MS = 12000, IDLE_HF_MS = 30000; // hands-free: a driver may take a while to answer
+const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
 // speaking speed: Grok's audio.output.speed (0.7 to 1.5), set in Settings or by asking the assistant; kept per phone
 const SPEEDS = [0.85, 1, 1.15, 1.3], SPEED_NAMES = { 0.85: "Slower", 1: "Normal", 1.15: "A bit faster", 1.3: "Faster" };
 const nearSpeed = (v) => SPEEDS.reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a, 1);
@@ -428,20 +429,22 @@ function idleCheck() {
   if (G.probing) return;
   // the officer is talking but the voice service hasn't heard anything: the line may have stalled without closing (seen Oct 24 in a dead spot)
   const talking = G.speechSince && Date.now() - G.speechSince > STALL_MS && Date.now() - (G.lastMsg || 0) > STALL_MS;
-  const quiet = Date.now() - (G.lastAct || Date.now()) >= IDLE_MS;
+  const since = Date.now() - (G.lastAct || Date.now());
+  const quiet = since >= idleMs() && (Date.now() - (G.loudAt || 0) >= idleMs() || since >= 60000); // sound on the mic counts as talking, but not for more than a minute (road noise)
   if (!talking && !quiet) return;
   G.probing = true; const ws = G.ws;
   pingMs(3000).then(ms => { G.probing = false; if (!G.live || G.ws !== ws || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
-    if (typeof ms !== "number" || ms > 2500) { G.stalled = true; G.speechSince = 0; netLog(`Line stalled (${talking ? "officer talking, nothing heard back" : "12 s of quiet"})`, ms); reconnect("the line stalled"); return; }
+    const fresh = Date.now() - (G.lastMsg || 0) < 3000; // the voice service is still sending: the line is alive, however slow the test (seen Oct 24: a 2.7 s test while Grok was answering)
+    if (!fresh && (typeof ms !== "number" || (talking && ms > 2500))) { G.stalled = true; G.speechSince = 0; netLog(`Line stalled (${talking ? "officer talking, nothing heard back" : "12 s of quiet"})`, ms); reconnect("the line stalled"); return; }
     if (talking) { G.speechSince = 0; return; } // the line is fine: it was background noise
-    if (Date.now() - (G.lastAct || Date.now()) >= IDLE_MS) idleStart(); });
+    if (Date.now() - (G.lastAct || Date.now()) >= idleMs()) idleStart(); });
 }
 function idleStart() {
-  G.idleEnding = true; vlog("12 seconds quiet: hanging up");
-  notice(`Nobody has spoken or tapped anything for 12 seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
+  G.idleEnding = true; G.idleAt = Date.now(); vlog(`${idleMs() / 1000} seconds quiet: hanging up`);
+  notice(`Nobody has spoken or tapped anything for ${idleMs() / 1000} seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
   G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
 }
-function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall("12 seconds of quiet"); toast("Hung up after 12 seconds of quiet. Tap the mic when you need me."); }
+function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; const secs = idleMs() / 1000; endCall(`${secs} seconds of quiet`); toast(`Hung up after ${secs} seconds of quiet. Tap the mic when you need me.`); }
 document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
 document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
@@ -607,7 +610,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -708,7 +711,10 @@ function onEvent(e) {
   const t = e.type || "";
   if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
-  if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0; }
+  if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0;
+    // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
+    if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0; clearTimeout(G.idleTimer); if (G.responding) send({ type: "response.cancel" }); stopPlayback(); vlog("hang-up called off: the officer spoke"); act("step", "Quiet hang-up called off: the officer spoke");
+      send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(App notice, not spoken by the officer) The officer spoke, so the app is NOT hanging up. Ignore the hang-up notice: don't say goodbye, just answer what they say next." }] } }); } }
   if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
   else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
     if (t === "response.done" && G.idleEnding) { clearTimeout(G.idleTimer); const left = G.ctx ? Math.max(0, G.playHead - G.ctx.currentTime) : 0; G.idleTimer = setTimeout(idleHangUp, left * 1000 + 500); }

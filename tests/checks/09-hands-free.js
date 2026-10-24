@@ -96,4 +96,24 @@ test("Hands-free: a line that stalls without closing (officer talking, nothing h
   const out = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), heard: __sent.some(s => s.includes("may have answered while the line was down")) }));
   ok(out.live && out.newLine && /Line stalled \(officer talking/.test(out.log) && out.heard, "the stalled line wasn't reconnected: " + JSON.stringify({ newLine: out.newLine, live: out.live, heard: out.heard }));
 });
+
+test("Hands-free: a new opportunity always asks the campaign when the entity has two, a slow test on a live line doesn't reconnect, and a late answer calls off the quiet hang-up", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  ok(await p.evaluate(() => idleMs() === 30000), "hands-free doesn't wait 30 seconds before the quiet hang-up");
+  await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = c.capacity || "C"; save(); });
+  const r = await ara(p, "show_opportunity_draft", { contact_name: "James Okafor", fund: "C.A. Idaho C4" });
+  ok((r.still_needed || []).some(x => /Campaign of interest/.test(x) && /National or Idaho/.test(x)), "the campaign wasn't asked for: " + JSON.stringify(r));
+  const s1 = await ara(p, "save_form", { confirmed: false });
+  ok(s1.saved === false && /which campaign/.test(s1.error || ""), "a read-back went ahead without the campaign: " + JSON.stringify(s1));
+  // a slow test request while the voice service is still sending is not a stall
+  await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise(res => setTimeout(() => res(new Response("{}")), 2800)) : f(u, o); });
+  await p.evaluate(() => { window.__ws0 = __ws; G.lastAct = Date.now() - 31000; G.loudAt = 0; const keep = setInterval(() => { if (!G.live) return clearInterval(keep); G.lastMsg = Date.now(); G.loudAt = 0; G.speechSince = 0; }, 100); window.__keep = keep; }); // the test browser's pretend mic beeps
+  await p.waitForTimeout(4500);
+  ok(await p.evaluate(() => __ws === __ws0 && G.idleEnding), "a live line with a slow test was reconnected instead of the normal quiet hang-up");
+  await p.evaluate(() => { clearInterval(__keep); G.responding = true; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
+  await p.waitForTimeout(200);
+  const off = await p.evaluate(() => ({ live: G.live, ending: G.idleEnding, note: __sent.some(s => s.includes("NOT hanging up")), cancel: __sent.slice(-5).some(s => JSON.parse(s).type === "response.cancel") }));
+  ok(off.live && !off.ending && off.note && off.cancel, "the officer's late answer didn't call off the hang-up: " + JSON.stringify(off));
+});
 };
