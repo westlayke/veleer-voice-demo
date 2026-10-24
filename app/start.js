@@ -63,8 +63,9 @@ function spookySound(kind, retried) {
   } else if (kind === "bat") { // a few high squeaks
     for (let i = 0; i < 5; i++) { const at = t0 + 0.3 + i * 0.16 + Math.random() * 0.05, o = c.createOscillator(), g = c.createGain(), f0 = 3200 + Math.random() * 1400;
       o.type = "sine"; o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f0 * 0.6, at + 0.07); env(g, at, 0.35, 0.08); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.1); }
-  } else if (kind === "owl") { // "hoo, hoo-hoooo": soft, breathy, pitched high enough for a phone speaker
-    [[1.6, 0.28], [2.05, 0.18], [2.3, 0.6]].forEach(([dt, len]) => { const at = t0 + dt;
+  } else if (kind === "owl" || kind === "hoot") { // "hoo, hoo-hoooo": soft, breathy, pitched high enough for a phone speaker (owl: once it has perched; hoot: straight away)
+    const lag = kind === "hoot" ? -1.5 : 0;
+    [[1.6, 0.28], [2.05, 0.18], [2.3, 0.6]].forEach(([dt, len]) => { const at = t0 + dt + lag;
       [[1, "sine", 1], [2, "sine", 0.35], [3, "triangle", 0.12]].forEach(([mult, type, vol]) => { const o = c.createOscillator(), g = c.createGain();
         o.type = type; o.frequency.setValueAtTime(560 * mult, at); o.frequency.linearRampToValueAtTime(600 * mult, at + len * 0.3); o.frequency.linearRampToValueAtTime(500 * mult, at + len);
         env(g, at, 0.7 * vol, len); o.connect(g); g.connect(out); o.start(at); o.stop(at + len + 0.05); }); });
@@ -125,10 +126,26 @@ let spkLoopT = null;
 function spookyLoop(first) { clearTimeout(spkLoopT); spkLoopT = setTimeout(() => { if (spookyOn() && document.visibilityState === "visible") spookyOnce(); spookyLoop(false); }, first ? (spookyMode() ? 3000 : 8000) : spookyMode() ? 15000 + Math.random() * 5000 : 40000 + Math.random() * 50000); }
 const spookyKick = () => spookyLoop(true);
 spookyLoop(true); applySpooky();
+// First open in October: phones only play sounds after a tap, so a big owl invites one ("Tap me to hear me hoot!"); the first tap anywhere sets him hooting and he flies off. Once per phone.
+function owlHint(tries = 0) {
+  if (!spookyOn() || S.settings.seenOwlHint || document.querySelector(".owlhint")) return; // once per phone, even if a tap already turned sound on (closing the welcome counts)
+  if (G.live || V || document.getElementById("modal").innerHTML.trim() || document.visibilityState !== "visible") { if (tries < 60) setTimeout(() => owlHint(tries + 1), 1000); return; } // wait for the welcome or a form to close
+  const el = document.createElement("div"); el.className = "owlhint"; el.setAttribute("role", "button"); el.setAttribute("aria-label", "Tap to turn on the Halloween sounds");
+  el.innerHTML = '<span class="owlhint-bubble">Tap me to hear me hoot!</span><span class="owlhint-owl" aria-hidden="true">🦉</span>';
+  document.body.appendChild(el);
+  el.animate([{ transform: "translateX(140%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 900, easing: "cubic-bezier(.2,.8,.3,1.1)" });
+  const go = (e) => { ["touchend", "click"].forEach(ev => document.removeEventListener(ev, go, true));
+    S.settings.seenOwlHint = true; save(); spookySound("hoot");
+    el.querySelector(".owlhint-bubble").textContent = "Hoo hoo! Sounds are on.";
+    if (e && el.contains(e.target)) { e.preventDefault(); e.stopPropagation(); } // tapping the owl does nothing else
+    setTimeout(() => el.animate([{ transform: "none", opacity: 1 }, { transform: "translate(-60vw, -70vh) scale(.6)", opacity: 0 }], { duration: 1400, easing: "ease-in" }).onfinish = () => el.remove(), 1600); };
+  ["touchend", "click"].forEach(ev => document.addEventListener(ev, go, true));
+}
+setTimeout(owlHint, 1500);
 // spooky mode's big moments: a creaking door as a form opens, thunder on Save, the organ sting and a cackle on Closed Won
 function spookyCue(kind) { if (spookyMode()) spookySound(kind); }
 render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
 function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app"); }
 logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
-window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, setSpooky, get spkPlayed() { return spkPlayed; } };
+window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, setSpooky, owlHint, get spkPlayed() { return spkPlayed; } };
