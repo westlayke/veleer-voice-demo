@@ -47,5 +47,16 @@ test("Ara: talk faster is remembered", async (p) => {
   await ara(p, "set_speaking_speed", { change: "faster" });
   ok(((await state(p)).settings.speed || 1) > before, "speed did not go up");
 });
+test("Halloween: in October a spider, pumpkin or ghost crosses without blocking taps, and Settings turns it off", async (p) => {
+  await signIn(p);
+  const kinds = await p.evaluate(() => ["spider", "pumpkin", "ghost"].map(k => { const el = window.__demo.spookyOnce(k); el.dataset.t = "1"; return getComputedStyle(el).pointerEvents; }));
+  ok(kinds.every(x => x === "none"), "a Halloween visitor would block taps");
+  await p.waitForTimeout(9500);
+  ok(!(await p.$(".spk[data-t]")), "Halloween visitors should leave the screen when done");
+  await p.tap("[data-go=settings]"); await p.waitForTimeout(400);
+  const october = await p.evaluate(() => new Date().getMonth() === 9);
+  if (october) { await p.click("#spookyTgl"); await p.waitForTimeout(200); ok((await state(p)).settings.noSpooky === true, "the Halloween switch did not turn it off"); }
+  else ok(!(await p.$("#spookyTgl")), "the Halloween switch should only show in October");
+});
 
 };

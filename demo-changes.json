@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "Halloween: during October, every minute or so a spider drops in on its thread, a pumpkin rolls along the bottom, or a ghost floats across. They never get in the way of a tap, and Settings has a switch to turn them off. They stop on their own on November 1.",
+   "area": "Look"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "More tidying with nothing changing on screen: each of Ara's lookup and app tools now has its own small function instead of one long one, eight old unused files were removed, and the logo image went from 52 KB to 9 KB.",
    "area": "Maintenance"
   },
