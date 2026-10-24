@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "Fix: the ghost's \"wooo\" was too low for a phone speaker, so it couldn't be heard. It is now higher, a little longer and starts as the ghost fades in. The pumpkin's thumps are higher too, with a hollow knock.",
+   "area": "Fix"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "Fix: Halloween sounds on iPhone. The sounds now play with the silent switch on (only while a sound plays, and never near a conversation), and the sound engine wakes up again after the app has been in the background.",
    "area": "Fix"
   },

@@ -41,20 +41,22 @@ function spookySound(kind, retried) {
   const t0 = c.currentTime + 0.05, out = c.createGain(); out.gain.value = 0.18; out.connect(c.destination);
   const env = (g, at, peak, len) => { g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(peak, at + Math.min(0.3, len / 4)); g.gain.exponentialRampToValueAtTime(0.0001, at + len); };
   const noise = (len) => { const b = c.createBuffer(1, Math.ceil(c.sampleRate * len), c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; const n = c.createBufferSource(); n.buffer = b; return n; };
-  if (kind === "ghost") { // a wavering "wooo" that rises and falls
+  if (kind === "ghost") { // a wavering "wooo" that rises and falls, pitched high enough for a phone speaker; starts as the ghost fades in
+    const at = t0 + 1.2;
     [0, 7].forEach(detune => { const o = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), dep = c.createGain();
-      o.type = "sine"; o.frequency.setValueAtTime(260, t0); o.frequency.linearRampToValueAtTime(520, t0 + 0.7); o.frequency.linearRampToValueAtTime(240, t0 + 1.8); o.detune.value = detune * 10;
-      lfo.frequency.value = 6; dep.gain.value = 14; lfo.connect(dep); dep.connect(o.frequency); env(g, t0, 0.5, 1.9);
-      o.connect(g); g.connect(out); o.start(t0); lfo.start(t0); o.stop(t0 + 2); lfo.stop(t0 + 2); });
+      o.type = "triangle"; o.frequency.setValueAtTime(520, at); o.frequency.linearRampToValueAtTime(1040, at + 0.9); o.frequency.linearRampToValueAtTime(470, at + 2.4); o.detune.value = detune * 10;
+      lfo.frequency.value = 6; dep.gain.value = 28; lfo.connect(dep); dep.connect(o.frequency); env(g, at, 0.8, 2.5);
+      o.connect(g); g.connect(out); o.start(at); lfo.start(at); o.stop(at + 2.6); lfo.stop(at + 2.6); });
   } else if (kind === "spider") { // a creak, then a quick scuttle of tiny clicks
     const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
     o.type = "sawtooth"; o.frequency.setValueAtTime(70, t0); o.frequency.linearRampToValueAtTime(130, t0 + 0.6); f.type = "bandpass"; f.frequency.value = 900; f.Q.value = 8;
     env(g, t0, 0.6, 0.7); o.connect(f); f.connect(g); g.connect(out); o.start(t0); o.stop(t0 + 0.75);
     for (let i = 0; i < 12; i++) { const at = t0 + 0.8 + i * 0.05 + Math.random() * 0.02, n = noise(0.02), hp = c.createBiquadFilter(), ng = c.createGain();
       hp.type = "highpass"; hp.frequency.value = 3000; env(ng, at, 0.5, 0.02); n.connect(hp); hp.connect(ng); ng.connect(out); n.start(at); }
-  } else { // a hollow pumpkin rolling: three low thumps
-    for (let i = 0; i < 3; i++) { const at = t0 + i * 0.38, o = c.createOscillator(), g = c.createGain();
-      o.type = "sine"; o.frequency.setValueAtTime(120, at); o.frequency.exponentialRampToValueAtTime(50, at + 0.25); env(g, at, 0.9, 0.3); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.32); }
+  } else { // a hollow pumpkin rolling: three knocks, pitched high enough for a phone speaker
+    for (let i = 0; i < 3; i++) { const at = t0 + i * 0.38, o = c.createOscillator(), g = c.createGain(), n = noise(0.08), bp = c.createBiquadFilter(), ng = c.createGain();
+      o.type = "triangle"; o.frequency.setValueAtTime(330, at); o.frequency.exponentialRampToValueAtTime(140, at + 0.22); env(g, at, 0.9, 0.28); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.3);
+      bp.type = "bandpass"; bp.frequency.value = 800; bp.Q.value = 3; env(ng, at, 0.7, 0.08); n.connect(bp); bp.connect(ng); ng.connect(out); n.start(at); }
   }
   spkPlayed++; return true;
 }
