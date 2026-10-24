@@ -74,4 +74,26 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   ok(!(await p.isVisible("text=Check 1 hands-free save")), "the check did not clear");
 });
 
+
+test("Hands-free: a drop right after a save tells Ara it went through, and saving again just says it's saved", async (p) => {
+  await signIn(p);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the agenda", due: "2026-11-30" });
+  await ara(p, "save_form", { confirmed: false });
+  await said(p, "Yes."); const r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved === true, "not saved: " + JSON.stringify(r));
+  await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
+  const line = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || "");
+  ok(/went through just before the drop/.test(line) && /Send Ruth the agenda|Task added/.test(line), "the reconnect didn't say the last save went through");
+  const again = await ara(p, "save_form", { confirmed: true });
+  ok(again.saved === true && again.already && /already saved/.test(again.status), "saving again after the drop didn't say it was already saved: " + JSON.stringify(again));
+});
+test("Hands-free: a line that stalls without closing (officer talking, nothing heard back) is reconnected instead of hung up", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res, rej) => { if (o && o.signal) o.signal.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError"))); }) : f(u, o); });
+  await p.evaluate(() => { window.__ws0 = __ws; G.lastMsg = Date.now() - 7000; G.speechSince = Date.now() - 6000; G.loudAt = Date.now(); });
+  await p.waitForTimeout(5500);
+  const out = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), heard: __sent.some(s => s.includes("may have answered while the line was down")) }));
+  ok(out.live && out.newLine && /Line stalled \(officer talking/.test(out.log) && out.heard, "the stalled line wasn't reconnected: " + JSON.stringify({ newLine: out.newLine, live: out.live, heard: out.heard }));
+});
 };

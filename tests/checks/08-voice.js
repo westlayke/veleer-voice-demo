@@ -253,7 +253,7 @@ test("Ara: an interaction's summary is taken from the officer's answer when Ara 
 
 
 test("Ara: when Grok goes silent after the app asks for a reply, the app asks up to 3 more times, then reconnects; Grok errors are logged", async (p) => {
-  await signIn(p); await p.waitForTimeout(300);
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
   const creates = () => p.evaluate(() => __sent.filter(s => JSON.parse(s).type === "response.create").length);
   await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
@@ -268,7 +268,7 @@ test("Ara: when Grok goes silent after the app asks for a reply, the app asks up
   ok(/empty reply, asked again \(1 of 3\)/.test(q) && /after 3 more asks/.test(q) && /Reconnecting \(1 of 3\)/.test(q) && /Grok error: Something broke upstream/.test(q), "the silent replies, the reconnect or the Grok error were not logged");
 });
 test("Ara: a dropped voice line reconnects and picks up where it left off; after 3 failed tries the phone says the voice service is unavailable", async (p) => {
-  await signIn(p); await p.waitForTimeout(300);
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   await p.evaluate(() => recent(botName(), "Which entity is the ask for?"));
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1200);
@@ -282,14 +282,14 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; after
   ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 3 tries/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
 });
 test("Ara: a planned ask for an entity with a state campaign leaves the campaign blank so Ara asks for it", async (p) => {
-  await signIn(p); await p.waitForTimeout(300);
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "C.A. Pennsylvania C4" });
   ok(await p.inputValue("#f_campaign") === "", "the campaign was filled in without asking");
   ok((r.still_needed || r.missing || []).some(x => /Campaign/.test(x) && /National or Pennsylvania/.test(x)), "Ara wasn't told to ask National or Pennsylvania");
 });
 
 test("Ara: a slow reply gets a soft tick, a doubled reply is cut off, readings time a test request, and a voice pass stays ready during a call", async (p) => {
-  await signIn(p); await p.waitForTimeout(300);
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
   await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
   await p.evaluate(() => { window.__cues = []; const c = cue; window.cue = (k) => { __cues.push(k); }; });
@@ -309,7 +309,7 @@ test("Ara: a slow reply gets a soft tick, a doubled reply is cut off, readings t
   ok(await p.evaluate(() => G.live && !!TOK.p), "no voice pass was kept ready during the call");
 });
 test("Ara: \"he handed me the check\" records the ask as Accepted, and a new ask's response starts blank", async (p) => {
-  await signIn(p); await p.waitForTimeout(300);
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const st = await state(p); const o = st.opps.find(x => x.stage === "Ask Planning"); const c = st.contacts.find(x => x.id === o.contactId);
   const who = c.first + " " + c.last;
   await ara(p, "show_ask_result_draft", { contact_name: who });

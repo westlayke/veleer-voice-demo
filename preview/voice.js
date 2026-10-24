@@ -420,11 +420,23 @@ const sessionCfg = () => ({ voice: S.settings.voice || "ara", instructions: sent
   audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() * (spookyMode() ? 0.9 : 1) } } }); // spooky mode: a touch slower, like a haunted-house host
 const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
 const busy = () => { G.lastAct = Date.now(); };
+const STALL_MS = 5000, SPEAK_RMS = 0.04; // officer's voice on the mic for 5 s with no word from the voice service means the line may be dead
 function idleCheck() {
   if (!G.live || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
   const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
-  if (Date.now() - (G.lastAct || Date.now()) < IDLE_MS) return;
+  if (G.probing) return;
+  // the officer is talking but the voice service hasn't heard anything: the line may have stalled without closing (seen Oct 24 in a dead spot)
+  const talking = G.speechSince && Date.now() - G.speechSince > STALL_MS && Date.now() - (G.lastMsg || 0) > STALL_MS;
+  const quiet = Date.now() - (G.lastAct || Date.now()) >= IDLE_MS;
+  if (!talking && !quiet) return;
+  G.probing = true; const ws = G.ws;
+  pingMs(3000).then(ms => { G.probing = false; if (!G.live || G.ws !== ws || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
+    if (typeof ms !== "number" || ms > 2500) { G.stalled = true; G.speechSince = 0; netLog(`Line stalled (${talking ? "officer talking, nothing heard back" : "12 s of quiet"})`, ms); reconnect("the line stalled"); return; }
+    if (talking) { G.speechSince = 0; return; } // the line is fine: it was background noise
+    if (Date.now() - (G.lastAct || Date.now()) >= IDLE_MS) idleStart(); });
+}
+function idleStart() {
   G.idleEnding = true; vlog("12 seconds quiet: hanging up");
   notice(`Nobody has spoken or tapped anything for 12 seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
   G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
@@ -462,7 +474,9 @@ async function startCall(opening) {
         const rms = Math.sqrt(sq / f32.length); G.echoPeak = Math.max(G.echoPeak || 0, rms);
         if (rms < BARGE_RMS) f32 = new Float32Array(f32.length); else G.barge = (G.barge || 0) + 1;
       }
-      G.buf.push(downsample(f32, G.ctx.sampleRate));
+      if (!(G.playHead > G.ctx.currentTime + 0.03)) { let sq = 0; for (let i = 0; i < f32.length; i += 4) sq += f32[i] * f32[i]; const lvl = Math.sqrt(sq / (f32.length / 4));
+      if (lvl > SPEAK_RMS) { if (!G.speechSince) G.speechSince = Date.now(); G.loudAt = Date.now(); } else if (G.speechSince && Date.now() - (G.loudAt || 0) > 8000) G.speechSince = 0; }
+    G.buf.push(downsample(f32, G.ctx.sampleRate));
       const total = G.buf.reduce((n, a) => n + a.length, 0);
       if (total < 2400) return; // ~100 ms
       const i16 = new Int16Array(total); let o = 0;
@@ -482,10 +496,12 @@ async function startCall(opening) {
 function openSocket(token, first) {
   const ws = G.ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
   const t0 = Date.now();
+  // in a dead spot the line can neither open nor fail: give it 10 s, then count it as a failed try
+  if (G.drops) setTimeout(() => { if (G.live && G.ws === ws && ws.readyState === 0) { netLog("Voice line didn't open in 10 s"); reconnect("the line didn't open"); } }, 10000);
   ws.onopen = () => {
     if (G.ws !== ws) return;
     send({ type: "session.update", session: sessionCfg() }); notice(first);
-    G.status = "Listening"; G.lastMsg = Date.now(); busy(); paintCall();
+    G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     netLog(`Voice line open in ${Date.now() - t0} ms${G.drops ? ` (reconnect ${G.drops} of ${MAX_DROPS})` : ""}`);
     clearInterval(G.netTick); G.netTick = setInterval(() => { if (G.live && G.ws === ws) netLog("Reading"); }, 30000);
@@ -511,11 +527,11 @@ function netInfo() {
   return bits.join(", ");
 }
 // iPhones only say "online", so the app times a tiny request to the key holder itself (the /log status check)
-async function pingMs() {
-  if (!tokenUrl()) return null; const t0 = performance.now(), ac = new AbortController(), to = setTimeout(() => ac.abort(), 8000);
-  try { await fetch(tokenUrl().replace(/\/$/, "") + "/log?ping=" + Date.now(), { cache: "no-store", signal: ac.signal }); return Math.round(performance.now() - t0); } catch (e) { return ac.signal.aborted ? "no answer in 8 s" : "failed"; } finally { clearTimeout(to); }
+async function pingMs(limit = 8000) {
+  if (!tokenUrl()) return null; const t0 = performance.now(), ac = new AbortController(), to = setTimeout(() => ac.abort(), limit);
+  try { await fetch(tokenUrl().replace(/\/$/, "") + "/log?ping=" + Date.now(), { cache: "no-store", signal: ac.signal }); return Math.round(performance.now() - t0); } catch (e) { return ac.signal.aborted ? `no answer in ${limit / 1000} s` : "failed"; } finally { clearTimeout(to); }
 }
-async function netLog(what) { const sess = G.session, info = netInfo(), ms = await pingMs(); act("step", `Connection: ${what}. ${info}${ms == null ? "" : typeof ms === "number" ? `, test request ${ms} ms` : `, test request ${ms}`}`, sess); }
+async function netLog(what, known) { const sess = G.session, info = netInfo(), ms = known !== undefined ? known : await pingMs(); act("step", `Connection: ${what}. ${info}${ms == null ? "" : typeof ms === "number" ? `, test request ${ms} ms` : `, test request ${ms}`}`, sess); }
 const MAX_DROPS = 3;
 // the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
 async function reconnect(why) {
@@ -526,15 +542,16 @@ async function reconnect(why) {
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {}
   if (G.drops === 1) cue("drop");
   vlog(`reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`); act("step", `Reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`);
-  await new Promise(r => setTimeout(r, [0, 1000, 3000, 6000][G.drops] || 6000));
-  if (navigator.onLine === false) await new Promise(r => { const t = setTimeout(r, 8000); window.addEventListener("online", () => { clearTimeout(t); r(); }, { once: true }); });
+  await new Promise(r => setTimeout(r, [0, 1000, 4000, 10000][G.drops] || 10000)); // spread out, so a short dead spot can pass
+  if (navigator.onLine === false) await new Promise(r => { const t = setTimeout(r, 15000); window.addEventListener("online", () => { clearTimeout(t); r(); }, { once: true }); });
   if (!G.live) return;
   const ready = !!TOK.p, tp = Date.now(); let token; try { token = await getToken(); act("step", `Voice pass ${ready ? "was ready" : "fetched"} in ${Date.now() - tp} ms`); } catch (e) { netLog("Couldn't get a voice pass (" + String(e && e.message || e).slice(0, 80) + ")"); reconnect("no voice pass"); return; }
   if (!G.live) return;
   G.lastMsg = 0; openSocket(token, reconnectLine());
 }
-const reconnectLine = () => { const d = draftSummary(), l = G.recent || [];
-  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${d ? d + " " : ""}Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} Then, if the last thing said was a question to the officer, ask it again; otherwise ask the next question needed to finish. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
+const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
+    justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "";
+  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${d ? d + " " : ""}${G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} Then, if the last thing said was a question to the officer, ask it again; otherwise ask the next question needed to finish. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {
   netLog("Voice service unavailable after " + MAX_DROPS + " tries (" + why + ")");
@@ -590,7 +607,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {}
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -691,7 +708,7 @@ function onEvent(e) {
   const t = e.type || "";
   if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
-  if (t === "input_audio_buffer.speech_started") G.heardSinceRetry = true;
+  if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0; }
   if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
   else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
     if (t === "response.done" && G.idleEnding) { clearTimeout(G.idleTimer); const left = G.ctx ? Math.max(0, G.playHead - G.ctx.currentTime) : 0; G.idleTimer = setTimeout(idleHangUp, left * 1000 + 500); }
