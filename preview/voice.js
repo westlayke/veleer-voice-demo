@@ -793,7 +793,7 @@ const TOOL_HANDLERS = {
     if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
     const c = r.contact, v = givingOf(c); S.sel.contact = c.id; go("contact"); whenIdle("instr");
     toolReply(callId, { ok: true, contact: nameOf(c), lifetime: money(v.lifetime), this_year: money(v.ytd), number_of_gifts: v.count,
-      last_gift: v.last ? `${money(v.last.amount)} on ${fmtDate(v.last.date)}${v.last.date.slice(0, 4) !== todayISO().slice(0, 4) ? " " + v.last.date.slice(0, 4) : ""} to ${v.last.fund}` : "none",
+      last_gift: v.last ? `${money(v.last.amount)} on ${fmtDate(v.last.date)} to ${v.last.fund}` : "none",
       open_pledge_balance: v.pledgeLeft ? money(v.pledgeLeft) : "none",
       say: "Say these figures in one or two sentences, e.g. lifetime, then this year, then the last gift and its date. 'This year' means since January 1." }); return;
   },

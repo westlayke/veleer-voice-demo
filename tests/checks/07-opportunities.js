@@ -176,4 +176,15 @@ test("Opportunities and Tasks have search and filter chips like Contacts, and Ar
   ok((await state(p)).tFilter === "done" && await p.isVisible(".cfilt button.on:has-text('Done')"), "Ara didn't open the Done view");
 });
 
+test("Ken's last gift gives its year once, and a defer reason ending in a full stop isn't doubled in History", async (p) => {
+  await signIn(p);
+  const r = await ara(p, "get_giving", { contact_name: "Ken Ito" });
+  ok(/^\$12,000 on Oct 2, 2025 to /.test(r.last_gift), "the last gift's date is wrong: " + r.last_gift);
+  await tab(p, "Opportunities"); await p.tap(".row:has-text('James Okafor')"); await p.waitForTimeout(400);
+  await p.tap(".nextblk button:has-text('Move to Cultivation')"); await p.waitForTimeout(400);
+  await p.selectOption("#f_decision", "Defer"); await p.fill("#f_reason", "Wait for his board meeting."); await p.fill("#f_reconsiderOn", "2026-11-07");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  const h = (await state(p)).history.map(x => x.text).find(t => /deferred/.test(t));
+  ok(h && /board meeting\. Reconsider on/.test(h) && !/\.\./.test(h), "the defer reason is wrong in History: " + h);
+});
 };

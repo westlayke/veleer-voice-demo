@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "Two fixes found while writing the tester guide: Ara no longer says the year of a past gift twice (\"Oct 2, 2025 2025\"), and a defer reason ending in a full stop no longer shows two full stops in History.",
+   "area": "Fix"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "The demo is now called a proof of concept everywhere people see or hear it: on screen, in the privacy notice, in Settings and in what Ara says. Questions Ara can't answer now go to the project team. The web address stays the same.",
    "area": "Wording"
   },
