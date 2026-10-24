@@ -1,0 +1,190 @@
+"use strict";
+// Citizens VCRM demo: keeping the voice line to Grok alive (loaded after voice.js; all files share one scope).
+// Voice passes, opening the line and reopening it when it drops, line tests and connection readings, stall and
+// quiet detection, asking Grok again when it goes silent, and the sounds and spoken line when the service is down.
+// What Ara is told after a reconnect is reconnectLine() below; the doubled-reply guard is in onEvent() in voice.js.
+
+/* ---------- timings: tune here ---------- */
+const IDLE_MS = 12000, IDLE_HF_MS = 30000;   // hang up after this much quiet (hands-free: a driver may take a while to answer)
+const NOISE_CAP_MS = 60000;                  // sound on the mic counts as talking, but not for longer than this (road noise)
+const STALL_MS = 5000, SPEAK_RMS = 0.04;     // officer's voice on the mic this long with no word from the voice service: the line may be dead
+const LINE_TEST_MS = 3000;                   // how long a line test (a tiny request to the key holder) may take before it counts as failed
+const SLOW_LINE_MS = 2000;                   // a line test slower than this is a slow line: open a fresh one rather than ask Grok again
+const STALL_SLOW_MS = 2500;                  // while the officer is talking, a line test slower than this counts as a stall
+const MAX_DROPS = 3;                         // reconnect tries before the phone says the voice service is unavailable
+const RECONNECT_DELAYS = [0, 1000, 4000, 10000]; // wait before reconnect try 1, 2, 3, spread out so a short dead spot can pass
+const OFFLINE_WAIT_MS = 15000;               // when the phone says it's offline, wait up to this long for it to come back
+const SECOND_LINE_MS = 5000;                 // a new line not open after this long gets a second one alongside
+const OPEN_TIMEOUT_MS = 10000;               // a new line not open after this long counts as a failed try
+const MAX_ASKS = 1;                          // times the app asks Grok again for a reply before opening a fresh line
+const TICK_MS = 4000;                        // soft tick while waiting, and the early line test when no reply has started
+const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has started by now (Grok sometimes takes 6 to 10 s)
+const EARLY_PING_MS = 2500;                  // the early line test's limit
+
+// a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
+const TOK = { p: null, at: 0 };
+function prefetchToken() {
+  if (document.visibilityState !== "visible" || (TOK.p && Date.now() - TOK.at < 180000)) return; // during a call too, so a dropped line reconnects without waiting for a new pass
+  TOK.at = Date.now(); TOK.p = mintToken(); TOK.p.catch(() => { TOK.p = null; TOK.at = 0; });
+}
+function getToken() { // each pass is used once; an old or failed one is replaced by a fresh fetch
+  const p = TOK.p, fresh = p && Date.now() - TOK.at < 240000; TOK.p = null; TOK.at = 0;
+  return fresh ? p.catch(() => mintToken()) : mintToken();
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") prefetchToken(); });
+setInterval(prefetchToken, 60000); // keeps a pass ready while the app sits open
+async function mintToken() {
+  const r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || DEMO_CODE } });
+  if (!r.ok) throw new Error(r.status === 401 ? "bad_code" : "service_" + r.status);
+  const j = await r.json();
+  const t = j.value || (j.client_secret && (j.client_secret.value || j.client_secret)) || j.token || j.secret;
+  if (!t || typeof t !== "string") throw new Error("token_shape");
+  return t;
+}
+// Grok bills for every minute a conversation is open, so hang up after 12 seconds with no talking and no taps
+const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
+function idleCheck() {
+  // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
+  if (G.live && ((G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS) || /^Reconnecting/.test(G.status)) && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); cue("wait"); vlog("still working: tick"); }
+  if (!G.live || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
+  if (playing) { busy(); return; }
+  if (G.probing) return;
+  // the officer is talking but the voice service hasn't heard anything: the line may have stalled without closing (seen Oct 24 in a dead spot)
+  const talking = G.speechSince && Date.now() - G.speechSince > STALL_MS && Date.now() - (G.lastMsg || 0) > STALL_MS;
+  const since = Date.now() - (G.lastAct || Date.now());
+  const quiet = since >= idleMs() && (Date.now() - (G.loudAt || 0) >= idleMs() || since >= NOISE_CAP_MS); // sound on the mic counts as talking, but not for more than a minute (road noise)
+  if (!talking && !quiet) return;
+  G.probing = true; const ws = G.ws;
+  pingMs(LINE_TEST_MS).then(ms => { G.probing = false; if (!G.live || G.ws !== ws || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
+    const fresh = Date.now() - (G.lastMsg || 0) < LINE_TEST_MS; // the voice service is still sending: the line is alive, however slow the test (seen Oct 24: a 2.7 s test while Grok was answering)
+    if (!fresh && (typeof ms !== "number" || (talking && ms > STALL_SLOW_MS))) { G.stalled = true; G.speechSince = 0; netLog(`Line stalled (${talking ? "officer talking, nothing heard back" : "12 s of quiet"})`, ms); reconnect("the line stalled"); return; }
+    if (talking) { G.speechSince = 0; return; } // the line is fine: it was background noise
+    if (Date.now() - (G.lastAct || Date.now()) >= idleMs()) idleStart(); });
+}
+function idleStart() {
+  G.idleEnding = true; G.idleAt = Date.now(); vlog(`${idleMs() / 1000} seconds quiet: hanging up`);
+  notice(`Nobody has spoken or tapped anything for ${idleMs() / 1000} seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
+  G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
+}
+function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; const secs = idleMs() / 1000; endCall(`${secs} seconds of quiet`); toast(`Hung up after ${secs} seconds of quiet. Tap the mic when you need me.`); }
+/* ---------- the voice line: opened at the start, and opened again when it drops (a phone in a car loses signal) ---------- */
+function openSocket(token, first, second) {
+  const ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
+  if (second) G.tries.add(ws); else { G.ws = ws; G.tries = new Set([ws]); }
+  const t0 = Date.now();
+  if (G.drops && !second) {
+    // not open after 5 s: try a second line alongside, and keep whichever opens first (seen Oct 24: the first try hung for 10 s)
+    setTimeout(async () => { if (!G.live || G.ws !== ws || ws.readyState !== 0) return;
+      act("step", `Voice line not open after ${SECOND_LINE_MS / 1000} s: trying a second line alongside`);
+      let tk; try { tk = await getToken(); } catch (e) { return; }
+      if (G.live && G.ws === ws && ws.readyState === 0 && G.tries) openSocket(tk, first, true); }, SECOND_LINE_MS);
+    // in a dead spot the line can neither open nor fail: give it OPEN_TIMEOUT_MS, then count it as a failed try
+    setTimeout(() => { if (G.live && G.ws === ws && ws.readyState === 0) { netLog(`Voice line didn't open in ${OPEN_TIMEOUT_MS / 1000} s`); reconnect("the line didn't open"); } }, OPEN_TIMEOUT_MS);
+  }
+  ws.onopen = () => {
+    if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
+    if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws;
+    send({ type: "session.update", session: sessionCfg() }); notice(first);
+    G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
+    vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
+    netLog(`Voice line open in ${Date.now() - t0} ms${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops} of ${MAX_DROPS})` : ""}`);
+    if (G.drops) setTimeout(prefetchToken, 2000); // the ready pass was used: have the next one ready for another drop (seen Oct 24: 7 s to fetch one)
+    clearInterval(G.netTick); G.netTick = setInterval(() => { if (G.live && G.ws === ws) netLog("Reading"); }, 30000);
+  };
+  ws.onmessage = (m) => { if (G.ws !== ws) return; G.lastMsg = Date.now(); let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
+  ws.onclose = (ev) => {
+    if (G.ws !== ws || !G.live) return;
+    vlog("connection closed " + (ev && ev.code));
+    const opened = !!G.lastMsg && G.status !== "Connecting…";
+    netLog(`Voice line closed (code ${ev && ev.code}${ev && ev.reason ? ", " + String(ev.reason).slice(0, 120) : ""})${opened ? "" : " before it opened"}`);
+    if (document.visibilityState === "hidden") { interrupted("connection closed while away"); return; }
+    if (!opened && !G.drops) { endCall("couldn't connect"); toast("Couldn't connect to Grok voice. Try again in a moment."); return; }
+    reconnect("the voice line dropped");
+  };
+  ws.onerror = () => {};
+}
+function closeTries() { if (G.tries) G.tries.forEach(o => { if (o !== G.ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; }
+// what the phone says about its connection; iPhones don't report the network type or speed, only online or offline
+function netInfo() {
+  const c = navigator.connection, bits = [navigator.onLine === false ? "offline" : "online"];
+  if (c) { if (c.type) bits.push(c.type); if (c.effectiveType) bits.push(c.effectiveType); if (c.downlink != null) bits.push(c.downlink + " Mbps"); if (c.rtt != null) bits.push("round trip " + c.rtt + " ms"); }
+  else bits.push("network type not reported by this browser");
+  if (G.lastMsg) bits.push(`last word from the voice service ${Math.round((Date.now() - G.lastMsg) / 1000)} s ago`);
+  return bits.join(", ");
+}
+// iPhones only say "online", so the app times a tiny request to the key holder itself (the /log status check)
+async function pingMs(limit = 8000) {
+  if (!tokenUrl()) return null; const t0 = performance.now(), ac = new AbortController(), to = setTimeout(() => ac.abort(), limit);
+  try { await fetch(tokenUrl().replace(/\/$/, "") + "/log?ping=" + Date.now(), { cache: "no-store", signal: ac.signal }); return Math.round(performance.now() - t0); } catch (e) { return ac.signal.aborted ? `no answer in ${limit / 1000} s` : "failed"; } finally { clearTimeout(to); }
+}
+async function netLog(what, known) { const sess = G.session, info = netInfo(), ms = known !== undefined ? known : await pingMs(); act("step", `Connection: ${what}. ${info}${ms == null ? "" : typeof ms === "number" ? `, test request ${ms} ms` : `, test request ${ms}`}`, sess); }
+// the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
+async function reconnect(why) {
+  if (!G.live) return;
+  if (G.drops >= MAX_DROPS) { voiceUnavailable(why); return; }
+  G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
+  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
+  const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
+  if (G.drops === 1) cue("drop");
+  vlog(`reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`); act("step", `Reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`);
+  await new Promise(r => setTimeout(r, RECONNECT_DELAYS[G.drops] || RECONNECT_DELAYS[RECONNECT_DELAYS.length - 1])); // spread out, so a short dead spot can pass
+  if (navigator.onLine === false) await new Promise(r => { const t = setTimeout(r, OFFLINE_WAIT_MS); window.addEventListener("online", () => { clearTimeout(t); r(); }, { once: true }); });
+  if (!G.live) return;
+  const ready = !!TOK.p, tp = Date.now(); let token; try { token = await getToken(); act("step", `Voice pass ${ready ? "was ready" : "fetched"} in ${Date.now() - tp} ms`); } catch (e) { netLog("Couldn't get a voice pass (" + String(e && e.message || e).slice(0, 80) + ")"); reconnect("no voice pass"); return; }
+  if (!G.live) return;
+  if (G.spokeInGap) act("step", "The officer talked while the line was down: Ara will ask them to repeat it");
+  G.lastMsg = 0; openSocket(token, reconnectLine());
+}
+const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
+    justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "";
+  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${d ? d + " " : ""}${G.spokeInGap ? "The officer was talking while the line was down and you didn't hear it: right after the sorry line, ask them to say that again. " : G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}If they ask whether you're there, say yes in two words and carry on with what you were doing; never ask "what would you like to do" while a form is open, and don't say "welcome back". Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} with no ${spookyMode() ? "spooky" : xmasMode() ? "festive" : "other"} aside in this reply. Then ask just one question: if the last thing said was a question to the officer and they haven't answered it in the lines above, ask it again; otherwise ask the next question needed to finish. If the officer's answer is in the lines above, use it (call the draft tool with it) instead of asking. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
+// after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
+function voiceUnavailable(why) {
+  netLog("Voice service unavailable after " + MAX_DROPS + " tries (" + why + ")");
+  G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "" };
+  cue("down");
+  endCall("voice service unavailable");
+  toast("The voice service isn't answering. Your form is still here. Tap the mic to try again.");
+}
+// short tones (and a spoken line when the phone allows it) so a driver knows without looking
+function cue(kind) {
+  const notes = kind === "down" ? [660, 520, 390] : kind === "wait" ? [880] : [520, 660];
+  try { const ctx = G.ctx && G.ctx.state === "running" ? G.ctx : (typeof spkCtx !== "undefined" && spkCtx) || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state !== "running") ctx.resume();
+    notes.forEach((f, i) => { const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + i * 0.22;
+      o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(kind === "wait" ? 0.08 : 0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.22); }); } catch (e) {}
+  if (kind !== "down") return;
+  try { if (window.speechSynthesis) setTimeout(() => { const u = new SpeechSynthesisUtterance("The voice service isn't answering right now. Tap the mic to try again."); u.rate = 1; speechSynthesis.speak(u); }, 750); } catch (e) {}
+}
+// Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
+// which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
+function askReply() {
+  send({ type: "response.create" }); G.asked = true; G.askedAt = Date.now();
+  clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
+  G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
+  // no reply at the first tick: test the line then, so a bad line gets a fresh one about 9 s sooner (seen Oct 24: 13 s to notice)
+  const ws = G.ws; G.tickWatch = setTimeout(() => { if (!G.live || !G.asked || G.ws !== ws) return;
+    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || !G.asked || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+      if (typeof ms === "number" && ms <= SLOW_LINE_MS) return; // a healthy line: Grok is just slow, keep waiting
+      clearTimeout(G.askWatch); G.askWatch = null; G.asked = false;
+      act("step", `No reply started after ${TICK_MS / 1000} s on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); }); }, TICK_MS);
+}
+function replyCheck(r) {
+  if (!G.live || G.idleEnding) return;
+  const asked = r.status === "never started" || G.respAsked; G.respAsked = false;
+  const empty = !G.bot && !G.respTool && !G.audioSamples, failed = r.status === "failed" || r.status === "never started";
+  if (!asked || r.status === "cancelled" || (!empty && !failed)) { G.retried = 0; if (!empty && G.drops) G.drops = 0; return; }
+  const why = r.status === "never started" ? "no reply started" : r.status === "failed" ? "reply failed" + (r.status_details && r.status_details.error ? ": " + (r.status_details.error.message || r.status_details.error.type || "") : "") : "empty reply";
+  G.retried = (G.retried || 0) + 1;
+  vlog(`Grok gave ${why} (${G.retried} of ${MAX_ASKS})`);
+  if (G.retried > MAX_ASKS) { act("step", `Grok gave ${why} after asking again`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
+  // asking again on a slow line only piles up late answers (seen Oct 24: six "I'm here"s at once): test the line first, and on a slow one start a fresh line
+  const ws = G.ws; busy();
+  pingMs(LINE_TEST_MS).then(ms => { if (!G.live || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+    const slow = typeof ms !== "number" || ms > SLOW_LINE_MS;
+    if (slow) { act("step", `Grok gave ${why} on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); return; }
+    act("step", `Grok gave ${why}, asked again`);
+    G.retriedAt = Date.now(); G.heardSinceRetry = false; if (!G.responding) askReply(); });
+}
