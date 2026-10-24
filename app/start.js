@@ -25,6 +25,31 @@ if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.path
 /* ---------- Halloween: now and then a spider, pumpkin or ghost crosses the screen (October only; Settings can turn it off) ---------- */
 const spookySeason = () => new Date().getMonth() === 9;
 const spookyOn = () => spookySeason() && !S.settings.noSpooky && !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+// spooky sounds, made by the phone (no sound files): quiet, only after the first tap, never during a conversation with Ara
+let spkCtx = null, spkPlayed = 0;
+document.addEventListener("pointerdown", () => { try { spkCtx = spkCtx || new (window.AudioContext || window.webkitAudioContext)(); if (spkCtx.state === "suspended") spkCtx.resume(); } catch (e) {} }, { capture: true });
+function spookySound(kind) {
+  const c = spkCtx; if (!c || c.state !== "running" || G.live) return false;
+  const t0 = c.currentTime + 0.05, out = c.createGain(); out.gain.value = 0.18; out.connect(c.destination);
+  const env = (g, at, peak, len) => { g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(peak, at + Math.min(0.3, len / 4)); g.gain.exponentialRampToValueAtTime(0.0001, at + len); };
+  const noise = (len) => { const b = c.createBuffer(1, Math.ceil(c.sampleRate * len), c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; const n = c.createBufferSource(); n.buffer = b; return n; };
+  if (kind === "ghost") { // a wavering "wooo" that rises and falls
+    [0, 7].forEach(detune => { const o = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), dep = c.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(260, t0); o.frequency.linearRampToValueAtTime(520, t0 + 0.7); o.frequency.linearRampToValueAtTime(240, t0 + 1.8); o.detune.value = detune * 10;
+      lfo.frequency.value = 6; dep.gain.value = 14; lfo.connect(dep); dep.connect(o.frequency); env(g, t0, 0.5, 1.9);
+      o.connect(g); g.connect(out); o.start(t0); lfo.start(t0); o.stop(t0 + 2); lfo.stop(t0 + 2); });
+  } else if (kind === "spider") { // a creak, then a quick scuttle of tiny clicks
+    const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+    o.type = "sawtooth"; o.frequency.setValueAtTime(70, t0); o.frequency.linearRampToValueAtTime(130, t0 + 0.6); f.type = "bandpass"; f.frequency.value = 900; f.Q.value = 8;
+    env(g, t0, 0.6, 0.7); o.connect(f); f.connect(g); g.connect(out); o.start(t0); o.stop(t0 + 0.75);
+    for (let i = 0; i < 12; i++) { const at = t0 + 0.8 + i * 0.05 + Math.random() * 0.02, n = noise(0.02), hp = c.createBiquadFilter(), ng = c.createGain();
+      hp.type = "highpass"; hp.frequency.value = 3000; env(ng, at, 0.5, 0.02); n.connect(hp); hp.connect(ng); ng.connect(out); n.start(at); }
+  } else { // a hollow pumpkin rolling: three low thumps
+    for (let i = 0; i < 3; i++) { const at = t0 + i * 0.38, o = c.createOscillator(), g = c.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(120, at); o.frequency.exponentialRampToValueAtTime(50, at + 0.25); env(g, at, 0.9, 0.3); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.32); }
+  }
+  spkPlayed++; return true;
+}
 function spookyOnce(kind) {
   kind = kind || ["spider", "pumpkin", "ghost"][Math.floor(Math.random() * 3)];
   const el = document.createElement("div"); el.className = "spk spk-" + kind; el.setAttribute("aria-hidden", "true");
@@ -40,11 +65,11 @@ function spookyOnce(kind) {
     el.textContent = "👻"; el.style.top = Math.round(h * (0.18 + Math.random() * 0.4)) + "px";
     el.animate([{ transform: "translate(-70px, 0)", opacity: 0 }, { transform: `translate(${w * 0.25}px, -18px)`, opacity: 0.9, offset: 0.25 }, { transform: `translate(${w * 0.5}px, 14px)`, offset: 0.5 }, { transform: `translate(${w * 0.75}px, -14px)`, opacity: 0.9, offset: 0.75 }, { transform: `translate(${w + 20}px, 0)`, opacity: 0 }], { duration: 9000, easing: "linear" }).onfinish = done;
   }
-  document.body.appendChild(el); return el;
+  document.body.appendChild(el); spookySound(kind); return el;
 }
 (function spookyLoop(first) { setTimeout(() => { if (spookyOn() && document.visibilityState === "visible") spookyOnce(); spookyLoop(false); }, first ? 8000 : 40000 + Math.random() * 50000); })(true);
 render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
 function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app"); }
 logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
-window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce };
+window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, get spkPlayed() { return spkPlayed; } };
