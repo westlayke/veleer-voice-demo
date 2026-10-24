@@ -53,10 +53,13 @@ function spookySound(kind, retried) {
     env(g, t0, 0.6, 0.7); o.connect(f); f.connect(g); g.connect(out); o.start(t0); o.stop(t0 + 0.75);
     for (let i = 0; i < 12; i++) { const at = t0 + 0.8 + i * 0.05 + Math.random() * 0.02, n = noise(0.02), hp = c.createBiquadFilter(), ng = c.createGain();
       hp.type = "highpass"; hp.frequency.value = 3000; env(ng, at, 0.5, 0.02); n.connect(hp); hp.connect(ng); ng.connect(out); n.start(at); }
-  } else { // a hollow pumpkin rolling: three knocks, pitched high enough for a phone speaker
-    for (let i = 0; i < 3; i++) { const at = t0 + i * 0.38, o = c.createOscillator(), g = c.createGain(), n = noise(0.08), bp = c.createBiquadFilter(), ng = c.createGain();
-      o.type = "triangle"; o.frequency.setValueAtTime(330, at); o.frequency.exponentialRampToValueAtTime(140, at + 0.22); env(g, at, 0.9, 0.28); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.3);
-      bp.type = "bandpass"; bp.frequency.value = 800; bp.Q.value = 3; env(ng, at, 0.7, 0.08); n.connect(bp); bp.connect(ng); ng.connect(out); n.start(at); }
+  } else { // a haunted-house organ sting as the pumpkin rolls in: dun, dun, DUNNN
+    const hz = (m) => 440 * Math.pow(2, (m - 69) / 12), lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2600; lp.connect(out);
+    [[0, 0.22, [60, 63, 67]], [0.28, 0.22, [60, 63, 67]], [0.58, 1.5, [59, 62, 65, 68]]].forEach(([dt, len, notes]) => notes.forEach(m => {
+      const at = t0 + dt, g = c.createGain(); env(g, at, 0.22, len); g.connect(lp);
+      [[1, "square", 0.5], [2, "sine", 0.6], [4, "sine", 0.25]].forEach(([mult, type, vol]) => { const o = c.createOscillator(), v = c.createGain();
+        o.type = type; o.frequency.value = hz(m) * mult; v.gain.value = vol; o.connect(v); v.connect(g); o.start(at); o.stop(at + len + 0.05); });
+    }));
   }
   spkPlayed++; return true;
 }

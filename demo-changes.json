@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 24, 2026",
+   "change": "The pumpkin now plays a short haunted-house organ sting (dun, dun, DUNNN) as it rolls in, instead of thumps.",
+   "area": "Look"
+  },
+  {
+   "date": "Oct 24, 2026",
    "change": "Fix: the ghost's \"wooo\" was too low for a phone speaker, so it couldn't be heard. It is now higher, a little longer and starts as the ghost fades in. The pumpkin's thumps are higher too, with a hollow knock.",
    "area": "Fix"
   },
