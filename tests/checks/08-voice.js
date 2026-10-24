@@ -290,6 +290,36 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; after
   ok(!out.live && /isn't answering/.test(out.spoke), "after the tries ran out the call didn't end with a spoken line");
   ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 3 tries/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
 });
+test("Ara: no reply at the first tick on a slow line gets a fresh line at once, and a new line that won't open gets a second line alongside", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  await p.evaluate(() => { const f = window.fetch; window.__fetch0 = f; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res, rej) => { const t = setTimeout(() => res(new Response("{}")), 2800); o && o.signal && o.signal.addEventListener("abort", () => { clearTimeout(t); rej(new Error("aborted")); }); }) : f(u, o); window.__ws1 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; });
+  await p.evaluate(() => notice("Ask the officer the next question."));
+  await p.waitForTimeout(7500);
+  ok(await p.evaluate(() => __ws !== __ws1 && G.live), "no reply at the first tick on a slow line didn't get a fresh line before the 10 s re-ask");
+  ok(/No reply started after 4 s on a slow line \(test request no answer in 2.5 s\): fresh line/.test(await logged()), "the early slow-line check wasn't logged");
+  // the next line hangs without opening: after 5 s a second one is tried alongside, and the first to open is kept
+  await p.waitForFunction(() => G.status === "Listening", null, { timeout: 8000 });
+  await p.evaluate(() => { window.fetch = window.__fetch0; const Orig = window.WebSocket; let n = 0;
+    window.WebSocket = function (...a) { n++; if (n === 1) { const w = { readyState: 0, send() {}, close() { this.closed = true; } }; window.__hung = w; return w; } window.WebSocket = Orig; return new Orig(...a); };
+    window.__ws2 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; __ws.onclose({ code: 1006, reason: "" }); });
+  await p.waitForTimeout(8000);
+  const st = await p.evaluate(() => ({ live: G.live, status: G.status, onSecond: G.ws === __ws && __ws !== __ws2, hungClosed: !!__hung.closed }));
+  ok(st.live && st.status === "Listening" && st.onSecond && st.hungClosed, "a line that wouldn't open didn't get a second line alongside: " + JSON.stringify(st));
+  const q = await logged();
+  ok(/trying a second line alongside/.test(q) && /\(the second line\)/.test(q), "the second line wasn't logged");
+  const sorry = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || "");
+  ok(/no (spooky|festive|other) aside/.test(sorry) && /just one question/.test(sorry), "the reconnect line still allows a theme aside or more than one question");
+});
+test("Ara: sees opportunities closed this year, passes a question on after any yes, and hands-free read-backs skip long text", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const snap = await p.evaluate(() => { const o = S.opps.find(x => x.stage !== "Closed"); o.stage = "Closed"; o.closed = "Won"; o.closedOn = todayISO(); return crmSnapshot(); });
+  ok(/closed this year: Closed Won on /.test(snap), "Ara's records don't show opportunities closed this year");
+  ok(await p.evaluate(() => /even when they ask for something else in the same breath: call pass_question_to_team first/.test(grokInstructions())), "Ara isn't told to pass a question on after a yes in other words");
+  await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: "2026-10-21", meetingType: "Phone call", summary: "Talked at length about the spring gala and her new grandchild" });
+  const rb = await p.evaluate(() => hfReadback());
+  ok(/Summary: noted/.test(rb) && !/grandchild/.test(rb), "the hands-free read-back still reads out the summary: " + rb);
+});
 test("Ara: a planned ask for an entity with a state campaign leaves the campaign blank so Ara asks for it", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "C.A. Pennsylvania C4" });

@@ -100,6 +100,7 @@ function hfReadback() {
   const parts = A.fields.filter(f => !f.fixed).map(f => { const v = d[f.k];
     if (v === null || v === undefined || v === "") return "";
     if (f.type === "bool") return v && !["permEmail", "permCalls"].includes(f.k) ? f.label : ""; // email and calls are on by default
+    if (f.type === "area") return `${f.label}: noted`; // long text is on the form; reading it out made the read-back about 13 s (Oct 24)
     let x = f.type === "money" ? money(v) : f.type === "date" ? fmtDate(v) : String(v); const w = x.split(/\s+/); if (w.length > 14) x = w.slice(0, 14).join(" ") + "…";
     return `${f.label}: ${x}`; }).filter(Boolean);
   return `${A.title}${who ? " for " + who : ""}.${parts.length ? " " + parts.join("; ") + "." : ""}`;
