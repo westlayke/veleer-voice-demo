@@ -3,6 +3,11 @@
  "changes": [
   {
    "date": "Oct 23, 2026",
+   "change": "Ara's instructions were tidied: grouped by topic, with repeated rules merged, and cut from about 55,000 to about 16,000 characters so she starts faster. The Process FAQ is no longer sent whole; Ara looks the answer up when asked a process question.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 23, 2026",
    "change": "Opportunities and Tasks now have a search box and filter chips like Contacts. Opportunities: Open, Needs attention, Asks this quarter, Pledges to record, Closed this year (on List and Board). Tasks: Open, Overdue, This week, Waiting, Done (Done replaces the separate Done panel). The chip you pick is remembered, and Ara can open a view when asked, such as \"show pledges to record\" or \"show my waiting tasks\".",
    "area": "Screens"
   },

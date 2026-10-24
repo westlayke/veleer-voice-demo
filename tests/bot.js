@@ -738,6 +738,16 @@ test("Opportunities and Tasks have search and filter chips like Contacts, and Ar
   ok(r.ok && /Done/.test(r.showing), "show_list failed: " + JSON.stringify(r));
   ok((await state(p)).tFilter === "done" && await p.isVisible(".cfilt button.on:has-text('Done')"), "Ara didn't open the Done view");
 });
+test("Ara's instructions stay short and the Process FAQ is looked up with get_process_faq", async (p) => {
+  await signIn(p);
+  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.session && e.session.instructions).map(e => e.session.instructions).at(-1));
+  ok(instr && instr.length < 20000, "instructions are " + (instr || "").length + " characters");
+  ok(!/\nQ: /.test(instr) && /get_process_faq/.test(instr) && /Ally - Do Not Solicit/.test(instr), "the FAQ is still sent whole, or the topics are missing");
+  let r = await ara(p, "get_process_faq", { question: "Who can clear the ally flag?" });
+  ok(r.ok && /clear the Ally - Do Not Solicit flag/.test(r.answers[0].q), "FAQ lookup missed: " + JSON.stringify(r.answers && r.answers[0]));
+  r = await ara(p, "get_process_faq", { question: "zebra xylophone" });
+  ok(r.ok && !r.answers.length && /isn't covered/.test(r.say), "an unmatched question returned answers");
+});
 test("Ara: talk faster is remembered", async (p) => {
   await signIn(p); const before = (await state(p)).settings.speed || 1;
   await ara(p, "set_speaking_speed", { change: "faster" });
