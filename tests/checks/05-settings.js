@@ -107,7 +107,7 @@ test("Spooky mode: a creak when a form opens, thunder on Save, bats and a cackle
   const quiet = await p.evaluate(() => { const n = window.__demo.spkPlayed; openForm("contact"); return window.__demo.spkPlayed - n; });
   ok(quiet === 0, "a form still creaked after spooky mode was turned off");
 });
-test("Halloween: an owl asks for a tap so sounds can play, hoots when tapped, and appears once per phone", async (p) => {
+test("Halloween: an owl asks for a tap so sounds can play, hoots when tapped, and comes back on every load until someone taps", async (p) => {
   if (new Date().getMonth() !== 9) return;
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Home"); await p.waitForTimeout(300);
   await p.evaluate(() => { spkCtx = null; delete window.__demo.state.settings.seenOwlHint; document.getElementById("modal").innerHTML = ""; window.__demo.owlHint(); });
@@ -120,7 +120,10 @@ test("Halloween: an owl asks for a tap so sounds can play, hoots when tapped, an
   ok((await state(p)).settings.seenOwlHint === true, "the owl would come back next time");
   await p.waitForTimeout(3300);
   ok(!(await p.isVisible(".owlhint")), "the owl didn't fly away");
-  await p.evaluate(() => { spkCtx = null; window.__demo.owlHint(); }); await p.waitForTimeout(400);
-  ok(!(await p.isVisible(".owlhint")), "the owl appeared a second time");
+  await p.evaluate(() => { spkCtx = null; window.__demo.owlHint(); }); await p.waitForTimeout(1000);
+  ok(await p.isVisible(".owlhint >> text=Tap me to hear me hoot!"), "the owl didn't come back on a silent load");
+  await p.tap(".owlhint-owl"); await p.waitForTimeout(3600);
+  await p.evaluate(() => { window.__demo.owlHint(); }); await p.waitForTimeout(400);
+  ok(!(await p.isVisible(".owlhint")), "the owl came back although sound was already on");
 });
 };

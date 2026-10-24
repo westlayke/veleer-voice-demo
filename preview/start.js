@@ -126,9 +126,9 @@ let spkLoopT = null;
 function spookyLoop(first) { clearTimeout(spkLoopT); spkLoopT = setTimeout(() => { if (spookyOn() && document.visibilityState === "visible") spookyOnce(); spookyLoop(false); }, first ? (spookyMode() ? 3000 : 8000) : spookyMode() ? 15000 + Math.random() * 5000 : 40000 + Math.random() * 50000); }
 const spookyKick = () => spookyLoop(true);
 spookyLoop(true); applySpooky();
-// First open in October: phones only play sounds after a tap, so a big owl invites one ("Tap me to hear me hoot!"); the first tap anywhere sets him hooting and he flies off. Once per phone.
+// In October phones only play sounds after a tap, so on every load that hasn't had a tap yet a big owl invites one ("Tap me to hear me hoot!"); the first tap anywhere sets him hooting and he flies off. A brand-new phone's welcome tap already turns sound on, so he still shows once after it.
 function owlHint(tries = 0) {
-  if (!spookyOn() || S.settings.seenOwlHint || document.querySelector(".owlhint")) return; // once per phone, even if a tap already turned sound on (closing the welcome counts)
+  if (!spookyOn() || (spkCtx && S.settings.seenOwlHint) || document.querySelector(".owlhint")) return; // sound already on and he's been seen
   if (G.live || V || document.getElementById("modal").innerHTML.trim() || document.visibilityState !== "visible") { if (tries < 60) setTimeout(() => owlHint(tries + 1), 1000); return; } // wait for the welcome or a form to close
   const el = document.createElement("div"); el.className = "owlhint"; el.setAttribute("role", "button"); el.setAttribute("aria-label", "Tap to turn on the Halloween sounds");
   el.innerHTML = '<span class="owlhint-bubble">Tap me to hear me hoot!</span><span class="owlhint-owl" aria-hidden="true">🦉</span>';
