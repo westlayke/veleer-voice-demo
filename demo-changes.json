@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+    {"date": "2026-10-24", "change": "Opportunity record shows one next-step button: Move to Cultivation once every Qualification step is done, otherwise Log interaction (it used to show both).", "area": "Opportunities"},
     {"date": "2026-10-24", "change": "Check your hands-free saves: each save now starts with the person's name, e.g. \"Ruth Abernathy's capacity rated B\" or \"Ruth Abernathy: Moved to Cultivation\".", "area": "Hands-free"},
     {"date": "2026-10-24", "change": "Christmas mode now has a white background, with evergreen, Christmas red and gold touches (was a dark evergreen night).", "area": "Christmas"},
     {"date": "2026-10-24", "change": "Fix links on Check your hands-free saves now name who or what they are for, e.g. \"Edit Ruth Abernathy's contact\" or \"Open the opportunity: Vasquez, Elena - 2026\".", "area": "Hands-free"},

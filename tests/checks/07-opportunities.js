@@ -124,6 +124,8 @@ test("Opportunity: Next step panel on the record and a Next: line in the list", 
   await p.tap(".row:has-text('James Okafor')"); await p.waitForTimeout(400);
   ok(await p.isVisible(".nextp") && /To reach Cultivation/.test(await p.textContent(".nextp .ph")), "James's record has no Next step panel to Cultivation");
   ok(await p.locator(".nextp li").count() === 3, "Qualification should list three steps");
+  const btns = await p.evaluate(() => [...document.querySelectorAll(".nextblk button")].map(b => b.textContent.trim()));
+  ok(btns.length === 1 && /Move to Cultivation/.test(btns[0]), "a ready opportunity should offer one next step, Move to Cultivation: " + JSON.stringify(btns));
 });
 test("Guided flow: one Next block on each record (stepper, Next: line, blue button), the save shown in it, and checklists that explain", async (p) => {
   await signIn(p); await tab(p, "Opportunities");
