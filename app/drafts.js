@@ -246,6 +246,7 @@ function quickAdd(anyone) {
   h.querySelectorAll("[data-qa]").forEach(b => b.onclick = () => { const a = b.dataset.qa; h.innerHTML = ""; if (a === "contact") openForm("contact"); else if (c) openForm(a, c.id); else pickFor(a); });
 }
 function renderOverlay() {
+  if (!V && G.hfForm) { G.hfForm = false; setTimeout(() => { if (!V && hfUnchecked().length) hfCheckModal(); }, 0); } // a fix opened from the hands-free check returns to it
   const host = document.getElementById("overlay");
   host.innerHTML = V ? `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(ACTIONS[V.action].title)}">${draftHTML()}</div></div>` : "";
 }
@@ -487,7 +488,7 @@ const APPLY = {
 let toastTimer = null;
 // confetti falling and balloons floating up across the screen, when a payment is recorded on a pledge (bats in spooky mode)
 function celebrate() {
-  const spooky = spookyMode(), xmas = xmasMode(), colors = xmas ? ["#c62f3b", "#2f8a4a", "#e8c15a", "#ffffff", "#1f6b39"] : spooky ? ["#f07b2a", "#8a4fd1", "#2b2233", "#e8b923", "#6fcf5a"] : ["#1f5fbf", "#e8b923", "#d94848", "#2e9d6a", "#8a4fd1", "#f07b2a"], rnd = (a, b) => a + Math.random() * (b - a);
+  const spooky = spookyMode(), xmas = xmasMode(), colors = xmas ? ["#c62f3b", "#2f8a4a", "#e8c15a", "#a9b8c8", "#1f6b39"] : spooky ? ["#f07b2a", "#8a4fd1", "#2b2233", "#e8b923", "#6fcf5a"] : ["#1f5fbf", "#e8b923", "#d94848", "#2e9d6a", "#8a4fd1", "#f07b2a"], rnd = (a, b) => a + Math.random() * (b - a);
   let h = "";
   for (let i = 0; i < 90; i++) { const w = Math.round(rnd(6, 11)); h += `<i class="cf" style="left:${rnd(0, 100).toFixed(1)}%;width:${w}px;height:${Math.round(w * 0.45)}px;background:${colors[i % colors.length]};animation-delay:${rnd(0, 0.8).toFixed(2)}s;animation-duration:${rnd(2.4, 4).toFixed(2)}s;--r:${Math.round(rnd(-540, 540))}deg;--dx:${Math.round(rnd(-70, 70))}px"></i>`; }
   if (xmas) { spookyCue("won"); spookyOnce("sleigh"); for (let i = 0; i < 9; i++) h += `<b class="bat" style="left:${(3 + i * 10.5 + rnd(0, 4)).toFixed(1)}%;animation-delay:${rnd(0, 1).toFixed(2)}s;animation-duration:${rnd(3.2, 4.6).toFixed(2)}s;--dx:${Math.round(rnd(-60, 60))}px">${["🎁", "⭐", "❄️"][i % 3]}</b>`; } // Christmas mode: gifts, stars and snowflakes rise, Santa's sleigh flies over, "Joy to the World" then "ho ho ho"

@@ -29,7 +29,7 @@ const spookyOn = () => spookySeason() && !S.settings.noSpooky;
 const calmMotion = () => !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 // spooky mode ("spooky mode" to the assistant, or Settings): night look, haunted-house host, spooky sounds on big moments, more visitors; ends by itself on Nov 1
 const spookyMode = () => spookySeason() && !!S.settings.spooky;
-/* ---------- Christmas (December; on the preview any time, to try it): snow, gifts, elves and reindeer come by; Christmas mode adds Santa's sleigh, a tree,
+/* ---------- Christmas (December; Christmas mode any time): snow, gifts, elves and reindeer come by; Christmas mode adds Santa's sleigh, a tree,
    an evergreen look with a wreath and a nativity scene on Home, Ara as a warm Christmas host, sleigh bells and Santa's "ho ho ho"; ends by itself on Jan 1 ---------- */
 const ON_PREVIEW = VERSION_FILE === "preview-version.json";
 const xmasSeason = () => new Date().getMonth() === 11;

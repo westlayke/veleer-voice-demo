@@ -370,19 +370,19 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 .owlhint-bubble::after { content: ""; position: absolute; right: -9px; bottom: 12px; border: 8px solid transparent; border-left-color: var(--brand); border-right: 0; }
 @keyframes owlbob { 50% { transform: translateY(-6px) rotate(-4deg); } }
 @media (prefers-reduced-motion: reduce) { .owlhint-owl { animation: none; } }
-/* Christmas mode: an evergreen night with red and gold, snow along the header, pine trees in the top corners, a wreath by the logo, a still nativity scene on Home (labels unchanged) */
+/* Christmas mode: a white background with evergreen and red, gold touches, snow along the header, pine trees in the top corners, a wreath by the logo, a still nativity scene on Home (labels unchanged) */
 :root.xmas {
-  --bg: #0c1d15; --surface: #13281e; --surface2: #1a3327; --line: #2b4a3a; --line-strong: #557c68; --fg: #f5f1e6; --muted: #bccbbf;
-  --brand: #c62f3b; --brand-soft: #3a1418; --brand-line: #8c2a31; --brand-ink: #ffb9bd; --bar: #10251a;
-  --ok: #8fdb9f; --ok-soft: #173020; --warn: #e8c15a; --warn-soft: #332a10; --warn-line: #a8862a; --bad: #ff7b81;
-  --pv: #e8c15a; --pv-soft: #2f2a12; --pv-line: #8a7426; --sl: #cfd8d0; --sl-soft: #1f2e26; --sl-line: #46604f;
-  --scrim: rgba(0,0,0,.65); --shadow: 0 6px 24px rgba(0,0,0,.55); color-scheme: dark; }
-:root.xmas body { background: radial-gradient(ellipse at 50% -10%, #1f4a33 0%, var(--bg) 55%) fixed var(--bg); }
+  --bg: #ffffff; --surface: #ffffff; --surface2: #f3f7f3; --line: #d3e0d6; --line-strong: #8fb39b; --fg: #1b2a20; --muted: #4a5a4f;
+  --brand: #b3202c; --brand-soft: #fbe9ea; --brand-line: #e3a3a8; --brand-ink: #7d1520; --bar: #edf5ef;
+  --ok: #1f7a37; --ok-soft: #e3f3e7; --warn: #8a5a00; --warn-soft: #fff4dc; --warn-line: #e0a020; --bad: #c2333b;
+  --pv: #8a6a10; --pv-soft: #fbf3d9; --pv-line: #d9bd62; --sl: #3e4a5c; --sl-soft: #eceff3; --sl-line: #c3cad5;
+  --scrim: rgba(20,36,26,.5); --shadow: 0 6px 24px rgba(20,50,30,.16); color-scheme: light; }
+:root.xmas body { background: #ffffff; }
 :root.xmas .app { background: transparent; }
-:root.xmas .top { border-bottom-color: #2f5a42; }
+:root.xmas .top { border-bottom-color: #8fb39b; }
 :root.xmas .top::after { content: ""; position: absolute; left: 0; right: 0; bottom: -5px; height: 8px; pointer-events: none; opacity: .9;
-  background: radial-gradient(circle at 5px 2px, #fff 2.4px, transparent 3px) repeat-x 0 0 / 13px 8px, radial-gradient(circle at 3px 4px, #e9f1ff 1.6px, transparent 2.2px) repeat-x 7px 0 / 17px 8px; }
-:root.xmas .app::before, :root.xmas .app::after { content: "🌲"; position: fixed; top: calc(env(safe-area-inset-top, 0px) + 60px); font-size: 34px; line-height: 1; z-index: 19; pointer-events: none; opacity: .55; }
+  background: radial-gradient(circle at 5px 2px, #fff 2.4px, #c9d7e6 2.9px, transparent 3.3px) repeat-x 0 0 / 13px 8px, radial-gradient(circle at 3px 4px, #fff 1.6px, #c9d7e6 2px, transparent 2.4px) repeat-x 7px 0 / 17px 8px; }
+:root.xmas .app::before, :root.xmas .app::after { content: "🌲"; position: fixed; top: calc(env(safe-area-inset-top, 0px) + 60px); font-size: 34px; line-height: 1; z-index: 19; pointer-events: none; opacity: .6; }
 :root.xmas .app::before { left: max(4px, calc(50% - 216px)); }
 :root.xmas .app::after { right: max(4px, calc(50% - 216px)); }
 .wreath { position: absolute; left: calc(50% + 48px); top: 50%; transform: translateY(-50%); line-height: 0; pointer-events: none; filter: drop-shadow(0 0 4px rgba(255,220,120,.35)); }

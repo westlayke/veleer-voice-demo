@@ -126,7 +126,7 @@ document.addEventListener("click", (e) => {
   const mp = e.target.closest("[data-act2=mtgprep]"); if (mp) { ask(`"Prepare me for my meeting with ${mp.dataset.who}"`); return; } // the Prepare button sits inside the meeting row
   const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); tellPicked("contact"); return; }
   const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); tellPicked("opp"); return; }
-  const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
+  const g = e.target.closest("[data-go]"); if (g) { if (g.dataset.go === "hfcheck") { go("home"); hfCheckModal(); return; } go(g.dataset.go); return; }
   const a = e.target.closest("[data-act2]"); if (!a) return;
   const act = a.dataset.act2;
   if (act === "mic") { if (G.live) endCall(); else ask(null); }
