@@ -116,6 +116,7 @@ const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function"
     { type: "function", name: "pass_question_to_team", description: "Send a question you can't answer, or a problem or suggestion about the proof of concept, to the project team. Only call it after the officer says yes to passing it on. Write it in the officer's own words, with any detail they gave.", parameters: { type: "object", properties: { question: { type: "string" } }, required: ["question"] } },
     { type: "function", name: "save_form", description: "Hands-free mode only: save the open form for the officer, who is driving and can't tap. First call it with confirmed false: the app gives you a read-back to say word for word. Call it again with confirmed true only after the officer says yes to that read-back. A gift or pledge then gets a second check of the amount, and needs a second yes. The app checks the officer's own words before saving.", parameters: { type: "object", properties: { confirmed: { type: "boolean" } }, required: ["confirmed"] } },
     { type: "function", name: "set_hands_free", description: "Turn hands-free (driving) mode on or off when the officer asks, for example \"I'm driving\" or \"I've parked\". In hands-free mode you read each finished form back and save it when they say yes.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
+    { type: "function", name: "set_spooky_mode", description: "Turn spooky mode (Halloween fun: a night look for the app, you as a haunted-house host, spooky sounds) on when the officer says \"spooky mode\", or off when they say \"normal mode\". It only exists in October.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
     { type: "function", name: "close_form", description: "Close the open form without saving (close), or clear it to start again (clear), when the officer asks in words the app didn't already carry out. Never say a form was closed or cleared unless this returns ok.", parameters: { type: "object", properties: { change: { type: "string", enum: ["close", "clear"] } }, required: ["change"] } },
     { type: "function", name: "stop_conversation", description: "End the call because the officer wants to stop for now. Say a short, warm goodbye first (for example \"Great work today, talk soon!\"; vary it), then call this.", parameters: { type: "object", properties: {}, required: [] } }]);
 
@@ -123,6 +124,7 @@ function crmSnapshot() {
   return S.contacts.map(c => { const o = openOpp(c.id), a = latestAsk(o);
     return `${nameOf(c)} (${c.status}${c.capacity ? ", capacity " + c.capacity : ""})${o ? ": opportunity in " + o.stage + (a ? `, ask ${money(a.amount)} ${a.status.toLowerCase()}` : "") + (nextStep(o) ? `, next step: ${nextStep(o).line}` : "") : oppReady(c) ? ": no open opportunity, ready for one" : ": no open opportunity"}`; }).join("; ");
 }
+const SPOOKY_RULES = `SPOOKY MODE IS ON. The officer asked for some Halloween fun, so play a warm, theatrical haunted-house host: speak a little slower, with relish, and now and then (not every turn, at most one per turn) add a short spooky aside about the house itself, such as "Mind the cobwebs.", "The candles flicker in approval.", "Ooh, I heard the floorboards creak." or "Welcome back to the haunted CRM.". Vary them. Everything else is unchanged: every fact, name, number, date and question is exactly as normal, any words you're told to say exactly are said exactly, and all the saving rules apply. The asides are never about investors, money, giving, flags or the officer's mistakes. If they say "normal mode", call set_spooky_mode with on false.`;
 const HF_RULES = `HANDS-FREE MODE IS ON. The officer is probably driving and can't look at or tap the screen, so this overrides "You never save anything" and every "tap the button". Keep each turn short and never describe what's on screen. When a draft has everything it needs, don't ask them to tap: call save_form with confirmed false and say the read-back it gives you, word for word. Call save_form with confirmed true only right after the officer says yes to that read-back; the app checks their words too. If they change something, update the draft and read it back again. Scheduling a meeting needs Google Calendar on screen, so keep it as a draft for when they've parked. If they say they've parked or want to tap themselves, call set_hands_free with on false.`;
 function grokInstructions() {
   return `# Who you are
@@ -141,7 +143,7 @@ You never save anything. As soon as the officer says what they want to do (and f
 When the tool reply says nothing more is needed, ask the officer to check the draft and tap the button named in the reply's "button", using that exact label (say "tap Record pledge", never "tap Save" when the button says something else).
 Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix or the step it suggests.
 The officer can say "cancel", "undo", "go back", "start over" or "say that again" at any time: the app carries these out itself and sends you a notice, so follow the notice and don't act on those words yourself. If they ask in other words to close, cancel or clear the open form and no notice came, call close_form. Never say a form was closed, cancelled, cleared or reset unless an app notice or a tool reply says so.
-${G.hands ? HF_RULES + "\n" : ""}After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
+${G.hands ? HF_RULES + "\n" : ""}${spookyMode() ? SPOOKY_RULES + "\n" : ""}After a save, briefly confirm and ask what they'd like to do next, or whether to stop. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 You can see saves: the app tells you each time one happens and lists them under Right now. If the officer asks whether something saved, answer from that; never say you can't see saves.
 
 # Task by task
@@ -189,7 +191,7 @@ function ctxNow() {
 ${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.\n` : ""}Contacts and opportunities: ${crmSnapshot()}.`;
 }
 // what changes Ara's rules, so the full instructions go again only when one of these does
-const rulesKey = () => JSON.stringify([!!G.hands, S.settings.userName || "", botName()]);
+const rulesKey = () => JSON.stringify([!!G.hands, S.settings.userName || "", botName(), spookyMode()]);
 // The Process FAQ is looked up with get_process_faq instead of being sent whole with every set of instructions
 let FAQ_CACHE = null; // built on first use, since FAQ_TEXT is defined further down the page
 const faqPairs = () => FAQ_CACHE || (FAQ_CACHE = (() => { const out = []; let sec = "";
@@ -390,7 +392,7 @@ const nearSpeed = (v) => SPEEDS.reduce((a, b) => Math.abs(b - v) < Math.abs(a - 
 const talkSpeed = () => nearSpeed(Number(S.settings.speed) || 1);
 // the whole session setup; sent again in full when the speed changes mid-call, so nothing else is reset
 const sessionCfg = () => ({ voice: S.settings.voice || "ara", instructions: sentInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
-  audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() } } });
+  audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() * (spookyMode() ? 0.9 : 1) } } }); // spooky mode: a touch slower, like a haunted-house host
 const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
 const busy = () => { G.lastAct = Date.now(); };
 function idleCheck() {
@@ -406,8 +408,8 @@ function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; endCall(
 document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
 document.addEventListener("input", () => { if (G.live) busy(); }, true);
 async function startCall(opening) {
-  if (typeof spkSession === "function") { clearTimeout(spkSessT); spkSession(false); } // the Halloween sounds hand the audio back before the mic starts
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
+  if (navigator.audioSession) vlog("audio session: " + navigator.audioSession.type);
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
   if (!G.keepRecent) { G.recent = []; G.saves = []; } G.keepRecent = false;
   G.live = true; { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
@@ -693,6 +695,11 @@ const TOOL_HANDLERS = {
   set_hands_free(callId, data, name) {
     setHandsFree(!!data.on);
     toolReply(callId, { ok: true, hands_free: G.hands, say: G.hands ? `Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `Say only "Hands-free is off. You'll tap Save yourself again."` }); return;
+  },
+  set_spooky_mode(callId, data, name) {
+    if (!spookySeason()) { toolReply(callId, { ok: false, error: "Spooky mode is only around in October.", say: "Say in one short sentence that spooky mode is only around in October." }); return; }
+    setSpooky(!!data.on); send({ type: "session.update", session: sessionCfg() }); // new rules and a slower voice straight away
+    toolReply(callId, { ok: true, spooky: spookyMode(), say: spookyMode() ? `In your haunted-house host voice, say one short welcome, such as "Mwahaha... spooky mode is on. Welcome to the haunted CRM!", then ask what they'd like to do.` : `Say only "Back to normal. The ghosts have gone home."` }); return;
   },
   set_speaking_speed(callId, data, name) {
     const now = talkSpeed(), next = data.change === "normal" ? 1 : SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, SPEEDS.indexOf(nearSpeed(now)) + (data.change === "faster" ? 1 : -1)))];
