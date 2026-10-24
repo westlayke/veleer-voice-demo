@@ -111,6 +111,7 @@ async function hfSave(callId, data) {
     toolReply(callId, recentSave ? { ok: true, saved: true, already: true, status: `That form was already saved (${G.savedLine}); it closed when it saved. Say in a few words that it's saved, then ask what's next. Don't open it again.` } : { ok: false, saved: false, error: "No form is open, so there's nothing to save." }); return; }
   const A = ACTIONS[V.action];
   if (!G.hands) { toolReply(callId, { ok: false, saved: false, error: `Hands-free mode is off, so you can't save. Ask the officer to check the draft and tap "${A.saveLabel}". If they're driving, they can say "hands-free mode".` }); return; }
+  if (oppNeedsCampaign(V.action, readDraft())) { const f = readDraft().fund; toolReply(callId, { ok: false, saved: false, error: `Not ready: ask which campaign first, ${campaignsFor(f).join(" or ")} (${f} has both). Fill it in with the draft tool, then read back.` }); return; }
   if (V.action === "meeting") { toolReply(callId, { ok: false, saved: false, error: "Scheduling a meeting finishes in Google Calendar, which needs the screen. Say it's kept as a draft for when they've parked." }); return; }
   const key = V.action + JSON.stringify(readDraft()), c = G.saveCheck;
   if (data.confirmed !== true || !c || c.key !== key) {

@@ -304,6 +304,7 @@ function draftTool(callId, name, data) {
   const onForm = A.fields.filter(f => !f.fixed && f.type !== "bool" && !empty(d[f.k])).map(f => `${f.label}: ${f.type === "money" ? money(d[f.k]) : d[f.k]}`);
   delete d.badCampaign;
   if ((tool.action === "contact" || tool.action === "editContact") && empty(d.email) && empty(d.mobile)) missing.push("Email or mobile");
+  if (oppNeedsCampaign(tool.action, d)) missing.push(`Campaign of interest (${d.fund} can be ${campaignsFor(d.fund).join(" or ")}: ask which)`); // Carverhill: always ask the campaign when there is a choice
   if (((tool.action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) || (tool.action === "ask" && d.response && d.response !== "Declined")) && (empty(d.nextStep) || empty(d.nextDue))) missing.push("Next step and its due date");
   // a new contact: ask once for the other of email/mobile, then once about the optional fields (the app drives this so it never gets skipped)
   if (missedSpelling.length) { toolReply(callId, { ok: true, button: A.saveLabel, status: `The officer just spelled out ${missedSpelling.map(w => `"${spellOut(w)}" (${w.charAt(0) + w.slice(1).toLowerCase()})`).join(" and ")}, but this update didn't use it. Call this tool again now with that exact spelling in the field they named (for a name, first or last as they said; for an email, the part before the @). If they changed how a name is spelled and the email uses that name, ask once whether the email should change to match. Don't ask them to repeat it.` }); return; }

@@ -13,6 +13,7 @@ const ENTITY_STATE = { "Citizens Alliance C3": "", "C.A. of America Action C4": 
   "C.A. Pennsylvania C4": "Pennsylvania", "C.A. Pennsylvania State PAC": "Pennsylvania" };
 const FUNDS = Object.keys(ENTITY_STATE);
 const CAMPAIGNS = ["National", "Idaho", "North Dakota", "New Hampshire", "Pennsylvania"];
+const oppNeedsCampaign = (action, d) => (action === "opportunity" || action === "editOpportunity") && d && d.fund && !d.campaign && campaignsFor(d.fund).length > 1;
 const campaignsFor = (f) => ENTITY_STATE[f] === undefined ? CAMPAIGNS : ["National", ...(ENTITY_STATE[f] ? [ENTITY_STATE[f]] : [])];
 // a spoken amount -> a number: "one hundred thousand dollars", "250k", "$1.5 million", "a hundred and fifty thousand" (Oct 24: Ara couldn't record "one hundred thousand")
 const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
