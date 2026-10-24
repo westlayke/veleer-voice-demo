@@ -68,4 +68,37 @@ test("Halloween sounds: a visitor makes a sound after the first tap, but not dur
   const b = await p.evaluate(() => { const n = window.__demo.spkPlayed; window.__demo.spookyOnce("spider").dataset.t = "1"; return window.__demo.spkPlayed - n; });
   ok(live, "no conversation started"); ok(b === 0, "a Halloween visitor made a sound during a conversation");
 });
+test("Spooky mode: Ara turns it on and off, with the night look, slower host voice and new rules", async (p) => {
+  if (new Date().getMonth() !== 9) return; // spooky mode only exists in October
+  await signIn(p); await p.waitForTimeout(400);
+  const n = await p.evaluate(() => __sent.length);
+  const on = await ara(p, "set_spooky_mode", { on: true });
+  ok(on.ok && on.spooky, "Ara couldn't turn spooky mode on");
+  const look = await p.evaluate(() => ({ cls: document.documentElement.classList.contains("spooky"), candle: !!document.querySelector(".top .candle"), bg: getComputedStyle(document.body).backgroundColor }));
+  ok(look.cls && look.candle, "the night look or the candle by the logo didn't appear");
+  const upd = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.audio).at(-1), n);
+  ok(upd && /SPOOKY MODE IS ON/.test(upd.session.instructions), "Ara wasn't given the spooky rules");
+  ok(Math.abs(upd.session.audio.output.speed - 0.9) < 0.001, "Ara's voice didn't slow down a touch");
+  const off = await ara(p, "set_spooky_mode", { on: false });
+  ok(off.ok && !off.spooky, "Ara couldn't turn spooky mode off");
+  ok(!(await p.evaluate(() => document.documentElement.classList.contains("spooky"))), "the night look stayed on after normal mode");
+});
+test("Spooky mode: a creak when a form opens, thunder on Save, bats and a cackle on Closed Won, visitors more often", async (p) => {
+  if (new Date().getMonth() !== 9) return;
+  await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Contacts"); await p.waitForTimeout(300);
+  await p.tap("header .setbtn"); await p.waitForTimeout(300); await p.check("#spookyMode"); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => document.documentElement.classList.contains("spooky")), "the Settings switch didn't turn spooky mode on");
+  const creak = await p.evaluate(() => { const n = window.__demo.spkPlayed; openForm("contact"); return window.__demo.spkPlayed - n; });
+  ok(creak === 1, "no creak when a form opened");
+  await p.evaluate(() => { V = null; renderOverlay(); });
+  const won = await p.evaluate(() => { const n = window.__demo.spkPlayed; celebrate(); const party = document.querySelector(".party"); return { played: window.__demo.spkPlayed - n, bats: party.querySelectorAll(".bat").length, balloons: party.querySelectorAll(".bl").length }; });
+  ok(won.played === 1 && won.bats > 0 && won.balloons === 0, "Closed Won didn't bring bats and the organ sting instead of balloons");
+  const bat = await p.evaluate(() => { const n = window.__demo.spkPlayed; const el = window.__demo.spookyOnce("bat"); return { played: window.__demo.spkPlayed - n, bats: el.querySelectorAll("i").length }; });
+  ok(bat.played === 1 && bat.bats === 3, "the bats didn't fly over with a squeak");
+  const thunder = await p.evaluate(() => { const n = window.__demo.spkPlayed; spookyCue("thunder"); return window.__demo.spkPlayed - n; });
+  ok(thunder === 1, "no thunder");
+  await p.uncheck("#spookyMode"); await p.waitForTimeout(300);
+  const quiet = await p.evaluate(() => { const n = window.__demo.spkPlayed; openForm("contact"); return window.__demo.spkPlayed - n; });
+  ok(quiet === 0, "a form still creaked after spooky mode was turned off");
+});
 };

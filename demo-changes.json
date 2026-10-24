@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+  {"date": "Oct 24, 2026", "change": "Spooky mode (preview): say \"spooky mode\" to Ara, or tick it in Settings, for a night look (orange and purple, cobwebs, a flickering candle by the logo), Ara as a slightly slower haunted-house host with spooky asides (facts and save rules unchanged), a creaking door when a form opens, thunder on Save, an organ sting and a cackle with bats on Closed Won, and a visitor every 15 to 20 seconds, now with bats. \"Normal mode\" turns it off; it ends by itself on Nov 1. Sounds never play during a conversation.", "area": "Halloween"},
   {
    "date": "Oct 24, 2026",
    "change": "The + button and Settings swapped places: + now sits in the top-right corner, the easiest spot to reach with your thumb and where iPhone apps put their add button, with Settings just to its left.",

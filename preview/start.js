@@ -25,6 +25,13 @@ if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.path
 /* ---------- Halloween: now and then a spider, pumpkin or ghost crosses the screen (October only; Settings can turn it off) ---------- */
 const spookySeason = () => new Date().getMonth() === 9;
 const spookyOn = () => spookySeason() && !S.settings.noSpooky && !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+// spooky mode ("spooky mode" to the assistant, or Settings): night look, haunted-house host, spooky sounds on big moments, more visitors; ends by itself on Nov 1
+const spookyMode = () => spookySeason() && !!S.settings.spooky;
+function applySpooky() { document.documentElement.classList.toggle("spooky", spookyMode()); }
+function setSpooky(on) {
+  if (on) { S.settings.spooky = true; delete S.settings.noSpooky; } else delete S.settings.spooky;
+  save(); applySpooky(); render(); act("step", "spooky mode " + (on ? "on" : "off")); spookyKick();
+}
 // spooky sounds, made by the phone (no sound files): quiet, only after the first tap, never during a conversation with Ara
 let spkCtx = null, spkPlayed = 0, spkSessT = null;
 function spkUnlock() { // iPhones only allow sound after a tap: start the sound engine in the tap and play a silent blip
@@ -53,18 +60,39 @@ function spookySound(kind, retried) {
     env(g, t0, 0.6, 0.7); o.connect(f); f.connect(g); g.connect(out); o.start(t0); o.stop(t0 + 0.75);
     for (let i = 0; i < 12; i++) { const at = t0 + 0.8 + i * 0.05 + Math.random() * 0.02, n = noise(0.02), hp = c.createBiquadFilter(), ng = c.createGain();
       hp.type = "highpass"; hp.frequency.value = 3000; env(ng, at, 0.5, 0.02); n.connect(hp); hp.connect(ng); ng.connect(out); n.start(at); }
-  } else { // a haunted-house organ sting as the pumpkin rolls in: dun, dun, DUNNN
+  } else if (kind === "bat") { // a few high squeaks
+    for (let i = 0; i < 5; i++) { const at = t0 + 0.3 + i * 0.16 + Math.random() * 0.05, o = c.createOscillator(), g = c.createGain(), f0 = 3200 + Math.random() * 1400;
+      o.type = "sine"; o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f0 * 0.6, at + 0.07); env(g, at, 0.35, 0.08); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.1); }
+  } else if (kind === "creak") { // a slow creaking door as a form opens
+    const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(), lfo = c.createOscillator(), dep = c.createGain();
+    o.type = "sawtooth"; o.frequency.setValueAtTime(95, t0); o.frequency.linearRampToValueAtTime(150, t0 + 0.5); o.frequency.linearRampToValueAtTime(80, t0 + 1.1);
+    lfo.type = "square"; lfo.frequency.value = 22; dep.gain.value = 30; lfo.connect(dep); dep.connect(o.frequency);
+    f.type = "bandpass"; f.frequency.value = 1200; f.Q.value = 6; env(g, t0, 0.7, 1.2); o.connect(f); f.connect(g); g.connect(out);
+    o.start(t0); lfo.start(t0); o.stop(t0 + 1.25); lfo.stop(t0 + 1.25);
+  } else if (kind === "thunder") { // a crack, then a rumble, as a form saves
+    const n = noise(2.4), lp = c.createBiquadFilter(), g = c.createGain(), k = noise(0.25), hp = c.createBiquadFilter(), kg = c.createGain();
+    lp.type = "lowpass"; lp.frequency.setValueAtTime(1400, t0); lp.frequency.exponentialRampToValueAtTime(300, t0 + 2.2);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(1, t0 + 0.08); g.gain.setValueAtTime(0.6, t0 + 0.5); g.gain.exponentialRampToValueAtTime(0.9, t0 + 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.4);
+    n.connect(lp); lp.connect(g); g.connect(out); n.start(t0);
+    hp.type = "highpass"; hp.frequency.value = 1800; env(kg, t0, 0.9, 0.25); k.connect(hp); hp.connect(kg); kg.connect(out); k.start(t0);
+  } else if (kind === "cackle") { // a witch's "ha-ha-ha-ha", falling
+    for (let i = 0; i < 7; i++) { const at = t0 + i * 0.15, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(), p = 900 - i * 60;
+      o.type = "sawtooth"; o.frequency.setValueAtTime(p * 1.15, at); o.frequency.linearRampToValueAtTime(p, at + 0.1);
+      f.type = "bandpass"; f.frequency.value = 1500; f.Q.value = 2; env(g, at, 0.6, 0.12); o.connect(f); f.connect(g); g.connect(out); o.start(at); o.stop(at + 0.13); }
+  } else { // a haunted-house organ sting as the pumpkin rolls in: dun, dun, DUNNN (on Closed Won in spooky mode, a cackle follows)
     const hz = (m) => 440 * Math.pow(2, (m - 69) / 12), lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2600; lp.connect(out);
     [[0, 0.22, [60, 63, 67]], [0.28, 0.22, [60, 63, 67]], [0.58, 1.5, [59, 62, 65, 68]]].forEach(([dt, len, notes]) => notes.forEach(m => {
       const at = t0 + dt, g = c.createGain(); env(g, at, 0.22, len); g.connect(lp);
       [[1, "square", 0.5], [2, "sine", 0.6], [4, "sine", 0.25]].forEach(([mult, type, vol]) => { const o = c.createOscillator(), v = c.createGain();
         o.type = type; o.frequency.value = hz(m) * mult; v.gain.value = vol; o.connect(v); v.connect(g); o.start(at); o.stop(at + len + 0.05); });
     }));
+    if (kind === "won") setTimeout(() => spookySound("cackle", true), 2100);
   }
   spkPlayed++; return true;
 }
 function spookyOnce(kind) {
-  kind = kind || ["spider", "pumpkin", "ghost"][Math.floor(Math.random() * 3)];
+  const kinds = spookyMode() ? ["spider", "pumpkin", "ghost", "bat"] : ["spider", "pumpkin", "ghost"];
+  kind = kind || kinds[Math.floor(Math.random() * kinds.length)];
   const el = document.createElement("div"); el.className = "spk spk-" + kind; el.setAttribute("aria-hidden", "true");
   const w = window.innerWidth, h = window.innerHeight, done = () => el.remove();
   if (kind === "spider") { // drops from the top on its thread, looks around, climbs back up
@@ -74,15 +102,24 @@ function spookyOnce(kind) {
   } else if (kind === "pumpkin") { // rolls along the bottom, right to left
     el.textContent = "🎃";
     el.animate([{ transform: `translateX(${w + 20}px) rotate(0deg)` }, { transform: "translateX(-70px) rotate(-720deg)" }], { duration: 6500, easing: "linear" }).onfinish = done;
+  } else if (kind === "bat") { // a few bats flap across the top of the screen, left to right
+    el.innerHTML = '<i>🦇</i><i>🦇</i><i>🦇</i>'; el.style.top = Math.round(70 + Math.random() * h * 0.2) + "px";
+    el.animate([{ transform: "translate(-140px, 0)" }, { transform: `translate(${w * 0.3}px, 30px)`, offset: 0.3 }, { transform: `translate(${w * 0.6}px, -10px)`, offset: 0.6 }, { transform: `translate(${w + 40}px, 20px)` }], { duration: 5000, easing: "linear" }).onfinish = done;
   } else { // floats across, bobbing
     el.textContent = "👻"; el.style.top = Math.round(h * (0.18 + Math.random() * 0.4)) + "px";
     el.animate([{ transform: "translate(-70px, 0)", opacity: 0 }, { transform: `translate(${w * 0.25}px, -18px)`, opacity: 0.9, offset: 0.25 }, { transform: `translate(${w * 0.5}px, 14px)`, offset: 0.5 }, { transform: `translate(${w * 0.75}px, -14px)`, opacity: 0.9, offset: 0.75 }, { transform: `translate(${w + 20}px, 0)`, opacity: 0 }], { duration: 9000, easing: "linear" }).onfinish = done;
   }
   document.body.appendChild(el); spookySound(kind); return el;
 }
-(function spookyLoop(first) { setTimeout(() => { if (spookyOn() && document.visibilityState === "visible") spookyOnce(); spookyLoop(false); }, first ? 8000 : 40000 + Math.random() * 50000); })(true);
+// a visitor every 40 to 90 seconds; in spooky mode every 15 to 20
+let spkLoopT = null;
+function spookyLoop(first) { clearTimeout(spkLoopT); spkLoopT = setTimeout(() => { if (spookyOn() && document.visibilityState === "visible") spookyOnce(); spookyLoop(false); }, first ? (spookyMode() ? 3000 : 8000) : spookyMode() ? 15000 + Math.random() * 5000 : 40000 + Math.random() * 50000); }
+const spookyKick = () => spookyLoop(true);
+spookyLoop(true); applySpooky();
+// spooky mode's big moments: a creaking door as a form opens, thunder on Save, the organ sting and a cackle on Closed Won
+function spookyCue(kind) { if (spookyMode()) spookySound(kind); }
 render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
 function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app"); }
 logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
-window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, get spkPlayed() { return spkPlayed; } };
+window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, setSpooky, get spkPlayed() { return spkPlayed; } };

@@ -192,7 +192,7 @@ function openForm(action, cid, item) {
   if (target.gate) { oppGate(target.gate); return; }
   if (target.error) { toast(plainErr(target.error)); return; }
   if (target.route) action = target.route;
-  V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true }; renderOverlay();
+  V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true }; renderOverlay(); spookyCue("creak");
   if (G.live) notice(`The officer opened the ${ACTIONS[action].title} form${target.contact ? " for " + nameOf(target.contact) : ""} by tapping. If they ask for help with it, fill it in with ${toolFor(action)}.`);
 }
 const toolFor = (action) => (TOOLS.find(t => t.action === (action === "payment" ? "gift" : action)) || {}).name || "the draft tool";
@@ -304,6 +304,7 @@ function saveDraft() {
   setWhatNext(action, result, t); if (G.whatNext) render();
   toast(A.saved, () => { S = JSON.parse(undo); G.whatNext = null; save(); render(); });
   if (action === "payment" || action === "gift") celebrate(); // the money came in: a pledge payment or an outright gift
+  else spookyCue("thunder");
   grokSaved(action, result, d);
 }
 
@@ -484,12 +485,13 @@ const APPLY = {
 
 /* ---------- toast ---------- */
 let toastTimer = null;
-// confetti falling and balloons floating up across the screen, when a payment is recorded on a pledge
+// confetti falling and balloons floating up across the screen, when a payment is recorded on a pledge (bats in spooky mode)
 function celebrate() {
-  const colors = ["#1f5fbf", "#e8b923", "#d94848", "#2e9d6a", "#8a4fd1", "#f07b2a"], rnd = (a, b) => a + Math.random() * (b - a);
+  const spooky = spookyMode(), colors = spooky ? ["#f07b2a", "#8a4fd1", "#2b2233", "#e8b923", "#6fcf5a"] : ["#1f5fbf", "#e8b923", "#d94848", "#2e9d6a", "#8a4fd1", "#f07b2a"], rnd = (a, b) => a + Math.random() * (b - a);
   let h = "";
   for (let i = 0; i < 90; i++) { const w = Math.round(rnd(6, 11)); h += `<i class="cf" style="left:${rnd(0, 100).toFixed(1)}%;width:${w}px;height:${Math.round(w * 0.45)}px;background:${colors[i % colors.length]};animation-delay:${rnd(0, 0.8).toFixed(2)}s;animation-duration:${rnd(2.4, 4).toFixed(2)}s;--r:${Math.round(rnd(-540, 540))}deg;--dx:${Math.round(rnd(-70, 70))}px"></i>`; }
-  for (let i = 0; i < 9; i++) h += `<b class="bl" style="left:${(3 + i * 10.5 + rnd(0, 4)).toFixed(1)}%;--c:${colors[i % colors.length]};animation-delay:${rnd(0, 1).toFixed(2)}s;animation-duration:${rnd(3.6, 5).toFixed(2)}s;--dx:${Math.round(rnd(-60, 60))}px"></b>`;
+  if (spooky) { spookyCue("won"); for (let i = 0; i < 9; i++) h += `<b class="bat" style="left:${(3 + i * 10.5 + rnd(0, 4)).toFixed(1)}%;animation-delay:${rnd(0, 1).toFixed(2)}s;animation-duration:${rnd(3.2, 4.6).toFixed(2)}s;--dx:${Math.round(rnd(-60, 60))}px">🦇</b>`; } // spooky mode: bats instead of balloons, and an organ sting with a cackle
+  else for (let i = 0; i < 9; i++) h += `<b class="bl" style="left:${(3 + i * 10.5 + rnd(0, 4)).toFixed(1)}%;--c:${colors[i % colors.length]};animation-delay:${rnd(0, 1).toFixed(2)}s;animation-duration:${rnd(3.6, 5).toFixed(2)}s;--dx:${Math.round(rnd(-60, 60))}px"></b>`;
   const box = document.createElement("div"); box.className = "party"; box.setAttribute("aria-hidden", "true"); box.innerHTML = h;
   document.body.appendChild(box); setTimeout(() => box.remove(), 6600);
 }

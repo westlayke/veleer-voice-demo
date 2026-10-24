@@ -342,3 +342,23 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 .spk-pumpkin { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 .spk-spider { font-size: 34px; }
 .spk-thread { position: absolute; left: 50%; bottom: 70%; width: 1px; height: 100vh; background: var(--muted); opacity: .55; }
+/* Spooky mode: a night look with orange and purple, cobwebs in the top corners, a flickering candle by the logo (labels unchanged) */
+:root.spooky {
+  --bg: #120d17; --surface: #1d1626; --surface2: #271e31; --line: #3b2f4a; --line-strong: #67557c; --fg: #f2ebf7; --muted: #b8a9c8;
+  --brand: #d9670f; --brand-soft: #36210f; --brand-line: #8f4a16; --brand-ink: #ffc58f; --bar: #24152f;
+  --ok: #7ad68f; --ok-soft: #17301f; --warn: #f0c060; --warn-soft: #33290f; --warn-line: #a87a1c; --bad: #ff7b81;
+  --pv: #c9a8f5; --pv-soft: #2c1f44; --pv-line: #6a4f96; --sl: #c9c0d6; --sl-soft: #262033; --sl-line: #4d4360;
+  --scrim: rgba(0,0,0,.65); --shadow: 0 6px 24px rgba(0,0,0,.55); color-scheme: dark; }
+:root.spooky body { background: radial-gradient(ellipse at 50% -10%, #2c1840 0%, var(--bg) 55%) fixed var(--bg); }
+:root.spooky .app { background: transparent; }
+:root.spooky .top { border-bottom-color: #4a2f63; }
+:root.spooky .app::before, :root.spooky .app::after { content: ""; position: fixed; top: calc(env(safe-area-inset-top, 0px) + 56px); width: 70px; height: 70px; z-index: 19; pointer-events: none; opacity: .5;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 70 70' fill='none' stroke='%23d8cce6' stroke-width='1'%3E%3Cpath d='M0 0L70 70M0 0L35 70M0 0L70 35M0 0L0 70M0 0L70 0'/%3E%3Cpath d='M0 14Q8 10 12 12Q12 8 14 0M0 28Q16 22 24 24Q22 16 28 0M0 44Q24 36 37 37Q36 24 44 0M0 60Q32 50 50 50Q50 32 60 0'/%3E%3C/svg%3E") no-repeat; }
+:root.spooky .app::before { left: max(0px, calc(50% - 220px)); }
+:root.spooky .app::after { right: max(0px, calc(50% - 220px)); transform: scaleX(-1); }
+.candle { position: absolute; left: calc(50% - 70px); top: 50%; transform: translateY(-50%); font-size: 24px; line-height: 1; pointer-events: none; animation: candle 2.2s infinite; filter: drop-shadow(0 0 6px rgba(255,170,60,.8)); }
+@keyframes candle { 0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px rgba(255,170,60,.8)); } 20% { opacity: .82; filter: drop-shadow(0 0 3px rgba(255,170,60,.5)); } 35% { opacity: 1; } 55% { opacity: .9; filter: drop-shadow(0 0 9px rgba(255,170,60,.9)); } 70% { opacity: .78; } }
+@media (prefers-reduced-motion: reduce) { .candle { animation: none; } }
+.spk-bat { font-size: 30px; display: flex; gap: 18px; } .spk-bat i { font-style: normal; display: inline-block; animation: batflap .25s infinite alternate; } .spk-bat i:nth-child(2) { margin-top: 22px; animation-delay: .1s; } .spk-bat i:nth-child(3) { margin-top: 6px; animation-delay: .05s; }
+@keyframes batflap { to { transform: scaleY(.6) translateY(4px); } }
+.party .bat { position: absolute; bottom: -80px; font-size: 40px; font-weight: 400; line-height: 1; animation-name: brise; animation-timing-function: ease-in; animation-fill-mode: both; }
