@@ -337,3 +337,8 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 .flowlink { display: block; padding: 0 14px 12px; font-size: 13.5px; color: var(--brand); cursor: pointer; font-weight: 600; }
 .updbar { position: fixed; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top, 0px)); z-index: 60; display: flex; align-items: center; gap: 10px; background: var(--brand); color: #fff; border-radius: 12px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.25); font-size: 14px; }
 .updbar b { flex: 1; } .updbar button { border: 0; border-radius: 9px; padding: 8px 12px; font: inherit; font-weight: 700; background: #fff; color: var(--brand); cursor: pointer; }
+/* Halloween visitors (October only) */
+.spk { position: fixed; z-index: 55; pointer-events: none; user-select: none; font-size: 42px; line-height: 1; left: 0; }
+.spk-pumpkin { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+.spk-spider { font-size: 34px; }
+.spk-thread { position: absolute; left: 50%; bottom: 70%; width: 1px; height: 100vh; background: var(--muted); opacity: .55; }

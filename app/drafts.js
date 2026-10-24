@@ -476,7 +476,7 @@ const APPLY = {
     const o = t.opp, c = t.contact, ids = { contactId: c.id, oppId: o.id };
     if (d.decision === "Defer") {
       o.defer = { reason: d.reason, until: d.reconsiderOn || "", subs: subCount(c), on: todayISO() };
-      log(`Move to Cultivation deferred: ${d.reason}${d.reconsiderOn ? ". Reconsider on " + fmtDate(d.reconsiderOn) : ""}`, ids);
+      log(`Move to Cultivation deferred: ${String(d.reason || "").trim().replace(/[.\s]+$/, "")}${d.reconsiderOn ? ". Reconsider on " + fmtDate(d.reconsiderOn) : ""}`, ids);
     } else { o.stage = "Cultivation"; delete o.defer; log("Moved to Cultivation (criteria met: capacity rating and a substantive interaction)", ids); }
     S.sel.opp = o.id; S.screen = "opp"; return t;
   }

@@ -112,8 +112,8 @@ const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function"
     { type: "function", name: "set_task_status", description: "Change a task's status: to do, in progress, waiting (on someone, with a check-back date) or done. First call it with confirmed false: the app finds the task and shows it; read back what will change and ask the officer to confirm. Only after they say yes, call again with confirmed true.", parameters: { type: "object", properties: Object.assign({ task: { type: "string", description: "Words from the task as the officer said them, e.g. 'pledge decision' or 'Pennsylvania update'" }, status: { type: "string", enum: ["to_do", "in_progress", "waiting", "done"] }, check_back_on: { type: "string", description: "YYYY-MM-DD to check back, for waiting; leave out if not said" }, confirmed: { type: "boolean" } }, FOR), required: ["task", "status", "confirmed"] } },
     { type: "function", name: "set_speaking_speed", description: "Change how fast you talk when the officer asks you to speak faster or slower (or normally). The choice is remembered on this phone.", parameters: { type: "object", properties: { change: { type: "string", enum: ["faster", "slower", "normal"] } }, required: ["change"] } },
     { type: "function", name: "get_process_faq", description: "Look up the Process FAQ (from the Chief Gift Officer's Guide) for a question about the process: who can do what, stage rules, flags, alerts, pledges and gifts, settings or terms. Returns the closest questions and answers; answer only from them.", parameters: { type: "object", properties: { question: { type: "string", description: "The officer's question, in their words" } }, required: ["question"] } },
-    { type: "function", name: "get_demo_changes", description: "Look up what has changed in this demo app since it was first released on Oct 18, 2026, from its change log: what's new, when something changed, or why it works the way it does. Pass a few keywords as topic (for example \"task status\" or \"confetti\"), or leave topic out for the latest changes.", parameters: { type: "object", properties: { topic: { type: "string" } }, required: [] } },
-    { type: "function", name: "pass_question_to_team", description: "Send a question you can't answer, or a problem or suggestion about the demo, to the demo team. Only call it after the officer says yes to passing it on. Write it in the officer's own words, with any detail they gave.", parameters: { type: "object", properties: { question: { type: "string" } }, required: ["question"] } },
+    { type: "function", name: "get_demo_changes", description: "Look up what has changed in this proof of concept since it was first released on Oct 18, 2026, from its change log: what's new, when something changed, or why it works the way it does. Pass a few keywords as topic (for example \"task status\" or \"confetti\"), or leave topic out for the latest changes.", parameters: { type: "object", properties: { topic: { type: "string" } }, required: [] } },
+    { type: "function", name: "pass_question_to_team", description: "Send a question you can't answer, or a problem or suggestion about the proof of concept, to the project team. Only call it after the officer says yes to passing it on. Write it in the officer's own words, with any detail they gave.", parameters: { type: "object", properties: { question: { type: "string" } }, required: ["question"] } },
     { type: "function", name: "save_form", description: "Hands-free mode only: save the open form for the officer, who is driving and can't tap. First call it with confirmed false: the app gives you a read-back to say word for word. Call it again with confirmed true only after the officer says yes to that read-back. A gift or pledge then gets a second check of the amount, and needs a second yes. The app checks the officer's own words before saving.", parameters: { type: "object", properties: { confirmed: { type: "boolean" } }, required: ["confirmed"] } },
     { type: "function", name: "set_hands_free", description: "Turn hands-free (driving) mode on or off when the officer asks, for example \"I'm driving\" or \"I've parked\". In hands-free mode you read each finished form back and save it when they say yes.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
     { type: "function", name: "close_form", description: "Close the open form without saving (close), or clear it to start again (clear), when the officer asks in words the app didn't already carry out. Never say a form was closed or cleared unless this returns ok.", parameters: { type: "object", properties: { change: { type: "string", enum: ["close", "clear"] } }, required: ["change"] } },
@@ -169,10 +169,10 @@ Preparing for a meeting: get_contact_history for that contact, then a spoken bri
 What's next for an opportunity: read its next step from the contacts below.
 
 # Questions about the process
-Questions about who can do what, rules, flags, alerts, settings or terms: call get_process_faq with the question, then answer only from what it returns and the stages below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't there, say plainly that it isn't covered in this demo and offer to pass the question to the demo team; if the FAQ says something is still open with the customer, say that. If two answers seem to disagree, give the more specific one.
+Questions about who can do what, rules, flags, alerts, settings or terms: call get_process_faq with the question, then answer only from what it returns and the stages below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If the answer isn't there, say plainly that it isn't covered in this proof of concept and offer to pass the question to the project team; if the FAQ says something is still open with the customer, say that. If two answers seem to disagree, give the more specific one.
 If the officer says "Review FAQ" or asks what they can ask about, name four or five of these topics in one or two sentences, give one example question, and ask what they'd like to know: ${faqTopics().join(", ")}.
-Questions about the demo app itself (what's new, what changed, when or why): call get_demo_changes with a few keywords and answer in one to three sentences with the date. Don't read the whole list out.
-When you can't answer from the FAQ, the demo changes or their data, or the officer reports a problem or makes a suggestion about the demo, say so briefly and ask "Shall I pass that to the demo team?" Only after they say yes, call pass_question_to_team with it in their words, then say the team will see it. Never promise when or how the team will reply.
+Questions about the proof of concept itself (what's new, what changed, when or why): call get_demo_changes with a few keywords and answer in one to three sentences with the date. Don't read the whole list out.
+When you can't answer from the FAQ, the list of changes or their data, or the officer reports a problem or makes a suggestion about the proof of concept, say so briefly and ask "Shall I pass that to the project team?" Only after they say yes, call pass_question_to_team with it in their words, then say the team will see it. Never promise when or how the team will reply.
 
 # The process overview
 If the officer asks how the process works, for an overview, or to be walked through it (not how to do one task): call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first, then open with the short introduction the tool reply gives you and give a spoken tour, one stage at a time in order. For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them. After the last stage (Closed Won), ask if they have questions or want to try a step. If they interrupt with a question, answer it, then ask whether to carry on with the stage you were on. The stages:
@@ -252,7 +252,7 @@ async function logReady() {
 }
 // outside a conversation, taps are grouped into a visit (a new one after 30 quiet minutes)
 function visitId() { const now = Date.now(); if (!G.visit || now - G.visit.last > 30 * 60000) G.visit = { id: deviceId().slice(0, 8) + "-v" + now.toString(36) }; G.visit.last = now; return G.visit.id; }
-// the demo's own change log (demo-changes.json), loaded the first time Ara is asked about it
+// its own change log (demo-changes.json), loaded the first time Ara is asked about it
 let CHANGES = null;
 async function demoChanges() {
   if (CHANGES) return CHANGES;
@@ -275,7 +275,7 @@ function formLog(A, d, fromVoice, typed) {
 function formLogNotice() {
   if (!S.settings.seenPrivacy || S.settings.seenFormLog || document.getElementById("fmbar")) return;
   const bar = document.createElement("div"); bar.id = "fmbar"; bar.className = "updbar";
-  bar.innerHTML = `<b>To improve the demo, it now also saves what is in each form when you tap Save. Settings has the full notice.</b><button type="button">OK</button>`;
+  bar.innerHTML = `<b>To improve the proof of concept, it now also saves what is in each form when you tap Save. Settings has the full notice.</b><button type="button">OK</button>`;
   bar.querySelector("button").onclick = () => { S.settings.seenFormLog = true; save(); bar.remove(); };
   document.body.appendChild(bar);
 }
@@ -332,8 +332,8 @@ async function mintToken() {
 }
 const callError = (e) => {
   const m = String(e && e.message || e);
-  if (m === "bad_code") return "This demo link isn't valid any more. Ask for a new link.";
-  if (m.startsWith("service_")) return "The demo's voice service didn't answer (" + m.slice(8) + "). Try again in a moment.";
+  if (m === "bad_code") return "This link isn't valid any more. Ask for a new link.";
+  if (m.startsWith("service_")) return "The voice service didn't answer (" + m.slice(8) + "). Try again in a moment.";
   if (m === "token_401" || m === "token_403") return "xAI refused the API key in Settings. Check it and try again.";
   if (m.startsWith("token_")) return "xAI couldn't start a voice session (" + m.slice(6) + "). Try again in a moment.";
   if (e && e.name === "NotAllowedError") return "The microphone is blocked. Allow it for this site in your browser settings.";
@@ -700,26 +700,26 @@ const TOOL_HANDLERS = {
   },
   get_process_faq(callId, data, name) {
     const hits = faqLookup(data.question || "");
-    toolReply(callId, hits.length ? { ok: true, answers: hits.map(h => ({ topic: h.section, q: h.q, a: h.a })), say: "Answer in one to three spoken sentences from these only, using their exact names. If none of them answers the question, say it isn't covered in this demo and offer to pass it to the demo team." }
-      : { ok: true, answers: [], say: "Nothing in the Process FAQ matches. Say it isn't covered in this demo and offer to pass the question to the demo team." }); return;
+    toolReply(callId, hits.length ? { ok: true, answers: hits.map(h => ({ topic: h.section, q: h.q, a: h.a })), say: "Answer in one to three spoken sentences from these only, using their exact names. If none of them answers the question, say it isn't covered in this proof of concept and offer to pass it to the project team." }
+      : { ok: true, answers: [], say: "Nothing in the Process FAQ matches. Say it isn't covered in this proof of concept and offer to pass the question to the project team." }); return;
   },
   get_demo_changes(callId, data, name) {
     demoChanges().then(all => {
-      if (!all.length) { toolReply(callId, { ok: false, error: "The change list couldn't be loaded. Say you can't look that up right now and offer to pass the question to the demo team." }); return; }
+      if (!all.length) { toolReply(callId, { ok: false, error: "The change list couldn't be loaded. Say you can't look that up right now and offer to pass the question to the project team." }); return; }
       const words = String(data.topic || "").toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2).map(w => w.replace(/(es|s)$/, ""));
       const scored = all.map((c, i) => ({ c, i, n: words.filter(w => (c.change + " " + c.area).toLowerCase().includes(w)).length }));
       const hits = words.length ? scored.filter(x => x.n).sort((a, b) => b.n - a.n || a.i - b.i).slice(0, 8) : scored.slice(0, 8);
       act("step", "get_demo_changes " + (data.topic || "latest") + " (" + hits.length + ")");
       toolReply(callId, { ok: true, first_release: "Oct 18, 2026", total_changes: all.length,
         changes: hits.map(x => ({ date: x.c.date, change: x.c.change })),
-        say: hits.length ? "Answer the question from these in one to three sentences, with the date. They are newest first." : "Nothing in the change log matches. Say so and offer to pass the question to the demo team." });
+        say: hits.length ? "Answer the question from these in one to three sentences, with the date. They are newest first." : "Nothing in the change log matches. Say so and offer to pass the question to the project team." });
     }); return;
   },
   pass_question_to_team(callId, data, name) {
     const q = String(data.question || "").trim();
     if (!q) { toolReply(callId, { ok: false, error: "No question given. Ask the officer what they'd like to pass on." }); return; }
-    act("question", q); logReady().then(on => toolReply(callId, on ? { ok: true, status: "Passed to the demo team. Say so in one short sentence and ask what they'd like to do next." }
-      : { ok: false, error: "The question couldn't be sent from this phone. Say so and suggest they tell the person who shared the demo." })); return;
+    act("question", q); logReady().then(on => toolReply(callId, on ? { ok: true, status: "Passed to the project team. Say so in one short sentence and ask what they'd like to do next." }
+      : { ok: false, error: "The question couldn't be sent from this phone. Say so and suggest they tell the person who shared the proof of concept." })); return;
   },
   close_form(callId, data, name) {
     if (!V) { toolReply(callId, { ok: false, error: "No form is open, so there is nothing to close or clear. Say so in one short sentence." }); return; }
@@ -793,7 +793,7 @@ const TOOL_HANDLERS = {
     if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
     const c = r.contact, v = givingOf(c); S.sel.contact = c.id; go("contact"); whenIdle("instr");
     toolReply(callId, { ok: true, contact: nameOf(c), lifetime: money(v.lifetime), this_year: money(v.ytd), number_of_gifts: v.count,
-      last_gift: v.last ? `${money(v.last.amount)} on ${fmtDate(v.last.date)}${v.last.date.slice(0, 4) !== todayISO().slice(0, 4) ? " " + v.last.date.slice(0, 4) : ""} to ${v.last.fund}` : "none",
+      last_gift: v.last ? `${money(v.last.amount)} on ${fmtDate(v.last.date)} to ${v.last.fund}` : "none",
       open_pledge_balance: v.pledgeLeft ? money(v.pledgeLeft) : "none",
       say: "Say these figures in one or two sentences, e.g. lifetime, then this year, then the last gift and its date. 'This year' means since January 1." }); return;
   },
