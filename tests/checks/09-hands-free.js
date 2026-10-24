@@ -93,7 +93,7 @@ test("Hands-free: a line that stalls without closing (officer talking, nothing h
   await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res, rej) => { if (o && o.signal) o.signal.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError"))); }) : f(u, o); });
   await p.evaluate(() => { window.__ws0 = __ws; G.lastMsg = Date.now() - 7000; G.speechSince = Date.now() - 6000; G.loudAt = Date.now(); });
   await p.waitForTimeout(5500);
-  const out = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), heard: __sent.some(s => s.includes("may have answered while the line was down")) }));
+  const out = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), heard: __sent.some(s => s.includes("may have answered while the line was down") || s.includes("talking while the line was down")) }));
   ok(out.live && out.newLine && /Line stalled \(officer talking/.test(out.log) && out.heard, "the stalled line wasn't reconnected: " + JSON.stringify({ newLine: out.newLine, live: out.live, heard: out.heard }));
 });
 
@@ -115,5 +115,14 @@ test("Hands-free: a new opportunity always asks the campaign when the entity has
   await p.waitForTimeout(200);
   const off = await p.evaluate(() => ({ live: G.live, ending: G.idleEnding, note: __sent.some(s => s.includes("NOT hanging up")), cancel: __sent.slice(-5).some(s => JSON.parse(s).type === "response.cancel") }));
   ok(off.live && !off.ending && off.note && off.cancel, "the officer's late answer didn't call off the hang-up: " + JSON.stringify(off));
+});
+
+test("Hands-free: words said while the line was down make Ara ask for them again, and she doesn't start over", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the agenda" });
+  await p.evaluate(() => { G.spokeInGap = true; window.__ws0 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
+  const line = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || "");
+  ok(/say that again/.test(line) && /never ask \\"what would you like to do\\" while a form is open/.test(line) && /Send Ruth the agenda/.test(line), "the reconnect didn't ask for the missed words or keep the form: " + line.slice(0, 300));
+  ok(await p.evaluate(() => !G.spokeInGap), "the missed-words flag stayed on after the line came back");
 });
 };
