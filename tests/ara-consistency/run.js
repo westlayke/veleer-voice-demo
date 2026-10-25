@@ -74,6 +74,7 @@ async function converse(browser, base, flow, n) {
     await p.tap("text=I'd rather type my name"); await p.fill("#wlName", "Dana"); await p.tap("text=Start"); await p.waitForTimeout(600);
     await p.evaluate(() => {
       window.__acts = []; const real = act; act = function (role, text, sess) { window.__acts.push({ at: Date.now(), role, text: String(text || "") }); return real.apply(this, arguments); };
+      window.__drops = []; const realV = vlog; vlog = function (text) { if (/: dropped |: left out /.test(String(text))) window.__drops.push(String(text)); return realV.apply(this, arguments); }; // the evidence rule's Voice log lines
       S.settings.speed = 1.3; save(); // Ara talks faster (her words are the same), so each conversation costs less line time
       window.__officer = (text) => {
         send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
@@ -123,6 +124,7 @@ async function converse(browser, base, flow, n) {
     await p.evaluate(() => { try { endCall("test done"); } catch (e) {} });
     await p.waitForTimeout(300);
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
+    conv.drops = await p.evaluate(() => window.__drops || []);
     conv.saved = conv.acts.filter(a => a.role === "saved").map(a => ({ text: a.text, at: a.at }));
   } catch (e) { conv.errors.push("run: " + e.message.slice(0, 300)); }
   conv.forced = sentForced;
@@ -208,7 +210,7 @@ function report(convs, extra) {
       if (!firstLogged && c.replies.length) { firstLogged = true; console.log("MILESTONE first-grok-reply: " + JSON.stringify(c.replies[0].text.slice(0, 200))); }
       console.log(`${convs.length}. ${c.flow} #${c.n}: ${c.turns.length} turns, ${(c.lineMs / 1000).toFixed(0)} s, $${c.cost.toFixed(3)}, saved: ${c.saved.map(s => s.text).join(" | ") || "nothing"}${c.errors.length ? ", errors: " + c.errors.slice(0, 2).join("; ") : ""}  [total $${spent().toFixed(3)}]`);
       if (!half.said && spent() >= BUDGET / 2) { half.said = true; console.log(`MILESTONE halfway: ${convs.length} conversations, $${spent().toFixed(3)}`); }
-      console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => { let err = ""; try { err = (JSON.parse(t.out || "{}").error || "").slice(0, 220); } catch (x) {} return [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)].concat(err ? ["ERROR: " + err] : []); }), saved: c.saved.map(s => s.text), leftOut: c.leftOut || [], errors: c.errors.slice(0, 3) }));
+      console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => { let err = ""; try { err = (JSON.parse(t.out || "{}").error || "").slice(0, 220); } catch (x) {} return [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)].concat(err ? ["ERROR: " + err] : []); }), saved: c.saved.map(s => s.text), leftOut: c.leftOut || [], drops: c.drops || [], errors: c.errors.slice(0, 3) }));
       fs.writeFileSync(path.join(OUT, "conversations.json"), JSON.stringify(convs, null, 1));
     }
   }
