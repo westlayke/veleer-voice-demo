@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+  {"date": "2026-10-25", "change": "Preview only, using more of xAI's voice features: a dropped line or Carry on picks up the same conversation on xAI (kept 30 minutes, tool calls included) instead of a summary; the speech recognizer is told to listen for US English and up to 100 key words (contact names, entities, stages); Ara says C.A. as Citizens Alliance and PAC as pack; the hands-free line is spoken word for word by xAI, then Ara carries on (if xAI doesn't play it, Ara says it).", "area": "Voice"},
   {"date": "2026-10-24", "change": "Preview only: on a computer screen the call bar's background band no longer covers the mic at the top of the left menu during a conversation, and in spooky mode the cobwebs sit in the top corners of the page instead of floating in the middle.", "area": "Screens"},
   {"date": "2026-10-24", "change": "Preview only: the rolling pumpkin plays the opening of Bach's Toccata and Fugue in D minor (the first 7 seconds of the recording Carverhill sent) as it crosses the screen. It used to be silent.", "area": "Spooky mode"},
   {"date": "2026-10-24", "change": "Preview only: the owl now hoots with a real owl recording (from tunetank.com) instead of the phone-made hoot, both the owl that comes by in spooky mode and the \"Tap me to hear me hoot!\" owl.", "area": "Spooky mode"},

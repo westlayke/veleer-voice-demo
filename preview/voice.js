@@ -395,6 +395,21 @@ const SPEEDS = [0.85, 1, 1.15, 1.3], SPEED_NAMES = { 0.85: "Slower", 1: "Normal"
 const nearSpeed = (v) => SPEEDS.reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a, 1);
 const talkSpeed = () => nearSpeed(Number(S.settings.speed) || 1);
 // the whole session setup; sent again in full when the speed changes mid-call, so nothing else is reset
+// xAI voice extras (Oct 24): conversation resumption (a dropped line picks up the whole conversation, tool calls included),
+// words for the speech recognizer to listen for, and pronunciation fixes. Each is sent in its own session.update after the
+// main one: xAI keeps the previous settings when it turns one down, so a rejected extra can't cost Ara her instructions.
+const SAY_AS = { "C.A.": "Citizens Alliance", "Fed PAC": "Fed pack", "State PAC": "State pack" };
+const KEY_WORDS = ["Citizens Alliance", "Qualification", "Cultivation", "Ask Planning", "Ask Made", "Commitment", "Closed Won", "Closed Lost", "substantive", "Ally", "Do Not Solicit", "Do Not Contact", "hands-free", "pledge", "Ara", "New Hampshire", "North Dakota", "Pennsylvania", "Idaho"];
+function keyTerms() {
+  const all = [...KEY_WORDS, ...FUNDS, OFFICER, ...S.contacts.map(c => `${c.first} ${c.last}`)].map(w => String(w || "").trim().slice(0, 50)).filter(Boolean);
+  return [...new Set(all)].slice(0, 100);
+}
+const transcriptionCfg = () => ({ language_hint: "en", keyterms: keyTerms() });
+function sendExtras() {
+  send({ type: "session.update", session: { resumption: { enabled: true } } });
+  send({ type: "session.update", session: { replace: SAY_AS } });
+  send({ type: "session.update", session: { audio: Object.assign({}, sessionCfg().audio, { input: Object.assign({}, sessionCfg().audio.input, { transcription: transcriptionCfg() }) }) } });
+}
 const sessionCfg = () => ({ voice: S.settings.voice || "ara", instructions: sentInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
   audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() * (spookyMode() ? 0.9 : 1) } } }); // spooky mode: a touch slower, like a haunted-house host
 const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
@@ -406,7 +421,7 @@ async function startCall(opening) {
   vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
   if (navigator.audioSession) vlog("audio session: " + navigator.audioSession.type);
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
-  if (!G.keepRecent) { G.recent = []; G.saves = []; } G.keepRecent = false;
+  if (!G.keepRecent) { G.recent = []; G.saves = []; G.convId = null; } G.keepRecent = false;
   G.live = true; if (G.keepHands) { G.hands = true; act("step", "hands-free kept on after Carry on"); } G.keepHands = false; { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     G.t0 = Date.now(); G.passReady = !!TOK.p;
@@ -485,7 +500,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.soundPausedAt = 0; G.micMutedAt = 0; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -526,7 +541,7 @@ function voiceCommand(text) {
   const who = botName() + ": "; let say;
   if (cmd === "repeat") { const last = (G.recent || []).filter(l => l.startsWith(who)).slice(-1)[0]; if (!last) return false; say = `The officer asked you to repeat. Say again exactly: "${last.slice(who.length)}"`; }
   else if (cmd === "cancel") { if (!V) return false; const what = cancelForm(); say = `The officer said "cancel". The app closed the ${what} form without saving. Say only "Cancelled, nothing was saved. What would you like to do?"`; }
-  else if (cmd === "hfon" || cmd === "hfoff") { setHandsFree(cmd === "hfon"); say = G.hands ? "The officer turned on hands-free mode. " + hfSwitchLine(true) : "The officer turned off hands-free mode. " + hfSwitchLine(false); }
+  else if (cmd === "hfon" || cmd === "hfoff") { setHandsFree(cmd === "hfon"); say = null; }
   else if (cmd === "undo" && !(V && (V.history || []).length) && G.lastSave && G.lastSave.hf && Date.now() - G.lastSave.at < 5 * 60e3) {
     const what = ACTIONS[G.lastSave.action].saved; S = JSON.parse(G.lastSave.undo); G.lastSave = null; if (G.saves) G.saves.pop(); save(); render(); whenIdle("instr");
     say = `The officer said "undo". The app took back the hands-free save (${what}), so it is no longer saved. Say only "Undone, that's not saved. What would you like to do?"`; }
@@ -536,7 +551,7 @@ function voiceCommand(text) {
   else if (cmd === "back") { if (V) return false; const b = document.querySelector("header.top .back"); if (!b) return false; const where = BACK_NAMES[b.dataset.go] || "the previous screen"; go(b.dataset.go); say = `The officer said "go back". The app is now on ${where}. Say only "Back on ${where}."`; }
   vlog("voice command: " + cmd); act("step", "voice command " + cmd);
   stopPlayback(); if (G.responding) send({ type: "response.cancel" }); G.cmdAt = Date.now(); // drop whatever the model started to do with those words
-  notice(say); return true;
+  if (say === null) hfAnnounce(); else notice(say); return true;
 }
 function notice(text) {
   send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(App notice, not spoken by the officer) " + text }] } });
@@ -598,6 +613,7 @@ function onEvent(e) {
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
   if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript); }
+  if (G.forced) forcedEvent(t, e);
   if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") replyCheck(e.response || {});
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
@@ -611,6 +627,8 @@ function onEvent(e) {
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
+  else if (t === "conversation.created" && e.conversation && e.conversation.id) { if (G.convId !== e.conversation.id) vlog("conversation " + e.conversation.id); G.convId = e.conversation.id; }
+  else if (t === "error" && G.forced && !G.forced.started) { const f = G.forced; G.forced = null; clearTimeout(G.forceTimer); act("step", "Scripted line refused: Ara says it instead"); notice(f.fallback); }
   else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) act("step", "Grok error: " + e.error.message.slice(0, 300)); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) toast("Voice: " + e.error.message); }
   if (t === "conversation.item.added" && e.item && e.item.id) { if (e.item.type !== "function_call") (G.respItems = G.respItems || []).push(e.item.id); if (G.tour && e.item.type !== "function_call" && !G.tourItems.includes(e.item.id)) G.tourItems.push(e.item.id); }
 }

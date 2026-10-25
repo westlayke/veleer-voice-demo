@@ -147,7 +147,7 @@ test("Ara: giving history and screens", async (p) => {
 });
 test("Ara answers what changed in the proof of concept, and passes a question she can't answer to the team", async (p) => {
   await signIn(p);
-  const sent = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update").at(-1).session);
+  const sent = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.tools).at(-1).session);
   ok(sent.tools.some(t => t.name === "get_demo_changes") && sent.tools.some(t => t.name === "pass_question_to_team"), "Ara was not given the demo changes or pass-to-team tools");
   ok(/Shall I pass that to the project team\?/.test(sent.instructions), "Ara is not told to offer passing a question on");
   const c = await ara(p, "get_demo_changes", { topic: "confetti balloons" });

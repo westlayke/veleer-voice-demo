@@ -18,7 +18,7 @@ const server = http.createServer((req, res) => {
 // stand-ins for the voice line and the Cloudflare key holder
 const FAKES = () => {
   window.__sent = [];
-  window.WebSocket = class { constructor() { window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); } close() { this.readyState = 3; } };
+  window.WebSocket = class { constructor(u) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); } close() { this.readyState = 3; } };
   window.__logs = [];
   const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/log/.test(String(u))) { if (o && o.body) window.__logs.push(JSON.parse(o.body)); return Promise.resolve(new Response('{"logging":true}', { status: 200 })); }
     return /workers\.dev/.test(String(u)) ? Promise.resolve(new Response('{"value":"test-pass"}', { status: 200 })) : f(u, o); };

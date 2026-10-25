@@ -20,6 +20,8 @@ const MAX_ASKS = 1;                          // times the app asks Grok again fo
 const TICK_MS = 4000;                        // soft tick while waiting, and the early line test when no reply has started
 const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has started by now (Grok sometimes takes 6 to 10 s)
 const EARLY_PING_MS = 2500;                  // the early line test's limit
+const RESUME_MS = 25 * 60000;               // a line reopened within this long picks up the same conversation on xAI (kept 30 minutes)
+const FORCE_WAIT_MS = 3000;                  // a scripted line that hasn't started by now is said by Ara instead
 const SOUND_BACK_MS = 6000;                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
 
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
@@ -71,7 +73,10 @@ function idleStart() {
 function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; const secs = idleMs() / 1000; endCall(`${secs} seconds of quiet`); toast(`Hung up after ${secs} seconds of quiet. Tap the mic when you need me.`); }
 /* ---------- the voice line: opened at the start, and opened again when it drops (a phone in a car loses signal) ---------- */
 function openSocket(token, first, second) {
-  const ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
+  // a line opened again within 25 minutes picks up the same conversation (xAI keeps it 30 minutes)
+  const resume = G.convId && Date.now() - (G.convAt || 0) < RESUME_MS ? G.convId : null;
+  const ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest" + (resume ? "&conversation_id=" + encodeURIComponent(resume) : ""), ["xai-client-secret." + token]);
+  ws.resumed = resume;
   if (second) G.tries.add(ws); else { G.ws = ws; G.tries = new Set([ws]); }
   const t0 = Date.now();
   if (G.drops && !second) {
@@ -86,20 +91,22 @@ function openSocket(token, first, second) {
   ws.onopen = () => {
     if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws;
-    send({ type: "session.update", session: sessionCfg() }); notice(first);
+    send({ type: "session.update", session: sessionCfg() }); sendExtras(); notice(first);
+    if (ws.resumed) netLog("Picked up the same conversation");
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     netLog(`Voice line open in ${Date.now() - t0} ms${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops} of ${MAX_DROPS})` : ""}`);
     if (G.drops) setTimeout(prefetchToken, 2000); // the ready pass was used: have the next one ready for another drop (seen Oct 24: 7 s to fetch one)
     clearInterval(G.netTick); G.netTick = setInterval(() => { if (G.live && G.ws === ws) netLog("Reading"); }, 30000);
   };
-  ws.onmessage = (m) => { if (G.ws !== ws) return; G.lastMsg = Date.now(); let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
+  ws.onmessage = (m) => { if (G.ws !== ws) return; G.lastMsg = G.convAt = Date.now(); let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
   ws.onclose = (ev) => {
     if (G.ws !== ws || !G.live) return;
     vlog("connection closed " + (ev && ev.code));
     const opened = !!G.lastMsg && G.status !== "Connecting…";
     netLog(`Voice line closed (code ${ev && ev.code}${ev && ev.reason ? ", " + String(ev.reason).slice(0, 120) : ""})${opened ? "" : " before it opened"}`);
     if (document.visibilityState === "hidden") { interrupted("connection closed while away"); return; }
+    if (!opened && ws.resumed) { G.convId = null; act("step", "Couldn't pick up the same conversation: opening a new one"); reconnect("the conversation couldn't be picked up"); return; }
     if (!opened && !G.drops) { endCall("couldn't connect"); toast("Couldn't connect to Grok voice. Try again in a moment."); return; }
     reconnect("the voice line dropped");
   };
@@ -213,4 +220,21 @@ function micMuted(tr) {
     if (!tr.muted) { clearInterval(tick); const s = ((Date.now() - G.micMutedAt) / 1000).toFixed(1); G.micMutedAt = 0; act("step", "Mic muted by the phone for " + s + " s, then came back"); return; }
     if (Date.now() - G.micMutedAt > SOUND_BACK_MS) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back"); }
   }, 500);
+}
+
+/* ---------- scripted lines: xAI speaks the exact words (force_message), then Ara carries on ---------- */
+// Used where the words matter and Ara used to stop or change them (Oct 24: "Say only ..." left her silent mid-form).
+// If xAI doesn't play it, Ara is asked to say it instead (fallback), so the officer always hears it.
+function forceSay(text, then, fallback, waited = 0) {
+  if (!G.live) return;
+  if (G.responding && waited < 6000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
+  G.forced = { text, then, fallback, started: false };
+  send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
+  vlog("scripted line: " + text);
+  clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; act("step", "Scripted line didn't play: Ara says it instead"); notice(f.fallback); } }, FORCE_WAIT_MS);
+}
+function forcedEvent(t) {
+  const f = G.forced;
+  if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); }
+  else if (t === "response.done" && f.started) { G.forced = null; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => notice(f.then), 0); }
 }

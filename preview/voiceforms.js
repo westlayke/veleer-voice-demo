@@ -113,7 +113,7 @@ function nextAsk(r, closed, hint) {
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (!a) return;
   if (a.dataset.act3 === "end") endCall("officer tapped End");
   else if (a.dataset.act3 === "hands") { setHandsFree(!G.hands);
-    notice(G.hands ? "The officer tapped Hands-free, so hands-free mode is on. " + hfSwitchLine(true) : "The officer tapped to turn hands-free mode off. " + hfSwitchLine(false)); } });
+    hfAnnounce(); } });
 // Hands-free (driving) mode: Ara saves a finished form after reading it back and hearing the officer's own yes. It lasts until the call ends.
 const CAR = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14v-5l-2-5H7l-2 5z"/><path d="M5 12h14"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>';
 const HF_MONEY = ["pledge", "gift", "payment"];
@@ -126,6 +126,12 @@ function hfSwitchLine(on) {
   const q = [...(G.recent || [])].reverse().find(l => !l.startsWith("Officer: ") && !l.startsWith("App: ") && /\?$/.test(l.trim()));
   const go = V && ACTIONS[V.action] ? ` Then, without waiting, carry on with the ${ACTIONS[V.action].title} form: ask the question it still needs${q ? ` (you last asked: "${q.replace(/^[^:]+: /, "")}")` : ""}.` : " Then ask what they'd like to do.";
   return (on ? `Say "Hands-free is on. I'll read back all the information on the form and save it when you say yes."` : `Say "Hands-free is off. You'll tap Save yourself again."`) + go;
+}
+// the hands-free line, word for word, then Ara goes on with the form
+function hfAnnounce() {
+  const on = G.hands, text = on ? "Hands-free is on. I'll read back all the information on the form and save it when you say yes." : "Hands-free is off. You'll tap Save yourself again.";
+  const go = hfSwitchLine(on).replace(/^Say "[^"]*"\.?\s*Then,?\s*/, "");
+  forceSay(text, `The app just said "${text}" in your voice; don't say it again. Now ${go.charAt(0).toLowerCase() + go.slice(1)}`, hfSwitchLine(on));
 }
 function setHandsFree(on) {
   G.hands = !!on && G.live; G.saveCheck = null; act("step", "hands-free " + (G.hands ? "on" : "off")); vlog("hands-free " + (G.hands ? "on" : "off"));

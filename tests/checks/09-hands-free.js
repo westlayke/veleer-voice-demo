@@ -212,8 +212,20 @@ test("Turning on hands-free mid-form: Ara says she'll read back all the informat
   await signIn(p);
   await ara(p, "show_contact_draft", {});
   await p.evaluate(() => recent("Ara", "Mind the cobwebs. What's the first name?"));
-  const r = await ara(p, "set_hands_free", { on: true });
-  ok(/read back all the information on the form/.test(r.say) && /carry on with the New contact form/.test(r.say) && /What's the first name\?/.test(r.say) && !/Say only/.test(r.say), "the hands-free line doesn't carry on with the form: " + r.say);
+  await ara(p, "set_hands_free", { on: true }); await p.waitForTimeout(300);
+  const forced = await p.evaluate(() => __sent.map(x => JSON.parse(x)).filter(x => x.item && x.item.type === "force_message").pop());
+  ok(forced && /read back all the information on the form/.test(forced.item.content[0].text), "the hands-free line wasn't sent word for word: " + JSON.stringify(forced));
+  await p.evaluate(() => [{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) }))); await p.waitForTimeout(300);
+  const next = await p.evaluate(() => __sent.filter(x => x.includes("The app just said")).pop() || "");
+  ok(/carry on with the New contact form/.test(next) && /What's the first name\?/.test(next) && !/Say only/.test(next), "after the line Ara wasn't told to carry on with the form: " + next.slice(0, 300));
+  // if xAI doesn't play a scripted line, Ara is asked to say it
+  await p.evaluate(() => forceSay("Test line.", "", "FALLBACK please say Test line.")); await p.waitForTimeout(3400);
+  ok(await p.evaluate(() => __sent.some(x => x.includes("FALLBACK please say Test line."))), "a scripted line that didn't play had no fallback");
+  // xAI extras: resumption, words to listen for, pronunciation fixes; a dropped line picks up the same conversation
+  const ups = await p.evaluate(() => __sent.map(x => JSON.parse(x)).filter(x => x.type === "session.update").map(x => x.session));
+  ok(ups.some(u => u.resumption && u.resumption.enabled) && ups.some(u => u.replace && u.replace["C.A."]) && ups.some(u => u.audio && u.audio.input.transcription && u.audio.input.transcription.keyterms.includes("Ruth Abernathy") && u.audio.input.transcription.keyterms.length <= 100) && ups[0].instructions, "the xAI extras weren't sent after the main settings");
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "conversation.created", conversation: { id: "conv_test1" } }) }); G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => /conversation_id=conv_test1/.test(__wsUrls[__wsUrls.length - 1])), "the reopened line didn't ask for the same conversation: " + await p.evaluate(() => __wsUrls.join(" ")));
   // a mic muted for a moment doesn't end the call
   const kept = await p.evaluate(async () => { const tr = { muted: true }; G.stream = { getAudioTracks: () => [tr], getTracks: () => [] }; micMuted(tr); await new Promise(r => setTimeout(r, 700)); tr.muted = false; await new Promise(r => setTimeout(r, 700)); return G.live && !G.micMutedAt; });
   ok(kept, "a short mic mute ended the call");

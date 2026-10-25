@@ -61,7 +61,7 @@ const TOOL_HANDLERS = {
   },
   set_hands_free(callId, data, name) {
     setHandsFree(!!data.on);
-    toolReply(callId, { ok: true, hands_free: G.hands, say: G.hands ? hfSwitchLine(true) : hfSwitchLine(false) }); return;
+    toolReply(callId, { ok: true, hands_free: G.hands, status: "The app now says the confirmation line itself, word for word, then tells you what's next. Don't say anything yet." }, false); hfAnnounce(); return;
   },
   optional_fields(callId, data, name) { optStep(callId, data); return; },
   set_spooky_mode(callId, data, name) {
