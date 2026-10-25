@@ -107,7 +107,7 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
 
 test("A $0 amount from the voice model counts as missing: the form shows it blank, Ara is told, and Save asks for it", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  await said(p, "Plan an ask for Ruth.");
+  await said(p, "Plan an ask for Ruth, the C3, December first.");
   const r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "National", plannedDate: "2026-12-01", amount: 0 });
   ok((r.still_needed || []).some(x => /^Amount/.test(x)), "a $0 amount was not asked for: " + JSON.stringify(r).slice(0, 300));
   ok(/amount of \$0/.test(JSON.stringify(r)), "Ara wasn't told the $0 was left out: " + JSON.stringify(r).slice(0, 300));
@@ -116,6 +116,26 @@ test("A $0 amount from the voice model counts as missing: the form shows it blan
   ok((await p.isVisible("#draftErr")) && /Amount/.test(await p.textContent("#draftErr")), "Save accepted a $0 amount");
   await p.fill("#f_amount", "25000"); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).opps.some(o => o.asks && o.asks.some(a => a.amount === 25000)), "the real amount did not save");
+});
+
+test("Evidence rule: a value the officer never said is left off the form and named to Ara (meeting type, amount, entity, payment method), said values stay", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await said(p, "Log an interaction with Ruth. I met her for lunch today and we talked about the Idaho campaign.");
+  let r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", meetingType: "Phone call", date: new Date().toISOString().slice(0, 10), summary: "Lunch, talked about the Idaho campaign." });
+  ok((await p.inputValue("#f_meetingType")) === "", "a meeting type the officer never gave stayed on the form: " + (await p.inputValue("#f_meetingType")));
+  ok(/type/.test(JSON.stringify(r)) && /Left out/.test(JSON.stringify(r)), "Ara wasn't told the meeting type was left out: " + JSON.stringify(r).slice(0, 300));
+  ok((await p.inputValue("#f_summary")).length > 5, "the summary (free text) was wrongly dropped");
+  await said(p, "It was in person."); r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", meetingType: "In person" });
+  ok((await p.inputValue("#f_meetingType")) === "In person", "a meeting type the officer gave was not kept");
+  await p.tap("[data-act=cancel]").catch(() => {}); await p.waitForTimeout(300);
+  await said(p, "Plan an ask for Ruth, the Idaho C4, ten thousand dollars, in December.");
+  r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "C.A. Idaho PAC", amount: 25000, plannedDate: "2026-12-01" });
+  ok((await p.inputValue("#f_amount")) === "", "an amount the officer never said stayed on the form: " + (await p.inputValue("#f_amount")));
+  ok((await p.inputValue("#f_fund")) !== "C.A. Idaho PAC", "an entity the officer never named stayed on the form: " + (await p.inputValue("#f_fund"))); // the opportunity's own entity fills in instead
+  ok(/amount asked \(ask for it\)/.test(JSON.stringify(r)) || /amount \(ask for it\)/.test(JSON.stringify(r)), "Ara wasn't told the amount was left out: " + JSON.stringify(r).slice(0, 400));
+  r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "C.A. Idaho C4", amount: 10000, plannedDate: "2026-12-01" });
+  ok((await p.inputValue("#f_amount")) !== "" && (await p.inputValue("#f_fund")) === "C.A. Idaho C4", "the amount and entity the officer said were not kept: " + JSON.stringify(r).slice(0, 300));
+  ok((await p.inputValue("#f_plannedDate")) === "2026-12-01", "a date the officer gave (December) was not kept");
 });
 
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {

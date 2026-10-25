@@ -78,6 +78,7 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
 test("Hands-free: a drop right after a save tells Ara it went through, and saving again just says it's saved", async (p) => {
   await signIn(p);
   await said(p, "I'm driving"); await p.waitForTimeout(900);
+  await said(p, "Add a task for Ruth: send her the agenda, due November 30.");
   await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the agenda", due: "2026-11-30" });
   await ara(p, "save_form", { confirmed: false });
   await said(p, "Yes."); const r = await ara(p, "save_form", { confirmed: true });
@@ -102,6 +103,7 @@ test("Hands-free: a new opportunity always asks the campaign when the entity has
   await said(p, "I'm driving"); await p.waitForTimeout(900);
   ok(await p.evaluate(() => idleMs() === 30000), "hands-free doesn't wait 30 seconds before the quiet hang-up");
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = c.capacity || "C"; save(); });
+  await said(p, "Create an opportunity for James, the Idaho C4.");
   const r = await ara(p, "show_opportunity_draft", { contact_name: "James Okafor", fund: "C.A. Idaho C4" });
   ok((r.still_needed || []).some(x => /Campaign of interest/.test(x) && /National or Idaho/.test(x)), "the campaign wasn't asked for: " + JSON.stringify(r));
   const s1 = await ara(p, "save_form", { confirmed: false });
@@ -186,6 +188,7 @@ test("Oct 24 call fixes: email spelling, substantive asked and read back, edits 
   await p.evaluate(() => { G.hands = false; });
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok(await p.isVisible("#draftErr"), "the edit saved substantive without a next step");
+  await said(p, "Next step: send the New Hampshire plan, due November 5.");
   await ara(p, "show_interaction_edit_draft", { contact_name: "Pat Moss", substantive: true, nextStep: "Send the New Hampshire plan", nextDue: "2026-11-05" });
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   const st = await state(p);
@@ -246,6 +249,7 @@ test("Turning on hands-free mid-form: Ara says she'll read back all the informat
 test("Hands-free: an interaction report is never read back without the substantive answer, and a due date today is said as today", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await said(p, "I'm driving"); await p.waitForTimeout(900);
+  await said(p, "Log an interaction with Ruth, I met her at the Halloween party yesterday.");
   let r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", date: "2026-10-24", meetingType: "Event", summary: "Met Ruth at the Halloween party." });
   ok(/substantive interaction/i.test(r.ask_exactly || "") && !r.read_back, "the finished report was read back before the substantive question: " + JSON.stringify(r));
   await p.evaluate(() => { V.askedSubst = false; }); // as if Ara had skipped the question (Oct 25)
