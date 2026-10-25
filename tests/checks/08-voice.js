@@ -7,19 +7,24 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   ok(r.still_needed && r.still_needed.some(x => /Email or mobile/.test(x)), "Ara was not asked for an email or mobile");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(/mobile number/.test(r.status), "Ara was not asked for the mobile too");
+  // the rating an opportunity will need is asked right away, by the app's own line (Carverhill, Oct 25); then the rest of the details are offered
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
-  ok(/add more details\? I can take you through them one at a time/.test(r.status), "Ara was not told to offer the optional fields one at a time");
+  ok(r.field === "capacity" && /Maya's capacity rating, which an opportunity needs/.test(r.ask_exactly || ""), "the rating wasn't asked for after the email: " + JSON.stringify(r));
   ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
   await said(p, "C.");
+  r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C" });
+  ok(/add more details\? I can take you through them one at a time/.test(r.ask_exactly || ""), "the optional fields weren't offered after the rating: " + JSON.stringify(r));
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
-  ok(/tap/.test(r.status) && !/more details/.test(r.status), "a question repeated");
+  ok(/tap/.test(r.status) && !/more details/.test(r.status) && !r.ask_exactly, "a question repeated: " + JSON.stringify(r));
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Maya").capacity === "C", "the rating was not saved with the contact");
 });
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });
-  ok(/one at a time/.test(r.status), "Ara was not told to offer the optional fields one at a time");
+  ok(r.field === "capacity" && /which an opportunity needs/.test(r.ask_exactly || ""), "the rating wasn't asked first: " + JSON.stringify(r));
+  r = await ara(p, "optional_fields", { step: "skip" });
+  ok(/No problem\. Would you like to add more details\? I can take you through them one at a time/.test(r.ask_exactly || ""), "skipping the rating didn't lead to the offer: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "start" });
   ok(r.field === "capacity" && /Capacity rating first/.test(r.ask_exactly) && /under \$5,000/.test(r.ask_exactly), "the first question wasn't the capacity rating with its bands");
   r = await ara(p, "optional_fields", { step: "answer", value: "D" });
@@ -85,8 +90,12 @@ test("Ara: setting a capacity rating asks first, then saves", async (p) => {
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   const c0 = (await state(p)).contacts.find(c => c.first === "Omar"), name = "Omar Reyes";
   ok(c0 && !c0.capacity, "test contact not added unrated");
+  // a rating the officer never mentioned is not proposed: the app asks them for it (Oct 25: Ara invented an A)
+  const none = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: false });
+  ok(!none.saved && /What's Omar's capacity rating\? A is \$250,000 and up/.test(none.ask_exactly || "") && !(await state(p)).contacts.find(c => c.id === c0.id).capacity, "a rating the officer never said wasn't asked for: " + JSON.stringify(none));
+  await said(p, "Let's make him a D.");
   const ask = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: false });
-  ok(/Rate/.test(ask.say) && !(await state(p)).contacts.find(c => c.id === c0.id).capacity, "saved before yes");
+  ok(/Rate/.test(ask.say) && !(await state(p)).contacts.find(c => c.id === c0.id).capacity, "saved before yes: " + JSON.stringify(ask));
   const yes = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: true });
   ok(yes.saved && (await state(p)).contacts.find(c => c.id === c0.id).capacity === "D", "not saved after yes");
 });
@@ -96,7 +105,7 @@ test("Ara: an interaction report keeps the spoken summary (new contact)", async 
   for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   let r = await ara(p, "show_interaction_draft", { contact_name: "Jenny Arena", date: "2026-10-20", meetingType: "In person" });
-  ok(/summary parameter/.test(r.status), "Ara was not told where the summary goes");
+  ok(/summary parameter/.test(r.status), "Ara was not told where the summary goes: " + JSON.stringify(r));
   r = await ara(p, "show_interaction_draft", { contact_name: "Jenny Arena", date: "2026-10-20", meetingType: "In person", notes: "Met Jenny for coffee; she is keen on the Pennsylvania program.", substantive: true });
   const v = await p.inputValue("#f_summary");
   ok(/coffee/.test(v), "the spoken summary is not in the Summary field");
@@ -369,5 +378,38 @@ test("Ara: her instructions list the entities by state, so she can't invent one"
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 });
   const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.session && e.session.instructions).map(e => e.session.instructions).at(-1));
   ok(/Pennsylvania: C\.A\. Pennsylvania C4, C\.A\. Pennsylvania State PAC[;.]/.test(instr) && /Never name any other/.test(instr), "the entities by state aren't in Ara's instructions");
+});
+
+test("Ara: an entity comes from the state the officer names, a rating is never invented, and the Cultivation decision is explained", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = c.capacity || "C"; save(); });
+  // one entity in that state: filled in; several: exactly those are named
+  await said(p, "Let's pick the New Hampshire entity.");
+  let r = await ara(p, "show_opportunity_draft", { contact_name: "James Okafor" });
+  ok((await p.inputValue("#f_fund")) === "C.A. New Hampshire C4", "the New Hampshire entity wasn't filled in from the state: " + JSON.stringify(r));
+  await said(p, "Cancel."); await p.waitForTimeout(900);
+  await said(p, "The North Dakota entity.");
+  r = await ara(p, "show_opportunity_draft", { contact_name: "James Okafor" });
+  ok(/named North Dakota, which has exactly these entities: C\.A\. North Dakota C4, C\.A\. North Dakota State PAC, C\.A\. North Dakota Fed PAC\. Ask which one of those, and name no other/.test(r.status || ""), "the North Dakota entities weren't listed exactly: " + JSON.stringify(r));
+  await said(p, "Cancel."); await p.waitForTimeout(900);
+  // a rating the officer never said is asked for, not proposed
+  await said(p, "Let's take the next step.");
+  r = await ara(p, "set_capacity_rating", { contact_name: "Ruth Abernathy", rating: "A", confirmed: false });
+  ok(r.ok === false && /What's Ruth's capacity rating\? A is \$250,000 and up/.test(r.ask_exactly || ""), "an invented rating wasn't turned into the question: " + JSON.stringify(r));
+  await said(p, "Let's do C.");
+  r = await ara(p, "set_capacity_rating", { contact_name: "Ruth Abernathy", rating: "C", confirmed: false });
+  ok(r.ok && /Rate Ruth C/.test(r.say || ""), "a rating the officer did say was refused: " + JSON.stringify(r));
+  // the Cultivation read-back opens with what the decision means
+  await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = "C"; S.opps.unshift({ id: "o_cult", contactId: c.id, name: "Okafor, James - 2026", stage: "Qualification", asks: [], fund: "C.A. Idaho C4", campaign: "Idaho", officer: OFFICER, participants: "", createdOn: todayISO() }); S.interactions.unshift({ id: "i_cult", contactId: c.id, date: todayISO(), type: "In person", summary: "Good talk.", substantive: true, kind: "interaction" }); save(); });
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
+  ok(/^Moving James to Cultivation means you, as the gift officer, believe they're ready to be pursued for a gift\. Move to Cultivation\? for James Okafor/.test(r.read_back || ""), "the Cultivation read-back doesn't explain the decision: " + JSON.stringify(r));
+});
+test("Ara: guidance sent while a scripted line is pending tells her not to say that line herself", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { G.responding = true; forceSay("A scripted line."); guide("Answer the officer."); G.responding = false; flushQueued(); });
+  await p.waitForTimeout(300);
+  const g = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && e.response.instructions).map(e => e.response.instructions).pop() || "");
+  ok(/don't say it or anything like it: "A scripted line\."/.test(g), "the guidance doesn't mention the pending scripted line: " + g);
 });
 };

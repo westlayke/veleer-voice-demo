@@ -8,7 +8,7 @@ function officerSubstantive() { const t = ((G.recent || []).filter(l => l.starts
 const OPT_OFFER = `The required details are in. Before anything else, ask exactly this: "Would you like to add more details? I can take you through them one at a time." If yes, call optional_fields with step start. If no, ask them to check the draft and tap the button.`;
 const OPT_STEPS = {
   contact: [
-    { k: "capacity", q: (who) => `Capacity rating first. A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000. Which fits ${who}, or shall we skip it?` },
+    { k: "capacity", q: (who, next) => `${next ? `Next, ${who}'s capacity rating, which an opportunity needs.` : "Capacity rating first."} A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000. Which fits ${who}, or shall we skip it?` },
     { k: "howMet", q: (who) => `How did you meet ${who}?` },
     { k: "permText", when: (d) => !!String(d.mobile || "").trim(), q: (who) => `Is it OK to text ${who} on their mobile?` },
     { k: "permSource", when: (d) => !!d.permText, q: (who) => `How did ${who} agree to texts?` },
@@ -41,9 +41,17 @@ function optParse(k, raw) { // the officer's answer in their words -> the field'
   if (k === "potential") return spokenAmount(t);
   return t || null; // how we met, texting source, notes: their words
 }
+// "Would you like to add more details?": the app's own line (Oct 25: asked for the fields an opportunity needs first, then this)
+function offerMore(callId, said) {
+  const A = ACTIONS[V.action]; V.askedOptional = true;
+  toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: `${said ? said + " " : ""}Would you like to add more details? I can take you through them one at a time.`,
+    next: `If yes, call optional_fields with step start. If no, ${G.hands && V.action !== "meeting" ? "call save_form with confirmed false" : `ask them to check the draft and tap "${A.saveLabel}"`}.` });
+}
 function optAsk(callId, said) { // the app itself says what it heard and the next question, word for word (Oct 24: Ara read its guidance aloud); or wrap up
-  const st = optNext(), A = ACTIONS[V.action];
-  if (st) { V.opt.cur = st.k; toolReply(callId, { ok: true, field: st.k, ask_exactly: `${said ? said + " " : ""}${st.q(optWho())}`, next: "After the officer answers, call optional_fields with step answer and their words as value (or step skip, back or stop)." }); return; }
+  const A = ACTIONS[V.action];
+  if (V.opt && V.opt.only && (V.opt.done.includes(V.opt.only) || !optEmpty(readDraft()[V.opt.only]))) { V.opt = null; offerMore(callId, said); return; } // just the one field that the next step needs, then the offer
+  const st = optNext();
+  if (st) { V.opt.cur = st.k; toolReply(callId, { ok: true, field: st.k, ask_exactly: `${said ? said + " " : ""}${st.q(optWho(), V.opt.only === st.k)}`, next: "After the officer answers, call optional_fields with step answer and their words as value (or step skip, back or stop)." }); return; }
   V.opt = null;
   if (G.hands && V.action !== "meeting") { hfSave(callId, { confirmed: false }, said); return; } // the app reads the finished draft back itself
   toolReply(callId, { ok: true, done: true, button: A.saveLabel, status: `${said ? `Start with "${said}" ` : ""}That was the last optional field. In one short sentence say the details are in, then ask them to check the draft and tap "${A.saveLabel}".` });
@@ -51,7 +59,7 @@ function optAsk(callId, said) { // the app itself says what it heard and the nex
 function optStep(callId, data) {
   if (!V || !OPT_STEPS[V.action]) { toolReply(callId, { ok: false, error: "No new contact or new opportunity form is open." }); return; }
   const step = data.step || "answer";
-  if (step === "start" || !V.opt) { V.opt = V.opt || { done: [] }; if (step === "start" || !V.opt.cur) { optAsk(callId); return; } }
+  if (step === "start" || !V.opt) { V.opt = { done: V.opt ? V.opt.done : [] }; if (step === "start" || !V.opt.cur) { optAsk(callId); return; } } // start: all the questions, not just the one
   if (step === "stop") { V.opt.done = (OPT_STEPS[V.action] || []).map(s => s.k); optAsk(callId, "No more questions, then."); return; }
   if (step === "back") { // "let's go back and set the entity": that question again, or its answer if they gave one
     const steps = OPT_STEPS[V.action], f = String(data.field || data.value || "").toLowerCase();
@@ -102,7 +110,7 @@ function grokSaved(action, r, d = {}) {
 // a tapped save Ara talked past (Oct 24: the officer said "uh, yes" right after tapping, and Ara answered "go ahead and tap it"):
 // if her first reply after the save doesn't mention it, tell her again, once
 function saveAckCheck(text) {
-  const a = G.saveAck; if (!a || Date.now() - a.at < 300) return; G.saveAck = null;
+  const a = G.saveAck; if (!a || Date.now() - a.at < 300) return; if (text === G.lastForcedText) return; /* the app's own scripted line, not Ara's reply */ G.saveAck = null;
   if (/\b(sav\w*|see|saw|got it|done|recorded|logged|on record|updated|changed|nice|great|congrat\w*|well done)\b/i.test(text) && !/\b(tap|press)\b.*\bsave\b/i.test(text)) return;
   act("step", "Ara missed the tapped save: told her again"); vlog("Ara missed the tapped save: told her again");
   guide(`Correction: the officer already tapped ${ACTIONS[a.action].saveLabel} and it IS saved (${ACTIONS[a.action].saved.toLowerCase()}${a.who ? " for " + a.who : ""}). Don't ask them to tap it. Say in a few words that you see it's saved, then ${a.next}`);
@@ -148,6 +156,8 @@ function setHandsFree(on) {
 // what Ara reads back before saving: the form, who it's for, and each filled-in field (long text cut short)
 function hfReadback() {
   const A = ACTIONS[V.action], d = readDraft(), who = V.target && V.target.contact ? nameOf(V.target.contact) : "";
+  // the Cultivation decision gets its meaning first (Carverhill, Oct 25)
+  const lead = V.action === "cultivate" && d.decision !== "Defer" && who ? `Moving ${who.split(" ")[0]} to Cultivation means you, as the gift officer, believe they're ready to be pursued for a gift. ` : "";
   const parts = A.fields.filter(f => !f.fixed).map(f => { const v = d[f.k];
     if (v === null || v === undefined || v === "") return "";
     if (f.k === "substantive") return `Substantive: ${v ? "yes" : "no"}`; // always said: it decides whether the opportunity can move on
@@ -155,7 +165,7 @@ function hfReadback() {
     if (f.type === "area") return `${f.label}: noted`; // long text is on the form; reading it out made the read-back about 13 s (Oct 24)
     let x = f.type === "money" ? money(v) : f.type === "date" ? dateSaid(v).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1") : String(v); const w = x.split(/\s+/); if (w.length > 14) x = w.slice(0, 14).join(" ") + "…";
     return `${f.label}: ${x}`; }).filter(Boolean);
-  return `${A.title}${who ? " for " + who : ""}.${parts.length ? " " + parts.join("; ") + "." : ""}`;
+  return `${lead}${A.title}${who ? " for " + who : ""}.${parts.length ? " " + parts.join("; ") + "." : ""}`;
 }
 // the officer's next words after Ara's question (the transcript can land a moment after her tool call)
 function hfHeardAfter(n, ms = 2500) { return new Promise(res => { const t0 = Date.now(); (function poll() { if ((G.heardN || 0) > n) return res(G.lastHeard); if (Date.now() - t0 > ms) return res(null); setTimeout(poll, 100); })(); }); }

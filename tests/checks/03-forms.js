@@ -116,7 +116,7 @@ test("New contact and new opportunity forms show every field, and Ara offers the
   const ready = "Ana Ruiz";
   let r = await ara(p, "show_opportunity_draft", { contact_name: ready });
   ok(!(await p.isVisible("details.more")) && (await p.isVisible("#f_potential")) && (await p.isVisible("#f_notes")), "the new opportunity form still hides fields under More details");
-  ok(/one at a time/.test(r.status), "Ara was not told to offer the opportunity's optional fields");
+  ok(/one at a time/.test(r.ask_exactly || r.status || ""), "the opportunity's optional fields weren't offered: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "start" });
   ok(r.field === "fund", "the opportunity's first optional question wasn't the entity");
   r = await ara(p, "optional_fields", { step: "answer", value: "Citizens Alliance C3" });

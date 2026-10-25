@@ -149,7 +149,7 @@ test("Oct 24 call fixes: email spelling, substantive asked and read back, edits 
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   // optional questions: an entity answer while the amount is asked goes to the entity, back works, no read-back mid-way
   let r = await ara(p, "show_opportunity_draft", { contact_name: "Pat Moss" });
-  ok(/one at a time/.test(r.status || ""), "the opportunity draft didn't open: " + JSON.stringify(r) + JSON.stringify((await state(p)).contacts.filter(c => c.first === "Pat")));
+  ok(/one at a time/.test(r.ask_exactly || r.status || ""), "the opportunity draft didn't open: " + JSON.stringify(r) + JSON.stringify((await state(p)).contacts.filter(c => c.first === "Pat")));
   r = await ara(p, "optional_fields", { step: "start" });
   ok(r.field === "fund" && /entity/.test(r.ask_exactly) && !/ask exactly/i.test(r.ask_exactly), "the question isn't on its own: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "skip" });
@@ -223,7 +223,7 @@ test("Turning on hands-free mid-form: Ara says she'll read back all the informat
   await p.waitForTimeout(2000);
   ok(await p.evaluate(() => __sent.some(x => x.includes("FALLBACK please say Test line."))), "a scripted line that didn't play had no fallback");
   const tell = (n) => p.evaluate((n) => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Test line here " }, { type: "response.output_audio_transcript.delta", delta: "please." }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) }));
-    if (n === 1) __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); }, n);
+    if (n === 1) { G.audioSamples = 30000; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); } }, n); // the first telling had over half a second of sound, so it was heard
   const n0 = await p.evaluate(() => __sent.length);
   await tell(1); await p.waitForTimeout(100);
   ok(!(await p.evaluate((n) => __sent.slice(n).some(x => JSON.parse(x).type === "response.cancel"), n0)), "the first telling of the line was cut");
