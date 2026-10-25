@@ -75,8 +75,17 @@ function grokSaved(action, r, d = {}) {
   (G.saves = G.saves || []).push(line); G.savedAt = Date.now(); G.savedLine = line; recent("App", "Saved: " + line); // a reconnect after this must not save it again
   const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? (hasOpp.stage === "Qualification" ? "for example move the opportunity to Cultivation if it's ready, or log another meeting" : hasOpp.stage === "Cultivation" ? "for example plan an ask or log another meeting" : "for example add a task or log another meeting") : "for example create an opportunity or log another meeting") : "";
   whenIdle("instr");
-  if (G.hfTry) { G.hfTry.say = `Saved: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Say"} in a few words that it's saved, then say "Say undo if that's wrong." and ask what they'd like to do next, or whether to stop here.`; return; }
-  notice(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see that's saved: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who.split(" ")[0] : ""}."), even if the officer has started talking; then ask what they'd like to do next${hint ? " (" + hint + ")" : ""}, or whether to stop here for today.`);
+  if (G.hfTry) { const undo = !G.undoSaid; G.undoSaid = true; // the undo reminder once per conversation: every save repeating it got tiresome (Oct 24)
+    G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Say"} in a few words that it's saved (for example "${savedShort(action, who)}")${undo ? `, then "Say undo if that's wrong."` : ""}, then ${nextAsk(r, closed)}`; return; }
+  notice(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see ${savedShort(action, who).replace(/\.$/, "").toLowerCase()}."), even if the officer has started talking; then ${nextAsk(r, closed, hint)}`);
+}
+// "Planned ask saved for Jen." (the item's name once, not "Saved: Planned ask saved")
+const savedShort = (action, who) => `${ACTIONS[action].saved}${who ? " for " + who.split(" ")[0] : ""}.`;
+// after a save, offer the contact's one next step (the same one the record's Next: line shows), or just ask what's next
+function nextAsk(r, closed, hint) {
+  const c = r && r.contact, n = !closed && c && typeof journeyNext === "function" ? journeyNext(c) : null;
+  if (n && n.line && !/^(nothing|deferred)/.test(n.line)) return `offer that next step in your own words, for example "Next is to ${n.line}. Want to do that now?" (one short question, nothing about stopping).`;
+  return `ask what's next in a few words, for example "What's next?"${hint ? " (if they're unsure: " + hint + ")" : ""} (one short question, nothing about stopping).`;
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (!a) return;
   if (a.dataset.act3 === "end") endCall("officer tapped End");
@@ -132,7 +141,7 @@ async function hfSave(callId, data) {
     toolReply(callId, { ok: false, saved: false, error: `Not saved. ${r.msg || (el && el.textContent) || "The form isn't complete."} Ask for what's missing in one short question, update the draft, then read it back again.` }); return; }
   S.history.slice(0, S.history.length - before).forEach(x => { x.hf = true; }); save(); render(); paintCall();
   act("step", "hands-free save: " + A.saved);
-  toolReply(callId, { ok: true, saved: true, say: r.say || `Say it's saved, then "Say undo if that's wrong."` });
+  toolReply(callId, { ok: true, saved: true, say: r.say || `Say in a few words that it's saved, then ask "What's next?"` });
 }
 // hands-free saves wait in Needs attention until the officer has looked at them
 const hfUnchecked = () => S.history.filter(x => x.hf && !x.hfChecked);

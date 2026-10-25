@@ -125,4 +125,17 @@ test("Hands-free: words said while the line was down make Ara ask for them again
   ok(/say that again/.test(line) && /never ask \\"what would you like to do\\" while a form is open/.test(line) && /Send Ruth the agenda/.test(line), "the reconnect didn't ask for the missed words or keep the form: " + line.slice(0, 300));
   ok(await p.evaluate(() => !G.spokeInGap), "the missed-words flag stayed on after the line came back");
 });
+
+test("Hands-free: after a save Ara says the undo line once per call, never 'Saved: X saved', and offers the next step", async (p) => {
+  await signIn(p);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage !== "Closed"); const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
+  const saveTask = async (text) => { await ara(p, "show_task_draft", { contact_name: who, text, due: "2026-11-30" }); await ara(p, "save_form", { confirmed: false }); await said(p, "Yes, save it."); return ara(p, "save_form", { confirmed: true }); };
+  const a = await saveTask("Send the board deck"), b = await saveTask("Send the agenda");
+  ok(a.saved && /Say undo/.test(a.say), "the first save has no undo line: " + JSON.stringify(a));
+  ok(b.saved && !/Say undo/.test(b.say), "the second save repeats the undo line: " + JSON.stringify(b));
+  ok(![a.say, b.say].some(s => /Saved: /.test(s)), "a save line still starts with 'Saved:': " + a.say);
+  ok(/Next is to .*Want to do that now\?/.test(a.say), "the save line doesn't offer the next step: " + a.say);
+  ok(await p.evaluate(() => !grokInstructions().includes("whether to stop")), "Ara's instructions still ask whether to stop");
+});
 };
