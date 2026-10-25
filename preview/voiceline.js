@@ -21,7 +21,8 @@ const TICK_MS = 4000;                        // soft tick while waiting, and the
 const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has started by now (Grok sometimes takes 6 to 10 s)
 const EARLY_PING_MS = 2500;                  // the early line test's limit
 const RESUME_MS = 25 * 60000;               // a line reopened within this long picks up the same conversation on xAI (kept 30 minutes)
-const FORCE_WAIT_MS = 3000;                  // a scripted line that hasn't started by now is said by Ara instead
+const FORCE_WAIT_MS = 5000;                  // a scripted line that hasn't started by now is said by Ara instead (3 s was too short on a slow line, Oct 25)
+const LATE_FORCE_MS = 25000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long
 const SOUND_BACK_MS = 6000;                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
 
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
@@ -232,7 +233,7 @@ function forceSay(text, then, fallback, waited = 0) {
   G.forced = { text, then, fallback: fallback || `Say exactly: "${text}"`, started: false };
   send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
   vlog("scripted line: " + text);
-  clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; act("step", "Scripted line didn't play: Ara says it instead"); guide(f.fallback); } }, FORCE_WAIT_MS);
+  clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(f.fallback); } }, FORCE_WAIT_MS);
 }
 function forcedEvent(t) {
   const f = G.forced;

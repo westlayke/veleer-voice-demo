@@ -11,11 +11,10 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   await said(p, "I'm driving"); await p.waitForTimeout(900); // tool calls right after a voice command are ignored
   ok(await p.isVisible(".cb-hf.on"), "the call bar does not show Hands-free on");
   r = await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
-  ok(/call save_form/.test(r.status), "the finished draft does not tell Ara to save hands-free: " + r.status);
+  // the app reads a finished draft back itself, as a scripted line, without waiting for Ara to call save_form (Oct 25: she said "Tap Confirm")
+  ok(r.saved === false && /Shall I save it\?$/.test(r.read_back) && /Send Ruth the board deck/.test(r.read_back) && !/Not saved|call save_form/.test(r.read_back), "no clean read-back from the finished draft: " + JSON.stringify(r));
+  ok(await p.evaluate(() => /Send Ruth the board deck.*Shall I save it\?$/.test((__sent.map(x => JSON.parse(x)).filter(x => x.item && x.item.type === "force_message").pop() || { item: { content: [{ text: "" }] } }).item.content[0].text)), "the read-back wasn't the app's own scripted line");
   ok(/HANDS-FREE MODE IS ON/.test(await p.evaluate(() => __sent.join(" "))), "Ara's instructions do not mention hands-free");
-  // confirmed true without a read-back is just a read-back
-  r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved === false && /Shall I save it\?$/.test(r.read_back) && /Send Ruth the board deck/.test(r.read_back) && !/Not saved|call save_form/.test(r.read_back), "no clean read-back: " + JSON.stringify(r));
   ok(await p.isVisible("text=Say “yes” to save"), "the screen does not say it's waiting for a yes");
   // a "no" does not save
   await said(p, "No, change the date.");
@@ -167,7 +166,7 @@ test("Oct 24 call fixes: email spelling, substantive asked and read back, edits 
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   // the interaction report asks whether it was substantive, takes the officer's yes, then needs a next step
   r = await ara(p, "show_interaction_draft", { contact_name: "Pat Moss", date: "2026-10-24", meetingType: "Video call", summary: "Very interested in New Hampshire." });
-  ok(/substantive/i.test(r.status) && !r.still_needed, "Ara wasn't told to ask whether it was substantive: " + JSON.stringify(r));
+  ok(/substantive interaction/i.test(r.ask_exactly || "") && !r.still_needed, "the app didn't ask whether it was substantive: " + JSON.stringify(r));
   await said(p, "Yes, it was.");
   r = await ara(p, "show_interaction_draft", { contact_name: "Pat Moss" });
   ok((r.still_needed || []).some(x => /Next step/.test(x)), "a yes to substantive didn't make the next step needed: " + JSON.stringify(r));
@@ -215,13 +214,22 @@ test("Turning on hands-free mid-form: Ara says she'll read back all the informat
   await p.evaluate(() => recent("Ara", "Mind the cobwebs. What's the first name?"));
   await ara(p, "set_hands_free", { on: true }); await p.waitForTimeout(300);
   const forced = await p.evaluate(() => __sent.map(x => JSON.parse(x)).filter(x => x.item && x.item.type === "force_message").pop());
-  ok(forced && /read back all the information on the form/.test(forced.item.content[0].text), "the hands-free line wasn't sent word for word: " + JSON.stringify(forced));
-  await p.evaluate(() => [{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) }))); await p.waitForTimeout(300);
-  const next = await p.evaluate(() => __sent.filter(x => x.includes("The app just said")).pop() || "");
-  ok(/carry on with the New contact form/.test(next) && /What's the first name\?/.test(next) && !/Say only/.test(next), "after the line Ara wasn't told to carry on with the form: " + next.slice(0, 300));
-  // if xAI doesn't play a scripted line, Ara is asked to say it
-  await p.evaluate(() => { window.__noAutoForce = true; forceSay("Test line.", "", "FALLBACK please say Test line."); }); await p.waitForTimeout(3400);
+  // the line carries the form's last question itself, so no second turn is needed (Oct 25: Ara went quiet after the line until the officer spoke)
+  ok(forced && /read back all the information on the form and save it when you say yes\. What's the first name\?$/.test(forced.item.content[0].text), "the hands-free line wasn't sent word for word with the form's question: " + JSON.stringify(forced));
+  ok(!(await p.evaluate(() => __sent.some(x => x.includes("The app just said")))), "a second turn was still requested after the line");
+  // if xAI doesn't play a scripted line within 5 s, Ara is asked to say it; if it then plays late, the repeat is cut
+  await p.evaluate(() => { window.__noAutoForce = true; forceSay("Test line here please.", "", "FALLBACK please say Test line."); }); await p.waitForTimeout(3400);
+  ok(!(await p.evaluate(() => __sent.some(x => x.includes("FALLBACK please say Test line.")))), "the fallback came before 5 s");
+  await p.waitForTimeout(2000);
   ok(await p.evaluate(() => __sent.some(x => x.includes("FALLBACK please say Test line."))), "a scripted line that didn't play had no fallback");
+  const tell = (n) => p.evaluate((n) => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Test line here " }, { type: "response.output_audio_transcript.delta", delta: "please." }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) }));
+    if (n === 1) __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); }, n);
+  const n0 = await p.evaluate(() => __sent.length);
+  await tell(1); await p.waitForTimeout(100);
+  ok(!(await p.evaluate((n) => __sent.slice(n).some(x => JSON.parse(x).type === "response.cancel"), n0)), "the first telling of the line was cut");
+  await tell(2); await p.waitForTimeout(100);
+  ok(await p.evaluate((n) => __sent.slice(n).some(x => JSON.parse(x).type === "response.cancel") && G.dropNext, n0), "the late repeat of the scripted line wasn't cut");
+  await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "cancelled" } }) }));
   // xAI extras: resumption, words to listen for, pronunciation fixes; a dropped line picks up the same conversation
   const ups = await p.evaluate(() => __sent.map(x => JSON.parse(x)).filter(x => x.type === "session.update").map(x => x.session));
   ok(ups.some(u => u.resumption && u.resumption.enabled) && ups.some(u => u.replace && u.replace["C.A."]) && ups.some(u => u.audio && u.audio.input.transcription && u.audio.input.transcription.keyterms.includes("Ruth Abernathy") && u.audio.input.transcription.keyterms.length <= 100) && ups[0].instructions, "the xAI extras weren't sent after the main settings");
@@ -230,5 +238,22 @@ test("Turning on hands-free mid-form: Ara says she'll read back all the informat
   // a mic muted for a moment doesn't end the call
   const kept = await p.evaluate(async () => { const tr = { muted: true }; G.stream = { getAudioTracks: () => [tr], getTracks: () => [] }; micMuted(tr); await new Promise(r => setTimeout(r, 700)); tr.muted = false; await new Promise(r => setTimeout(r, 700)); return G.live && !G.micMutedAt; });
   ok(kept, "a short mic mute ended the call");
+});
+
+test("Hands-free: an interaction report is never read back without the substantive answer, and a due date today is said as today", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  let r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", date: "2026-10-24", meetingType: "Event", summary: "Met Ruth at the Halloween party." });
+  ok(/substantive interaction/i.test(r.ask_exactly || "") && !r.read_back, "the finished report was read back before the substantive question: " + JSON.stringify(r));
+  await p.evaluate(() => { V.askedSubst = false; }); // as if Ara had skipped the question (Oct 25)
+  r = await ara(p, "save_form", { confirmed: false });
+  ok(r.saved === false && /substantive interaction/i.test(r.ask_exactly || "") && !r.read_back, "save_form read back without the substantive answer: " + JSON.stringify(r));
+  await said(p, "Yes, it was.");
+  r = await ara(p, "save_form", { confirmed: false });
+  ok(r.saved === false && /next step, and when is it due/.test(r.ask_exactly || "") && (await p.isChecked("#f_substantive")), "the yes wasn't taken, or the next step wasn't asked: " + JSON.stringify(r));
+  const today = await p.evaluate(() => todayISO());
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", nextStep: "Make the ask", nextDue: today });
+  ok(/Next step due: [A-Z][a-z]+ \d+, today\. Shall I save it\?$/.test(r.read_back || ""), "the read-back doesn't say the due date is today: " + JSON.stringify(r));
+  ok(await p.evaluate((d) => dateSaid(d).endsWith("(today)"), today), "dateSaid has no day word");
 });
 };
