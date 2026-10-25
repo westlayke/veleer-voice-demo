@@ -139,6 +139,30 @@ test("Evidence rule: a value the officer never said is left off the form and nam
   ok((await p.inputValue("#f_plannedDate")) === "2026-12-01", "a date the officer gave (December) was not kept");
 });
 
+test("Ara: the phone checks whether each line could be heard, and \"Are you there?\" logs the readings of the last line and has Ara repeat it", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  // a line with words but no voice audio is flagged (the readings: audio received, speaker level, mic echo, sound state)
+  await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "What's her last name?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
+  await p.waitForTimeout(1200);
+  ok(/Ara's line may not have been heard: no voice audio came from the voice service, only the words \("What's her last name\?"\)/.test(await logged()), "a line without voice audio wasn't flagged: " + (await logged()).slice(-300));
+  ok(await p.evaluate(() => !!(G.out && G.outAn) && G.lastLine && G.lastLine.text === "What's her last name?"), "the speaker-path analyser or the last-line record is missing");
+  // a line with sound is not flagged
+  await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(4800))) }, { type: "response.output_audio_transcript.delta", delta: "Smith, got it." }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); G.audioSamples = 30000; G.outPeak = 0.2; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await p.waitForTimeout(1200);
+  ok(!/may not have been heard: [^|]*Smith, got it/.test(await logged()), "a line with sound was flagged as not heard");
+  // "Are you there?" (Carverhill, Oct 25: it always means he heard nothing for a while)
+  const n0 = await p.evaluate(() => __sent.length);
+  await said(p, "Are you there?"); await p.waitForTimeout(400);
+  const out = await p.evaluate((n) => ({ log: ACT.q.map(a => a.text).join(" | "), guide: __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "response.create").map(x => x.response.instructions).join(" ") }), n0);
+  ok(/The officer asked whether Ara is there: her last line was \d+ s ago \("Smith, got it\."\): 1\.3 s of voice audio, speaker level 0\.2\d\d, mic heard [\d.]+ while it played, sound running; sound now running/.test(out.log), "the readings of the last line weren't logged: " + out.log.slice(-400));
+  ok(/asked whether you are there\. Say "I'm here\." and then say your last line again, word for word/.test(out.guide), "Ara wasn't asked to repeat her last line: " + out.guide);
+  // every log event carries an id, so the key holder can drop a batch that arrives twice
+  ok(await p.evaluate(() => ACT.q.every(e => /^[a-z0-9]{10,}$/.test(e.id || ""))), "log events have no ids");
+  // a form left open from an earlier conversation is in Right now, so a fresh conversation knows about it (Oct 25: "Weren't we working on a form for Pauline?")
+  await ara(p, "show_contact_draft", { first: "Pauline", last: "Smith" });
+  ok(/The "New contact" form is still open on screen, not saved yet\. Filled in so far: First name: Pauline; Last name: Smith[^\n]*If the officer asks about it, carry on with it/.test(await p.evaluate(() => ctxNow())), "the open form isn't in Right now: " + await p.evaluate(() => ctxNow().replace(/\n/g, " / ").slice(0, 400)));
+});
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
   await signIn(p);
   await said(p, "I've parked, I'll tap myself."); await ara(p, "set_hands_free", { on: false }); // this check is the tap flow; hands-free is on by default since Oct 25
@@ -425,7 +449,7 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; it ke
   const four = await p.evaluate(() => ({ live: G.live, drops: G.drops, log: ACT.q.map(a => a.text).join(" | ") }));
   ok(four.live && four.drops === 4 && /Reconnecting \(4\)/.test(four.log), "the fourth drop ended the call instead of reconnecting: " + JSON.stringify({ live: four.live, drops: four.drops }));
   // a new line that doesn't open (G.lastMsg is 0 while it opens) counts from when the service was last heard, not from the call's start (Oct 25 3:42 PM: gave up after one try)
-  await p.evaluate(() => { G.t0 = Date.now() - 300000; G.lastMsg = 0; G.lastHeard = Date.now() - 15000; reconnect("the line didn't open"); }); await p.waitForTimeout(600);
+  await p.evaluate(() => { G.t0 = Date.now() - 300000; G.lastMsg = 0; G.heardAt = Date.now() - 15000; reconnect("the line didn't open"); }); await p.waitForTimeout(600);
   ok(await p.evaluate(() => G.live && G.drops === 5), "a line that didn't open ended the call although the service was heard 15 s ago");
   await p.waitForFunction(() => window.__ws !== window.__ws1, null, { timeout: 12000 }); await p.waitForTimeout(300);
   // 5 minutes without a word (Carverhill, Oct 25: a 3-minute dead spot in the driveway outlasted the old 2-minute limit by 5 s)

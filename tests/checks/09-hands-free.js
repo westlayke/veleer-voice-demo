@@ -226,10 +226,10 @@ test("Turning on hands-free mid-form: Ara says she'll read back all the informat
   // the line carries the form's last question itself, so no second turn is needed (Oct 25: Ara went quiet after the line until the officer spoke)
   ok(forced && /read back all the information on the form and save it when you say yes\. What's the first name\?$/.test(forced.item.content[0].text), "the hands-free line wasn't sent word for word with the form's question: " + JSON.stringify(forced));
   ok(!(await p.evaluate(() => __sent.some(x => x.includes("The app just said")))), "a second turn was still requested after the line");
-  // if xAI doesn't play a scripted line within 5 s, Ara is asked to say it; if it then plays late, the repeat is cut
+  // if xAI doesn't play a scripted line within 8 s, Ara is asked to say it; if it then plays late, the repeat is cut
   await p.evaluate(() => { window.__noAutoForce = true; forceSay("Test line here please.", "", "FALLBACK please say Test line."); }); await p.waitForTimeout(3400);
-  ok(!(await p.evaluate(() => __sent.some(x => x.includes("FALLBACK please say Test line.")))), "the fallback came before 5 s");
-  await p.waitForTimeout(2000);
+  ok(!(await p.evaluate(() => __sent.some(x => x.includes("FALLBACK please say Test line.")))), "the fallback came before 8 s");
+  await p.waitForTimeout(5000);
   ok(await p.evaluate(() => __sent.some(x => x.includes("FALLBACK please say Test line."))), "a scripted line that didn't play had no fallback");
   const tell = (n) => p.evaluate((n) => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Test line here " }, { type: "response.output_audio_transcript.delta", delta: "please." }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) }));
     if (n === 1) { G.audioSamples = 30000; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); } }, n); // the first telling had over half a second of sound, so it was heard

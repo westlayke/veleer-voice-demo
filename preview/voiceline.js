@@ -22,7 +22,7 @@ const TICK_MS = 4000;                        // soft tick while waiting, and the
 const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has started by now (Grok sometimes takes 6 to 10 s)
 const EARLY_PING_MS = 2500;                  // the early line test's limit
 const RESUME_MS = 25 * 60000;               // a line reopened within this long picks up the same conversation on xAI (kept 30 minutes)
-const FORCE_WAIT_MS = 5000;                  // a scripted line that hasn't started by now is said by Ara instead (3 s was too short on a slow line, Oct 25)
+const FORCE_WAIT_MS = 8000;                  // a scripted line that hasn't started by now is said by Ara instead (3 s was too short on a slow line, Oct 25; 5 s still fell back 5 times in the 4:42 PM call, lines then played late)
 const LATE_FORCE_MS = 25000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long
 const TOKEN_WAIT_MS = 6000;                  // a voice pass that takes longer counts as failed (Oct 25: one took 89 s, the next never came back and the call hung)
 const TOKEN_RETRY_MS = 2000;                 // between tries for a voice pass while the line is down
@@ -158,7 +158,7 @@ async function netLog(what, known) { const sess = G.session, info = netInfo(), m
 // the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
 async function reconnect(why) {
   if (!G.live) return;
-  if (Date.now() - (G.lastMsg || G.lastHeard || G.t0 || Date.now()) > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
+  if (Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now()) > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
   G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
@@ -179,7 +179,7 @@ async function reconnect(why) {
   }
   if (!G.live) return;
   if (G.spokeInGap) act("step", "The officer talked while the line was down: Ara will ask them to repeat it");
-  G.lastHeard = G.lastMsg || G.lastHeard || Date.now(); G.lastMsg = 0; openSocket(token, () => guide(reconnectLine()));
+  G.heardAt = G.lastMsg || G.heardAt || Date.now(); G.lastMsg = 0; openSocket(token, () => guide(reconnectLine()));
 }
 const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "",
@@ -296,7 +296,7 @@ function forceSay(text, then, fallback, waited = 0) {
   if (!G.live) { G.pendingForce = null; return; }
   if (!waited) G.pendingForce = text;
   if ((G.responding || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
-  G.forced = { text, then, fallback: fallback || `Say exactly: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;
+  G.forced = { text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;
   send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
   vlog("scripted line: " + text);
   clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(f.fallback); } }, FORCE_WAIT_MS);

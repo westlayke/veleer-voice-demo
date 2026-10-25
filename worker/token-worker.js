@@ -43,6 +43,9 @@ async function ensureTable(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, device TEXT, name TEXT,
     session TEXT, page TEXT, role TEXT, text TEXT, city TEXT, region TEXT, country TEXT)`).run();
   await db.prepare("CREATE INDEX IF NOT EXISTS events_session ON events (session, id)").run();
+  // each event carries an id from the phone, so a batch sent twice (a reply lost to a bad patch of signal) is stored once (Oct 25)
+  try { await db.prepare("ALTER TABLE events ADD COLUMN bid TEXT").run(); } catch (e) {}
+  await db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS events_bid ON events (bid)").run();
 }
 
 async function saveLog(request, env, json) {
@@ -53,9 +56,9 @@ async function saveLog(request, env, json) {
   if (!events.length) return json({ stored: 0 });
   const cf = request.cf || {};
   await ensureTable(env.DB);
-  const ins = env.DB.prepare("INSERT INTO events (at, device, name, session, page, role, text, city, region, country) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  const ins = env.DB.prepare("INSERT OR IGNORE INTO events (at, device, name, session, page, role, text, city, region, country, bid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
   await env.DB.batch(events.map(e => ins.bind(cut(e.at, 30), cut(b.device, 64), cut(b.name, 80), cut(b.session, 64), cut(b.page, 20),
-    cut(e.role, 20), cut(e.text, 4000), cut(cf.city, 80), cut(cf.region, 80), cut(cf.country, 8))));
+    cut(e.role, 20), cut(e.text, 4000), cut(cf.city, 80), cut(cf.region, 80), cut(cf.country, 8), e.id ? cut(e.id, 40) : null)));
   if (Math.random() < 0.05) await env.DB.prepare("DELETE FROM events WHERE at < ?").bind(new Date(Date.now() - KEEP_DAYS * 864e5).toISOString()).run();
   return json({ stored: events.length });
 }
