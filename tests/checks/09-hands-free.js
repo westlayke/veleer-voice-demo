@@ -207,4 +207,15 @@ test("Oct 24 call fixes: the phone pausing the sound doesn't end the call, and C
   ok(await p.evaluate(() => G.live && G.hands), "hands-free was lost after Carry on");
   ok(await p.evaluate(() => __sent.join(" ").includes("Hands-free mode is still on")), "Ara wasn't told hands-free is still on");
 });
+
+test("Turning on hands-free mid-form: Ara says she'll read back all the information, then asks the form's next question", async (p) => {
+  await signIn(p);
+  await ara(p, "show_contact_draft", {});
+  await p.evaluate(() => recent("Ara", "Mind the cobwebs. What's the first name?"));
+  const r = await ara(p, "set_hands_free", { on: true });
+  ok(/read back all the information on the form/.test(r.say) && /carry on with the New contact form/.test(r.say) && /What's the first name\?/.test(r.say) && !/Say only/.test(r.say), "the hands-free line doesn't carry on with the form: " + r.say);
+  // a mic muted for a moment doesn't end the call
+  const kept = await p.evaluate(async () => { const tr = { muted: true }; G.stream = { getAudioTracks: () => [tr], getTracks: () => [] }; micMuted(tr); await new Promise(r => setTimeout(r, 700)); tr.muted = false; await new Promise(r => setTimeout(r, 700)); return G.live && !G.micMutedAt; });
+  ok(kept, "a short mic mute ended the call");
+});
 };

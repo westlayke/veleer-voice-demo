@@ -420,7 +420,7 @@ async function startCall(opening) {
     if (!G.live) { try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (x) {} G.stream = null; return; } // hung up while connecting
     // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
     const ctx = G.ctx; ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") soundPaused(ctx); };
-    G.stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && G.status !== "Connecting…") interrupted("mic muted"); }; tr.onended = () => { if (G.live) interrupted("mic ended"); }; });
+    G.stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && G.status !== "Connecting…") micMuted(tr); }; tr.onended = () => { if (G.live) interrupted("mic ended"); }; });
     const srcNode = G.ctx.createMediaStreamSource(G.stream);
     const onPcm = (f32) => {
       if (!G.ctx) return;
@@ -485,7 +485,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.soundPausedAt = 0; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.soundPausedAt = 0; G.micMutedAt = 0; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -526,7 +526,7 @@ function voiceCommand(text) {
   const who = botName() + ": "; let say;
   if (cmd === "repeat") { const last = (G.recent || []).filter(l => l.startsWith(who)).slice(-1)[0]; if (!last) return false; say = `The officer asked you to repeat. Say again exactly: "${last.slice(who.length)}"`; }
   else if (cmd === "cancel") { if (!V) return false; const what = cancelForm(); say = `The officer said "cancel". The app closed the ${what} form without saving. Say only "Cancelled, nothing was saved. What would you like to do?"`; }
-  else if (cmd === "hfon" || cmd === "hfoff") { setHandsFree(cmd === "hfon"); say = G.hands ? `The officer turned on hands-free mode. Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `The officer turned off hands-free mode. Say only "Hands-free is off. You'll tap Save yourself again."`; }
+  else if (cmd === "hfon" || cmd === "hfoff") { setHandsFree(cmd === "hfon"); say = G.hands ? "The officer turned on hands-free mode. " + hfSwitchLine(true) : "The officer turned off hands-free mode. " + hfSwitchLine(false); }
   else if (cmd === "undo" && !(V && (V.history || []).length) && G.lastSave && G.lastSave.hf && Date.now() - G.lastSave.at < 5 * 60e3) {
     const what = ACTIONS[G.lastSave.action].saved; S = JSON.parse(G.lastSave.undo); G.lastSave = null; if (G.saves) G.saves.pop(); save(); render(); whenIdle("instr");
     say = `The officer said "undo". The app took back the hands-free save (${what}), so it is no longer saved. Say only "Undone, that's not saved. What would you like to do?"`; }

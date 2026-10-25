@@ -47,7 +47,7 @@ const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
 function idleCheck() {
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
   if (G.live && ((G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS) || /^Reconnecting/.test(G.status)) && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); cue("wait"); vlog("still working: tick"); }
-  if (!G.live || G.idleEnding || G.soundPausedAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
   const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
   if (G.probing) return;
@@ -203,5 +203,14 @@ function soundPaused(ctx) {
     if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); return; }
     if (document.visibilityState === "visible") ctx.resume().catch(() => {});
     if (Date.now() - G.soundPausedAt > SOUND_BACK_MS) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
+  }, 500);
+}
+// the same for the mic: an iPhone mutes it for a moment (seen Oct 24, 4 s into a call); end only if it stays muted
+function micMuted(tr) {
+  if (G.micMutedAt) return; G.micMutedAt = Date.now(); vlog("mic muted by the phone"); netLog("Mic muted by the phone");
+  const tick = setInterval(() => {
+    if (!G.live || !G.stream || !G.stream.getAudioTracks().includes(tr)) { clearInterval(tick); G.micMutedAt = 0; return; }
+    if (!tr.muted) { clearInterval(tick); const s = ((Date.now() - G.micMutedAt) / 1000).toFixed(1); G.micMutedAt = 0; act("step", "Mic muted by the phone for " + s + " s, then came back"); return; }
+    if (Date.now() - G.micMutedAt > SOUND_BACK_MS) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back"); }
   }, 500);
 }
