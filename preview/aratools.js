@@ -53,7 +53,7 @@ const TOOL_HANDLERS = {
     const until = st === "waiting" ? (/^\d{4}-\d{2}-\d{2}$/.test(data.check_back_on || "") ? data.check_back_on : addDays(todayISO(), 7)) : null;
     const change = st === "waiting" ? `Waiting, check back ${fmtDate(until)}` : TSTAT[st];
     if (!data.confirmed) { go("tasks"); whenIdle("instr"); setTimeout(() => { const r = document.querySelector(`.trow[data-tid="${t.id}"]`); if (r) { r.classList.add("tflash"); r.scrollIntoView({ block: "center", behavior: "smooth" }); } }, 150);
-      toolReply(callId, { ok: true, task: t.text, for: taskWhere(t), now: TSTAT[taskStatus(t)], will_become: change, say: `Ask in one short sentence: "Mark '${t.text}' as ${change.toLowerCase()}?"${st === "waiting" && !data.check_back_on ? " Mention the check-back date is a week from today unless they want another day." : ""} Wait for yes before calling again with confirmed true.` }); return; }
+      toolReply(callId, { ok: true, task: t.text, for: taskWhere(t), now: TSTAT[taskStatus(t)], will_become: change, ask_exactly: `Mark '${t.text}' as ${change.toLowerCase()}?${st === "waiting" && !data.check_back_on ? " The check-back date would be a week from today unless you want another day." : ""}`, next: "The app asked the question itself; don't ask it again. Wait for yes before calling again with confirmed true." }); return; } // the question is scripted (Oct 25 6:03 PM: Ara announced it and then asked it, "Didn't you just ask me that?")
     const undo = setTaskStatus(t, st, until); go("tasks"); toast(`${change}: ${t.text}`, undo);
     const meetingish = /follow|call|meet|visit|lunch|coffee|pledge|ask/i.test(t.text);
     toolReply(callId, { ok: true, saved: true, task: t.text, status: change, say: `Confirm in one short sentence that it's saved${st === "done" && meetingish ? ", then ask whether they'd like to log an interaction for it (for example a call or meeting report)" : ""}.` }); return;
@@ -230,6 +230,9 @@ const TOOL_HANDLERS = {
     toolReply(callId, { ok: true, summary: `${f.stage} is lit up on screen. ${i === 0 ? `First say exactly: "${PROCESS_INTRO}" Then talk` : "Your next words are"} about ${f.stage} only: start with "${f.stage}" and say one or two sentences based on this: ${facts} Say nothing about earlier stages and don't finish or repeat anything you said before. Then ${nx ? `ask "Shall I go on to ${nx.stage}?" and wait for the answer (unless they asked you to go straight through). When they say yes, call highlight_stage for ${nx.stage} before saying anything.` : "ask if they have questions or want to try a step."}` }); return;
   },
   show_needs_attention(callId, data, name) {
+    if (data.filter === "hands_free") { // the saves made by voice that the officer hasn't looked at yet (Carverhill, Oct 25: "read off all of the hands-free decisions that I made that I need to approve")
+      const xs = hfUnchecked(); S.naFilter = "all"; save(); go("home");
+      toolReply(callId, { ok: true, filter: "Hands-free saves to check", count: xs.length, items: xs.slice(0, 12).map(x => hfLine(x)), status: xs.length ? "Read them out briefly. The officer checks them off on the phone (Needs attention, Hands-free saves) once parked; you can't check them off." : "No hands-free saves are waiting to be checked." }); return; }
     const k = { all: "all", overdue: "overdue", opportunities: "opps", tasks: "tasks", contacts: "contacts" }[data.filter] || "all";
     S.naFilter = k; save(); go("home");
     const xs = attentionItems().filter(NA_FILTERS[k][1]);

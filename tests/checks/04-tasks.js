@@ -38,7 +38,7 @@ test("Ara: reading open tasks matches the Tasks list", async (p) => {
 test("Ara: changing a task's status asks first, then saves", async (p) => {
   await signIn(p);
   const ask = await ara(p, "set_task_status", { task: "Pennsylvania update", status: "done", confirmed: false });
-  ok(ask.ok && /Mark/.test(ask.say), "Ara was not told to ask first");
+  ok(ask.ok && /^Mark '[^']*Pennsylvania update' as done\?$/.test(ask.ask_exactly || ""), "the app didn't ask the question itself: " + JSON.stringify(ask));
   ok(!(await state(p)).tasks.find(t => /Pennsylvania/.test(t.text)).done, "saved before the officer said yes");
   const yes = await ara(p, "set_task_status", { task: "Pennsylvania update", status: "done", confirmed: true });
   ok(yes.saved, "not saved after yes");

@@ -36,7 +36,10 @@ function editItem(action, c, sel) {
   if (action === "editTask") {
     const l = S.tasks.filter(t => t.contactId === c.id && !t.done);
     let hit = sel.id ? S.tasks.find(t => t.id === sel.id) : null;
-    if (!hit && sel.which) { const w = words(sel.which), m = l.filter(t => w.some(x => norm(t.text).includes(x))); if (m.length === 1) hit = m[0]; }
+    if (!hit && sel.which) { // the exact text, else the task sharing the most words with it (Oct 25: any one shared word, such as the person's name, made two tasks "match")
+      const nw = words(nameOf(c)), w = words(sel.which).filter(x => !nw.includes(x)), exact = l.filter(t => norm(t.text) === norm(sel.which));
+      const scored = l.map(t => [t, w.filter(x => norm(t.text).includes(x)).length]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+      hit = exact.length === 1 ? exact[0] : scored.length && (scored.length === 1 || scored[0][1] > scored[1][1]) ? scored[0][0] : null; }
     if (!hit && !sel.id && l.length === 1) hit = l[0];
     if (!hit) return { error: l.length ? `Which of ${nameOf(c)}'s tasks? ${l.map(t => `"${t.text}"`).join("; ")}. Ask which one, then call again with which set to words from it.` : `${nameOf(c)} has no open tasks to edit.` };
     return { contact: c, item: hit, opp: hit.oppId ? oppById(hit.oppId) : null };

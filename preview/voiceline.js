@@ -308,5 +308,14 @@ function forceSay(text, then, fallback, waited = 0) {
 function forcedEvent(t) {
   const f = G.forced;
   if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); }
-  else if (t === "response.done" && f.started) { G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => guide(f.then), 0); }
+  else if (t === "response.done" && f.started) {
+    const said = sameWords(G.bot || ""), want = sameWords(f.text);
+    if (said.length >= 12 && !want.startsWith(said.slice(0, 40)) && !said.startsWith(want.slice(0, 40))) {
+      // Ara answered on her own (to the tool result) and the app took that for the scripted line starting (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
+      if (wordOverlap(said, want) >= 0.6) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
+      else { f.started = false; act("step", "Ara answered on her own while the scripted line was still to come"); clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(g.fallback); } }, FORCE_WAIT_MS); }
+      return; }
+    G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => guide(f.then), 0); }
 }
+// how much two lines share, as a fraction of the shorter one's words
+function wordOverlap(a, b) { const A = new Set(a.split(" ").filter(Boolean)), B = new Set(b.split(" ").filter(Boolean)); if (!A.size || !B.size) return 0; let n = 0; A.forEach(w => { if (B.has(w)) n++; }); return n / Math.min(A.size, B.size); }

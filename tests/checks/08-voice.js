@@ -192,6 +192,38 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
   ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /Sorry, I lost you[^]*The "Add planned ask" form still needs: /.test(x.response.instructions || ""); }), n0), "a form with required fields missing didn't guide Ara with what's still needed");
 });
+test("Ara: a task named in full is found even when another task shares a word with it; the hands-free filter lists the saves to check; Ara's own answer isn't taken for a scripted line", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  // two tasks for Ruth sharing the word Ruth (Oct 25: "Record the pledge or gift from Joey" also matched "Follow up with Joey on the $50,000 ask")
+  await p.evaluate(() => { const c = S.contacts.find(x => x.last === "Abernathy"); S.tasks.push({ id: "tk_a1", contactId: c.id, text: "Record the pledge or gift from Ruth", due: "2026-10-31" }, { id: "tk_a2", contactId: c.id, text: "Follow up with Ruth on the $50,000 ask", due: "2026-10-31" }); save(); });
+  let r = await ara(p, "show_task_edit_draft", { contact_name: "Ruth Abernathy", which: "Follow up with Ruth on the $50,000 ask", due: "2026-11-20" });
+  ok(!r.error && await p.evaluate(() => V && V.action === "editTask" && V.target.item.id === "tk_a2"), "the task named in full wasn't found: " + JSON.stringify(r));
+  await p.evaluate(() => { V = null; document.getElementById("overlay").innerHTML = ""; });
+  r = await ara(p, "show_task_edit_draft", { contact_name: "Ruth Abernathy", which: "record the pledge", due: "2026-11-24" });
+  ok(!r.error && await p.evaluate(() => V && V.target.item.id === "tk_a1"), "a few words from the task didn't find it: " + JSON.stringify(r));
+  await p.evaluate(() => { V = null; document.getElementById("overlay").innerHTML = ""; });
+  r = await ara(p, "show_task_edit_draft", { contact_name: "Ruth Abernathy", which: "Ruth", due: "2026-11-24" });
+  ok(r.error && /Which of Ruth Abernathy's tasks\?/.test(r.error), "a name alone picked a task: " + JSON.stringify(r));
+  // the hands-free saves still to be checked (Oct 25: "read off all of the hands-free decisions that I made that I need to approve")
+  await p.evaluate(() => { const c = S.contacts.find(x => x.last === "Abernathy"); S.history.unshift({ id: "h_hf1", contactId: c.id, text: "Capacity rated B ($100k to $250k)", hf: true, at: new Date().toISOString() }); save(); });
+  r = await ara(p, "show_needs_attention", { filter: "hands_free" });
+  ok(r.ok && r.count === 1 && r.items[0] === "Ruth Abernathy's capacity rated B ($100k to $250k)" && /checks them off on the phone/.test(r.status), "the hands-free filter didn't list the save to check: " + JSON.stringify(r));
+  // a scripted line is pending; Ara answers on her own instead (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
+  await p.evaluate(() => { window.__noAutoForce = true; forceSay("Edit task for Joe Paratore. Task: Meet 10/23; Due date: Nov 10. Shall I save it?"); });
+  await p.waitForTimeout(300);
+  const tell = (text) => p.evaluate((text) => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: text }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); G.audioSamples = 30000; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); }, text);
+  await tell("The weather is lovely today, isn't it, with the leaves turning.");
+  let f = await p.evaluate(() => ({ pending: !!G.forced, started: G.forced && G.forced.started, late: !!G.lateForced, log: ACT.q.map(a => a.text).join(" | ") }));
+  ok(f.pending && !f.started && !f.late && /Ara answered on her own while the scripted line was still to come/.test(f.log), "an unrelated answer was taken for the scripted line: " + JSON.stringify([f.pending, f.started, f.late]));
+  await tell("Edit task for Joe Paratore. Task: Meet ten twenty three; Due date: Nov ten. Shall I save it?");
+  f = await p.evaluate(() => ({ pending: !!G.forced, late: G.lateForced && G.lateForced.text, log: ACT.q.map(a => a.text).join(" | ") }));
+  ok(!f.pending && /^Edit task for Joe Paratore/.test(f.late || "") && /Ara said the scripted line in her own words before it played: its late copy will be cut/.test(f.log), "Ara's own telling of the read-back wasn't recognised: " + JSON.stringify(f));
+  const n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Edit task for Joe Paratore. Task: Meet 10/23; Due date: Nov 10. Shall I save it?" }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
+  await p.waitForTimeout(150);
+  ok(await p.evaluate((n) => __sent.slice(n).some(x => JSON.parse(x).type === "response.cancel") && G.dropNext, n0), "the late scripted copy wasn't cut");
+  await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "cancelled" } }) }));
+});
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
   await signIn(p);
   await said(p, "I've parked, I'll tap myself."); await ara(p, "set_hands_free", { on: false }); // this check is the tap flow; hands-free is on by default since Oct 25
