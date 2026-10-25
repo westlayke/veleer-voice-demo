@@ -38,4 +38,19 @@ test("Top bar: the + button sits in the top-right corner, with Settings just to 
     ok(a > g, `on ${t} the + button is not to the right of Settings`);
     ok(await p.evaluate(() => innerWidth - document.querySelector(".top .addbtn").getBoundingClientRect().right) < 24, `on ${t} the + button is not in the corner`); }
 });
+test("A computer screen gets a left menu, a two-column Home and the Opportunities list beside the open opportunity; a phone keeps the phone layout", async (p) => {
+  await signIn(p);
+  ok(!(await p.$("main.home-wide")), "the phone got the computer layout");
+  await p.setViewportSize({ width: 1440, height: 900 }); await p.waitForTimeout(400);
+  ok(await p.$("main.home-wide .hcol"), "Home didn't switch to two columns on a wide screen");
+  ok(await p.evaluate(() => getComputedStyle(document.querySelector(".tabbar")).width === "220px"), "the tab bar didn't become a left menu");
+  await p.evaluate(() => go("board")); await p.waitForTimeout(300);
+  const first = await p.$eval(".split-list [aria-current=true]", r => r.dataset.opp).catch(() => null);
+  ok(first && await p.$(".split-detail .stepper, .split-detail h2, .split-detail section"), "the list and the open opportunity aren't side by side");
+  const other = await p.$$eval(".split-list [data-opp]", rs => rs.map(r => r.dataset.opp));
+  await p.click(`.split-list [data-opp="${other[2]}"]`); await p.waitForTimeout(300);
+  ok(await p.$eval(".split-list [aria-current=true]", r => r.dataset.opp) === other[2] && (await state(p)).screen === "board", "picking another opportunity didn't show it beside the list");
+  await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(400);
+  ok(!(await p.$("main.split")), "going back to phone width kept the computer layout");
+});
 };

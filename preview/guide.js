@@ -97,7 +97,7 @@ function render() {
   applyName();
   const app = document.getElementById("app");
   const s = S.screen;
-  app.innerHTML = s === "contacts" ? contactsScreen() : s === "contact" ? contactScreen() : s === "opp" ? oppScreen() : s === "board" ? boardScreen() : s === "tasks" ? tasksScreen() : s === "settings" ? settingsScreen() : s === "flow" ? flowScreen() : homeScreen();
+  app.innerHTML = s === "contacts" ? contactsScreen() : s === "contact" ? contactScreen() : s === "opp" ? (wide() ? boardScreen(true) : oppScreen()) : s === "board" ? boardScreen() : s === "tasks" ? tasksScreen() : s === "settings" ? settingsScreen() : s === "flow" ? flowScreen() : homeScreen();
   const tab = (id, label, icon, also) => `<button class="tab ${s === id || s === also ? "on" : ""}" data-go="${id}">${icon}<span>${label}</span></button>`;
   const I = (p) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   document.getElementById("tabs").innerHTML =
@@ -125,7 +125,7 @@ document.addEventListener("click", (e) => {
     hintCard(say); return; }
   const mp = e.target.closest("[data-act2=mtgprep]"); if (mp) { ask(`"Prepare me for my meeting with ${mp.dataset.who}"`); return; } // the Prepare button sits inside the meeting row
   const ct = e.target.closest("[data-contact]"); if (ct) { S.sel.contact = ct.dataset.contact; go("contact"); tellPicked("contact"); return; }
-  const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; go("opp"); tellPicked("opp"); return; }
+  const op = e.target.closest("[data-opp]"); if (op) { S.sel.opp = op.dataset.opp; if (wide() && S.screen === "board" && (S.oppView || "list") === "list" && op.closest(".split-list")) { save(); render(); } else go("opp"); tellPicked("opp"); return; }
   const g = e.target.closest("[data-go]"); if (g) { if (g.dataset.go === "hfcheck") { go("home"); hfCheckModal(); return; } go(g.dataset.go); return; }
   const a = e.target.closest("[data-act2]"); if (!a) return;
   const act = a.dataset.act2;
