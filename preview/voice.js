@@ -12,10 +12,10 @@ function spellPrep(t) {
   return t;
 }
 const spellOut = (w) => String(w).replace(/[^A-Za-z'-]/g, "").toUpperCase().split("").join(" ");
-// letters the officer spelled out ("T U D Z I N", "K-A-T-H"), joined into words, from their last few lines
+// letters the officer spelled out ("T U D Z I N", "K-A-T-H"), joined into words, from their last few lines; the s of "it's" is not a letter (Oct 24: "it's J B" became SJB)
 function spelledWords() {
   const lines = (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1).map(l => l.slice(9));
-  const out = []; lines.forEach(t => (spellPrep(t).match(/\b(?:[A-Za-z][.,-]?\s+){2,}[A-Za-z]\b\.?/g) || []).forEach(m => { const w = m.replace(/[^A-Za-z]/g, ""); if (w.length >= 3) out.push(w); }));
+  const out = []; lines.forEach(t => (spellPrep(t).match(/(?<![A-Za-z'’])(?:[A-Za-z][.,-]?\s+){2,}[A-Za-z]\b\.?/g) || []).forEach(m => { const w = m.replace(/[^A-Za-z]/g, ""); if (w.length >= 3) out.push(w); }));
   return out;
 }
 function officerRated() {
@@ -80,8 +80,8 @@ const TOOLS = [
     first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
     permEmail: { type: "boolean" }, permCalls: { type: "boolean" }, permText: { type: "boolean" }, ally: { type: "boolean" }, dnc: { type: "boolean" },
     permSource: { type: "string", description: "Only when texting is permitted: how they agreed to texts" }, howMet: { type: "string" }, capacity: { type: "string", enum: Object.keys(CAPACITY), description: "Only if the officer gives one: " + CAPACITY_LIST } }) },
-  { action: "editInteraction", name: "show_interaction_edit_draft", description: "Change a SAVED interaction report (date, type, summary, substantive, outcome). Send only what changes; the edit form opens filled in from the report, and the officer taps Save changes. Not for recorded asks: only the Chief Gift Officer corrects those. To change the next step, edit its task.", req: ["contact_name"], props: Object.assign({}, FOR, {
-    which_date: { type: "string", description: "YYYY-MM-DD date of the report to change, if the officer names one; leave out for the latest" }, date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES }, summary: { type: "string" }, substantive: { type: "boolean" }, outcome: { type: "string", enum: OUTCOMES } }) },
+  { action: "editInteraction", name: "show_interaction_edit_draft", description: "Change a SAVED interaction report (date, type, summary, substantive, outcome). Send only what changes; the edit form opens filled in from the report, and the officer taps Save changes. Not for recorded asks: only the Chief Gift Officer corrects those. To change an existing next step, edit its task. Marking a report substantive needs a new next step and its due date (nextStep, nextDue), which creates one task.", req: ["contact_name"], props: Object.assign({}, FOR, {
+    which_date: { type: "string", description: "YYYY-MM-DD date of the report to change, if the officer names one; leave out for the latest" }, date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES }, summary: { type: "string" }, substantive: { type: "boolean" }, outcome: { type: "string", enum: OUTCOMES }, nextStep: { type: "string", description: "Only when marking it substantive: the next step" }, nextDue: S_DATE }) },
   { action: "editTask", name: "show_task_edit_draft", description: "Change a SAVED open task's wording or due date. Send only what changes; the officer taps Save changes. To mark it done, waiting or in progress use set_task_status instead.", req: ["contact_name"], props: Object.assign({}, FOR, {
     which: { type: "string", description: "A few words from the task's current text, so the right one is found" }, text: { type: "string", description: "The new wording" }, due: S_DATE }) },
   { action: "editPlan", name: "show_ask_plan_edit_draft", description: "Change the PLANNED ask on a contact's open opportunity (entity, campaign, planned ask date, amount, ask type, participants) before the ask is made. Send only what changes; the officer taps Save changes. A recorded ask, pledge, gift or payment can't be changed: only the Chief Gift Officer or an administrator corrects them.", req: ["contact_name"], props: Object.assign({}, FOR, {
@@ -138,7 +138,7 @@ const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function"
     { type: "function", name: "pass_question_to_team", description: "Send a question you can't answer, or a problem or suggestion about the proof of concept, to the project team. Only call it after the officer says yes to passing it on. Write it in the officer's own words, with any detail they gave.", parameters: { type: "object", properties: { question: { type: "string" } }, required: ["question"] } },
     { type: "function", name: "save_form", description: "Hands-free mode only: save the open form for the officer, who is driving and can't tap. First call it with confirmed false: the app gives you a read-back to say word for word. Call it again with confirmed true only after the officer says yes to that read-back. A gift or pledge then gets a second check of the amount, and needs a second yes. The app checks the officer's own words before saving.", parameters: { type: "object", properties: { confirmed: { type: "boolean" } }, required: ["confirmed"] } },
     { type: "function", name: "set_hands_free", description: "Turn hands-free (driving) mode on or off when the officer asks, for example \"I'm driving\" or \"I've parked\". In hands-free mode you read each finished form back and save it when they say yes.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
-    { type: "function", name: "optional_fields", description: "Go through a new contact's or new opportunity's optional fields one at a time; the app asks the questions and fills in the answers. step: start (the officer said yes to adding more details), answer (pass the officer's answer to the question you just asked, in their words, as value), skip (they want to skip this one), stop (they've had enough). Each reply tells you exactly what to say next.", parameters: { type: "object", properties: { step: { type: "string", enum: ["start", "answer", "skip", "stop"] }, value: { type: "string", description: "With answer: the officer's answer, for example \"D\", \"yes\", \"neither\", \"C4\", \"50000\" or a sentence" } }, required: ["step"] } },
+    { type: "function", name: "optional_fields", description: "Go through a new contact's or new opportunity's optional fields one at a time; the app asks the questions and fills in the answers. step: start (the officer said yes to adding more details), answer (pass the officer's answer to the question you just asked, in their words, as value), skip (they want to skip this one), back (they want to go back to an earlier question, or answer a different one: pass which as field), stop (they've had enough). Each reply tells you exactly what to say next. Never save or read back while these questions are going on, unless the reply says they are done.", parameters: { type: "object", properties: { step: { type: "string", enum: ["start", "answer", "skip", "back", "stop"] }, value: { type: "string", description: "With answer: the officer's answer, for example \"D\", \"yes\", \"neither\", \"C4\", \"50000\" or a sentence. With back: their answer to that question, if they gave one" }, field: { type: "string", description: "With back: which question, in a word or two, for example \"entity\", \"campaign\", \"amount\", \"notes\", \"capacity\", \"how we met\", \"flags\"" } }, required: ["step"] } },
     { type: "function", name: "set_spooky_mode", description: "Turn spooky mode (Halloween fun: a night look for the app, you as a haunted-house host, spooky sounds) on when the officer says \"spooky mode\", or off when they say \"normal mode\". It only exists in October.", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
     { type: "function", name: "set_christmas_mode", description: "Turn Christmas mode (Christmas cheer: an evergreen look with a nativity scene, you as a warm Christmas host, sleigh bells and Santa's \"ho ho ho\") on when the officer says \"Christmas mode\", or off when they say \"normal mode\". It exists in December (and any time on the preview).", parameters: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] } },
     { type: "function", name: "close_form", description: "Close the open form without saving (close), or clear it to start again (clear), when the officer asks in words the app didn't already carry out. Never say a form was closed or cleared unless this returns ok.", parameters: { type: "object", properties: { change: { type: "string", enum: ["close", "clear"] } }, required: ["change"] } },
@@ -407,7 +407,7 @@ async function startCall(opening) {
   if (navigator.audioSession) vlog("audio session: " + navigator.audioSession.type);
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
   if (!G.keepRecent) { G.recent = []; G.saves = []; } G.keepRecent = false;
-  G.live = true; { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
+  G.live = true; if (G.keepHands) { G.hands = true; act("step", "hands-free kept on after Carry on"); } G.keepHands = false; { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     G.t0 = Date.now(); G.passReady = !!TOK.p;
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -419,7 +419,7 @@ async function startCall(opening) {
     const [, token, worklet] = await Promise.all([micP, tokP, wkP]);
     if (!G.live) { try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (x) {} G.stream = null; return; } // hung up while connecting
     // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
-    const ctx = G.ctx; ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") interrupted("audio " + ctx.state); };
+    const ctx = G.ctx; ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") soundPaused(ctx); };
     G.stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && G.status !== "Connecting…") interrupted("mic muted"); }; tr.onended = () => { if (G.live) interrupted("mic ended"); }; });
     const srcNode = G.ctx.createMediaStreamSource(G.stream);
     const onPcm = (f32) => {
@@ -462,7 +462,7 @@ function draftSummary() {
 function interrupted(why) {
   if (!G.live || G.interrupting) return; G.interrupting = true;
   vlog("conversation interrupted: " + why);
-  G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "" };
+  G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "", hands: !!G.hands };
   endCall("interrupted: " + why); G.interrupting = false;
   if (document.visibilityState === "visible") resumeModal(); else G.endedByLock = true;
 }
@@ -476,16 +476,16 @@ function resumeModal() {
     <p>A call, an alarm or the phone locking cut it off.${r.what ? ` Your “${esc(r.what)}” form is still here, not saved.` : ""} ${esc(botName())} can pick up where you left off.</p>
     <button class="btn blue" id="rsmGo">${mic(16)} Carry on</button><button class="btn quiet" id="rsmX">Not now</button></div></div>`;
   document.getElementById("rsmX").onclick = () => { G.resume = null; h.innerHTML = ""; };
-  document.getElementById("rsmGo").onclick = () => { h.innerHTML = ""; const r2 = G.resume; G.resume = null; G.recent = r2.lines.slice(); G.keepRecent = true; startCall(resumeLine(r2)); };
+  document.getElementById("rsmGo").onclick = () => { h.innerHTML = ""; const r2 = G.resume; G.resume = null; G.recent = r2.lines.slice(); G.keepRecent = true; G.keepHands = r2.hands; startCall(resumeLine(r2)); };
 }
-const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
+const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; G.hands = false; G.saveCheck = null; stopPlayback(); letSleep();
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.soundPausedAt = 0; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -598,7 +598,7 @@ function onEvent(e) {
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
   if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript); }
-  if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); }
+  if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") replyCheck(e.response || {});
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }

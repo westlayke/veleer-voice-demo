@@ -138,4 +138,73 @@ test("Hands-free: after a save Ara says the undo line once per call, never 'Save
   ok(/Next is to .*Want to do that now\?/.test(a.say), "the save line doesn't offer the next step: " + a.say);
   ok(await p.evaluate(() => !grokInstructions().includes("whether to stop")), "Ara's instructions still ask whether to stop");
 });
+
+test("Oct 24 call fixes: email spelling, substantive asked and read back, edits need a next step, going back in optional questions", async (p) => {
+  await signIn(p);
+  ok(await p.evaluate(() => { G.recent = ["Officer: Yeah, it's J B at g mail dot com."]; const a = spelledWords().length === 0; G.recent = ["Officer: Bat. B A T."]; return a && spelledWords().join() === "BAT"; }), "the s of it's was read as a spelled letter");
+  // a new contact for the rest
+  await ara(p, "show_contact_draft", { first: "Pat", last: "Moss", email: "pat@example.org", mobile: "(555) 010-0150" });
+  await said(p, "Rate them C."); await ara(p, "show_contact_draft", { first: "Pat", last: "Moss", email: "pat@example.org", mobile: "(555) 010-0150", capacity: "C" });
+  for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  // optional questions: an entity answer while the amount is asked goes to the entity, back works, no read-back mid-way
+  let r = await ara(p, "show_opportunity_draft", { contact_name: "Pat Moss" });
+  ok(/one at a time/.test(r.status || ""), "the opportunity draft didn't open: " + JSON.stringify(r) + JSON.stringify((await state(p)).contacts.filter(c => c.first === "Pat")));
+  r = await ara(p, "optional_fields", { step: "start" });
+  ok(r.field === "fund" && /entity/.test(r.ask_exactly) && !/ask exactly/i.test(r.ask_exactly), "the question isn't on its own: " + JSON.stringify(r));
+  r = await ara(p, "optional_fields", { step: "skip" });
+  ok(r.field === "potential" && !/Skip it and move on/.test(JSON.stringify(r)), "skip reply: " + JSON.stringify(r));
+  r = await ara(p, "optional_fields", { step: "answer", value: "one of the New Hampshire entities" });
+  ok((await p.inputValue("#f_fund")) === "C.A. New Hampshire C4", "the entity answer given at the amount question wasn't used: " + JSON.stringify(r));
+  r = await ara(p, "optional_fields", { step: "back", field: "entity" });
+  ok(r.field === "fund", "back to the entity didn't ask the entity: " + JSON.stringify(r));
+  r = await ara(p, "optional_fields", { step: "answer", value: "C.A. New Hampshire C4" });
+  r = await ara(p, "save_form", { confirmed: false });
+  ok(r.ok === false && r.field && r.ask_exactly, "save_form read back before the optional questions finished: " + JSON.stringify(r));
+  await ara(p, "optional_fields", { step: "stop" });
+  for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  // the interaction report asks whether it was substantive, takes the officer's yes, then needs a next step
+  r = await ara(p, "show_interaction_draft", { contact_name: "Pat Moss", date: "2026-10-24", meetingType: "Video call", summary: "Very interested in New Hampshire." });
+  ok(/substantive/i.test(r.status) && !r.still_needed, "Ara wasn't told to ask whether it was substantive: " + JSON.stringify(r));
+  await said(p, "Yes, it was.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Pat Moss" });
+  ok((r.still_needed || []).some(x => /Next step/.test(x)), "a yes to substantive didn't make the next step needed: " + JSON.stringify(r));
+  r = await ara(p, "show_interaction_draft", { contact_name: "Pat Moss", substantive: false });
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(/Substantive: no/.test(r.read_back || ""), "the read-back doesn't say whether it was substantive: " + JSON.stringify(r));
+  await said(p, "Yes."); r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved, "the report wasn't saved: " + JSON.stringify(r));
+  // marking it substantive later needs a next step too
+  r = await ara(p, "show_interaction_edit_draft", { contact_name: "Pat Moss", substantive: true });
+  ok((r.still_needed || []).some(x => /Next step/.test(x)), "the edit didn't ask for a next step: " + JSON.stringify(r));
+  await said(p, "Hands-free off"); await p.waitForTimeout(900);
+  await p.evaluate(() => { G.hands = false; });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  ok(await p.isVisible("#draftErr"), "the edit saved substantive without a next step");
+  await ara(p, "show_interaction_edit_draft", { contact_name: "Pat Moss", substantive: true, nextStep: "Send the New Hampshire plan", nextDue: "2026-11-05" });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  const st = await state(p);
+  ok(st.tasks.some(t => t.text === "Send the New Hampshire plan") && st.interactions.some(i => i.substantive && /New Hampshire/.test(i.summary)), "the edit didn't save substantive with its task");
+  // Ara talked past the tapped save: the app tells her again
+  ok(await p.evaluate(() => __sent.join(" ").includes("just tapped Save changes")), "no notice of the tapped save");
+  await p.evaluate(() => { G.saveAck = Object.assign(G.saveAck || {}, { at: Date.now() - 1000 }); [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Go ahead and tap it." }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
+  await p.waitForTimeout(300);
+  ok(await p.evaluate(() => __sent.join(" ").includes("Correction: the officer already tapped Save changes")), "Ara wasn't told again about the save she missed");
+});
+
+test("Oct 24 call fixes: the phone pausing the sound doesn't end the call, and Carry on keeps hands-free on", async (p) => {
+  await signIn(p);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  await p.evaluate(() => G.ctx.suspend()); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => G.live && G.ctx.state === "running" && !G.soundPausedAt), "the call ended or the sound didn't come back after a short pause");
+  await p.evaluate(() => { G.ctx.resume = () => Promise.resolve(); return G.ctx.suspend(); });
+  await p.waitForTimeout(7000);
+  ok(await p.evaluate(() => !G.live), "the call didn't end when the sound stayed paused");
+  ok(await p.isVisible("#rsmGo"), "no Carry on after the sound stayed paused");
+  await p.tap("#rsmGo"); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => G.live && G.hands), "hands-free was lost after Carry on");
+  ok(await p.evaluate(() => __sent.join(" ").includes("Hands-free mode is still on")), "Ara wasn't told hands-free is still on");
+});
 };

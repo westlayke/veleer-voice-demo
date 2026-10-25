@@ -21,15 +21,15 @@ test("Ara: optional fields one at a time, filled in by the app (rating, how met,
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });
   ok(/one at a time/.test(r.status), "Ara was not told to offer the optional fields one at a time");
   r = await ara(p, "optional_fields", { step: "start" });
-  ok(r.field === "capacity" && /Capacity rating first/.test(r.say) && /under \$5,000/.test(r.say), "the first question wasn't the capacity rating with its bands");
+  ok(r.field === "capacity" && /Capacity rating first/.test(r.ask_exactly) && /under \$5,000/.test(r.ask_exactly), "the first question wasn't the capacity rating with its bands");
   r = await ara(p, "optional_fields", { step: "answer", value: "D" });
-  ok((await p.inputValue("#f_capacity")) === "D" && r.field === "howMet" && /How did you meet Jack/.test(r.say), "the rating wasn't filled in, or How we met didn't come next");
+  ok((await p.inputValue("#f_capacity")) === "D" && r.field === "howMet" && /How did you meet Jack/.test(r.ask_exactly), "the rating wasn't filled in, or How we met didn't come next");
   r = await ara(p, "optional_fields", { step: "answer", value: "In the pumpkin patch" });
   ok(/pumpkin patch/.test(await p.inputValue("#f_howMet")) && r.field === "permText", "How we met wasn't filled in, or texting didn't come next");
   r = await ara(p, "optional_fields", { step: "answer", value: "Yes, that's fine" });
   ok(await p.isChecked("#f_permText") && r.field === "permSource", "texting wasn't turned on, or its source wasn't asked next");
   r = await ara(p, "optional_fields", { step: "skip" });
-  ok(r.field === "flags" && /Most people are neither/.test(r.say), "the flags question didn't come last");
+  ok(r.field === "flags" && /Most people are neither/.test(r.ask_exactly), "the flags question didn't come last");
   r = await ara(p, "optional_fields", { step: "answer", value: "maybe" });
   ok(r.ok === false && /didn't catch/.test(r.say), "an unclear answer wasn't asked again");
   r = await ara(p, "optional_fields", { step: "answer", value: "Neither" });

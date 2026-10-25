@@ -20,6 +20,7 @@ const MAX_ASKS = 1;                          // times the app asks Grok again fo
 const TICK_MS = 4000;                        // soft tick while waiting, and the early line test when no reply has started
 const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has started by now (Grok sometimes takes 6 to 10 s)
 const EARLY_PING_MS = 2500;                  // the early line test's limit
+const SOUND_BACK_MS = 6000;                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
 
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
 const TOK = { p: null, at: 0 };
@@ -46,7 +47,7 @@ const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
 function idleCheck() {
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
   if (G.live && ((G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS) || /^Reconnecting/.test(G.status)) && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); cue("wait"); vlog("still working: tick"); }
-  if (!G.live || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  if (!G.live || G.idleEnding || G.soundPausedAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
   const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
   if (G.probing) return;
@@ -187,4 +188,20 @@ function replyCheck(r) {
     if (slow) { act("step", `Grok gave ${why} on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); return; }
     act("step", `Grok gave ${why}, asked again`);
     G.retriedAt = Date.now(); G.heardSinceRetry = false; if (!G.responding) askReply(); });
+}
+
+/* ---------- the phone pauses the app's sound ---------- */
+// An iPhone pauses a web page's sound when something else takes the speaker for a moment: a notification sound, Siri, another
+// app's audio, a headset or Bluetooth change. Seen twice on Oct 24 with the line still healthy. Ending the call at once cut the
+// officer off mid-sentence, so keep the line open and try to restart the sound; end only if it doesn't come back.
+function soundPaused(ctx) {
+  if (G.soundPausedAt) return; G.soundPausedAt = Date.now();
+  const why = `Sound paused by the phone (${ctx.state}; app ${document.visibilityState}${document.hasFocus && !document.hasFocus() ? ", not in focus" : ""})`;
+  vlog(why); netLog(why);
+  const tick = setInterval(() => {
+    if (!G.live || G.ctx !== ctx) { clearInterval(tick); G.soundPausedAt = 0; return; }
+    if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); return; }
+    if (document.visibilityState === "visible") ctx.resume().catch(() => {});
+    if (Date.now() - G.soundPausedAt > SOUND_BACK_MS) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
+  }, 500);
 }
