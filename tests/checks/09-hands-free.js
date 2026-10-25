@@ -277,4 +277,21 @@ test("Hands-free: a yes to a read-back saves the form even when Ara opens anothe
   r = await ara(p, "show_task_draft", { contact_name: "James Okafor", text: "Call James" });
   ok(r.ok === false && /waiting for the officer's yes; it is NOT saved/.test(r.error || "") && (await p.evaluate(() => V && V.action === "cultivate")), "another form opened over an unsettled read-back: " + JSON.stringify(r));
 });
+
+test("Hands-free: when Ara reads a form back herself, in full, and the officer says yes, the app saves instead of reading it back again", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  // Oct 25, 10:04 AM: Ara read the new contact back herself, the officer said yes, and the app read it all back again
+  let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Baloney", email: "jb@example.org" });
+  await p.evaluate(() => recent("Ara", "Here's the read-back. New contact: Jack Baloney, email jb at example dot org, email and calls permitted. Shall I save it?"));
+  await said(p, "Yes");
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved === true && !r.read_back && (await state(p)).contacts.some(c => c.last === "Baloney"), "a complete read-back by Ara plus a yes wasn't taken as the read-back: " + JSON.stringify(r));
+  // but a read-back that left a field out still gets the app's own
+  r = await ara(p, "show_contact_draft", { first: "Rita", last: "Moss", email: "rita@example.org", mobile: "(555) 010-0166" });
+  await p.evaluate(() => { V.opt = null; recent("Ara", "New contact: Rita Moss, rita at example dot org. Shall I save it?"); }); // the mobile was left out (and Ara skipped the app's rating question)
+  await said(p, "Yes");
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved === false && /Shall I save it\?$/.test(r.read_back || "") && !(await state(p)).contacts.some(c => c.last === "Moss"), "an incomplete read-back by Ara was accepted: " + JSON.stringify(r));
+});
 };

@@ -13,7 +13,7 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
   await said(p, "C.");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C" });
-  ok(/add more details\? I can take you through them one at a time/.test(r.ask_exactly || ""), "the optional fields weren't offered after the rating: " + JSON.stringify(r));
+  ok(r.field === "howMet" && /Let's take the next step: a few optional details for Maya, one at a time\. Say move on to skip any, or tap "Save contact" any time\. Next field: how you met Maya\. Fill it in, or move on\?$/.test(r.ask_exactly || ""), "the optional details didn't start after the rating, led by the app: " + JSON.stringify(r));
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
   ok(/tap/.test(r.status) && !/more details/.test(r.status) && !r.ask_exactly, "a question repeated: " + JSON.stringify(r));
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
@@ -24,16 +24,16 @@ test("Ara: optional fields one at a time, filled in by the app (rating, how met,
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });
   ok(r.field === "capacity" && /which an opportunity needs/.test(r.ask_exactly || ""), "the rating wasn't asked first: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "skip" });
-  ok(/No problem\. Would you like to add more details\? I can take you through them one at a time/.test(r.ask_exactly || ""), "skipping the rating didn't lead to the offer: " + JSON.stringify(r));
-  r = await ara(p, "optional_fields", { step: "start" });
-  ok(r.field === "capacity" && /Capacity rating first/.test(r.ask_exactly) && /under \$5,000/.test(r.ask_exactly), "the first question wasn't the capacity rating with its bands");
+  ok(r.field === "howMet" && /^No problem\. Let's take the next step: a few optional details for Jack, one at a time\. .*Next field: how you met Jack\. Fill it in, or move on\?$/.test(r.ask_exactly || ""), "skipping the rating didn't lead on to the other details: " + JSON.stringify(r));
+  r = await ara(p, "optional_fields", { step: "back", field: "the rating" });
+  ok(r.field === "capacity" && /Sure, back to that\. First, Jack's capacity rating\./.test(r.ask_exactly) && /under \$5,000\. Which fits Jack, or move on\?$/.test(r.ask_exactly), "going back to the rating didn't ask it with its bands: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "answer", value: "D" });
-  ok((await p.inputValue("#f_capacity")) === "D" && r.field === "howMet" && /How did you meet Jack/.test(r.ask_exactly), "the rating wasn't filled in, or How we met didn't come next");
+  ok((await p.inputValue("#f_capacity")) === "D" && r.field === "howMet" && /how you met Jack\. Fill it in, or move on\?/.test(r.ask_exactly), "the rating wasn't filled in, or How we met didn't come next");
   r = await ara(p, "optional_fields", { step: "answer", value: "In the pumpkin patch" });
   ok(/pumpkin patch/.test(await p.inputValue("#f_howMet")) && r.field === "permText", "How we met wasn't filled in, or texting didn't come next");
   r = await ara(p, "optional_fields", { step: "answer", value: "Yes, that's fine" });
   ok(await p.isChecked("#f_permText") && r.field === "permSource", "texting wasn't turned on, or its source wasn't asked next");
-  r = await ara(p, "optional_fields", { step: "skip" });
+  r = await ara(p, "optional_fields", { step: "answer", value: "Move on." }); // said to a fill-in field, that means skip (Carverhill, Oct 25)
   ok(r.field === "flags" && /Most people are neither/.test(r.ask_exactly), "the flags question didn't come last");
   r = await ara(p, "optional_fields", { step: "answer", value: "maybe" });
   ok(r.ok === false && /didn't catch/.test(r.say), "an unclear answer wasn't asked again");
@@ -417,20 +417,37 @@ test("Ara: a dead spot while reconnecting: the voice pass is tried again every f
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   // Oct 25, 9:09 and 9:18 AM: the reconnect waited 89 s for a voice pass, then for ever; the officer heard nothing and had to end the call
   await p.evaluate(() => { window.__spoken = []; speechSynthesis.speak = (u) => __spoken.push(u.text); speechSynthesis.cancel = () => {}; TOK.p = null; TOK.at = 0;
-    const f = window.fetch; window.__hang = true; window.fetch = (u, o) => (window.__hang && o && o.method === "POST" && /workers\.dev/.test(String(u))) ? new Promise((_, rej) => { if (o.signal) o.signal.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError"))); }) : f(u, o); // a dead spot: the request never answers, only the app's own time limit ends it
+    const f = window.fetch; window.__hang = true; window.fetch = (u, o) => (window.__hang && o && o.method === "POST" && /workers\.dev/.test(String(u)) && !/\/log/.test(String(u))) ? new Promise((_, rej) => { if (o.signal) o.signal.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError"))); }) : f(u, o); // a dead spot: the request never answers, only the app's own time limit ends it
     __ws.onclose({ code: 1006, reason: "" }); });
   await p.waitForTimeout(8500);
-  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  const logged = () => p.evaluate(() => __logs.flatMap(l => l.events || [l]).concat(ACT.q).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).map(a => a.text).join(" | "));
   const mid = await p.evaluate(() => ({ spoken: __spoken.slice(), status: G.status, live: G.live })); mid.log = await logged();
   ok(mid.live && /^Reconnecting/.test(mid.status) && /No voice pass yet \(no answer in 6 s\): trying again in 2 s/.test(mid.log), "a hanging voice pass fetch wasn't given up on and tried again: " + mid.status + " " + mid.log.slice(-300));
-  ok(mid.spoken.length === 1 && mid.spoken[0] === "The line dropped. Reconnecting you to Ara.", "the phone didn't say the line dropped at 5 s: " + JSON.stringify(mid.spoken));
+  const saidLines = (log) => (log.match(/The phone said \((recording|phone's speech)\): "[^"]*"/g) || []).map(x => x.replace(/^[^"]*"/, "").replace(/"$/, ""));
+  ok(saidLines(mid.log).join("|") === "The line dropped. Reconnecting you to Ara.", "the phone didn't say the line dropped at 5 s: " + JSON.stringify(saidLines(mid.log)));
   await p.waitForTimeout(5000);
-  const s2 = await p.evaluate(() => __spoken.slice());
+  const s2 = saidLines(await logged());
   ok(s2.length === 2 && s2[1] === "Still trying to reconnect.", "the phone didn't say it's still trying at 12 s: " + JSON.stringify(s2));
   await p.evaluate(() => { window.__hang = false; }); await p.waitForTimeout(4500);
   const end = await p.evaluate(() => ({ live: G.live, status: G.status, downAt: G.downAt, timer: G.downTimer, spoken: __spoken.length })); end.log = await logged();
   ok(end.live && end.status === "Listening" && /Voice pass fetched in \d+ ms/.test(end.log) && /Voice line open in/.test(end.log), "the line didn't come back once a voice pass could be fetched: " + end.status + " " + end.log.slice(-300));
-  ok(!end.downAt && !end.timer && end.spoken === 2 && /The phone said: "Still trying to reconnect\."/.test(end.log), "the spoken reconnect lines didn't stop when the line came back, or weren't logged: " + JSON.stringify(end));
+  ok(!end.downAt && !end.timer && saidLines(end.log).join("|") === "The line dropped. Reconnecting you to Ara.|Still trying to reconnect.|You're back with Ara.", "the spoken reconnect lines didn't stop when the line came back, or the back line wasn't said: " + JSON.stringify(saidLines(end.log)));
+  ok(/\(recording\)/.test(end.log), "the lines were not played as recordings through the call's own sound: " + end.log.slice(-400));
+});
+test("Ara: a drop with no form open comes back to the person just worked on, and a rating said before the questions is taken", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  let r = await ara(p, "show_contact_draft", { first: "Nora", last: "Quist", email: "nora@example.org", mobile: "(555) 010-0188" });
+  ok(r.field === "capacity", "the rating wasn't asked first: " + JSON.stringify(r));
+  // the officer answers before the questions have started (Oct 25: "a capacity rating of C" got every option read out)
+  await p.evaluate(() => { V.opt = null; });
+  r = await ara(p, "optional_fields", { step: "answer", value: "C" });
+  ok((await p.inputValue("#f_capacity")) === "C" && r.field === "howMet" && /^Rating C is on the form\. Next field: how you met Nora/.test(r.ask_exactly || ""), "the rating said before the questions wasn't taken: " + JSON.stringify(r));
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  ok((await state(p)).contacts.find(c => c.first === "Nora").capacity === "C", "the contact didn't save with the rating");
+  // the line drops with no form open: Ara carries on with Nora, never "anyone else" (Carverhill, Oct 25)
+  await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1200);
+  const line = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && /Sorry, I lost you/.test(e.response.instructions)).map(e => e.response.instructions).pop() || "");
+  ok(/You were working on Nora Quist: after the sorry line, offer that next step in your own words, for example "Next is to create an opportunity for Nora/.test(line) && /Never ask whether they want to work on someone else/.test(line), "the reconnect line doesn't carry on with Nora: " + line.slice(0, 600));
 });
 test("Ara: Move to Cultivation is refused while the criteria are missing, by voice and at the save", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
