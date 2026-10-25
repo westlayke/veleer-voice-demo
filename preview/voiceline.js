@@ -12,7 +12,7 @@ const LINE_TEST_MS = 3000;                   // how long a line test (a tiny req
 const SLOW_LINE_MS = 2000;                   // a line test slower than this is a slow line: open a fresh one rather than ask Grok again
 const STALL_SLOW_MS = 2500;                  // while the officer is talking, a line test slower than this counts as a stall
 const MAX_DROPS = 3;                         // reconnect tries shown in the log as "n of 3"; the call no longer ends by count (Oct 25: a driveway dead spot took 4)
-const NO_LINE_GIVE_UP_MS = 120000;           // the call ends only after this long without a word from the voice service, while the phone keeps reconnecting
+const NO_LINE_GIVE_UP_MS = 600000;           // the call ends only after this long without a word from the voice service, while the phone keeps reconnecting (10 minutes: Oct 25 4:38 PM, a 3-minute driveway dead spot outlasted the 2-minute limit by 5 s)
 const RECONNECT_DELAYS = [0, 1000, 4000, 10000]; // wait before reconnect try 1, 2, 3, spread out so a short dead spot can pass
 const OFFLINE_WAIT_MS = 15000;               // when the phone says it's offline, wait up to this long for it to come back
 const SECOND_LINE_MS = 5000;                 // a new line not open after this long gets a second one alongside
@@ -26,8 +26,10 @@ const FORCE_WAIT_MS = 5000;                  // a scripted line that hasn't star
 const LATE_FORCE_MS = 25000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long
 const TOKEN_WAIT_MS = 6000;                  // a voice pass that takes longer counts as failed (Oct 25: one took 89 s, the next never came back and the call hung)
 const TOKEN_RETRY_MS = 2000;                 // between tries for a voice pass while the line is down
-const DOWN_GIVE_UP_MS = 120000;              // a line down this long (no voice pass to be had) ends the call with the phone's spoken notice
+const DOWN_GIVE_UP_MS = 600000;              // a line down this long (no voice pass to be had) ends the call with the phone's spoken notice (10 minutes, as above)
 const SAY_DOWN_MS = 5000, SAY_STILL_MS = 12000, SAY_REPEAT_MS = 10000; // the phone's own spoken lines while the line is down (Carverhill, Oct 25)
+const SAY_SLOW_AFTER_MS = 60000, SAY_REPEAT_LATER_MS = 30000; // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (a long dead spot shouldn't nag)
+const downRepeatMs = () => Date.now() - (G.downAt || Date.now()) >= SAY_SLOW_AFTER_MS ? SAY_REPEAT_LATER_MS : SAY_REPEAT_MS;
 const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."]; // recorded in sounds/ (line-dropped, still-trying, line-back): the phone's own speech is silent during a call on an iPhone (Oct 25)
 const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3" }, lineRaw = {}, lineBuf = {};
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
@@ -202,7 +204,7 @@ function sayLocal(text, kind) {
 }
 function downStart() {
   if (G.downAt) return; G.downAt = Date.now(); linePrep();
-  const again = () => { if (!G.live || !G.downAt) return; sayLocal(DOWN_LINES[1], "still"); G.downTimer = setTimeout(again, SAY_REPEAT_MS); };
+  const again = () => { if (!G.live || !G.downAt) return; sayLocal(DOWN_LINES[1], "still"); G.downTimer = setTimeout(again, downRepeatMs()); };
   G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; sayLocal(DOWN_LINES[0], "dropped"); G.downTimer = setTimeout(again, SAY_STILL_MS - SAY_DOWN_MS); }, SAY_DOWN_MS);
 }
 function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;

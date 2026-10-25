@@ -411,7 +411,7 @@ test("Ara: when Grok goes silent after the app asks for a reply, the app asks on
   ok(await p.evaluate(() => __ws !== __ws1) && await creates() >= c1, "a silent reply on a slow line didn't go straight to a fresh line");
   ok(/on a slow line \(test request \d+ ms\): fresh line/.test(await logged()), "the slow-line reconnect wasn't logged");
 });
-test("Ara: a dropped voice line reconnects and picks up where it left off; it keeps reconnecting past 3 tries, and only 2 minutes without a working line ends the call", async (p) => {
+test("Ara: a dropped voice line reconnects and picks up where it left off; it keeps reconnecting past 3 tries, and only 10 minutes without a working line ends the call", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   await p.evaluate(() => recent(botName(), "Which entity is the ask for?"));
@@ -428,11 +428,15 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; it ke
   await p.evaluate(() => { G.t0 = Date.now() - 300000; G.lastMsg = 0; G.lastHeard = Date.now() - 15000; reconnect("the line didn't open"); }); await p.waitForTimeout(600);
   ok(await p.evaluate(() => G.live && G.drops === 5), "a line that didn't open ended the call although the service was heard 15 s ago");
   await p.waitForFunction(() => window.__ws !== window.__ws1, null, { timeout: 12000 }); await p.waitForTimeout(300);
-  await p.evaluate(() => { G.lastMsg = Date.now() - 130000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
+  // 10 minutes without a word (Oct 25 4:38 PM: a 3-minute dead spot in the driveway outlasted the old 2-minute limit by 5 s)
+  await p.evaluate(() => { G.lastMsg = Date.now() - 300000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1200);
+  ok(await p.evaluate(() => G.live), "5 minutes without a word ended the call; the limit is 10 minutes");
+  await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 12000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { G.lastMsg = Date.now() - 610000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
   const out = await p.evaluate(() => ({ live: G.live, spoke: window.__spoke || "", log: ACT.q.map(a => a.text).join(" | ") + __logs.map(l => JSON.stringify(l)).join(" ") }));
   ok(!out.live && out.spoke === "", "after the tries ran out the call didn't end, or the phone's built-in speech was used (never allowed since Oct 25): " + out.spoke);
   ok(await p.isVisible("text=The voice service isn't answering"), "the screen doesn't say the voice service isn't answering");
-  ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 2 minutes without a working line/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
+  ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 10 minutes without a working line/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
 });
 test("Ara: no reply at the first tick on a slow line gets a fresh line at once, and a new line that won't open gets a second line alongside", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -564,6 +568,9 @@ test("Ara: a dead spot while reconnecting: the voice pass is tried again every f
   ok(end.live && end.status === "Listening" && /Voice pass fetched in \d+ ms/.test(end.log) && /Voice line open in/.test(end.log), "the line didn't come back once a voice pass could be fetched: " + end.status + " " + end.log.slice(-300));
   ok(!end.downAt && !end.timer && saidLines(end.log).join("|") === "The line dropped. Reconnecting you to Ara.|Still trying to reconnect.|You're back with Ara.", "the spoken reconnect lines didn't stop when the line came back, or the back line wasn't said: " + JSON.stringify(saidLines(end.log)));
   ok(/\(recording\)/.test(end.log), "the lines were not played as recordings through the call's own sound: " + end.log.slice(-400));
+  // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (Oct 25 4:38 PM: a 3-minute dead spot got the line 13 times)
+  const gaps = await p.evaluate(() => { G.downAt = Date.now() - 20000; const a = downRepeatMs(); G.downAt = Date.now() - 70000; const b = downRepeatMs(); G.downAt = 0; return [a, b]; });
+  ok(gaps[0] === 10000 && gaps[1] === 30000, "the still-trying line isn't every 10 s in the first minute and every 30 s after: " + JSON.stringify(gaps));
 });
 test("Ara: a drop with no form open comes back to the person just worked on, and a rating said before the questions is taken", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
