@@ -1,4 +1,4 @@
-/* Layout: one phone-width app column (max 440px, centred on wider screens), sticky top bar, fixed tab bar with a centre mic, bottom sheet for voice drafts. */
+/* Layout: one phone-width app column (max 440px, centred), sticky top bar, fixed tab bar with a centre mic, bottom sheet for voice drafts; at 1000px and wider a left menu and side-by-side layouts (end of file). */
 :root {
   --bg: #f4f6f9; --surface: #ffffff; --surface2: #eef1f5; --line: #d5dae2; --line-strong: #a7b0bd;
   --fg: #1c1f24; --muted: #4b525d; --brand: #2f74d0; --brand-soft: #e8f0fb; --brand-line: #9dbbe4; --brand-ink: #1f4f8f;
@@ -396,3 +396,25 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 .spk-sleigh { font-size: 34px; white-space: nowrap; } .spk-sleigh i { font-style: normal; display: inline-block; margin-left: -18px; transform: translateY(-8px); }
 .spk-tree { bottom: calc(90px + env(safe-area-inset-bottom, 0px)); font-size: 58px; } .spk-tree i { font-style: normal; position: absolute; top: -6px; right: -8px; font-size: 22px; animation: twk 1s infinite alternate; }
 @keyframes twk { from { opacity: .3; } to { opacity: 1; } }
+/* a computer screen (1000 px or wider): the tab bar becomes a left menu with the mic on top, Home has two columns,
+   and Opportunities shows the list beside the open opportunity. Phones keep the layout above. */
+@media (min-width: 1000px) {
+  .tabbar { top: 0; bottom: 0; right: auto; width: 220px; border-top: 0; border-right: 1px solid var(--line); padding: 0; }
+  .tabbar .in { max-width: none; height: auto; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px; padding: 18px 12px; }
+  .tab { flex-direction: row; justify-content: flex-start; gap: 12px; min-width: 0; padding: 10px 12px; border-radius: 10px; font-size: 15px; }
+  .tab.on { background: var(--brand-soft); }
+  .tab:hover { background: var(--surface2); } .tab.on:hover { background: var(--brand-soft); }
+  .micbtn { order: -1; margin: 2px auto 18px; }
+  .app { max-width: none; margin-left: 220px; padding-bottom: 24px; }
+  .app > main { max-width: 1240px; margin: 0 auto; width: 100%; padding: 20px 24px; }
+  main.home-wide { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 0 20px; align-items: start; }
+  main.home-wide > .nativity { grid-column: 1 / -1; margin-bottom: 18px; }
+  .hcol { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  main.split { display: grid; grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); gap: 0 20px; align-items: start; }
+  .split-list { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .split-detail { display: flex; flex-direction: column; gap: 18px; min-width: 0; position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; padding-bottom: 8px; }
+  .split-list [aria-current="true"] { background: var(--brand-soft); box-shadow: inset 4px 0 0 var(--brand); }
+  .row.tap:hover { background: var(--surface2); } .split-list [aria-current="true"]:hover { background: var(--brand-soft); }
+  .toast { bottom: 24px; left: calc(50% + 110px); }
+  .callbar { left: 220px; }
+}

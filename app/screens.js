@@ -320,21 +320,26 @@ function homeScreen() {
   // the overview row sits at the bottom of Home
   const ov = `<section class="panel"><div class="ovrow"><div class="t"><b>From first contact to Closed Won</b><button type="button" class="linkbtn" data-act2="flowhome">See the stages</button></div>
     <button class="btn blue" data-say="Walk me through the process" data-nohint="1">${mic(15)} Hear the overview</button></div></section>`;
+  const say = `<section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>`,
+    na = `<section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>`;
+  // a computer screen: Needs attention gets the wide left column, everything else sits on the right
+  if (wide()) return topbar("Home", null, true) + `<main class="home-wide">${xmasMode() ? NATIVITY : ""}<div class="hcol">${na}${ov}</div><div class="hcol">${say}${upcomingPanel()}${pipelinePanel(open, asked, pledged)}${goalsPanel()}</div></main>`;
   return topbar("Home", null, true) + `<main>${xmasMode() ? NATIVITY : ""}
-  <section class="panel"><div class="ph"><h2>Say things like…</h2><button class="ph-help" data-act2="help" aria-label="How voice works">?</button></div>${sayList()}</section>
-  <section class="panel"><div class="ph"><h2>Needs attention</h2></div>${needsAttention()}</section>
+  ${say}
+  ${na}
   ${upcomingPanel()}
-  <section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">open opportunities</span></div>
-    <div class="tiles"><div class="tile tap" data-go="board"><div class="k">Open opportunities</div><div class="v">${open.length}</div></div>
-    <div class="tile tap" data-go="board"><div class="k">Asked <span class="go">›</span></div><div class="v">${money(asked)}</div></div>
-    <div class="tile tap ${pledged ? "hl" : ""}" data-go="board"><div class="k">Pledged <span class="go">›</span></div><div class="v">${money(pledged)}</div></div></div>
-  </section>
+  ${pipelinePanel(open, asked, pledged)}
   ${goalsPanel()}
   ${canTalk() ? "" : `<section class="note" style="border-radius:12px">Voice needs an xAI API key on this phone. <button class="btn quiet" data-go="settings" style="margin-top:8px;width:100%">Open Settings</button></section>`}
   ${ov}
   ${addBtnCard()}
   </main>`;
 }
+const pipelinePanel = (open, asked, pledged) => `<section class="panel"><div class="ph"><h2>My pipeline</h2><span class="meta">open opportunities</span></div>
+    <div class="tiles"><div class="tile tap" data-go="board"><div class="k">Open opportunities</div><div class="v">${open.length}</div></div>
+    <div class="tile tap" data-go="board"><div class="k">Asked <span class="go">›</span></div><div class="v">${money(asked)}</div></div>
+    <div class="tile tap ${pledged ? "hl" : ""}" data-go="board"><div class="k">Pledged <span class="go">›</span></div><div class="v">${money(pledged)}</div></div></div>
+  </section>`;
 function contactsScreen() {
   const all = S.contacts.slice().sort((a, b) => `${a.last} ${a.first}`.localeCompare(`${b.last} ${b.first}`));
   const F = { all: ["All", () => true, "My contacts"], ready: ["Ready for opportunity", oppReady, "Ready for opportunity"], rating: ["Needs rating", needsRating, "Need a capacity rating"] };
@@ -551,10 +556,19 @@ function oppListHTML() {
       const amt = oppAmountText(o, a);
       return `<div class="row tap" data-opp="${o.id}" data-name="${esc(oppSearchText(o))}"><div class="t"><span class="lnk">${esc(nameOf(c))}</span><div class="s">${amt} · ${esc(o.fund || "")}</div>${nextStep(o) ? `<div class="nextline${nextStep(o).warn ? " warn" : ""}">Next: ${esc(nextStep(o).line)}</div>` : ""}${oppAlert(o) ? `<div style="margin-top:5px">${alertPill(oppAlert(o))}</div>` : ""}</div><span class="chev">${CHEV}</span></div>`; }).join(""); }).join("");
 }
-function boardScreen() {
-  const view = S.oppView || "list";
+// a computer screen (1000 px or wider) gets a left menu and side-by-side layouts; a phone keeps the phone layout
+const WIDE_MQ = window.matchMedia("(min-width: 1000px)"), wide = () => WIDE_MQ.matches;
+WIDE_MQ.addEventListener("change", () => { try { render(); } catch (e) {} });
+function boardScreen(split) {
+  const view = split ? "list" : S.oppView || "list";
   const sw = `<div class="seg" role="tablist"><button class="${view === "list" ? "on" : ""}" data-act2="oppview" data-v="list">List</button><button class="${view === "board" ? "on" : ""}" data-act2="oppview" data-v="board">Board</button></div>`;
   const fk = oppFk(), F = OPP_F[fk], top = `<input id="oSearch" class="search" type="search" placeholder="Search opportunities" autocomplete="off">${chipRow(OPP_F, fk, "ofilt", S.opps, "")}`;
+  if (view === "list" && wide()) { // the list on the left, the open opportunity on the right
+    const shown = S.opps.filter(F[1]), sel = oppById(S.sel.opp) && (split || shown.some(o => o.id === S.sel.opp)) ? S.sel.opp : (shown[0] || {}).id;
+    let list = oppListHTML(); if (sel) list = list.replace(`data-opp="${sel}"`, `data-opp="${sel}" aria-current="true"`);
+    let detail = `<div class="empty">Pick an opportunity to see it here.</div>`;
+    if (sel) { const keep = S.sel.opp; S.sel.opp = sel; detail = oppScreen().replace(/^\s*<header[\s\S]*?<\/header>\s*<main[^>]*>/, "").replace(/<\/main>\s*$/, ""); S.sel.opp = keep || sel; }
+    return topbar("Opportunities") + `<main class="split"><div class="split-list">${top}<section class="panel"><div class="ph"><h2>${F[2]}</h2>${sw}</div>${list}</section></div><div class="split-detail">${detail}</div></main>`; }
   if (view === "list") return topbar("Opportunities") + `<main>${top}<section class="panel"><div class="ph"><h2>${F[2]}</h2>${sw}</div>${oppListHTML()}</section></main>`;
   const show = S.opps.filter(F[1]);
   return topbar("Opportunities") + `<main>${top}
