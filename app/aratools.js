@@ -292,7 +292,8 @@ function draftTool(callId, name, data) {
   // a rating can arrive as "c", "C · $25k to $100k" or "$25,000 to $100,000": keep just the letter
   if ("capacity" in data) { const r = normCap(data.capacity); if (r) data.capacity = r; else { if (data.capacity) vlog(`${name}: couldn't read capacity "${data.capacity}"`); delete data.capacity; } }
   // the voice model tends to fill in a rating nobody gave (usually E): keep it only if the officer just talked about one
-  if (data.capacity && !(V && V.data && V.data.capacity === data.capacity) && !officerRated()) { vlog(`${name}: dropped capacity "${data.capacity}" (the officer didn't give a rating)`); delete data.capacity; data._dropped = ["capacity rating"]; } // Oct 25: Ara read back her own E after the app had dropped it, so the reply says so
+  (ACTIONS[tool.action] ? ACTIONS[tool.action].fields : []).filter(f => f.type === "money" && data[f.k] !== undefined && data[f.k] !== null && String(data[f.k]).trim() !== "" && !(toNum(data[f.k]) > 0)).forEach(f => { vlog(`${name}: dropped ${f.label} "${data[f.k]}" (not an amount)`); delete data[f.k]; (data._dropped = data._dropped || []).push(`${f.label.toLowerCase()} of $0${f.req ? " (ask for the real amount)" : ""}`); }); // Oct 25 consistency run: amount 0 was read back as $0 and saved
+  if (data.capacity && !(V && V.data && V.data.capacity === data.capacity) && !officerRated()) { vlog(`${name}: dropped capacity "${data.capacity}" (the officer didn't give a rating)`); delete data.capacity; (data._dropped = data._dropped || []).push("capacity rating"); } // Oct 25: Ara read back her own E after the app had dropped it, so the reply says so
   // the voice model doesn't send texting permitted on a new contact (seen Oct 24: eight tries, never sent): take it from the officer's own words
   if ((tool.action === "contact" || tool.action === "editContact") && data.permText === undefined) { const t = officerSaidTexting(); if (t !== null) { data.permText = t; vlog(`${name}: texting ${t ? "permitted" : "not permitted"}, from the officer's words`); } }
   if ((tool.action === "interaction" || tool.action === "ask") && !String(data.summary || "").trim() && !(V && V.action === tool.action && V.data && String(V.data.summary || "").trim())) {
@@ -329,7 +330,7 @@ function draftTool(callId, name, data) {
   else V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice: new Set(said) };
   renderOverlay();
   const A = ACTIONS[tool.action], d = V.data, empty = (v) => v === null || v === undefined || String(v).trim() === "";
-  const missing = A.fields.filter(f => f.req && !f.fixed && empty(d[f.k])).map(f => f.k === "campaign" && d.fund ? `Campaign (${d.badCampaign ? d.badCampaign + " isn't a campaign for " + d.fund + "; " : ""}the entity, ${d.fund}, is already set; its campaign is ${campaignsFor(d.fund).join(" or ")})` : f.label);
+  const missing = A.fields.filter(f => f.req && !f.fixed && fieldBlank(f, d[f.k])).map(f => f.k === "campaign" && d.fund ? `Campaign (${d.badCampaign ? d.badCampaign + " isn't a campaign for " + d.fund + "; " : ""}the entity, ${d.fund}, is already set; its campaign is ${campaignsFor(d.fund).join(" or ")})` : f.label);
   // what is already on the form (filled in by the app from earlier records, or said before), so Ara never asks for it again
   const onForm = A.fields.filter(f => !f.fixed && f.type !== "bool" && !empty(d[f.k])).map(f => `${f.label}: ${f.type === "money" ? money(d[f.k]) : f.type === "date" ? dateSaid(d[f.k]) : d[f.k]}`);
   delete d.badCampaign;
