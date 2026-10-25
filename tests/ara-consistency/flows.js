@@ -25,4 +25,18 @@ module.exports = [
   { id: "record-gift", title: "Record a gift",
     lines: ["Let's go into hands-free mode.", "Ken Ito sent a check for thirty thousand dollars today, let's record the gift.", "By check."],
     tool: "show_gift_draft", saved: /Gift recorded/ },
+  // a save followed by a second form (Oct 25, after the "forms only on the officer's word" guard)
+  { id: "contact-then-opp", title: "Add a new contact, then create their opportunity",
+    lines: ["Can we go into hands-free mode and create a new contact?", "Jordan Pike, P I K E.", "J Pike at gmail dot com for email.", "Let's go with capacity C.",
+      "Yes, let's do that.", "The North Dakota Fed PAC.", "North Dakota.", "Twenty-five thousand dollars."],
+    tool: "show_opportunity_draft", saved: /Opportunity created/, rated: true },
+  { id: "plan-then-record", title: "Plan an ask, then record it",
+    lines: ["Let's go into hands-free mode.", "Let's plan an ask for Priya Sandaruwan.", "The Pennsylvania C4.", "Pennsylvania.", "Today.", "Twenty-five thousand dollars.",
+      "Yes, let's do that.", "It was an in-person meeting today, and she accepted.", "I need to collect the check from her later today."],
+    tool: "show_ask_result_draft", saved: /Ask recorded/ },
+  // the officer doesn't give a next step until Ara asks for one
+  { id: "log-interaction-ask", title: "Log an interaction, next step only when asked",
+    lines: ["Let's go into hands-free mode.", "Log an interaction with James Okafor.", "I met him yesterday at the Citizens Alliance Halloween party, in person. We talked about the North Dakota work.",
+      "Yes. I'll call him on Friday to talk about a gift."],
+    subst: "Yes, it was.", tool: "show_interaction_draft", saved: /Interaction report/ },
 ];
