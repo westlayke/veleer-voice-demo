@@ -18,7 +18,8 @@ const server = http.createServer((req, res) => {
 // stand-ins for the voice line and the Cloudflare key holder
 const FAKES = () => {
   window.__sent = [];
-  window.WebSocket = class { constructor(u) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); } close() { this.readyState = 3; } };
+  window.WebSocket = class { constructor(u) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); try { const e = JSON.parse(d); if (e.item && e.item.type === "force_message" && !window.__noAutoForce) { // xAI plays a scripted line as a response of its own
+          setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.created" }) }), 20); setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }), 60); } } catch (x) {} } close() { this.readyState = 3; } };
   window.__logs = [];
   const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/log/.test(String(u))) { if (o && o.body) window.__logs.push(JSON.parse(o.body)); return Promise.resolve(new Response('{"logging":true}', { status: 200 })); }
     return /workers\.dev/.test(String(u)) ? Promise.resolve(new Response('{"value":"test-pass"}', { status: 200 })) : f(u, o); };
@@ -50,7 +51,14 @@ async function ara(p, name, args, wait = 350) {
     __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) });
   }, [name, args]);
   await p.waitForTimeout(wait);
-  const out = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "function_call_output").map(e => JSON.parse(e.item.output)), n);
+  // the app's answer: the tool result (data), plus what followed it: guidance riding with the reply request (status/say) or a scripted line (ask_exactly/read_back)
+  const out = await p.evaluate((n) => { const xs = __sent.slice(n).map(s => JSON.parse(s)), out = [];
+    xs.forEach((e, i) => { if (!(e.item && e.item.type === "function_call_output")) return; const r = JSON.parse(e.item.output);
+      for (let j = i + 1; j < xs.length; j++) { const x = xs[j]; if (x.item && x.item.type === "function_call_output") break;
+        if (x.type === "response.create" && x.response && x.response.instructions) { const g = x.response.instructions.replace(/^App guidance for this reply only \(never read it aloud\): /, ""); r.status = r.say = r.instructions = g; }
+        if (x.item && x.item.type === "force_message") { const t = x.item.content[0].text; if (r.read_back === undefined) r.ask_exactly = t; } }
+      out.push(r); });
+    return out; }, n);
   ok(out.length, `the app gave Ara no answer to ${name}`); return out.at(-1);
 }
 // the officer says something (as Grok's transcript of their speech)

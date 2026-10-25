@@ -67,7 +67,7 @@ function idleCheck() {
 }
 function idleStart() {
   G.idleEnding = true; G.idleAt = Date.now(); vlog(`${idleMs() / 1000} seconds quiet: hanging up`);
-  notice(`Nobody has spoken or tapped anything for ${idleMs() / 1000} seconds, so the app is hanging up. Say exactly "I'll hang up for now. Tap the mic when you need me." and nothing else.`);
+  forceSay("I'll hang up for now. Tap the mic when you need me.");
   G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
 }
 function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; const secs = idleMs() / 1000; endCall(`${secs} seconds of quiet`); toast(`Hung up after ${secs} seconds of quiet. Tap the mic when you need me.`); }
@@ -91,7 +91,7 @@ function openSocket(token, first, second) {
   ws.onopen = () => {
     if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws;
-    send({ type: "session.update", session: sessionCfg() }); sendExtras(); notice(first);
+    send({ type: "session.update", session: sessionCfg() }); sendExtras(); if (typeof first === "function") first(); else guide(first);
     if (ws.resumed) netLog("Picked up the same conversation");
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
@@ -142,7 +142,7 @@ async function reconnect(why) {
   const ready = !!TOK.p, tp = Date.now(); let token; try { token = await getToken(); act("step", `Voice pass ${ready ? "was ready" : "fetched"} in ${Date.now() - tp} ms`); } catch (e) { netLog("Couldn't get a voice pass (" + String(e && e.message || e).slice(0, 80) + ")"); reconnect("no voice pass"); return; }
   if (!G.live) return;
   if (G.spokeInGap) act("step", "The officer talked while the line was down: Ara will ask them to repeat it");
-  G.lastMsg = 0; openSocket(token, reconnectLine());
+  G.lastMsg = 0; openSocket(token, () => guide(reconnectLine()));
 }
 const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "";
@@ -168,8 +168,9 @@ function cue(kind) {
 }
 // Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
-function askReply() {
-  send({ type: "response.create" }); G.asked = true; G.askedAt = Date.now();
+function askReply(guidance) {
+  if (guidance !== undefined) G.askGuide = guidance; // the same guidance goes again if the app has to ask twice
+  send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now();
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
   G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
   // no reply at the first tick: test the line then, so a bad line gets a fresh one about 9 s sooner (seen Oct 24: 13 s to notice)
@@ -227,14 +228,14 @@ function micMuted(tr) {
 // If xAI doesn't play it, Ara is asked to say it instead (fallback), so the officer always hears it.
 function forceSay(text, then, fallback, waited = 0) {
   if (!G.live) return;
-  if (G.responding && waited < 6000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
-  G.forced = { text, then, fallback, started: false };
+  if ((G.responding || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
+  G.forced = { text, then, fallback: fallback || `Say exactly: "${text}"`, started: false };
   send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
   vlog("scripted line: " + text);
-  clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; act("step", "Scripted line didn't play: Ara says it instead"); notice(f.fallback); } }, FORCE_WAIT_MS);
+  clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; act("step", "Scripted line didn't play: Ara says it instead"); guide(f.fallback); } }, FORCE_WAIT_MS);
 }
 function forcedEvent(t) {
   const f = G.forced;
   if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); }
-  else if (t === "response.done" && f.started) { G.forced = null; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => notice(f.then), 0); }
+  else if (t === "response.done" && f.started) { G.forced = null; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => guide(f.then), 0); }
 }

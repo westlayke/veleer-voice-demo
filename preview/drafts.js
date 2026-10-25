@@ -193,7 +193,7 @@ function openForm(action, cid, item) {
   if (target.error) { toast(plainErr(target.error)); return; }
   if (target.route) action = target.route;
   V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true }; renderOverlay(); spookyCue("creak");
-  if (G.live) notice(`The officer opened the ${ACTIONS[action].title} form${target.contact ? " for " + nameOf(target.contact) : ""} by tapping. If they ask for help with it, fill it in with ${toolFor(action)}.`);
+  if (G.live) guide(`The officer opened the ${ACTIONS[action].title} form${target.contact ? " for " + nameOf(target.contact) : ""} by tapping. In a few words, say you see it and that they can tell you the details (you fill it in with ${toolFor(action)}).`);
 }
 const toolFor = (action) => (TOOLS.find(t => t.action === (action === "payment" ? "gift" : action)) || {}).name || "the draft tool";
 // rule messages are written for the assistant ("Offer to..."); on screen keep only the facts
@@ -262,7 +262,7 @@ function needsNextStep(action, d, t) {
   if (!d.substantive || NO_NEXT_STEP.includes(d.outcome)) return false;
   return action === "interaction" || (action === "editInteraction" && !(t && t.item && t.item.substantive));
 }
-function hfNotice(text) { if (G.hfTry) G.hfTry.msg = text; else notice(text); }
+function hfNotice(text) { if (G.hfTry) G.hfTry.msg = text; else guide(text); }
 function saveDraft() {
   const d = readDraft(), A = ACTIONS[V.action];
   const miss = A.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));

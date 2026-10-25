@@ -105,8 +105,8 @@ test("Spooky mode: Ara greets as the haunted-house host from her first words, an
   const sent = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)), n);
   const cfg = sent.find(e => e.type === "session.update" && e.session.instructions);
   ok(cfg && /SPOOKY MODE IS ON/.test(cfg.session.instructions), "a new conversation in spooky mode didn't start with the spooky rules");
-  const hi = sent.filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" ");
-  ok(/haunted-house host voice/.test(hi) && /welcome to the haunted CRM/.test(hi), "Ara's greeting wasn't spooky");
+  const hi = sent.filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text).join(" ");
+  ok(/^Mwahaha\.\.\. welcome to the haunted CRM\. Hi/.test(hi), "Ara's scripted greeting wasn't spooky: " + hi);
   ok(/Welcome back to the haunted CRM/.test(await p.evaluate(() => resumeLine({ lines: [], draft: "" }))), "Carry on's welcome back wasn't spooky");
   await p.tap(".cb-end").catch(() => {}); await p.evaluate(() => window.__demo.setSpooky(false));
   const n2 = await p.evaluate(() => __sent.length);

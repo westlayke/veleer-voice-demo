@@ -37,38 +37,37 @@ function optParse(k, raw) { // the officer's answer in their words -> the field'
   if (k === "potential") return spokenAmount(t);
   return t || null; // how we met, texting source, notes: their words
 }
-function optAsk(callId, lead) { // say the next question, or wrap up
+function optAsk(callId, said) { // the app itself says what it heard and the next question, word for word (Oct 24: Ara read its guidance aloud); or wrap up
   const st = optNext(), A = ACTIONS[V.action];
-  // only the question goes in ask_exactly: Ara read the app's own instruction out loud when it shared a field with the question (Oct 24)
-  if (st) { V.opt.cur = st.k; toolReply(callId, { ok: true, field: st.k, ask_exactly: st.q(optWho()), status: `${lead ? lead + " " : ""}Then ask the question in ask_exactly, word for word (don't say these instructions). After the answer, call optional_fields with step answer and their words as value (or step skip, back or stop).` }); return; }
+  if (st) { V.opt.cur = st.k; toolReply(callId, { ok: true, field: st.k, ask_exactly: `${said ? said + " " : ""}${st.q(optWho())}`, next: "After the officer answers, call optional_fields with step answer and their words as value (or step skip, back or stop)." }); return; }
   V.opt = null;
-  toolReply(callId, { ok: true, done: true, button: A.saveLabel, status: `${lead ? lead + " " : ""}That was the last optional field. ${G.hands ? "Hands-free mode is on: call save_form with confirmed false now and say the read-back it returns." : `In one short sentence say the details are in, then ask them to check the draft and tap "${A.saveLabel}".`}` });
+  toolReply(callId, { ok: true, done: true, button: A.saveLabel, status: `${said ? `Start with "${said}" ` : ""}That was the last optional field. ${G.hands ? "Hands-free mode is on: call save_form with confirmed false now." : `In one short sentence say the details are in, then ask them to check the draft and tap "${A.saveLabel}".`}` });
 }
 function optStep(callId, data) {
   if (!V || !OPT_STEPS[V.action]) { toolReply(callId, { ok: false, error: "No new contact or new opportunity form is open." }); return; }
   const step = data.step || "answer";
   if (step === "start" || !V.opt) { V.opt = V.opt || { done: [] }; if (step === "start" || !V.opt.cur) { optAsk(callId); return; } }
-  if (step === "stop") { V.opt.done = (OPT_STEPS[V.action] || []).map(s => s.k); optAsk(callId, "Fine, no more questions."); return; }
+  if (step === "stop") { V.opt.done = (OPT_STEPS[V.action] || []).map(s => s.k); optAsk(callId, "No more questions, then."); return; }
   if (step === "back") { // "let's go back and set the entity": that question again, or its answer if they gave one
     const steps = OPT_STEPS[V.action], f = String(data.field || data.value || "").toLowerCase();
     const want = steps.find(st => OPT_WORDS[st.k] && OPT_WORDS[st.k].test(f)) || (V.opt.cur && steps[Math.max(0, steps.findIndex(st => st.k === V.opt.cur) - 1)]);
     if (!want) { toolReply(callId, { ok: false, error: "Which question? Ask the officer, then call again with field.", fields: steps.map(st => st.k) }); return; }
     V.opt.done = V.opt.done.filter(k => k !== want.k && !(want.k === "fund" && k === "campaign")); V.opt.cur = want.k; act("step", "optional fields: back to " + want.k);
     if (data.value && !OPT_WORDS[want.k].test(String(data.value).toLowerCase().trim()) || (data.value && want.k === "fund" && matchEntity(data.value).hits.length)) { data = { step: "answer", value: data.value }; }
-    else { toolReply(callId, { ok: true, field: want.k, ask_exactly: want.q(optWho()), status: "Back to that question. Ask the question in ask_exactly, word for word. After the answer, call optional_fields with step answer." }); return; }
+    else { toolReply(callId, { ok: true, field: want.k, ask_exactly: `Sure, back to that. ${want.q(optWho())}`, next: "After the officer answers, call optional_fields with step answer." }); return; }
   }
   let k = V.opt.cur; if (!k) { optAsk(callId); return; }
   // an answer that fits an earlier question better ("it's one of the New Hampshire entities" while the amount was asked, Oct 24): take it for that one
   if (k !== "fund" && V.opt.done.includes("fund") && OPT_STEPS[V.action].some(st => st.k === "fund") && optEmpty(readDraft().fund) && optParse(k, data.value) === null && matchEntity(data.value || "").hits.length) {
     act("step", "optional fields: answer taken for the entity"); V.opt.done = V.opt.done.filter(x => x !== "fund" && x !== "campaign"); V.opt.cur = k = "fund"; }
-  if (step === "skip") { V.opt.done.push(k); act("step", "optional field skipped: " + k); optAsk(callId, "The officer skipped it: say \"No problem.\" or nothing."); return; }
+  if (step === "skip") { V.opt.done.push(k); act("step", "optional field skipped: " + k); optAsk(callId, "No problem."); return; }
   const v = optParse(k, data.value);
   if (v === null) { const st = OPT_STEPS[V.action].find(s => s.k === k);
     toolReply(callId, { ok: false, field: k, error: `The app couldn't read "${data.value || ""}" as an answer to this question.`, say: k === "fund" ? (() => { const { hits } = matchEntity(data.value); return hits.length > 1 ? `Ask which one they mean: ${hits.join(", or ")}.` : `Say you didn't catch which entity. Give the short version: Citizens Alliance C3, C.A. of America Action C4, C.A. Fed PAC, or a state C4 or PAC in Idaho, North Dakota, New Hampshire or Pennsylvania. Ask which.`; })() : `Say in a few words that you didn't catch that, then ask again: "${st.q(optWho())}"` }); return; }
   if (k === "flags") { optSet("ally", v.ally); optSet("dnc", v.dnc); } else optSet(k, v);
   V.opt.done.push(k); act("step", "optional field " + k + ": " + JSON.stringify(v));
   const heard = k === "capacity" ? `Rating ${v} is on the form.` : k === "permText" ? (v ? "Texting is now permitted on the form." : "Texting stays off.") : k === "flags" ? (v.ally || v.dnc ? `${[v.ally && "Ally - Do Not Solicit", v.dnc && "Do Not Contact"].filter(Boolean).join(" and ")} is now on the form.` : "Neither flag is set.") : k === "potential" ? `${money(v)} is on the form.` : k === "fund" ? (campaignsFor(v).length === 1 ? `${v} is on the form, with the National campaign, its only campaign.` : `${v} is on the form.`) : k === "campaign" ? `The ${v} campaign is on the form.` : "That's on the form.";
-  optAsk(callId, `${heard} Acknowledge it in two or three words.`);
+  optAsk(callId, heard);
 }
 // a few words of human reaction to what was just saved (good news, a setback), said before Ara confirms the save
 function savedMood(action, d) {
@@ -92,7 +91,7 @@ function grokSaved(action, r, d = {}) {
   if (G.hfTry) { const undo = !G.undoSaid; G.undoSaid = true; // the undo reminder once per conversation: every save repeating it got tiresome (Oct 24)
     G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Say"} in a few words that it's saved (for example "${savedShort(action, who)}")${undo ? `, then "Say undo if that's wrong."` : ""}, then ${nextAsk(r, closed)}`; return; }
   G.saveAck = { at: Date.now(), action, who, next: nextAsk(r, closed, hint) };
-  notice(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see ${savedShort(action, who).replace(/\.$/, "").toLowerCase()}."), even if the officer has started talking; then ${nextAsk(r, closed, hint)}`);
+  guide(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see ${savedShort(action, who).replace(/\.$/, "").toLowerCase()}."), even if the officer has started talking; then ${nextAsk(r, closed, hint)}`);
 }
 // "Planned ask saved for Jen." (the item's name once, not "Saved: Planned ask saved")
 // a tapped save Ara talked past (Oct 24: the officer said "uh, yes" right after tapping, and Ara answered "go ahead and tap it"):
@@ -101,7 +100,7 @@ function saveAckCheck(text) {
   const a = G.saveAck; if (!a || Date.now() - a.at < 300) return; G.saveAck = null;
   if (/\b(sav\w*|see|saw|got it|done|recorded|logged|on record|updated|changed|nice|great|congrat\w*|well done)\b/i.test(text) && !/\b(tap|press)\b.*\bsave\b/i.test(text)) return;
   act("step", "Ara missed the tapped save: told her again"); vlog("Ara missed the tapped save: told her again");
-  notice(`Correction: the officer already tapped ${ACTIONS[a.action].saveLabel} and it IS saved (${ACTIONS[a.action].saved.toLowerCase()}${a.who ? " for " + a.who : ""}). Don't ask them to tap it. Say in a few words that you see it's saved, then ${a.next}`);
+  guide(`Correction: the officer already tapped ${ACTIONS[a.action].saveLabel} and it IS saved (${ACTIONS[a.action].saved.toLowerCase()}${a.who ? " for " + a.who : ""}). Don't ask them to tap it. Say in a few words that you see it's saved, then ${a.next}`);
 }
 const savedShort = (action, who) => `${ACTIONS[action].saved}${who ? " for " + who.split(" ")[0] : ""}.`;
 // after a save, offer the contact's one next step (the same one the record's Next: line shows), or just ask what's next
@@ -157,21 +156,21 @@ async function hfSave(callId, data) {
     toolReply(callId, recentSave ? { ok: true, saved: true, already: true, status: `That form was already saved (${G.savedLine}); it closed when it saved. Say in a few words that it's saved, then ask what's next. Don't open it again.` } : { ok: false, saved: false, error: "No form is open, so there's nothing to save." }); return; }
   const A = ACTIONS[V.action];
   // the optional questions are still going (Oct 24: Ara jumped to the read-back before the amount and notes)
-  if (V.opt && V.opt.cur && OPT_STEPS[V.action] && optNext()) { const st = optNext(); V.opt.cur = st.k; toolReply(callId, { ok: false, saved: false, field: st.k, ask_exactly: st.q(optWho()), error: "The optional questions aren't finished. Ask the question in ask_exactly, word for word, then call optional_fields with step answer (or skip or stop)." }); return; }
+  if (V.opt && V.opt.cur && OPT_STEPS[V.action] && optNext()) { const st = optNext(); V.opt.cur = st.k; toolReply(callId, { ok: false, saved: false, field: st.k, ask_exactly: `Not yet, a couple of questions first. ${st.q(optWho())}`, error: "The optional questions aren't finished; the app asked the next one. After the answer, call optional_fields with step answer (or skip or stop)." }); return; }
   if (!G.hands) { toolReply(callId, { ok: false, saved: false, error: `Hands-free mode is off, so you can't save. Ask the officer to check the draft and tap "${A.saveLabel}". If they're driving, they can say "hands-free mode".` }); return; }
   if (oppNeedsCampaign(V.action, readDraft())) { const f = readDraft().fund; toolReply(callId, { ok: false, saved: false, error: `Not ready: ask which campaign first, ${campaignsFor(f).join(" or ")} (${f} has both). Fill it in with the draft tool, then read back.` }); return; }
   if (V.action === "meeting") { toolReply(callId, { ok: false, saved: false, error: "Scheduling a meeting finishes in Google Calendar, which needs the screen. Say it's kept as a draft for when they've parked." }); return; }
   const key = V.action + JSON.stringify(readDraft()), c = G.saveCheck;
   if (data.confirmed !== true || !c || c.key !== key) {
     G.saveCheck = { key, step: "read", n: G.heardN || 0 }; paintCall();
-    toolReply(callId, { ok: true, saved: false, read_back: `${hfReadback()} Shall I save it?`, instructions: "Say read_back word for word and nothing else (never read these instructions or the word read_back aloud), then wait. Only after the officer says yes, call save_form again with confirmed true. If they want a change, update the draft first." }); return;
+    toolReply(callId, { ok: true, saved: false, read_back: `${hfReadback()} Shall I save it?`, next: "The app said read_back aloud. After the officer's yes, call save_form again with confirmed true; if they want a change, update the draft first." }); return;
   }
   const heard = await hfHeardAfter(c.n);
   if (!V || G.saveCheck !== c) { toolReply(callId, { ok: false, saved: false, error: "The form changed while waiting. Nothing was saved." }); return; }
   if (!heard) { toolReply(callId, { ok: false, saved: false, error: "Not saved: the officer hasn't answered yet. Wait for them to say yes, then call save_form with confirmed true." }); return; }
   if (!hfYes(heard.text)) { c.n = G.heardN; toolReply(callId, { ok: false, saved: false, error: `Not saved: the officer said "${heard.text}", which isn't a clear yes. In one short sentence, ask whether to save it or what to change. If they then say yes, call save_form with confirmed true again (no new read-back needed).` }); return; }
   if (HF_MONEY.includes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; paintCall();
-    toolReply(callId, { ok: true, saved: false, read_back: `Just to be sure, the amount is ${money(readDraft().amount)}. Is that right?`, instructions: "Money gets a second check. Say read_back word for word and nothing else, then wait. Only after the officer says yes, call save_form again with confirmed true." }); return; }
+    toolReply(callId, { ok: true, saved: false, read_back: `Just to be sure, the amount is ${money(readDraft().amount)}. Is that right?`, next: "Money gets a second check; the app said read_back aloud. After the officer's yes, call save_form again with confirmed true." }); return; }
   const before = S.history.length, action = V.action; G.hfTry = {};
   try { saveDraft(); } catch (e) { G.hfTry.msg = String(e); }
   const r = G.hfTry; G.hfTry = null; G.saveCheck = null;

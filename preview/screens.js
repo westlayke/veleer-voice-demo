@@ -396,7 +396,7 @@ function noCallModal(c) {
     <button class="btn blue" id="ncLog">${mic(16)} Log the call</button><button class="btn quiet" id="ncX">Cancel</button></div></div>`;
   document.getElementById("ncLog").onclick = () => { if (G.live) endCall(); h.innerHTML = ""; callDoneModal(); setTimeout(() => { const b = document.getElementById("cdLog"); if (b) b.click(); }, 0); };
   document.getElementById("ncX").onclick = () => { delete S.pendingCall; save(); h.innerHTML = ""; };
-  if (G.live) notice(`The computer couldn't place the call to ${nameOf(c)}. In one short sentence, say they can dial ${c.first} from their phone at the number on screen and tap Log the call afterwards.`);
+  if (G.live) guide(`The computer couldn't place the call to ${nameOf(c)}. In one short sentence, say they can dial ${c.first} from their phone at the number on screen and tap Log the call afterwards.`);
 }
 function callDoneModal() {
   const pc = S.pendingCall, c = pc && contactById(pc.contactId);
@@ -610,7 +610,7 @@ function oppGate(c) {
     ${canRate ? `<button type="button" class="btn blue" id="ogRate">Set capacity rating</button>` : ""}
     <button type="button" class="btn quiet" data-helpx="1">${canRate ? "Not now" : "Close"}</button></div></div>`;
   const b = document.getElementById("ogRate"); if (b) b.onclick = () => ratingPicker(c, true);
-  if (G.live) notice(`The officer tapped Create opportunity for ${nameOf(c)}, but they aren't ready: ${ch.filter(x => !x.ok).map(x => x.todo).join(" ")} The screen lists what's needed. If they ask, explain it, and offer set_capacity_rating if the rating is what's missing.`);
+  if (G.live) guide(`The officer tapped Create opportunity for ${nameOf(c)}, but they aren't ready: ${ch.filter(x => !x.ok).map(x => x.todo).join(" ")} The screen lists what's needed. If they ask, explain it, and offer set_capacity_rating if the rating is what's missing.`);
 }
 function ratingPicker(c, thenOpp) {
   const h = document.getElementById("modal");

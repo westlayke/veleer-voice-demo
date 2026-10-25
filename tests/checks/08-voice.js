@@ -76,7 +76,7 @@ test("Ara has a friendly personality and congratulates the officer when a pledge
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
   const sent = await p.evaluate((n) => __sent.slice(n).join(" "), n);
   ok(/Pledge recorded/.test(sent) && /Congrats/.test(sent) && /Well done/.test(sent), "Ara was not told to congratulate the officer");  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.instructions).map(e => e.session.instructions).pop());
-  ok(/Your personality: friendly, upbeat/.test(instr) && /Never joke about investors/.test(instr), "Ara has no personality line");
+  ok(/## Voice & Communication Style\n- Speak warmly and briefly/.test(instr) && /Friendly, upbeat and a little playful/.test(instr) && /Never joke about investors/.test(instr), "Ara has no personality section");
 });
 test("Ara: setting a capacity rating asks first, then saves", async (p) => {
   await signIn(p);
@@ -181,17 +181,18 @@ test("Ara's instructions stay short and the Process FAQ is looked up with get_pr
   r = await ara(p, "get_process_faq", { question: "zebra xylophone" });
   ok(r.ok && !r.answers.length && /isn't covered/.test(r.say), "an unmatched question returned answers");
 });
-test("During a call, changes reach Ara as short Right now notes; the full instructions go again only when her rules change", async (p) => {
+test("During a call, a save or a rule change refreshes Ara's instructions (a session update), never a message in the conversation", async (p) => {
   await signIn(p);
   const full = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).length);
-  const notes = () => p.evaluate(() => __sent.filter(s => s.includes("Right now update")).length);
-  const f0 = await full(), n0 = await notes();
+  const msgs = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "message").length);
+  const f0 = await full(), m0 = await msgs();
   await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
-  ok(await full() === f0, "a save sent the full instructions again");
-  ok(await notes() > n0 && await p.evaluate(() => __sent.some(s => s.includes("Right now update") && s.includes("Task added"))), "the save was not sent as a Right now note");
+  const upd = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).at(-1).session.instructions);
+  ok(await full() === f0 + 1 && /Saved so far in this conversation: Task added/.test(upd), "the save did not refresh the Right now section");
+  ok(await msgs() === m0, "the save was sent as a message in the conversation");
   await said(p, "I'm driving"); await p.waitForTimeout(900);
-  ok(await full() === f0 + 1, "turning on hands-free did not send the new rules");
+  ok(/HANDS-FREE MODE IS ON/.test(await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).at(-1).session.instructions)), "turning on hands-free did not send the new rules");
 });
 test("Voice commands: undo, start over, cancel and go back are carried out by the app", async (p) => {
   await signIn(p);
@@ -206,8 +207,12 @@ test("Voice commands: undo, start over, cancel and go back are carried out by th
   await p.evaluate(() => window.__demo && 0); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
   await said(p, "Go back."); await p.waitForTimeout(900);
   ok((await titleOf(p)) === "Contacts", "go back did not return to Contacts");
-  const notices = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "message").map(e => e.item.content[0].text).join(" | "));
-  ok(/said "undo"/.test(notices) && /said "cancel"/.test(notices) && /said "go back"/.test(notices), "Ara was not told what the app did");
+  const sent = await p.evaluate(() => __sent.map(s => JSON.parse(s)));
+  const guided = sent.filter(e => e.type === "response.create" && e.response && e.response.instructions).map(e => e.response.instructions).join(" | ");
+  const forced = sent.filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text).join(" | ");
+  ok(/said "undo"/.test(guided) && /said "start over"/.test(guided), "Ara was not told what the app did: " + guided.slice(-300));
+  ok(/Cancelled, nothing was saved/.test(forced) && /Back on Contacts\./.test(forced), "the cancel and go back lines weren't said by the app itself: " + forced);
+  ok(!sent.some(e => e.item && e.item.type === "message" && /App notice/.test(e.item.content[0].text)), "an app notice was still sent as a message");
 });
 test("Voice commands: everyday ways of saying cancel or start over work, and Ara can close a form herself", async (p) => {
   await signIn(p);

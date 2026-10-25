@@ -108,13 +108,14 @@ test("Hands-free: a new opportunity always asks the campaign when the entity has
   ok(s1.saved === false && /which campaign/.test(s1.error || ""), "a read-back went ahead without the campaign: " + JSON.stringify(s1));
   // a slow test request while the voice service is still sending is not a stall
   await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise(res => setTimeout(() => res(new Response("{}")), 2800)) : f(u, o); });
+  await p.evaluate(() => { clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.asked = false; window.__noAutoForce = true; }); // the pretend service never answered the earlier reply requests, and leaves the goodbye line pending
   await p.evaluate(() => { window.__ws0 = __ws; G.lastAct = Date.now() - 31000; G.loudAt = 0; const keep = setInterval(() => { if (!G.live) return clearInterval(keep); G.lastMsg = Date.now(); G.loudAt = 0; G.speechSince = 0; }, 100); window.__keep = keep; }); // the test browser's pretend mic beeps
   await p.waitForTimeout(4500);
-  ok(await p.evaluate(() => __ws === __ws0 && G.idleEnding), "a live line with a slow test was reconnected instead of the normal quiet hang-up");
+  ok(await p.evaluate(() => __ws === __ws0 && G.idleEnding && G.forced && /hang up for now/.test(G.forced.text)), "a live line with a slow test was reconnected instead of the normal quiet hang-up (a scripted goodbye)");
   await p.evaluate(() => { clearInterval(__keep); G.responding = true; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
-  await p.waitForTimeout(200);
-  const off = await p.evaluate(() => ({ live: G.live, ending: G.idleEnding, note: __sent.some(s => s.includes("NOT hanging up")), cancel: __sent.slice(-5).some(s => JSON.parse(s).type === "response.cancel") }));
-  ok(off.live && !off.ending && off.note && off.cancel, "the officer's late answer didn't call off the hang-up: " + JSON.stringify(off));
+  await p.waitForTimeout(3400); // long enough for a pending scripted line's fallback, which must not happen
+  const off = await p.evaluate(() => ({ live: G.live, ending: G.idleEnding, forced: !!G.forced, fallback: __sent.some(s => s.includes("hang up for now") && JSON.parse(s).type === "response.create"), cancel: __sent.some(s => JSON.parse(s).type === "response.cancel") }));
+  ok(off.live && !off.ending && !off.forced && !off.fallback && off.cancel, "the officer's late answer didn't call off the hang-up cleanly: " + JSON.stringify(off));
 });
 
 test("Hands-free: words said while the line was down make Ara ask for them again, and she doesn't start over", async (p) => {
@@ -219,7 +220,7 @@ test("Turning on hands-free mid-form: Ara says she'll read back all the informat
   const next = await p.evaluate(() => __sent.filter(x => x.includes("The app just said")).pop() || "");
   ok(/carry on with the New contact form/.test(next) && /What's the first name\?/.test(next) && !/Say only/.test(next), "after the line Ara wasn't told to carry on with the form: " + next.slice(0, 300));
   // if xAI doesn't play a scripted line, Ara is asked to say it
-  await p.evaluate(() => forceSay("Test line.", "", "FALLBACK please say Test line.")); await p.waitForTimeout(3400);
+  await p.evaluate(() => { window.__noAutoForce = true; forceSay("Test line.", "", "FALLBACK please say Test line."); }); await p.waitForTimeout(3400);
   ok(await p.evaluate(() => __sent.some(x => x.includes("FALLBACK please say Test line."))), "a scripted line that didn't play had no fallback");
   // xAI extras: resumption, words to listen for, pronunciation fixes; a dropped line picks up the same conversation
   const ups = await p.evaluate(() => __sent.map(x => JSON.parse(x)).filter(x => x.type === "session.update").map(x => x.session));
