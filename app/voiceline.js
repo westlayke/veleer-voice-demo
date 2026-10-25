@@ -195,8 +195,9 @@ function playLine(kind) { // through the call's own sound, which the phone keeps
   try { const src = c.createBufferSource(), g = c.createGain(); g.gain.value = 1; src.buffer = lineBuf[kind]; src.connect(g); g.connect(c.destination); src.start(c.currentTime + 0.02); G.lineSrc = src; G.lineEndAt = Date.now() + lineBuf[kind].duration * 1000 + 50; return true; } catch (e) { return false; }
 }
 function sayLocal(text, kind) {
-  const how = kind && playLine(kind) ? "recording" : (() => { try { if (!window.speechSynthesis) return ""; speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1; speechSynthesis.speak(u); return "phone's speech"; } catch (e) { return ""; } })();
-  if (how) { act("step", `The phone said (${how}): "${text}"`); vlog(`phone said (${how}): ${text}`); }
+  // only ever a recording through the call's own sound: the phone's built-in speech is never used (Oct 25: an iOS "Audio Recording / Stop audio recording?" dialog appeared after it spoke, muting the mic and ending the call)
+  const how = kind && playLine(kind) ? "recording" : "";
+  if (how) { act("step", `The phone said (${how}): "${text}"`); vlog(`phone said (${how}): ${text}`); } else vlog(`status line not played (sound not running): ${text}`);
   return !!how;
 }
 function downStart() {
@@ -207,7 +208,7 @@ function downStart() {
 function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;
   const cut = G.lineEndAt && Date.now() < G.lineEndAt; // a status recording still playing is stopped so it can't overlap Ara (Oct 25 call)
   if (cut) { try { G.lineSrc && G.lineSrc.stop(); } catch (e) {} act("step", "The phone's status line was cut short: the line came back"); } G.lineSrc = null; G.lineEndAt = 0;
-  if (G.downAt) { try { speechSynthesis.cancel(); } catch (e) {} vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && !cut && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back"); }
+  if (G.downAt) { vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && !cut && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back"); }
   G.downAt = 0; }
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {
@@ -227,7 +228,7 @@ function cue(kind) {
       o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(kind === "wait" ? 0.08 : 0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
       o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.22); }); } catch (e) {}
   if (kind !== "down") return;
-  try { if (window.speechSynthesis) setTimeout(() => { const u = new SpeechSynthesisUtterance("The voice service isn't answering right now. Tap the mic to try again."); u.rate = 1; speechSynthesis.speak(u); }, 750); } catch (e) {}
+  // no spoken line here any more: the screen says the voice service isn't answering (see voiceUnavailable), and the phone's built-in speech is never used
 }
 // Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
