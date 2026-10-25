@@ -53,18 +53,18 @@ async function converse(browser, base, flow, n) {
   });
   const p = await ctx.newPage();
   p.on("pageerror", e => conv.errors.push("page: " + e.message));
-  let cur = null, lastFrame = Date.now(); const sentForced = [];
+  let cur = null, lastFrame = Date.now(); const sentForced = [], convLines = [];
   p.on("websocket", ws => {
     if (!/api\.x\.ai/.test(ws.url())) return;
-    const line = { opened: Date.now(), closed: 0 }; lines.add(line);
-    ws.on("close", () => { line.closed = Date.now(); conv.lineMs += line.closed - line.opened; });
+    const line = { opened: Date.now(), closed: 0 }; lines.add(line); convLines.push(line);
+    ws.on("close", () => { line.closed = Date.now(); });
     ws.on("framesent", f => { const s = String(f.payload); if (s.includes('"input_audio_buffer.append"')) return; let e; try { e = JSON.parse(s); } catch (x) { return; }
       if (e.type === "conversation.item.create") { items++; conv.items++; if (e.item && e.item.type === "force_message") sentForced.push(e.item.content[0].text); }
       if (e.type === "conversation.item.create" && e.item && e.item.type === "function_call_output") conv.tools.length && (conv.tools[conv.tools.length - 1].out = conv.tools[conv.tools.length - 1].out || e.item.output.slice(0, 600));
       if (e.type === "response.create" && e.response && e.response.instructions) conv.lastGuide = e.response.instructions; });
     ws.on("framereceived", f => { const s = String(f.payload); lastFrame = Date.now(); if (s.includes('audio.delta"')) return; let e; try { e = JSON.parse(s); } catch (x) { return; }
       if (e.type === "response.created") cur = { text: "", at: Date.now(), turn: conv.turns.length, forced: sentForced.length ? sentForced[sentForced.length - 1] : null, forcedN: sentForced.length };
-      else if (/audio_transcript\.delta$/.test(e.type) && cur) cur.text += e.delta || "";
+      else if (/transcript\.delta$/.test(e.type) && !/input_audio/.test(e.type) && cur) { (conv.kinds = conv.kinds || {})[e.type] = 1; if (!cur.kind) cur.kind = e.type; if (cur.kind === e.type) cur.text += e.delta || ""; }
       else if (e.type === "response.function_call_arguments.done") { let a = {}; try { a = JSON.parse(e.arguments || "{}"); } catch (x) {} conv.tools.push({ name: e.name, args: a, turn: conv.turns.length, at: Date.now() }); }
       else if (e.type === "response.done") { if (cur) { cur.status = e.response && e.response.status; if (e.response && e.response.usage) cur.usage = e.response.usage; if (cur.text || cur.status !== "cancelled") conv.replies.push(cur); } cur = null; }
       else if (e.type === "error") conv.errors.push("grok: " + JSON.stringify(e.error || e).slice(0, 300)); });
@@ -123,7 +123,7 @@ async function converse(browser, base, flow, n) {
   } catch (e) { conv.errors.push("run: " + e.message.slice(0, 300)); }
   conv.forced = sentForced;
   await ctx.close();
-  lines.forEach(l => { if (!l.closed) l.closed = Date.now(); });
+  convLines.forEach(l => { if (!l.closed) l.closed = Date.now(); conv.lineMs += l.closed - l.opened; });
   conv.cost = conv.lineMs / 60000 * PER_MIN + conv.items * PER_ITEM;
   return conv;
 }
@@ -132,7 +132,8 @@ async function converse(browser, base, flow, n) {
 const sameWords = (s) => String(s).toLowerCase().replace(/[^a-z0-9$ ]/g, " ").replace(/\s+/g, " ").trim();
 const scripted = (r, forced) => r.forced && sameWords(r.text).slice(0, 30) && sameWords(r.forced).startsWith(sameWords(r.text).slice(0, 30)) || forced.some(f => sameWords(r.text).length > 10 && sameWords(f).startsWith(sameWords(r.text).slice(0, 30)));
 const LABELS = /\b(first name|last name|email|mobile|capacity|entity|campaign|amount|planned (ask )?date|ask type|summary|next step|due( date)?|substantive|method|meeting type|response|type)\b/gi;
-const RANGES = /\$(100k|250k|25k|5k)|\$(100|250|25|5),000|hundred thousand|twenty-five thousand|five thousand/gi;
+const RANGES = /\$?(1(\.0)? ?m(illion)?|250k|100k|25k|5k|1,000,000|250,000|100,000|25,000|5,000)|one million|(two hundred (and )?fifty|one hundred|twenty-five|five) thousand/gi;
+const rangeKey = (m) => { m = m.toLowerCase(); return /m|million/.test(m) ? "1m" : /250|fifty/.test(m) ? "250" : /100|hundred/.test(m) ? "100" : /25|twenty/.test(m) ? "25" : "5"; };
 const RULES = [
   { id: "hands_free_on", text: "Turns hands-free on when asked" },
   { id: "right_tool", text: "Calls the right tool for the task" },
@@ -160,7 +161,7 @@ function score(conv, flow) {
     if (t.args.capacity) hit("no_invented_rating", /\b(capacity|rating|rated)\b|\b[A-E]\b\.?$/i.test(said) || /\b(rating|capacity) (of )?[A-E]\b|\b[A-E] rating\b|with capacity [A-E]/i.test(said), `${t.name} capacity ${t.args.capacity} after: "${said.slice(-160)}"`);
     if (t.args.fund && t.name !== "show_gift_draft") hit("no_invented_entity", /\b(C3|C4|PAC|entity|North Dakota|New Hampshire|Pennsylvania|Idaho|national|America)\b/i.test(said), `${t.name} entity ${t.args.fund} after: "${said.slice(-160)}"`);
   });
-  if (flow.rated) own.forEach(r => hit("rating_not_listed", (r.text.match(RANGES) || []).length < 3, r.text));
+  if (flow.rated) own.forEach(r => hit("rating_not_listed", new Set((r.text.match(RANGES) || []).map(rangeKey)).size < 4, r.text));
   if (flow.subst) { const save = conv.saved.find(s => /Interaction report/.test(s.text)); if (save) hit("asks_substantive", conv.replies.some(r => r.at < save.at && /substantive/i.test(r.text)) || conv.forced.some(f => /substantive/i.test(f)), "saved with no substantive question"); }
   own.forEach(r => hit("no_guidance_aloud", !/app guidance|never read it aloud|tool result|the app is saying|still[_ ]needed|function call/i.test(r.text), r.text));
   own.forEach(r => { if (/\b(i've|i have|it's|it is|has been|been|all) (saved|recorded|logged|added)\b|\bsaved it\b/i.test(r.text)) hit("no_false_saved", conv.saved.some(s => s.at <= r.at + 1500) && conv.saved.filter(s => s.at <= r.at + 1500).length > 0 && conv.acts.some(a => a.role === "saved" && a.at <= r.at + 1500 && a.at > r.at - 60000), r.text); });
@@ -202,6 +203,7 @@ function report(convs, extra) {
       if (!firstLogged && c.replies.length) { firstLogged = true; console.log("MILESTONE first-grok-reply: " + JSON.stringify(c.replies[0].text.slice(0, 200))); }
       console.log(`${convs.length}. ${c.flow} #${c.n}: ${c.turns.length} turns, ${(c.lineMs / 1000).toFixed(0)} s, $${c.cost.toFixed(3)}, saved: ${c.saved.map(s => s.text).join(" | ") || "nothing"}${c.errors.length ? ", errors: " + c.errors.slice(0, 2).join("; ") : ""}  [total $${spent().toFixed(3)}]`);
       if (!half.said && spent() >= BUDGET / 2) { half.said = true; console.log(`MILESTONE halfway: ${convs.length} conversations, $${spent().toFixed(3)}`); }
+      console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)]), saved: c.saved.map(s => s.text), errors: c.errors.slice(0, 3) }));
       fs.writeFileSync(path.join(OUT, "conversations.json"), JSON.stringify(convs, null, 1));
     }
   }
