@@ -1,7 +1,7 @@
 "use strict";
 // Citizens VCRM demo: updates and start-up. Loaded in order by the page; all files share one scope.
 /* ---------- updates: check for a newer published version on open and on return ---------- */
-const buildLabel = () => BUILD === "dev" ? "Development copy" : new Date(BUILD).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const buildLabel = () => BUILD === "dev" ? "Development copy" : BUILD; // the stamp is already in words ("Oct 25, 9:39 AM ET"); new Date() on it gave "Invalid Date" on iPhone (Oct 25)
 let updChecked = 0;
 async function checkUpdate() {
   if (BUILD === "dev" || Date.now() - updChecked < 15000) return; updChecked = Date.now();
