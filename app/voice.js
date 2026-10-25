@@ -279,7 +279,7 @@ ${ctxNow()}`;
 function ctxNow() {
   const f = focusContact();
   return `${(G.saves || []).length ? `Saved so far in this conversation: ${G.saves.join("; ")}.` : "Nothing has been saved yet in this conversation."}
-${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.\n` : ""}Contacts and opportunities: ${crmSnapshot()}.`;
+${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.\n` : ""}${V && document.getElementById("draftForm") ? draftSummary() + " If the officer asks about it, carry on with it; don't open a new form for the same person.\n" : ""}Contacts and opportunities: ${crmSnapshot()}.`;
 }
 // what changes Ara's rules, so the full instructions go again only when one of these does
 const rulesKey = () => JSON.stringify([!!G.hands, S.settings.userName || "", botName(), spookyMode(), xmasMode()]);
@@ -354,7 +354,7 @@ async function demoChanges() {
 }
 function act(role, text, sess) {
   if (!text) return; const session = sess || G.session || visitId();
-  ACT.q.push({ at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session });
+  ACT.q.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session }); // the id lets the key holder drop a batch that arrives twice (Oct 25: a resent batch doubled 20 s of log)
   clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, role === "end" ? 0 : 4000);
 }
 // what was in a form when Save was tapped, for the activity log (the privacy notice says so)
@@ -438,7 +438,7 @@ function playChunk(b64) {
   const i16 = int16FromB64(b64); if (!i16.length) return;
   const buf = G.ctx.createBuffer(1, i16.length, 24000), ch = buf.getChannelData(0);
   for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 32768;
-  const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.ctx.destination);
+  const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.out || G.ctx.destination);
   const at = Math.max(G.ctx.currentTime + 0.02, G.playHead); src.start(at); G.playHead = at + buf.duration;
   const cap = G.caps && G.caps[G.caps.length - 1]; if (cap) { if (cap.t0 == null) cap.t0 = at; cap.t1 = G.playHead; }
   G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
@@ -492,8 +492,10 @@ async function startCall(opening) {
   if (!G.keepRecent) { G.recent = []; G.saves = []; G.convId = null; } G.keepRecent = false;
   G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
-    G.t0 = Date.now(); G.lastHeard = 0; G.passReady = !!TOK.p;
+    G.t0 = Date.now(); G.heardAt = 0; G.passReady = !!TOK.p;
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Ara's voice goes through a gain and an analyser, so the phone can tell whether it produced any sound (heard.js)
+    try { G.out = G.ctx.createGain(); G.outAn = G.ctx.createAnalyser(); G.outAn.fftSize = 2048; G.out.connect(G.outAn); G.outAn.connect(G.ctx.destination); } catch (e) { G.out = G.outAn = null; }
     G.ctx.resume();
     // the mic, the voice pass and the audio code all at once, not one after another
     const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(st => (G.stream = st));
@@ -690,9 +692,10 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript); }
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
+    if (typeof heardAsk === "function" && heardAsk(e.transcript)) guide("The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."); }
   if (G.forced) forcedEvent(t, e);
-  if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
+  if (t === "response.done" && G.bot) { act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
