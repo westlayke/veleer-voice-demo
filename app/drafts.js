@@ -18,8 +18,8 @@ function focusContact() {
 ACTIONS.editContact = { title: "Edit contact", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.contact.fields, pairs: ACTIONS.contact.pairs,
   left: "A contact needs an email or a mobile number. Every change is recorded in History. Only the Chief Gift Officer can turn off Do Not Contact; Ally - Do Not Solicit can be turned off by whoever set it or the Chief Gift Officer." };
 // editing a saved meeting, task or planned ask: the same fields, filled in from what was saved
-ACTIONS.editInteraction = { title: "Edit interaction report", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.interaction.fields.filter(f => !["capacity", "nextStep", "nextDue"].includes(f.k)), pairs: ACTIONS.interaction.pairs,
-  left: "Every change is recorded in History. To change the next step, edit its task. A recorded ask is changed only by the Chief Gift Officer." };
+ACTIONS.editInteraction = { title: "Edit interaction report", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.interaction.fields.filter(f => f.k !== "capacity"), pairs: ACTIONS.interaction.pairs,
+  left: "Every change is recorded in History. Marking it substantive needs a next step and its due date, which creates one Task. To change an existing next step, edit its task. A recorded ask is changed only by the Chief Gift Officer." };
 ACTIONS.editTask = { title: "Edit task", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.task.fields.filter(f => f.k !== "onOpp"), left: "Every change is recorded in History. Change the status from the task's status button." };
 ACTIONS.editPlan = { title: "Edit planned ask", saved: "Changes saved", saveLabel: "Save changes", fields: ACTIONS.plan.fields, pairs: ACTIONS.plan.pairs,
   left: "A planned ask can be changed until the ask is recorded. Its reminder task moves with the planned date. Every change is recorded in History." };
@@ -257,11 +257,16 @@ document.getElementById("overlay").addEventListener("click", (e) => {
   else if (a.dataset.act === "save") saveDraft();
 });
 // while Ara saves hands-free, what's wrong with the form goes back in her tool reply instead of as a notice
+// a substantive interaction needs a next step (guide rule), also when an edit turns substantive on (seen Oct 24: an edit skipped it)
+function needsNextStep(action, d, t) {
+  if (!d.substantive || NO_NEXT_STEP.includes(d.outcome)) return false;
+  return action === "interaction" || (action === "editInteraction" && !(t && t.item && t.item.substantive));
+}
 function hfNotice(text) { if (G.hfTry) G.hfTry.msg = text; else notice(text); }
 function saveDraft() {
   const d = readDraft(), A = ACTIONS[V.action];
   const miss = A.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));
-  if (!miss.length && ((V.action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) || (V.action === "ask" && d.response !== "Declined"))) {
+  if (!miss.length && (needsNextStep(V.action, d, V.target) || (V.action === "ask" && d.response !== "Declined"))) {
     const need = [!String(d.nextStep || "").trim() && "Next step", !d.nextDue && "Next step due"].filter(Boolean);
     if (need.length) {
       const msg = `Add the ${need.join(" and ").toLowerCase()} before saving. A substantive interaction needs a next step and its due date.`;
@@ -345,6 +350,7 @@ const APPLY = {
   editInteraction(d, t) {
     const i = t.item, ch = editLog(i, d, { date: ["date", "Date", fmtDate], meetingType: ["type", "Type"], summary: ["summary", "Summary"], substantive: ["substantive", "Substantive", (v) => v ? "yes" : "no"], outcome: ["outcome", "Outcome"] });
     if (ch.length) log(`Interaction report of ${fmtDate(i.date)} edited by ${OFFICER}: ${ch.join("; ")}`, { contactId: i.contactId, oppId: i.oppId }, !V.typed);
+    if (String(d.nextStep || "").trim()) { S.tasks.unshift({ id: uid(), contactId: i.contactId, oppId: i.oppId, text: d.nextStep.trim(), due: d.nextDue, done: false }); log(`Task added: ${d.nextStep.trim()}${d.nextDue ? ", due " + fmtDate(d.nextDue) : ""}`, { contactId: i.contactId, oppId: i.oppId }); }
     S.sel.contact = t.contact.id; S.screen = "contact"; return { contact: t.contact };
   },
   editTask(d, t) {

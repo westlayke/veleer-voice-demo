@@ -33,7 +33,7 @@ function spokenAmount(raw) {
 }
 // a spoken entity -> one entity, or the few it could be: "the C-3", "Citizens Alliance C 3", "North Dakota Fed PAC" (Oct 24: "C-3" wasn't understood)
 const entityWords = (t) => String(t || "").toLowerCase().replace(/c\.a\.|\bca\b/g, "citizens alliance").replace(/\bc\s*-?\s*([34])\b/g, "c$1").replace(/[^a-z0-9 ]/g, " ")
-  .split(/\s+/).filter(w => w && !/^[a-z]$/.test(w) && !["the", "a", "an", "is", "it", "its", "it's", "one", "that", "this", "to", "for", "of", "let's", "lets", "go", "with", "please", "entity", "i", "think", "say", "make", "yes", "yeah"].includes(w));
+  .split(/\s+/).filter(w => w && !/^[a-z]$/.test(w) && !["the", "a", "an", "is", "it", "its", "it's", "one", "that", "this", "to", "for", "of", "let's", "lets", "go", "with", "please", "entity", "entities", "ones", "i", "think", "say", "make", "yes", "yeah"].includes(w));
 function matchEntity(t) {
   const ws = entityWords(t); if (!ws.length) return { hits: [] };
   const hits = FUNDS.filter(f => { const fw = entityWords(f); return ws.every(w => fw.includes(w)); });
