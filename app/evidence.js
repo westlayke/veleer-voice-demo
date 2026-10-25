@@ -8,6 +8,7 @@ const EVIDENCE_SKIP = new Set(["first", "last", "email", "mobile", "summary", "n
 // words that stand for an option when the officer says them
 const OPTION_WORDS = {
   meetingType: { "In person": /\bin person\b|\bmet\b|\bmeeting\b|\blunch\b|\bcoffee\b|\bdinner\b|\bbreakfast\b|\boffice\b|\bvisit|\bface to face\b|\bevent\b|\bparty\b|\bdropped by\b|\bstopped by\b|\bhouse\b|\bhome\b/,
+    "Event": /\bevent\b|\bgala\b|\bparty\b|\breception\b|\bfundraiser\b|\bconference\b|\bluncheon\b|\bbanquet\b|\bopening\b|\bceremony\b/, "Email": /\bemail|\be-mail|\bwrote\b|\breplied\b|\bmessage\b|\bnote\b/,
     "Phone call": /\bphone\b|\bcall(ed|s)?\b|\brang\b|\bdialed\b/, "Video call": /\bvideo\b|\bzoom\b|\bteams\b|\bfacetime\b|\bgoogle meet\b|\bonline\b|\bvirtual/ },
   response: { "Accepted": /\baccept|\bagreed\b|\bsaid yes\b|\byes to\b|\bcommitted\b|\bhe's in\b|\bshe's in\b|\bthey're in\b|\bhanded\b|\bcheck\b|\bcheque\b|\bpledged\b|\bgave\b|\bwrote\b/,
     "Declined": /\bdeclin|\bturned (me|us|it) down\b|\bpassed\b|\bsaid no\b|\bnot interested\b|\bno thanks\b|\bwon't\b|\bwouldn't\b|\bnot going to\b/,
@@ -24,14 +25,14 @@ const OPTION_WORDS = {
   dnc: { true: /\bdo not contact\b|\bdon't contact\b|\bno contact\b|\bnever contact\b/, false: /\bcontact\b/ },
   permText: { true: /\btext/, false: /\btext/ }
 };
-const DATE_WORDS = /\b(today|tomorrow|yesterday|tonight|this|next|last|coming|end of|beginning of|mid|early|late|week|weekend|month|year|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|first|second|third|fourth|fifth|tenth|fifteenth|twentieth|thirtieth|christmas|thanksgiving|halloween|new year|on the|by the|the \d+(st|nd|rd|th)?|\d+(st|nd|rd|th)|\d+\/\d+|\d{4})\b/;
+const DATE_WORDS = /\bin (a|an|one|two|three|four|five|six|\d+|a few|a couple of|several) (day|week|month|year)s?\b|\b(a|one|two|three|\d+) (day|week|month|year)s? (from|out|later|ahead)\b|\b(today|tomorrow|yesterday|tonight|this|next|last|coming|end of|beginning of|mid|early|late|week|weekend|month|year|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|first|second|third|fourth|fifth|tenth|fifteenth|twentieth|thirtieth|christmas|thanksgiving|halloween|new year|on the|by the|the \d+(st|nd|rd|th)?|\d+(st|nd|rd|th)|\d+\/\d+|\d{4})\b/;
 // every officer line of this call, lower case
 function evidenceLines() { return (G.recent || []).filter(l => l.startsWith("Officer: ")).map(l => l.slice(9).toLowerCase().replace(/[’‘]/g, "'")); }
 // did the officer say this amount, in digits or words ("25,000", "25k", "twenty-five thousand", "ten grand")?
 function amountSaid(n, lines) {
   n = toNum(n); if (!(n > 0)) return false;
   return lines.some(t => {
-    const s = t.replace(/\bgrand\b/g, "thousand").replace(/\b(a|one) (thousand|million|hundred)\b/g, "1 $2");
+    const s = t.replace(/\bgrand\b/g, "thousand");
     if (new RegExp("(^|[^0-9.])" + String(n).replace(".", "\\.") + "(?![0-9])").test(s.replace(/,/g, ""))) return true;
     const ws = s.replace(/[$]/g, "").replace(/[^a-z0-9. ]/g, " ").split(/\s+/).filter(Boolean);
     for (let i = 0; i < ws.length; i++) for (let j = i + 1; j <= Math.min(ws.length, i + 7); j++) { const v = spokenAmount(ws.slice(i, j).join(" ")); if (v === n) return true; if (v !== null && v > n) break; }
