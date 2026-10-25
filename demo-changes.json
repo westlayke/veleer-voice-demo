@@ -1,6 +1,7 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+    {"date": "Oct 25, 5:05 PM", "change": "The dead-spot limit is 5 minutes (Carverhill's choice; it was 10 minutes for twenty minutes, and 2 before that).", "area": "Voice line"},
     {"date": "Oct 25, 4:55 PM", "change": "In a dead spot the app keeps reconnecting for up to 10 minutes (was 2) and picks the conversation back up by itself when the signal returns; after the first minute down, \"Still trying to reconnect\" is said every 30 s instead of every 10 s.", "area": "Voice line"},
     {"date": "Oct 25, 4:35 PM", "change": "A source check guards against a // comment that swallows code on its line (it failed six checks once today): tools/lint-comments.js runs before every publish and as a suite check, which also makes sure every app script parses.", "area": "Tests"},
   {"date": "2026-10-25", "change": "Hands-free is now on from the start of every conversation, for everyone: the assistant reads each finished form back and saves it on the officer's yes, without any tapping. Saying \"I've parked\" or that you'll tap yourself turns it off for that conversation. Also from the 3:50 PM walk: when the assistant offers the next form in two sentences (\"We were about to decide on moving Sandy to Cultivation.\" then \"Want to do that now?\"), a yes now opens the form; the guard used to read only the last sentence and refused three times.", "area": "Hands-free, Rules"},
