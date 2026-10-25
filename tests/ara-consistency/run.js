@@ -14,7 +14,7 @@ const JOBS = Number(process.env.JOBS || 3);
 const ONLY = process.env.FLOWS ? process.env.FLOWS.split(",") : null;
 // xAI prices (Oct 2026): speech to speech per minute of open line, and each conversation.item.create (counted for every item, to be safe)
 const PER_MIN = Number(process.env.PER_MIN || 0.08), PER_ITEM = Number(process.env.PER_ITEM || 0.004);
-const MAX_CONV_MS = 6 * 60000, TURN_WAIT_MS = 25000, MAX_TURNS = 14;
+const MAX_CONV_MS = 6 * 60000, TURN_WAIT_MS = 25000, MAX_TURNS = 20;
 const ROOT = path.resolve(__dirname, "../.."), OUT = path.join(__dirname, "results");
 
 if (!KEY) { console.error("ARA_CONSISTENCY_KEY is not set"); process.exit(1); }
