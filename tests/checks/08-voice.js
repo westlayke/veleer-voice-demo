@@ -163,6 +163,35 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   await ara(p, "show_contact_draft", { first: "Pauline", last: "Smith" });
   ok(/The "New contact" form is still open on screen, not saved yet\. Filled in so far: First name: Pauline; Last name: Smith[^\n]*If the officer asks about it, carry on with it/.test(await p.evaluate(() => ctxNow())), "the open form isn't in Right now: " + await p.evaluate(() => ctxNow().replace(/\n/g, " / ").slice(0, 400)));
 });
+test("Ara: after a reconnect the app says where the form stands and asks the pending question itself (an optional question, or the read-back waiting for a yes)", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await ara(p, "show_contact_draft", { first: "Nora", last: "Quist", email: "nora@example.org", mobile: "(555) 010-0188" });
+  ok(await p.evaluate(() => V && V.opt && V.opt.cur === "capacity"), "the capacity question isn't pending after the required details");
+  const forced = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "force_message").map(x => x.item.content[0].text), n);
+  const instr = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "session.update" && x.session.instructions).map(x => x.session.instructions).join(" "), n);
+  let n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
+  let f = await forced(n0), i = await instr(n0);
+  ok(f.some(t => /^Sorry, I lost you for a moment\. Next, Nora's capacity rating, which an opportunity needs\. A is \$250,000 and up/.test(t)), "the pending optional question wasn't asked again by the app after the reconnect: " + JSON.stringify(f));
+  ok(/Just now: The connection to the officer dropped[^]*The optional questions for the "New contact" form are at "Capacity rating" \(the earlier ones are done\); the app asks it again itself\./.test(i), "Ara's instructions don't say where the optional questions stand: " + i.slice(-500));
+  ok(!(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /Sorry, I lost you/.test(x.response.instructions || ""); }), n0)), "Ara was also asked to say the sorry line herself (a doubled turn)");
+  // the read-back waiting for a yes is read again by the app
+  await p.evaluate(() => { window.__noAutoForce = false; });
+  await ara(p, "optional_fields", { step: "stop" }, 600);
+  ok(await p.evaluate(() => !!(G.saveCheck && G.hands)), "the form wasn't read back and waiting for a yes");
+  n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
+  f = await forced(n0); i = await instr(n0);
+  ok(f.some(t => /^Sorry, I lost you for a moment\. New contact\. First name: Nora; Last name: Quist; Email: nora@example\.org[^]*Shall I save it\?$/.test(t)), "the read-back wasn't repeated by the app after the reconnect: " + JSON.stringify(f));
+  ok(/has been read back in full and is waiting for the officer's yes to save it/.test(i), "Ara's instructions don't say the form is waiting for a yes: " + i.slice(-400));
+  // a form with required fields still missing: Ara is guided as before, told what's still needed
+  await p.evaluate(() => { V = null; G.saveCheck = null; renderOverlay && renderOverlay(); });
+  await p.evaluate(() => { V = null; });
+  await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
+  n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /Sorry, I lost you[^]*The "Add planned ask" form still needs: /.test(x.response.instructions || ""); }), n0), "a form with required fields missing didn't guide Ara with what's still needed");
+});
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
   await signIn(p);
   await said(p, "I've parked, I'll tap myself."); await ara(p, "set_hands_free", { on: false }); // this check is the tap flow; hands-free is on by default since Oct 25

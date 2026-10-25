@@ -233,6 +233,18 @@ function hfCommit() {
 }
 // a form read back and waiting for the officer's yes, when Ara moves on to another form instead of calling save_form
 // (Oct 25: "Yes, let's go ahead" to an interaction report's read-back became show_cultivation_decision, and the report was lost)
+// Where the form process stands, in the app's own words, for a reconnect or Carry on (Carverhill, Oct 25: "always be tracking
+// on our side where we are in a form process, and then when we have to reconnect, we pass Ara that context"). `where` goes into
+// Ara's instructions; `ask` is the pending question, which the app asks again itself as a scripted line.
+function formPosition() {
+  if (!V || !ACTIONS[V.action]) return null;
+  const A = ACTIONS[V.action], d = readDraft(), key = V.action + JSON.stringify(d), label = (k) => ((A.fields || []).find(f => f.k === k) || {}).label || k;
+  if (G.hands && G.saveCheck && G.saveCheck.key === key) return { where: `The "${A.title}" form has been read back in full and is waiting for the officer's yes to save it; the app asks "Shall I save it?" again itself.`, ask: `${hfReadback()} Shall I save it?` };
+  if (V.opt && V.opt.cur && OPT_STEPS[V.action]) { const st = OPT_STEPS[V.action].find(x => x.k === V.opt.cur); if (st) return { where: `The optional questions for the "${A.title}" form are at "${label(st.k)}" (the earlier ones are done); the app asks it again itself.`, ask: st.q(optWho(), V.opt.only === st.k) }; }
+  if (V.action === "interaction" && V.askedSubst && !V.fromVoice.has("substantive")) return { where: "The app asked whether the interaction was substantive and is waiting for the answer; it asks again itself.", ask: SUBST_Q };
+  const need = (A.fields || []).filter(f => f.req && optEmpty(d[f.k])).map(f => f.label);
+  return { where: need.length ? `The "${A.title}" form still needs: ${need.join(", ")}. Ask for the first of those.` : `Every required field of the "${A.title}" form is in; nothing has been read back yet.`, ask: "" };
+}
 function hfSettlePending() {
   const c = G.saveCheck; if (!V || !c || !G.hands || c.key !== V.action + JSON.stringify(readDraft())) return null;
   const title = ACTIONS[V.action].title, heard = (G.heardN || 0) > c.n ? G.lastHeard : null;
