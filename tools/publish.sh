@@ -5,6 +5,7 @@
 # Then run the tests, and commit and push only if they all pass.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+node tools/lint-comments.js   # a // comment that swallowed code fails the publish (Oct 25)
 case "${1:-}" in
   preview)
     STAMP=$(TZ=America/New_York date +"%b %-d, %-I:%M %p ET"); B=$(date +%s)
