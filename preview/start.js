@@ -45,14 +45,16 @@ function setSpooky(on) {
   if (on) { S.settings.spooky = true; delete S.settings.noSpooky; delete S.settings.xmas; } else delete S.settings.spooky;
   save(); applySpooky(); render(); act("step", "spooky mode " + (on ? "on" : "off")); spookyKick();
 }
+// The owl's hoot is a recording from tunetank.com ("Owl hooting in the night"), sent by Carverhill (Oct 24).
 // Christmas sounds that are files (in sounds/): Santa's voice from a Pixabay recording (freesound_community, Pixabay Content License), and a sleigh bell recording by Dragon Studio from Pixabay (Pixabay Content License), sent by Carverhill.
 // Fetched as soon as Christmas is on, decoded and played on the sound engine below (so the same first-tap and never-during-a-call rules apply)
-const XMAS_FILES = { hohoho: "santa-hoho.mp3", merry: "santa-merry.mp3", bells: "sleigh-bells.mp3", jingle: "jingle.mp3" }, xmasRaw = {}, xmasDec = {};
+const XMAS_FILES = { hohoho: "santa-hoho.mp3", merry: "santa-merry.mp3", bells: "sleigh-bells.mp3", jingle: "jingle.mp3", owl: "owl-hoot.mp3" }, xmasRaw = {}, xmasDec = {};
 function xmasPrefetch() { Object.entries(XMAS_FILES).forEach(([k, f]) => { if (!xmasRaw[k]) xmasRaw[k] = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + f).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); }); }
-function xmasPlay(c, kind) {
+xmasRaw.owl = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/owl-hoot.mp3").then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); // small (42 KB): ready for the first tap
+function xmasPlay(c, kind, delay = 0) {
   if (!xmasRaw[kind]) xmasPrefetch();
   xmasDec[kind] = xmasDec[kind] || xmasRaw[kind].then(b => b ? c.decodeAudioData(b.slice(0)) : null).catch(() => null);
-  xmasDec[kind].then(buf => { if (!buf || G.live || c.state !== "running") return; const src = c.createBufferSource(), g = c.createGain(); g.gain.value = 0.7; src.buffer = buf; src.connect(g); g.connect(c.destination); src.start(c.currentTime + 0.02); });
+  xmasDec[kind].then(buf => { if (!buf || G.live || c.state !== "running") return; const src = c.createBufferSource(), g = c.createGain(); g.gain.value = 0.7; src.buffer = buf; src.connect(g); g.connect(c.destination); src.start(c.currentTime + 0.02 + delay); });
   spkPlayed++; return true;
 }
 // spooky sounds, made by the phone (no sound files): quiet, only after the first tap, never during a conversation with Ara
@@ -69,6 +71,7 @@ function spookySound(kind, retried) {
   const c = spkCtx; if (!c || G.live) return false;
   if (c.state !== "running") { if (!retried) c.resume().then(() => { if (c.state === "running") spookySound(kind, true); }).catch(() => {}); return false; }
   if (kind === "sleigh") { setTimeout(() => spookySound("hohoho", true), 1600); return spookySound("bells", true); } // Santa's sleigh: bells, then "ho ho ho"
+  if (kind === "owl" || kind === "hoot") return xmasPlay(c, "owl", kind === "owl" ? 1.6 : 0); // the recording; the perched owl hoots once it has landed
   if (XMAS_FILES[kind]) return xmasPlay(c, kind);
   const t0 = c.currentTime + 0.05, out = c.createGain(); out.gain.value = 0.18; out.connect(c.destination);
   const env = (g, at, peak, len) => { g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(peak, at + Math.min(0.3, len / 4)); g.gain.exponentialRampToValueAtTime(0.0001, at + len); };
@@ -88,12 +91,6 @@ function spookySound(kind, retried) {
   } else if (kind === "bat") { // a few high squeaks
     for (let i = 0; i < 5; i++) { const at = t0 + 0.3 + i * 0.16 + Math.random() * 0.05, o = c.createOscillator(), g = c.createGain(), f0 = 3200 + Math.random() * 1400;
       o.type = "sine"; o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f0 * 0.6, at + 0.07); env(g, at, 0.35, 0.08); o.connect(g); g.connect(out); o.start(at); o.stop(at + 0.1); }
-  } else if (kind === "owl" || kind === "hoot") { // "hoo, hoo-hoooo": soft, breathy, pitched high enough for a phone speaker (owl: once it has perched; hoot: straight away)
-    const lag = kind === "hoot" ? -1.5 : 0;
-    [[1.6, 0.28], [2.05, 0.18], [2.3, 0.6]].forEach(([dt, len]) => { const at = t0 + dt + lag;
-      [[1, "sine", 1], [2, "sine", 0.35], [3, "triangle", 0.12]].forEach(([mult, type, vol]) => { const o = c.createOscillator(), g = c.createGain();
-        o.type = type; o.frequency.setValueAtTime(560 * mult, at); o.frequency.linearRampToValueAtTime(600 * mult, at + len * 0.3); o.frequency.linearRampToValueAtTime(500 * mult, at + len);
-        env(g, at, 0.7 * vol, len); o.connect(g); g.connect(out); o.start(at); o.stop(at + len + 0.05); }); });
   } else if (kind === "creak") { // a slow creaking door as a form opens
     const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(), lfo = c.createOscillator(), dep = c.createGain();
     o.type = "sawtooth"; o.frequency.setValueAtTime(95, t0); o.frequency.linearRampToValueAtTime(150, t0 + 0.5); o.frequency.linearRampToValueAtTime(80, t0 + 1.1);
