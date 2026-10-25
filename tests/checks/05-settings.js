@@ -201,7 +201,7 @@ test("Halloween: an owl asks for a tap so sounds can play, hoots when tapped, an
   await p.tap(".owlhint-owl"); await p.waitForTimeout(500);
   ok(await p.isVisible(".owlhint >> text=Sounds are on"), "the owl didn't say the sounds are on");
   ok(await p.evaluate((n) => window.__demo.spkPlayed > n, n), "the owl didn't hoot");
-  ok(await p.evaluate(() => fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/owl-hoot.mp3").then(r => r.ok && r.headers.get("content-length") !== "0")), "the owl recording is missing");
+  ok(await p.evaluate(() => fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/owl-hoot.mp3").then(r => r.ok && r.headers.get("content-length") !== "0")) && await p.evaluate(() => fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES.pumpkin).then(r => r.ok)), "the owl or pumpkin recording is missing");
   ok((await state(p)).settings.seenOwlHint === true, "the owl would come back next time");
   await p.waitForTimeout(3300);
   ok(!(await p.isVisible(".owlhint")), "the owl didn't fly away");
