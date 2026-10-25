@@ -156,7 +156,7 @@ async function netLog(what, known) { const sess = G.session, info = netInfo(), m
 // the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
 async function reconnect(why) {
   if (!G.live) return;
-  if (Date.now() - (G.lastMsg || G.t0 || Date.now()) > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } // 2 minutes with no usable line, however many tries
+  if (Date.now() - (G.lastMsg || G.lastHeard || G.t0 || Date.now()) > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
   G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
@@ -177,7 +177,7 @@ async function reconnect(why) {
   }
   if (!G.live) return;
   if (G.spokeInGap) act("step", "The officer talked while the line was down: Ara will ask them to repeat it");
-  G.lastMsg = 0; openSocket(token, () => guide(reconnectLine()));
+  G.lastHeard = G.lastMsg || G.lastHeard || Date.now(); G.lastMsg = 0; openSocket(token, () => guide(reconnectLine()));
 }
 const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "",
