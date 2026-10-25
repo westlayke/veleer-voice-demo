@@ -27,7 +27,9 @@ const TOKEN_WAIT_MS = 6000;                  // a voice pass that takes longer c
 const TOKEN_RETRY_MS = 2000;                 // between tries for a voice pass while the line is down
 const DOWN_GIVE_UP_MS = 120000;              // a line down this long (no voice pass to be had) ends the call with the phone's spoken notice
 const SAY_DOWN_MS = 5000, SAY_STILL_MS = 12000, SAY_REPEAT_MS = 10000; // the phone's own spoken lines while the line is down (Carverhill, Oct 25)
-const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."];
+const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."]; // recorded in sounds/ (line-dropped, still-trying, line-back): the phone's own speech is silent during a call on an iPhone (Oct 25)
+const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3" }, lineRaw = {}, lineBuf = {};
+const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
 
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
@@ -100,13 +102,17 @@ function openSocket(token, first, second) {
     if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws;
     send({ type: "session.update", session: sessionCfg() }); sendExtras(); if (typeof first === "function") first(); else guide(first);
-    downEnd();
+    downEnd(true); G.openedAt = Date.now(); linePrep();
     if (ws.resumed) netLog("Picked up the same conversation");
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     netLog(`Voice line open in ${Date.now() - t0} ms${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops} of ${MAX_DROPS})` : ""}`);
     if (G.drops) setTimeout(prefetchToken, 2000); // the ready pass was used: have the next one ready for another drop (seen Oct 24: 7 s to fetch one)
-    clearInterval(G.netTick); G.netTick = setInterval(() => { if (G.live && G.ws === ws) netLog("Reading"); }, 30000);
+    clearInterval(G.netTick); G.netTick = setInterval(async () => { if (!(G.live && G.ws === ws)) return; const ms = await pingMs(); netLog("Reading", ms);
+      // nothing was expected from Grok (the officer was thinking), so nothing else notices a dead network: a second quick test, then a fresh line (Oct 25: 35 s of "Hello?")
+      if (typeof ms === "number" || !G.live || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+      const again = await pingMs(LINE_TEST_MS); if (typeof again === "number" || !G.live || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+      act("step", "The line went quiet (two test requests unanswered): fresh line"); reconnect("the line went quiet"); }, 30000);
   };
   ws.onmessage = (m) => { if (G.ws !== ws) return; G.lastMsg = G.convAt = Date.now(); let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
   ws.onclose = (ev) => {
@@ -117,6 +123,7 @@ function openSocket(token, first, second) {
     if (document.visibilityState === "hidden") { interrupted("connection closed while away"); return; }
     if (!opened && ws.resumed) { G.convId = null; act("step", "Couldn't pick up the same conversation: opening a new one"); reconnect("the conversation couldn't be picked up"); return; }
     if (!opened && !G.drops) { endCall("couldn't connect"); toast("Couldn't connect to Grok voice. Try again in a moment."); return; }
+    if (opened && G.drops && Date.now() - (G.openedAt || 0) > STABLE_MS) { vlog("the line had been up a while: reconnect count starts afresh"); G.drops = 0; }
     reconnect("the voice line dropped");
   };
   ws.onerror = () => {};
@@ -163,18 +170,33 @@ async function reconnect(why) {
   G.lastMsg = 0; openSocket(token, () => guide(reconnectLine()));
 }
 const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
-    justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "";
-  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${d ? d + " " : ""}${G.spokeInGap ? "The officer was talking while the line was down and you didn't hear it: right after the sorry line, ask them to say that again. " : G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}If they ask whether you're there, say yes in two words and carry on with what you were doing; never ask "what would you like to do" while a form is open, and don't say "welcome back". Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} with no ${spookyMode() ? "spooky" : xmasMode() ? "festive" : "other"} aside in this reply. Then ask just one question: if the last thing said was a question to the officer and they haven't answered it in the lines above, ask it again; otherwise ask the next question needed to finish. If the officer's answer is in the lines above, use it (call the draft tool with it) instead of asking. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
+    justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "",
+    carryOn = !V && G.lastSaved && Date.now() - G.lastSaved.at < 10 * 60e3 ? `You were working on ${G.lastSaved.who}: after the sorry line, ${G.lastSaved.next} Never ask whether they want to work on someone else. ` : "",
+    hf = G.hands ? "Hands-free is on: the app reads each finished form back and asks \"Shall I save it?\" itself, so never read a form back or ask whether it's correct yourself. " : "";
+  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${carryOn}${hf}${d ? d + " " : ""}${G.spokeInGap ? "The officer was talking while the line was down and you didn't hear it: right after the sorry line, ask them to say that again. " : G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}If they ask whether you're there, say yes in two words and carry on with what you were doing; never ask "what would you like to do" while a form is open, and don't say "welcome back". Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} with no ${spookyMode() ? "spooky" : xmasMode() ? "festive" : "other"} aside in this reply. Then ask just one question: if the last thing said was a question to the officer and they haven't answered it in the lines above, ask it again; otherwise ask the next question needed to finish. If the officer's answer is in the lines above, use it (call the draft tool with it) instead of asking. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
 // while the line is down the phone itself speaks, since Grok can't: "The line dropped..." at 5 s, "Still trying..." at 12 s and every 10 s after (Carverhill, Oct 25: he had no idea what was going on)
-function sayLocal(text) {
-  try { if (!window.speechSynthesis) return false; speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1; speechSynthesis.speak(u); act("step", `The phone said: "${text}"`); vlog(`phone said: ${text}`); return true; } catch (e) { return false; }
+function linePrep() { // fetch and decode the recorded lines, so they can play the moment the line drops
+  Object.entries(LINE_FILES).forEach(([k, f]) => { if (!lineRaw[k]) lineRaw[k] = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + f).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); });
+  const c = G.ctx; if (!c) return;
+  Object.keys(LINE_FILES).forEach(k => { if (lineBuf[k]) return; lineRaw[k].then(b => b && c.decodeAudioData(b.slice(0))).then(buf => { if (buf) lineBuf[k] = buf; }).catch(() => {}); });
+}
+function playLine(kind) { // through the call's own sound, which the phone keeps open during a conversation
+  const c = G.ctx; if (!c || c.state !== "running" || !lineBuf[kind]) return false;
+  try { const src = c.createBufferSource(), g = c.createGain(); g.gain.value = 1; src.buffer = lineBuf[kind]; src.connect(g); g.connect(c.destination); src.start(c.currentTime + 0.02); return true; } catch (e) { return false; }
+}
+function sayLocal(text, kind) {
+  const how = kind && playLine(kind) ? "recording" : (() => { try { if (!window.speechSynthesis) return ""; speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1; speechSynthesis.speak(u); return "phone's speech"; } catch (e) { return ""; } })();
+  if (how) { act("step", `The phone said (${how}): "${text}"`); vlog(`phone said (${how}): ${text}`); }
+  return !!how;
 }
 function downStart() {
-  if (G.downAt) return; G.downAt = Date.now();
-  const again = () => { if (!G.live || !G.downAt) return; sayLocal(DOWN_LINES[1]); G.downTimer = setTimeout(again, SAY_REPEAT_MS); };
-  G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; sayLocal(DOWN_LINES[0]); G.downTimer = setTimeout(again, SAY_STILL_MS - SAY_DOWN_MS); }, SAY_DOWN_MS);
+  if (G.downAt) return; G.downAt = Date.now(); linePrep();
+  const again = () => { if (!G.live || !G.downAt) return; sayLocal(DOWN_LINES[1], "still"); G.downTimer = setTimeout(again, SAY_REPEAT_MS); };
+  G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; sayLocal(DOWN_LINES[0], "dropped"); G.downTimer = setTimeout(again, SAY_STILL_MS - SAY_DOWN_MS); }, SAY_DOWN_MS);
 }
-function downEnd() { clearTimeout(G.downTimer); G.downTimer = null; if (G.downAt) { try { speechSynthesis.cancel(); } catch (e) {} vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); } G.downAt = 0; }
+function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;
+  if (G.downAt) { try { speechSynthesis.cancel(); } catch (e) {} vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back"); }
+  G.downAt = 0; }
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {
   downEnd();
