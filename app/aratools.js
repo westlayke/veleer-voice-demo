@@ -266,9 +266,15 @@ function draftTool(callId, name, data) {
   G.tour = false; // the officer moved on to other work; keep it out of the walkthrough that gets dropped
   let tool = TOOLS.find(t => t.name === name && !t.hidden);
   if (!tool) { toolReply(callId, { ok: false, error: "Unknown tool." }); return; }
+  // another form while the open one was read back and is waiting for a yes: the officer's yes saves it first, anything else keeps it open (a safeguard added Oct 25)
+  const settle = () => { const p = hfSettlePending(); if (!p) return false;
+    if (!p.saved) { toolReply(callId, { ok: false, error: `The open ${p.title} form was read back and is waiting for the officer's yes; it is NOT saved${p.err ? ` (${p.err})` : ""}. Settle it first: if they said yes, call save_form with confirmed true; if they want a change, update it; otherwise ask them. Then open the ${ACTIONS[tool.action].title} form.` }); return true; }
+    guide(`The officer's yes saved the ${p.title} form first (${p.line}); say so in a few words before going on.`); return false; };
+  if (V && V.action !== tool.action && settle()) return;
   const target = resolveTarget(tool.action, data.contact_name, { date: data.which_date ? normDate(data.which_date) : "", which: data.which });
   if (target.error) { toolReply(callId, { ok: false, error: target.error }); return; }
   if (target.route) { tool = TOOLS.find(t => t.action === target.route); delete data.fund; } // Record gift in Commitment: applied to the pledge
+  if (V && V.action === tool.action && ((V.target.contact || null) !== (target.contact || null) || (V.target.item || null) !== (target.item || null)) && settle()) return;
   delete data.contact_name; delete data.which; delete data.which_date;
   // the voice model sometimes files the officer's words under a name the tool doesn't have (notes, description...); put them where they belong, and note any other stray field in the Voice log
   const known = new Set(Object.keys(tool.props || {})), area = (ACTIONS[tool.action].fields.find(f => f.type === "area" && f.req) || {}).k;

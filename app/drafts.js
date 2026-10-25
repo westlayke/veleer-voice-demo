@@ -278,6 +278,7 @@ function saveDraft() {
     }
   }
   const ruleMsg = miss.length ? "" : V.action === "ask" && d.response === "Declined" && !String(d.lostReason || "").trim() ? ["lostReason", "Add the reason before saving. A declined ask closes the opportunity as Closed Lost, with a reason.", "the ask was declined but there is no reason. Explain that a declined ask closes the opportunity as Closed Lost and needs a reason, ask why"]
+    : V.action === "cultivate" && d.decision !== "Defer" && cultMissing(V.target.contact).length ? ["decision", `Can't move to Cultivation yet: it still needs ${cultMissing(V.target.contact).join(" and ")}.`, `the move to Cultivation still needs ${cultMissing(V.target.contact).join(" and ")}. Say so in one sentence and offer to log the interaction or set the rating`]
     : V.action === "cultivate" && d.decision === "Defer" && !String(d.reason || "").trim() ? ["reason", "Add a reason before saving. Deferring needs a reason, which the Chief Gift Officer can see.", "they chose Defer without a reason. Explain that a defer needs a reason the Chief Gift Officer can see, ask for it"] : "";
   if (ruleMsg) {
     const el = document.getElementById("draftErr"); el.hidden = false; el.textContent = ruleMsg[1];
