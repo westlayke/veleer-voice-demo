@@ -417,7 +417,7 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; it ke
   const back = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, sorry: __sent.some(s => s.includes("Sorry, I lost you") && s.includes("Which entity is the ask for?")) }));
   ok(back.newLine && back.live && back.sorry, "the dropped line wasn't reopened with the last question and the open form");
   ok(await p.evaluate(() => !!document.getElementById("draftForm")), "the planned ask form closed when the line dropped");
-  await p.evaluate(() => { window.speechSynthesis.speak = (u) => { window.__spoke = u.text; }; });
+  await p.evaluate(() => { window.speechSynthesis.speak = (u) => { window.__spoke = u.text; }; }); // the phone's built-in speech must never be used (Oct 25: iOS "Stop audio recording?" dialog)
   // a fourth drop with the line heard from recently keeps reconnecting (Oct 25: a driveway dead spot took 4 tries and the call was hung up)
   await p.evaluate(() => { G.drops = 3; G.lastMsg = Date.now() - 20000; window.__ws1 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1200);
   const four = await p.evaluate(() => ({ live: G.live, drops: G.drops, log: ACT.q.map(a => a.text).join(" | ") }));
@@ -425,7 +425,8 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; it ke
   await p.waitForFunction(() => window.__ws !== window.__ws1, null, { timeout: 12000 }); await p.waitForTimeout(300);
   await p.evaluate(() => { G.lastMsg = Date.now() - 130000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
   const out = await p.evaluate(() => ({ live: G.live, spoke: window.__spoke || "", log: ACT.q.map(a => a.text).join(" | ") + __logs.map(l => JSON.stringify(l)).join(" ") }));
-  ok(!out.live && /isn't answering/.test(out.spoke), "after the tries ran out the call didn't end with a spoken line");
+  ok(!out.live && out.spoke === "", "after the tries ran out the call didn't end, or the phone's built-in speech was used (never allowed since Oct 25): " + out.spoke);
+  ok(await p.isVisible("text=The voice service isn't answering"), "the screen doesn't say the voice service isn't answering");
   ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 2 minutes without a working line/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
 });
 test("Ara: no reply at the first tick on a slow line gets a fresh line at once, and a new line that won't open gets a second line alongside", async (p) => {
