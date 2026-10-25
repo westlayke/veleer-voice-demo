@@ -3,6 +3,7 @@ module.exports = ({ test, ok, fresh, signIn, state, tab, ara, said, titleOf, PAG
 
 test("Ara: a new contact gets the other contact detail, then the optional fields with the capacity rating", async (p) => {
   await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); }); // this check starts in tap mode; hands-free is on by default since Oct 25
   let r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin" });
   ok(r.still_needed && r.still_needed.some(x => /Email or mobile/.test(x)), "Ara was not asked for an email or mobile");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
@@ -140,6 +141,7 @@ test("Evidence rule: a value the officer never said is left off the form and nam
 
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
   await signIn(p);
+  await said(p, "I've parked, I'll tap myself."); await ara(p, "set_hands_free", { on: false }); // this check is the tap flow; hands-free is on by default since Oct 25
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });
   ok(r.field === "capacity" && /which an opportunity needs/.test(r.ask_exactly || ""), "the rating wasn't asked first: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "skip" });
@@ -472,6 +474,7 @@ test("Ara: a planned ask for an entity with a state campaign leaves the campaign
 
 test("Ara: a slow reply gets a soft tick, a doubled reply is cut off, readings time a test request, and a voice pass stays ready during a call", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); }); // this check starts in tap mode; hands-free is on by default since Oct 25
   const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
   await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
   await p.evaluate(() => { window.__cues = []; const c = cue; window.cue = (k) => { __cues.push(k); }; });

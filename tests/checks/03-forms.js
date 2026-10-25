@@ -56,6 +56,7 @@ test("The + button on every screen opens one menu to log, add or record anything
 });
 test("Ending a conversation with a form open brings back the voice button, keeping what was filled in", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Ito, Ken"); await p.waitForTimeout(300);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); }); // this check starts in tap mode; hands-free is on by default since Oct 25
   if (await p.evaluate(() => G.live)) { await p.tap(".cb-end"); await p.waitForTimeout(300); } // the welcome conversation may still be open
   await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap("[data-qa=meeting]"); await p.waitForTimeout(300);
   await p.tap("[data-act=voicefill]"); await p.waitForTimeout(600);
@@ -106,6 +107,7 @@ test("Log a meeting will not save without its required fields", async (p) => {
 });
 test("New contact and new opportunity forms show every field, and Ara offers the opportunity's optional fields", async (p) => {
   await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); }); // this check starts in tap mode; hands-free is on by default since Oct 25
   await ara(p, "show_contact_draft", { first: "Ana", last: "Ruiz" });
   ok(!(await p.isVisible("details.more")) && (await p.isVisible("#f_howMet")), "the new contact form still hides fields under More details");
   await p.tap("[data-act=close]"); await p.waitForTimeout(300);
