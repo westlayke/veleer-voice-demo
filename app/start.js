@@ -45,12 +45,13 @@ function setSpooky(on) {
   if (on) { S.settings.spooky = true; delete S.settings.noSpooky; delete S.settings.xmas; } else delete S.settings.spooky;
   save(); applySpooky(); render(); act("step", "spooky mode " + (on ? "on" : "off")); spookyKick();
 }
-// The owl's hoot is a recording from tunetank.com ("Owl hooting in the night"), sent by Carverhill (Oct 24).
+// The owl's hoot is a recording from tunetank.com ("Owl hooting in the night"), sent by Carverhill (Oct 24). The rolling pumpkin plays
+// the opening of Bach's Toccata and Fugue in D minor, BWV 565 (the first 7 s of a recording Carverhill sent, Oct 24).
 // Christmas sounds that are files (in sounds/): Santa's voice from a Pixabay recording (freesound_community, Pixabay Content License), and a sleigh bell recording by Dragon Studio from Pixabay (Pixabay Content License), sent by Carverhill.
 // Fetched as soon as Christmas is on, decoded and played on the sound engine below (so the same first-tap and never-during-a-call rules apply)
-const XMAS_FILES = { hohoho: "santa-hoho.mp3", merry: "santa-merry.mp3", bells: "sleigh-bells.mp3", jingle: "jingle.mp3", owl: "owl-hoot.mp3" }, xmasRaw = {}, xmasDec = {};
+const XMAS_FILES = { hohoho: "santa-hoho.mp3", merry: "santa-merry.mp3", bells: "sleigh-bells.mp3", jingle: "jingle.mp3", owl: "owl-hoot.mp3", pumpkin: "pumpkin-toccata.mp3" }, xmasRaw = {}, xmasDec = {};
 function xmasPrefetch() { Object.entries(XMAS_FILES).forEach(([k, f]) => { if (!xmasRaw[k]) xmasRaw[k] = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + f).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); }); }
-xmasRaw.owl = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/owl-hoot.mp3").then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); // small (42 KB): ready for the first tap
+["owl", "pumpkin"].forEach(k => { xmasRaw[k] = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES[k]).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); }); // small (42 and 55 KB): ready when the first one comes by
 function xmasPlay(c, kind, delay = 0) {
   if (!xmasRaw[kind]) xmasPrefetch();
   xmasDec[kind] = xmasDec[kind] || xmasRaw[kind].then(b => b ? c.decodeAudioData(b.slice(0)) : null).catch(() => null);
