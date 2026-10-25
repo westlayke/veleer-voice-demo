@@ -46,6 +46,19 @@ function officerResponse() {
   if (/\b(no|not|didn't|declined|turned (me|us|it) down|passed)\b/.test(t)) return null;
   return /\b(handed (me|us|over)|gave (me|us) (a|the|his|her|their) check|wrote (me |us )?(a|the) check|said yes|agreed|accepted|committed|he's in|she's in|they're in|yes to)\b/.test(t) ? "Accepted" : null;
 }
+// the last few officer lines, newest last, and the line Ara said just before the officer's latest
+function officerLines(n = 4) { return (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-n).map(l => l.slice(9).toLowerCase().replace(/[’‘]/g, "'")); }
+function askedBefore() { const r = G.recent || []; let i = r.length - 1; while (i >= 0 && !r[i].startsWith("Officer: ")) i--; return i < 1 ? "" : (r.slice(0, i).reverse().find(l => !l.startsWith("Officer: ")) || "").toLowerCase(); }
+// did the officer say whether it was substantive (the word itself, or a yes/no to a question that used it)? Oct 25 consistency run: Grok marked 2 of 6 reports substantive on its own
+function officerGaveSubstantive() { const ls = officerLines(3); if (ls.some(t => /\bsubstantive\b/.test(t))) return true;
+  const last = ls[ls.length - 1] || ""; return /\bsubstantive\b/.test(askedBefore()) && (hfYes(last) || /\b(no|not|wasn't|nope)\b/.test(last)); }
+// did the officer give a next step (an action word in their words, or an answer to a next-step question)? Oct 25: Grok invented "Follow up on James's interest"
+function officerGaveNextStep() { const ls = officerLines(4), last = ls[ls.length - 1] || "";
+  if (/\b(next step|follow[- ]?up|follow up|what's next)\b/.test(askedBefore()) && last.split(/\s+/).length >= 2 && !/\b(no|none|nothing|not sure|don't know)\b/.test(last)) return true;
+  return ls.some(t => /\b(next step|follow[- ]?up|call (him|her|them|back)|give (him|her|them) a call|phone (him|her|them)|meet(ing)?|lunch|coffee|dinner|breakfast|send (him|her|them)?|email (him|her|them)?|text (him|her|them)|visit|drop by|stop by|check (in|back)|reach out|invite|schedule|set up|get back|circle back|touch base|task|remind|tour|introduce|proposal|deck|materials)\b/.test(t)); }
+// did the officer say something that matches the outcome Grok picked?
+const OUTCOME_WORDS = { "Interested, continue cultivation": /\b(interested|keen|excited|enthusiastic|positive|receptive|engaged|on board|liked it|loved it)\b|went (really |very )?well|(good|great) (meeting|call|conversation)|keep cultivating/, "Ask made": /\bask(ed)?\b|proposed|pitched|requested|invited (him|her|them) to give/, "Ask accepted": /accept|agreed|said yes|yes to|committed|he's in|she's in|they're in|pledg|handed|check/, "Not now, revisit": /not now|later|revisit|next year|next quarter|hold off|wait|timing|busy|not yet|down the road/, "Not interested": /not interested|no interest|declined|turned (me|us|it) down|passed|no thanks|not for (him|her|them)/, "Referred elsewhere": /refer|pointed (me|us) to|sent (me|us) to|someone else|better fit/ };
+function officerGaveOutcome(o) { const re = OUTCOME_WORDS[o]; if (!re) return false; return officerLines(4).some(t => re.test(t)); }
 function normCap(v) {
   if (v == null) return null; const t = String(v).trim(); if (!t) return null;
   let m = t.match(/^([A-Ea-e])(?![a-z])/); if (m) return m[1].toUpperCase();
@@ -215,7 +228,7 @@ ${flowScript()}
 ${G.hands ? "### Hands-free mode\n- " + HF_RULES + "\n" : ""}
 ## Guardrails
 - Ask at most one question at a time, and only for a required field the officer hasn't said. Never ask about optional fields, except the ones named above (email and mobile and the optional-fields questions the app gives you for a new contact or opportunity, and the next step for a substantive meeting).
-- Never make up details: leave out anything the officer didn't say, such as a capacity rating.
+- Never make up details: leave out anything the officer didn't say, such as a capacity rating, whether a meeting was substantive, its outcome or a next step. A field you could guess from context is still a field to leave empty: the app asks the officer for what it needs, and a guessed value that the officer confirms by habit is worse than a question.
 - Call the money's recipient the "entity" (C3, C4 or PAC), never "fund". The only entities, by state: ${ENTITIES_BY_STATE()}. Never name any other; when asked about a state, list exactly those.
 - Say "gift", never "payment". Write spoken email addresses as real addresses. Resolve relative dates against today.
 - When the officer spells something letter by letter, use exactly those letters in the field they mean; "T as in Tom" and words like Tango or Delta stand for their first letter. When they correct how a name is spelled, ask once whether the email address should change to match.

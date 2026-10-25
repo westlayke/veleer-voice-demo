@@ -11,7 +11,8 @@ const STALL_MS = 5000, SPEAK_RMS = 0.04;     // officer's voice on the mic this 
 const LINE_TEST_MS = 3000;                   // how long a line test (a tiny request to the key holder) may take before it counts as failed
 const SLOW_LINE_MS = 2000;                   // a line test slower than this is a slow line: open a fresh one rather than ask Grok again
 const STALL_SLOW_MS = 2500;                  // while the officer is talking, a line test slower than this counts as a stall
-const MAX_DROPS = 3;                         // reconnect tries before the phone says the voice service is unavailable
+const MAX_DROPS = 3;                         // reconnect tries shown in the log as "n of 3"; the call no longer ends by count (Oct 25: a driveway dead spot took 4)
+const NO_LINE_GIVE_UP_MS = 120000;           // the call ends only after this long without a word from the voice service, while the phone keeps reconnecting
 const RECONNECT_DELAYS = [0, 1000, 4000, 10000]; // wait before reconnect try 1, 2, 3, spread out so a short dead spot can pass
 const OFFLINE_WAIT_MS = 15000;               // when the phone says it's offline, wait up to this long for it to come back
 const SECOND_LINE_MS = 5000;                 // a new line not open after this long gets a second one alongside
@@ -107,7 +108,7 @@ function openSocket(token, first, second) {
     if (ws.resumed) netLog("Picked up the same conversation");
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
-    netLog(`Voice line open in ${Date.now() - t0} ms${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops} of ${MAX_DROPS})` : ""}`);
+    netLog(`Voice line open in ${Date.now() - t0} ms${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops})` : ""}`);
     if (G.drops) setTimeout(prefetchToken, 2000); // the ready pass was used: have the next one ready for another drop (seen Oct 24: 7 s to fetch one)
     clearInterval(G.netTick); G.netTick = setInterval(async () => { if (!(G.live && G.ws === ws)) return; const ms = await pingMs(); netLog("Reading", ms);
       // nothing was expected from Grok (the officer was thinking), so nothing else notices a dead network: a second quick test, then a fresh line (Oct 25: 35 s of "Hello?")
@@ -153,14 +154,14 @@ async function netLog(what, known) { const sess = G.session, info = netInfo(), m
 // the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
 async function reconnect(why) {
   if (!G.live) return;
-  if (G.drops >= MAX_DROPS) { voiceUnavailable(why); return; }
+  if (Date.now() - (G.lastMsg || G.t0 || Date.now()) > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } // 2 minutes with no usable line, however many tries
   G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
   if (G.drops === 1) cue("drop");
   downStart();
-  vlog(`reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`); act("step", `Reconnecting (${G.drops} of ${MAX_DROPS}): ${why}`);
-  await new Promise(r => setTimeout(r, RECONNECT_DELAYS[G.drops] || RECONNECT_DELAYS[RECONNECT_DELAYS.length - 1])); // spread out, so a short dead spot can pass
+  vlog(`reconnecting (${G.drops}): ${why}`); act("step", `Reconnecting (${G.drops}): ${why}`);
+  await new Promise(r => setTimeout(r, RECONNECT_DELAYS[Math.min(G.drops, MAX_DROPS)] || RECONNECT_DELAYS[RECONNECT_DELAYS.length - 1])); // spread out, so a short dead spot can pass
   if (navigator.onLine === false) await new Promise(r => { const t = setTimeout(r, OFFLINE_WAIT_MS); window.addEventListener("online", () => { clearTimeout(t); r(); }, { once: true }); });
   if (!G.live) return;
   // a voice pass, tried again every few seconds while the phone is in a dead spot (each try is time-limited, so the reconnect can't hang)
@@ -207,7 +208,7 @@ function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {
   downEnd();
-  netLog("Voice service unavailable after " + MAX_DROPS + " tries (" + why + ")");
+  netLog(`Voice service unavailable after ${Math.round(NO_LINE_GIVE_UP_MS / 60000)} minutes without a working line, ${G.drops} tries (${why})`);
   G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "" };
   cue("down");
   endCall("voice service unavailable");
