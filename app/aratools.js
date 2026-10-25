@@ -61,7 +61,7 @@ const TOOL_HANDLERS = {
   },
   set_hands_free(callId, data, name) {
     setHandsFree(!!data.on);
-    toolReply(callId, { ok: true, hands_free: G.hands, say: G.hands ? hfSwitchLine(true) : hfSwitchLine(false) }); return;
+    toolReply(callId, { ok: true, hands_free: G.hands, status: "The app now says the confirmation line itself, word for word, then tells you what's next. Don't say anything yet." }, false); hfAnnounce(); return;
   },
   optional_fields(callId, data, name) { optStep(callId, data); return; },
   set_spooky_mode(callId, data, name) {
@@ -255,7 +255,7 @@ function onTool(callId, name, args) {
   if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
-  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command. Follow the app notice." }); return; }
+  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command." }); return; }
   if (Object.hasOwn(TOOL_HANDLERS, name)) { TOOL_HANDLERS[name](callId, data, name); return; }
   draftTool(callId, name, data);
 }
