@@ -61,7 +61,7 @@ const TOOL_HANDLERS = {
   },
   set_hands_free(callId, data, name) {
     setHandsFree(!!data.on);
-    toolReply(callId, { ok: true, hands_free: G.hands, say: G.hands ? `Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `Say only "Hands-free is off. You'll tap Save yourself again."` }); return;
+    toolReply(callId, { ok: true, hands_free: G.hands, say: G.hands ? hfSwitchLine(true) : hfSwitchLine(false) }); return;
   },
   optional_fields(callId, data, name) { optStep(callId, data); return; },
   set_spooky_mode(callId, data, name) {

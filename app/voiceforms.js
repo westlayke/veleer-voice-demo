@@ -113,7 +113,7 @@ function nextAsk(r, closed, hint) {
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (!a) return;
   if (a.dataset.act3 === "end") endCall("officer tapped End");
   else if (a.dataset.act3 === "hands") { setHandsFree(!G.hands);
-    notice(G.hands ? `The officer tapped Hands-free, so hands-free mode is on. Say only "Hands-free is on. I'll read each form back and save it when you say yes."` : `The officer tapped to turn hands-free mode off. Say only "Hands-free is off. You'll tap Save yourself again."`); } });
+    notice(G.hands ? "The officer tapped Hands-free, so hands-free mode is on. " + hfSwitchLine(true) : "The officer tapped to turn hands-free mode off. " + hfSwitchLine(false)); } });
 // Hands-free (driving) mode: Ara saves a finished form after reading it back and hearing the officer's own yes. It lasts until the call ends.
 const CAR = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14v-5l-2-5H7l-2 5z"/><path d="M5 12h14"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>';
 const HF_MONEY = ["pledge", "gift", "payment"];
@@ -121,6 +121,12 @@ const HF_YES = /\b(yes|yeah|yep|yup|ya|correct|right|sure|save|go ahead|do it|co
 // a no is an answer that opens with no or wait, or asks not to save or to change something; "I don't think you needed to say that, but yes" is still a yes
 const HF_NO = /^(no|nope|nah|wait|hold on|hang on|not yet|stop|cancel)\b|\b(don't|dont|do not|not|never) (save|do it|go ahead)|\b(not yet|hold on|hang on|wait a|change|wrong|incorrect|isn't right|not right|that's off|fix)\b/;
 const hfYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim(); return HF_YES.test(t) && !HF_NO.test(t); };
+// what Ara says when hands-free goes on or off, then she carries on: "Say only" left her silent mid-form (Oct 24: the officer waited 30 s for the first-name question)
+function hfSwitchLine(on) {
+  const q = [...(G.recent || [])].reverse().find(l => !l.startsWith("Officer: ") && !l.startsWith("App: ") && /\?$/.test(l.trim()));
+  const go = V && ACTIONS[V.action] ? ` Then, without waiting, carry on with the ${ACTIONS[V.action].title} form: ask the question it still needs${q ? ` (you last asked: "${q.replace(/^[^:]+: /, "")}")` : ""}.` : " Then ask what they'd like to do.";
+  return (on ? `Say "Hands-free is on. I'll read back all the information on the form and save it when you say yes."` : `Say "Hands-free is off. You'll tap Save yourself again."`) + go;
+}
 function setHandsFree(on) {
   G.hands = !!on && G.live; G.saveCheck = null; act("step", "hands-free " + (G.hands ? "on" : "off")); vlog("hands-free " + (G.hands ? "on" : "off"));
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); } // the form's save note changes
