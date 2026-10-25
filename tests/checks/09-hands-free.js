@@ -252,6 +252,7 @@ test("Hands-free: an interaction report is never read back without the substanti
   r = await ara(p, "save_form", { confirmed: false });
   ok(r.saved === false && /next step, and when is it due/.test(r.ask_exactly || "") && (await p.isChecked("#f_substantive")), "the yes wasn't taken, or the next step wasn't asked: " + JSON.stringify(r));
   const today = await p.evaluate(() => todayISO());
+  await said(p, "Make the ask, today."); // the officer answers the next-step question (Oct 25: a next step the officer never said is dropped)
   r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", nextStep: "Make the ask", nextDue: today });
   ok(/Next step due: [A-Z][a-z]+ \d+, today\. Shall I save it\?$/.test(r.read_back || ""), "the read-back doesn't say the due date is today: " + JSON.stringify(r));
   ok(await p.evaluate((d) => dateSaid(d).endsWith("(today)"), today), "dateSaid has no day word");
@@ -264,6 +265,7 @@ test("Hands-free: a yes to a read-back saves the form even when Ara opens anothe
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); S.interactions = S.interactions.filter(i => i.contactId !== c.id); c.capacity = "C";
     S.opps.push({ id: "o_jo", contactId: c.id, name: "Okafor, James - 2026", stage: "Qualification", asks: [], fund: "", campaign: "", officer: OFFICER, participants: "", createdOn: todayISO() }); save(); });
   const today = await p.evaluate(() => todayISO()), n0 = await p.evaluate(() => S.interactions.length);
+  await said(p, "I met James at the Halloween party, it was substantive, and I'll follow up with him today."); // said by the officer, so the fields are kept (Oct 25)
   let r = await ara(p, "show_interaction_draft", { contact_name: "James Okafor", date: today, meetingType: "Event", summary: "Met James at the Halloween party.", substantive: true, nextStep: "Follow up with James", nextDue: today });
   ok(/Shall I save it\?$/.test(r.read_back || ""), "the finished report wasn't read back: " + JSON.stringify(r));
   await said(p, "Yes, let's go ahead and do that."); await p.waitForTimeout(200);

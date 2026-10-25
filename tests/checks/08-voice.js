@@ -19,6 +19,31 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Maya").capacity === "C", "the rating was not saved with the contact");
 });
+test("Ara: an interaction report keeps only what the officer said (substantive, outcome, next step are dropped when invented, kept when said)", async (p) => {
+  await signIn(p);
+  await said(p, "I met Ken Ito this morning, we talked about the gala and the North Dakota work.");
+  let r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: "2026-10-25", meetingType: "In person", summary: "Met Ken this morning; talked about the gala and the North Dakota work.", substantive: true, outcome: "Interested, continue cultivation", nextStep: "Follow up on Ken's interest in the North Dakota work", nextDue: "2026-11-01" });
+  let d = await p.evaluate(() => V && V.data);
+  ok(d && !d.nextStep && !d.nextDue && !d.outcome && !d.substantive, "fields the officer never said stayed on the form: " + JSON.stringify(d && { nextStep: d.nextStep, outcome: d.outcome, substantive: d.substantive }));
+  ok(/substantive interaction/i.test(r.ask_exactly || ""), "the app didn't ask the substantive question after dropping Grok's own answer: " + JSON.stringify(r));
+  ok(/Left out of the form because the officer never said it: substantive, next step, outcome/.test(r.status || r.error || r.next || ""), "the tool reply didn't tell Ara what was left out: " + JSON.stringify(r));
+  await said(p, "Yes, it was.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true });
+  ok(r.still_needed && r.still_needed.some(x => /Next step/.test(x)), "after the officer's yes the next step wasn't asked for: " + JSON.stringify(r));
+  await said(p, "I'll give him a call next Tuesday.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", nextStep: "Call Ken", nextDue: "2026-10-27" });
+  d = await p.evaluate(() => V && V.data);
+  ok(d && d.nextStep === "Call Ken" && d.substantive === true, "the next step the officer gave was not kept: " + JSON.stringify(d && { nextStep: d.nextStep, substantive: d.substantive }));
+  ok(!r.still_needed || !r.still_needed.length, "something was still needed after the officer gave the next step: " + JSON.stringify(r.still_needed));
+  // said outright: everything is kept and the substantive question isn't asked again
+  await p.evaluate(() => { V = null; renderOverlay(); });
+  await said(p, "Had a substantive meeting with Ruth Abernathy, she's interested, next step is a follow-up call next Friday.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", date: "2026-10-25", meetingType: "In person", summary: "Substantive meeting with Ruth; she is interested.", substantive: true, outcome: "Interested, continue cultivation", nextStep: "Follow-up call", nextDue: "2026-10-30" });
+  d = await p.evaluate(() => V && V.data);
+  ok(d && d.substantive === true && d.outcome === "Interested, continue cultivation" && d.nextStep === "Follow-up call", "fields the officer did say were dropped: " + JSON.stringify(d && { nextStep: d.nextStep, outcome: d.outcome, substantive: d.substantive }));
+  ok(!r.ask_exactly && !r.still_needed?.length, "the substantive question was asked although the officer said the word: " + JSON.stringify(r));
+});
+
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });
