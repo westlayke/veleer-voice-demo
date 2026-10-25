@@ -1,6 +1,10 @@
 "use strict";
 // Filling and saving forms by voice: optional fields one at a time, hands-free saves, and the check of hands-free saves (loaded after aratools.js)
 // Optional fields, one at a time (Oct 24, after testers found the one long list hard to follow): the app asks each question and fills in each answer itself
+const SUBST_Q = "Was it a substantive interaction, one that moved the relationship forward?";
+// the officer's yes or no to the substantive question, from their last line (Grok sometimes doesn't pass it on)
+function officerSubstantive() { const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9); if (!t) return null;
+  if (/\b(not|no|wasn't|isn't)\b/i.test(t) && !/\bbut yes\b/i.test(t)) return false; return hfYes(t) || /\bsubstantive\b/i.test(t) ? true : null; }
 const OPT_OFFER = `The required details are in. Before anything else, ask exactly this: "Would you like to add more details? I can take you through them one at a time." If yes, call optional_fields with step start. If no, ask them to check the draft and tap the button.`;
 const OPT_STEPS = {
   contact: [
@@ -41,7 +45,8 @@ function optAsk(callId, said) { // the app itself says what it heard and the nex
   const st = optNext(), A = ACTIONS[V.action];
   if (st) { V.opt.cur = st.k; toolReply(callId, { ok: true, field: st.k, ask_exactly: `${said ? said + " " : ""}${st.q(optWho())}`, next: "After the officer answers, call optional_fields with step answer and their words as value (or step skip, back or stop)." }); return; }
   V.opt = null;
-  toolReply(callId, { ok: true, done: true, button: A.saveLabel, status: `${said ? `Start with "${said}" ` : ""}That was the last optional field. ${G.hands ? "Hands-free mode is on: call save_form with confirmed false now." : `In one short sentence say the details are in, then ask them to check the draft and tap "${A.saveLabel}".`}` });
+  if (G.hands && V.action !== "meeting") { hfSave(callId, { confirmed: false }, said); return; } // the app reads the finished draft back itself
+  toolReply(callId, { ok: true, done: true, button: A.saveLabel, status: `${said ? `Start with "${said}" ` : ""}That was the last optional field. In one short sentence say the details are in, then ask them to check the draft and tap "${A.saveLabel}".` });
 }
 function optStep(callId, data) {
   if (!V || !OPT_STEPS[V.action]) { toolReply(callId, { ok: false, error: "No new contact or new opportunity form is open." }); return; }
@@ -128,9 +133,12 @@ function hfSwitchLine(on) {
 }
 // the hands-free line, word for word, then Ara goes on with the form
 function hfAnnounce() {
-  const on = G.hands, text = on ? "Hands-free is on. I'll read back all the information on the form and save it when you say yes." : "Hands-free is off. You'll tap Save yourself again.";
+  const on = G.hands, line = on ? "Hands-free is on. I'll read back all the information on the form and save it when you say yes." : "Hands-free is off. You'll tap Save yourself again.";
+  const q = [...(G.recent || [])].reverse().find(l => !l.startsWith("Officer: ") && !l.startsWith("App: ") && /\?$/.test(l.trim()));
+  // the follow-up is in the same scripted line: the form's last question, or what they'd like to do (Oct 25: a second turn after the line never came)
+  const text = `${line} ${V && ACTIONS[V.action] ? (q ? (q.replace(/^[^:]+: /, "").trim().match(/[^.!?]*\?$/) || [""])[0].trim() : "") : "What would you like to do?"}`.trim();
   const go = hfSwitchLine(on).replace(/^Say "[^"]*"\.?\s*Then,?\s*/, "");
-  forceSay(text, `The app just said "${text}" in your voice; don't say it again. Now ${go.charAt(0).toLowerCase() + go.slice(1)}`, hfSwitchLine(on));
+  forceSay(text, V && !q ? `The app just said "${text}" in your voice; don't say it again. Now ${go.charAt(0).toLowerCase() + go.slice(1)}` : null, hfSwitchLine(on));
 }
 function setHandsFree(on) {
   G.hands = !!on && G.live; G.saveCheck = null; act("step", "hands-free " + (G.hands ? "on" : "off")); vlog("hands-free " + (G.hands ? "on" : "off"));
@@ -145,13 +153,13 @@ function hfReadback() {
     if (f.k === "substantive") return `Substantive: ${v ? "yes" : "no"}`; // always said: it decides whether the opportunity can move on
     if (f.type === "bool") return v && !["permEmail", "permCalls"].includes(f.k) ? f.label : ""; // email and calls are on by default
     if (f.type === "area") return `${f.label}: noted`; // long text is on the form; reading it out made the read-back about 13 s (Oct 24)
-    let x = f.type === "money" ? money(v) : f.type === "date" ? fmtDate(v) : String(v); const w = x.split(/\s+/); if (w.length > 14) x = w.slice(0, 14).join(" ") + "…";
+    let x = f.type === "money" ? money(v) : f.type === "date" ? dateSaid(v).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1") : String(v); const w = x.split(/\s+/); if (w.length > 14) x = w.slice(0, 14).join(" ") + "…";
     return `${f.label}: ${x}`; }).filter(Boolean);
   return `${A.title}${who ? " for " + who : ""}.${parts.length ? " " + parts.join("; ") + "." : ""}`;
 }
 // the officer's next words after Ara's question (the transcript can land a moment after her tool call)
 function hfHeardAfter(n, ms = 2500) { return new Promise(res => { const t0 = Date.now(); (function poll() { if ((G.heardN || 0) > n) return res(G.lastHeard); if (Date.now() - t0 > ms) return res(null); setTimeout(poll, 100); })(); }); }
-async function hfSave(callId, data) {
+async function hfSave(callId, data, lead) {
   if (!V) { const recentSave = G.savedAt && Date.now() - G.savedAt < 3 * 60e3;
     toolReply(callId, recentSave ? { ok: true, saved: true, already: true, status: `That form was already saved (${G.savedLine}); it closed when it saved. Say in a few words that it's saved, then ask what's next. Don't open it again.` } : { ok: false, saved: false, error: "No form is open, so there's nothing to save." }); return; }
   const A = ACTIONS[V.action];
@@ -160,10 +168,18 @@ async function hfSave(callId, data) {
   if (!G.hands) { toolReply(callId, { ok: false, saved: false, error: `Hands-free mode is off, so you can't save. Ask the officer to check the draft and tap "${A.saveLabel}". If they're driving, they can say "hands-free mode".` }); return; }
   if (oppNeedsCampaign(V.action, readDraft())) { const f = readDraft().fund; toolReply(callId, { ok: false, saved: false, error: `Not ready: ask which campaign first, ${campaignsFor(f).join(" or ")} (${f} has both). Fill it in with the draft tool, then read back.` }); return; }
   if (V.action === "meeting") { toolReply(callId, { ok: false, saved: false, error: "Scheduling a meeting finishes in Google Calendar, which needs the screen. Say it's kept as a draft for when they've parked." }); return; }
+  // an interaction report is never read back without the substantive answer (Oct 25: saved as not substantive, never asked)
+  if (V.action === "interaction" && !V.fromVoice.has("substantive")) {
+    const v = V.askedSubst ? officerSubstantive() : null;
+    if (v === null) { V.askedSubst = true; toolReply(callId, { ok: false, saved: false, field: "substantive", ask_exactly: `${lead ? lead + " " : ""}One more thing. ${SUBST_Q}`, error: "Not read back yet: the app asked whether it was substantive. After the answer, call show_interaction_draft with substantive true or false." }); return; }
+    const cur = readDraft(); cur.substantive = v; V.fromVoice.add("substantive"); V.data = prefill(V.action, cur, V.target); renderOverlay(); act("step", `substantive ${v}, from the officer's words`);
+  }
+  { const d = readDraft(); if ((needsNextStep(V.action, d, V.target) || (V.action === "ask" && d.response && d.response !== "Declined")) && (optEmpty(d.nextStep) || optEmpty(d.nextDue))) {
+    toolReply(callId, { ok: false, saved: false, field: "nextStep", ask_exactly: `${lead ? lead + " " : ""}What's the next step, and when is it due?`, error: "Not read back yet: a substantive interaction (or an ask that wasn't declined) needs a next step and its due date. After the answer, call the draft tool with nextStep and nextDue." }); return; } }
   const key = V.action + JSON.stringify(readDraft()), c = G.saveCheck;
   if (data.confirmed !== true || !c || c.key !== key) {
     G.saveCheck = { key, step: "read", n: G.heardN || 0 }; paintCall();
-    toolReply(callId, { ok: true, saved: false, read_back: `${hfReadback()} Shall I save it?`, next: "The app said read_back aloud. After the officer's yes, call save_form again with confirmed true; if they want a change, update the draft first." }); return;
+    toolReply(callId, { ok: true, saved: false, read_back: `${lead ? lead + " " : ""}${hfReadback()} Shall I save it?`, next: "The app said read_back aloud. After the officer's yes, call save_form again with confirmed true; if they want a change, update the draft first." }); return;
   }
   const heard = await hfHeardAfter(c.n);
   if (!V || G.saveCheck !== c) { toolReply(callId, { ok: false, saved: false, error: "The form changed while waiting. Nothing was saved." }); return; }
