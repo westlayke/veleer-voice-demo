@@ -94,18 +94,20 @@ async function converse(browser, base, flow, n) {
       return false;
     };
     await settle();
-    const script = flow.lines.slice(); let saidNo = 0;
+    const script = flow.lines.slice(); let saidNo = 0, doneAt = 0;
+    const savedDone = () => doneAt;
     const t0 = Date.now();
     for (let turn = 0; turn < MAX_TURNS && !stopAll && Date.now() - t0 < MAX_CONV_MS; turn++) {
-      const last = (conv.replies.filter(r => r.text).pop() || { text: "" }).text;
-      const savedNow = (await p.evaluate(() => window.__acts.filter(a => a.role === "saved").map(a => a.text)));
+      const whole = (conv.replies.filter(r => r.text).pop() || { text: "" }).text.trim();
+      const last = whole.split(/(?<=[.?!])\s+/).filter(Boolean).pop() || ""; // the officer answers the question Ara ended on
       let say;
+      if (savedDone()) break;
       if (/substantive/i.test(last) && /\?\s*$/.test(last.trim())) say = flow.subst || "Yes.";
       else if (/\b(save|saving)\b[^.?!]*\?|shall i (save|record)|say yes|is that (right|correct)\?|correct\?|confirm/i.test(last) && !/would you like to (add|fill)/i.test(last)) say = "Yes.";
       else if (/fill it in,? or move on|or move on\?/i.test(last) && !/^(Let's go with capacity|Add a capacity)/.test(script[0] || "")) { say = "Move on."; saidNo++; }
       else if (/would you like to (add|fill|include)|anything else|want to add|any (other|more) details|optional/i.test(last) && (!script.length || saidNo < 2)) { say = "No."; saidNo++; }
       else if (script.length) say = script.shift();
-      else if (flow.saved.test(savedNow.join("\n")) || !/\?/.test(last) || saidNo > 6) break;
+      else if (!/\?/.test(last) || saidNo > 6) break;
       else { say = "No, that's all for now."; saidNo++; }
       const nBefore = conv.replies.length, at = Date.now();
       conv.turns.push({ say, at, after: last.slice(0, 300) });
@@ -113,8 +115,9 @@ async function converse(browser, base, flow, n) {
       const settled = await settle();
       conv.turns[conv.turns.length - 1].heard = conv.replies.slice(nBefore).some(r => r.text);
       conv.turns[conv.turns.length - 1].settled = settled;
-      if (!script.length && flow.saved.test((await p.evaluate(() => window.__acts.filter(a => a.role === "saved").map(a => a.text))).join("\n")) && !/\?\s*$/.test((conv.replies.filter(r => r.text).pop() || { text: "" }).text.trim())) break;
+      if (flow.saved.test((await p.evaluate(() => window.__acts.filter(a => a.role === "saved").map(a => a.text))).join("\n"))) doneAt = Date.now(); // the task is done: Ara's answer to the save was heard, so hang up
     }
+    conv.cut = stopAll;
     conv.hands = await p.evaluate(() => !!G.hands);
     await p.evaluate(() => { try { endCall("test done"); } catch (e) {} });
     await p.waitForTimeout(300);
@@ -155,7 +158,7 @@ function score(conv, flow) {
   hit("hands_free_on", conv.hands, "hands-free was off at the end");
   hit("right_tool", conv.tools.some(t => t.name === flow.tool), "tools called: " + [...new Set(conv.tools.map(t => t.name))].join(", "));
   hit("task_saved", conv.saved.some(s => flow.saved.test(s.text)), "saved: " + conv.saved.map(s => s.text).join(" | "));
-  own.forEach(r => { const labels = new Set((r.text.match(LABELS) || []).map(x => x.toLowerCase())); const rb = labels.size >= 3 || /here's what i have|let me read|reading (it|that) back|i have:|so far i have/i.test(r.text); hit("no_self_readback", !rb, r.text); });
+  own.forEach(r => { const labels = new Set((r.text.match(LABELS) || []).map(x => x.toLowerCase())); const rb = labels.size >= 4 && /save|right\?|correct\?|all set\?/i.test(r.text) || /here's what i have|let me read|reading (it|that) back|i have:|so far i have/i.test(r.text); hit("no_self_readback", !rb, r.text); });
   conv.tools.forEach(t => {
     const said = officerUpTo(t.turn);
     if (t.args.capacity) hit("no_invented_rating", /\b(capacity|rating|rated)\b|\b[A-E]\b\.?$/i.test(said) || /\b(rating|capacity) (of )?[A-E]\b|\b[A-E] rating\b|with capacity [A-E]/i.test(said), `${t.name} capacity ${t.args.capacity} after: "${said.slice(-160)}"`);
@@ -166,7 +169,8 @@ function score(conv, flow) {
   own.forEach(r => hit("no_guidance_aloud", !/app guidance|never read it aloud|tool result|the app is saying|still[_ ]needed|function call/i.test(r.text), r.text));
   own.forEach(r => { if (/\b(i've|i have|it's|it is|has been|been|all) (saved|recorded|logged|added)\b|\bsaved it\b/i.test(r.text)) hit("no_false_saved", conv.saved.some(s => s.at <= r.at + 1500) && conv.saved.filter(s => s.at <= r.at + 1500).length > 0 && conv.acts.some(a => a.role === "saved" && a.at <= r.at + 1500 && a.at > r.at - 60000), r.text); });
   conv.turns.forEach(t => hit("replies_every_turn", t.heard, `no reply to "${t.say}"`));
-  for (let i = 1; i < conv.replies.length; i++) { const a = conv.replies[i - 1], b = conv.replies[i]; if (a.text && b.text && a.turn === b.turn) hit("no_double_reply", sameWords(a.text) !== sameWords(b.text), b.text); }
+  const heard = conv.acts.filter(a => a.role === "grok"); // what the app played and logged, as the officer heard it
+  for (let i = 1; i < heard.length; i++) hit("no_double_reply", sameWords(heard[i - 1].text) !== sameWords(heard[i].text), heard[i].text);
   return res;
 }
 
@@ -191,14 +195,14 @@ function report(convs, extra) {
   const args = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--use-file-for-fake-audio-capture=" + wav, "--autoplay-policy=no-user-gesture-required"];
   const browser = await chromium.launch(Object.assign({ args }, process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : fs.existsSync("/opt/pw-browsers/chromium") ? { executablePath: "/opt/pw-browsers/chromium" } : {}));
   const flows = FLOWS.filter(f => !ONLY || ONLY.includes(f.id));
-  const convs = []; let started = 0, running = 0, firstLogged = false, fails = 0; const avg = () => { const ok = convs.filter(c => !c.failed); return ok.length ? ok.reduce((a, c) => a + c.cost, 0) / ok.length : 0.25; };
+  const convs = []; let started = 0, running = 0, firstLogged = false, fails = 0; const avg = () => { const ok = convs.filter(c => !c.failed); return ok.length ? ok.reduce((a, c) => a + c.cost, 0) / ok.length : Number(process.env.EST || 0.3); };
   const guard = setInterval(() => { if (spent() > BUDGET && !stopAll) { stopAll = true; console.log(`Budget reached ($${spent().toFixed(3)}): stopping`); } }, 1000);
   const half = { said: false };
   async function worker() {
     while (!stopAll && started < MAX_CONVS && spent() + (running + 1) * avg() * 1.1 <= BUDGET) {
       const flow = flows[started % flows.length], n = Math.floor(started / flows.length) + 1; started++; running++;
       const c = await converse(browser, base, flow, n); running--;
-      c.failed = !c.replies.some(r => r.text); if (!c.failed) { c.score = score(c, flow); fails = 0; } else if (++fails >= 3) { stopAll = true; console.log("Three conversations in a row got no answer from Grok: stopping. " + c.errors.slice(0, 2).join("; ")); }
+      c.failed = !c.replies.some(r => r.text); if (c.cut) console.log(`(conversation ${c.flow} #${c.n} was cut off by the budget and is left out of the scores)`); else if (!c.failed) { c.score = score(c, flow); fails = 0; } else if (++fails >= 3) { stopAll = true; console.log("Three conversations in a row got no answer from Grok: stopping. " + c.errors.slice(0, 2).join("; ")); }
       convs.push(c);
       if (!firstLogged && c.replies.length) { firstLogged = true; console.log("MILESTONE first-grok-reply: " + JSON.stringify(c.replies[0].text.slice(0, 200))); }
       console.log(`${convs.length}. ${c.flow} #${c.n}: ${c.turns.length} turns, ${(c.lineMs / 1000).toFixed(0)} s, $${c.cost.toFixed(3)}, saved: ${c.saved.map(s => s.text).join(" | ") || "nothing"}${c.errors.length ? ", errors: " + c.errors.slice(0, 2).join("; ") : ""}  [total $${spent().toFixed(3)}]`);
@@ -212,7 +216,7 @@ function report(convs, extra) {
   const total = spent(), okN = convs.filter(c => !c.failed).length, per = okN ? total / okN : 0;
   const extra = `Budget for this run: $${BUDGET}. Spent (estimate): $${total.toFixed(3)}. Per conversation: $${per.toFixed(3)}, so $2 buys about ${per ? Math.floor(2 / per) : "?"} and $10 about ${per ? Math.floor(10 / per) : "?"} conversations.`;
   const failed = convs.filter(c => c.failed).length;
-  const { md, rows, byFlow } = report(convs.filter(c => !c.failed), extra + (failed ? ` ${failed} conversation(s) got no answer from Grok and are left out of the scores.` : ""));
+  const { md, rows, byFlow } = report(convs.filter(c => !c.failed && !c.cut), extra + (failed ? ` ${failed} conversation(s) got no answer from Grok and are left out of the scores.` : ""));
   fs.writeFileSync(path.join(OUT, "summary.md"), md);
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify({ budget: BUDGET, spent: total, perConversation: per, conversations: convs.length, rows, byFlow }, null, 1));
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
