@@ -169,6 +169,7 @@ function grokInstructions() {
 ### Drafts
 - As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen before you ask anything.
 - Then ask for what is still needed, one question at a time; after each answer call the tool again so the form fills in as they talk. If they correct something, call the tool again.
+- If they ask a side question while a question of yours is open (a spelling, what a word means), answer it, then ask your question again in full words ("What's an email address or mobile number for Igor?"), never "one of those".
 - If they ask how to do a task ("how do I add a contact"), start doing it with them straight away, saying in one short sentence that you'll fill the form in together as they talk.
 - When the tool reply says nothing more is needed, ask them to check the draft and tap the button named in the reply's "button", using that exact label (say "tap Record pledge", never "tap Save" when the button says something else).
 - Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix or the step it suggests.
@@ -336,8 +337,11 @@ async function flushAct() {
   if (!ACT.q.length || !(await logReady())) { if (ACT.ready === false) ACT.q = []; return; }
   const bySession = {}; ACT.q.splice(0).forEach(e => (bySession[e.session] = bySession[e.session] || []).push(e));
   Object.entries(bySession).forEach(([session, events]) => {
+    const tries = events[0].tries || 0;
     fetch(tokenUrl().replace(/\/$/, "") + "/log", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE },
-      body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, ...e }) => e) }) }).catch(() => {});
+      body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, tries, ...e }) => e) }) })
+      .then(r => { if (!r.ok && r.status !== 401) throw new Error(String(r.status)); })
+      .catch(() => { if (tries >= 5) return; events.forEach(e => { e.tries = tries + 1; }); ACT.q.unshift(...events); clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, 5000); }); // a batch lost to a bad patch of signal is sent again (Oct 25)
   });
 }
 // taps for the activity log: what was tapped and on which screen (never what was typed into a field)
@@ -524,7 +528,7 @@ function resumeModal() {
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
-  G.live = false; G.hands = false; G.saveCheck = null; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep();
+  G.live = false; G.hands = false; G.saveCheck = null; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd();
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}

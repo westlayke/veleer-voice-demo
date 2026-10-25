@@ -197,14 +197,27 @@ async function hfSave(callId, data, lead) {
   if (!hfYes(heard.text)) { c.n = G.heardN; toolReply(callId, { ok: false, saved: false, error: `Not saved: the officer said "${heard.text}", which isn't a clear yes. In one short sentence, ask whether to save it or what to change. If they then say yes, call save_form with confirmed true again (no new read-back needed).` }); return; }
   if (HF_MONEY.includes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; paintCall();
     toolReply(callId, { ok: true, saved: false, read_back: `Just to be sure, the amount is ${money(readDraft().amount)}. Is that right?`, next: "Money gets a second check; the app said read_back aloud. After the officer's yes, call save_form again with confirmed true." }); return; }
-  const before = S.history.length, action = V.action; G.hfTry = {};
+  const r = hfCommit();
+  if (!r.ok) { toolReply(callId, { ok: false, saved: false, error: `Not saved. ${r.err} Ask for what's missing in one short question, update the draft, then read it back again.` }); return; }
+  toolReply(callId, { ok: true, saved: true, say: r.say || `Say in a few words that it's saved, then ask "What's next?"` });
+}
+// the hands-free save itself: the form on screen, marked as saved hands-free
+function hfCommit() {
+  const A = ACTIONS[V.action], before = S.history.length, action = V.action; G.hfTry = {};
   try { saveDraft(); } catch (e) { G.hfTry.msg = String(e); }
   const r = G.hfTry; G.hfTry = null; G.saveCheck = null;
-  if (V && V.action === action) { paintCall(); const el = document.getElementById("draftErr");
-    toolReply(callId, { ok: false, saved: false, error: `Not saved. ${r.msg || (el && el.textContent) || "The form isn't complete."} Ask for what's missing in one short question, update the draft, then read it back again.` }); return; }
+  if (V && V.action === action) { paintCall(); const el = document.getElementById("draftErr"); return { ok: false, err: r.msg || (el && el.textContent) || "The form isn't complete." }; }
   S.history.slice(0, S.history.length - before).forEach(x => { x.hf = true; }); save(); render(); paintCall();
-  act("step", "hands-free save: " + A.saved);
-  toolReply(callId, { ok: true, saved: true, say: r.say || `Say in a few words that it's saved, then ask "What's next?"` });
+  act("step", "hands-free save: " + A.saved); return { ok: true, say: r.say, saved: A.saved };
+}
+// a form read back and waiting for the officer's yes, when Ara moves on to another form instead of calling save_form
+// (Oct 25: "Yes, let's go ahead" to an interaction report's read-back became show_cultivation_decision, and the report was lost)
+function hfSettlePending() {
+  const c = G.saveCheck; if (!V || !c || !G.hands || c.key !== V.action + JSON.stringify(readDraft())) return null;
+  const title = ACTIONS[V.action].title, heard = (G.heardN || 0) > c.n ? G.lastHeard : null;
+  if (!heard || !hfYes(heard.text) || (HF_MONEY.includes(V.action) && c.step === "read")) return { saved: false, title };
+  act("step", `The officer's yes to the read-back saved the ${title} form before the next one opened`);
+  const r = hfCommit(); return { saved: r.ok, title, err: r.err, say: r.say, line: r.saved };
 }
 // hands-free saves wait in Needs attention until the officer has looked at them
 const hfUnchecked = () => S.history.filter(x => x.hf && !x.hfChecked);

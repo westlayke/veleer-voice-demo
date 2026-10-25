@@ -16,7 +16,7 @@ test("Settings: speaking speed saves, Restart asks first", async (p) => {
 test("Activity log records opening the app and taps outside a conversation", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(4600);
   const ev = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
-  ok(ev.filter(x => x === "open: Opened the app").length === 1, "opening the app was not logged exactly once: " + ev.slice(0, 4).join(" | "));
+  ok(ev.filter(x => /^open: Opened the app \(build /.test(x)).length === 1, "opening the app was not logged exactly once: " + ev.slice(0, 4).join(" | "));
   ok(ev.some(x => /^tap: .*Contacts/.test(x)) && ev.some(x => /^tap: .*Abernathy/.test(x)), "taps were not sent to the activity log: " + ev.slice(0, 6).join(" | "));
 });
 test("Activity log records what is in a form when Save is tapped", async (p) => {

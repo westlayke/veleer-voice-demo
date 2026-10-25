@@ -256,4 +256,25 @@ test("Hands-free: an interaction report is never read back without the substanti
   ok(/Next step due: [A-Z][a-z]+ \d+, today\. Shall I save it\?$/.test(r.read_back || ""), "the read-back doesn't say the due date is today: " + JSON.stringify(r));
   ok(await p.evaluate((d) => dateSaid(d).endsWith("(today)"), today), "dateSaid has no day word");
 });
+
+test("Hands-free: a yes to a read-back saves the form even when Ara opens another form instead of calling save_form; without the yes the other form waits", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  // Oct 25, 9:16 AM: "Yes, let's go ahead and do that" to an interaction report's read-back became show_cultivation_decision; the report was never saved
+  await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); S.interactions = S.interactions.filter(i => i.contactId !== c.id); c.capacity = "C";
+    S.opps.push({ id: "o_jo", contactId: c.id, name: "Okafor, James - 2026", stage: "Qualification", asks: [], fund: "", campaign: "", officer: OFFICER, participants: "", createdOn: todayISO() }); save(); });
+  const today = await p.evaluate(() => todayISO()), n0 = await p.evaluate(() => S.interactions.length);
+  let r = await ara(p, "show_interaction_draft", { contact_name: "James Okafor", date: today, meetingType: "Event", summary: "Met James at the Halloween party.", substantive: true, nextStep: "Follow up with James", nextDue: today });
+  ok(/Shall I save it\?$/.test(r.read_back || ""), "the finished report wasn't read back: " + JSON.stringify(r));
+  await said(p, "Yes, let's go ahead and do that."); await p.waitForTimeout(200);
+  r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
+  const after = await p.evaluate(() => ({ n: S.interactions.length, form: V && V.action, hf: S.history[0] && S.history[0].hf, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | ") }));
+  ok(after.n === n0 + 1 && after.form === "cultivate" && /saved the Interaction report form before the next one opened/.test(after.log), "the yes didn't save the report before the Cultivation form opened: " + JSON.stringify(after));
+  ok(await p.evaluate(() => __sent.some(s => s.includes("The officer's yes saved the Interaction report form first"))), "Ara wasn't told the report was saved first");
+  // the Cultivation decision read back, no yes yet: another form has to wait
+  r = await ara(p, "save_form", { confirmed: false });
+  ok(/Moving James to Cultivation means you, as the gift officer/.test(r.read_back || ""), "the Cultivation read-back lacks its explanation: " + JSON.stringify(r));
+  r = await ara(p, "show_task_draft", { contact_name: "James Okafor", text: "Call James" });
+  ok(r.ok === false && /waiting for the officer's yes; it is NOT saved/.test(r.error || "") && (await p.evaluate(() => V && V.action === "cultivate")), "another form opened over an unsettled read-back: " + JSON.stringify(r));
+});
 };

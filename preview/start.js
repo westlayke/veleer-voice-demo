@@ -208,6 +208,6 @@ setTimeout(owlHint, 1500);
 function spookyCue(kind) { if (spookyMode()) spookySound(kind); else if (xmasMode()) spookySound({ creak: "jingle", thunder: "chime", won: "carol" }[kind] || kind); }
 render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
-function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app" + (calmMotion() ? " (Reduce Motion is on)" : "")); }
+function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app (build " + BUILD + ")" + (calmMotion() ? " (Reduce Motion is on)" : "")); }
 logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
 window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, setSpooky, setXmas, owlHint, get spkPlayed() { return spkPlayed; } };

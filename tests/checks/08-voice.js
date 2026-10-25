@@ -412,4 +412,34 @@ test("Ara: guidance sent while a scripted line is pending tells her not to say t
   const g = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && e.response.instructions).map(e => e.response.instructions).pop() || "");
   ok(/don't say it or anything like it: "A scripted line\."/.test(g), "the guidance doesn't mention the pending scripted line: " + g);
 });
+
+test("Ara: a dead spot while reconnecting: the voice pass is tried again every few seconds instead of hanging, the phone says what's happening, and the line comes back", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  // Oct 25, 9:09 and 9:18 AM: the reconnect waited 89 s for a voice pass, then for ever; the officer heard nothing and had to end the call
+  await p.evaluate(() => { window.__spoken = []; speechSynthesis.speak = (u) => __spoken.push(u.text); speechSynthesis.cancel = () => {}; TOK.p = null; TOK.at = 0;
+    const f = window.fetch; window.__hang = true; window.fetch = (u, o) => (window.__hang && o && o.method === "POST" && /workers\.dev/.test(String(u))) ? new Promise((_, rej) => { if (o.signal) o.signal.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError"))); }) : f(u, o); // a dead spot: the request never answers, only the app's own time limit ends it
+    __ws.onclose({ code: 1006, reason: "" }); });
+  await p.waitForTimeout(8500);
+  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  const mid = await p.evaluate(() => ({ spoken: __spoken.slice(), status: G.status, live: G.live })); mid.log = await logged();
+  ok(mid.live && /^Reconnecting/.test(mid.status) && /No voice pass yet \(no answer in 6 s\): trying again in 2 s/.test(mid.log), "a hanging voice pass fetch wasn't given up on and tried again: " + mid.status + " " + mid.log.slice(-300));
+  ok(mid.spoken.length === 1 && mid.spoken[0] === "The line dropped. Reconnecting you to Ara.", "the phone didn't say the line dropped at 5 s: " + JSON.stringify(mid.spoken));
+  await p.waitForTimeout(5000);
+  const s2 = await p.evaluate(() => __spoken.slice());
+  ok(s2.length === 2 && s2[1] === "Still trying to reconnect.", "the phone didn't say it's still trying at 12 s: " + JSON.stringify(s2));
+  await p.evaluate(() => { window.__hang = false; }); await p.waitForTimeout(4500);
+  const end = await p.evaluate(() => ({ live: G.live, status: G.status, downAt: G.downAt, timer: G.downTimer, spoken: __spoken.length })); end.log = await logged();
+  ok(end.live && end.status === "Listening" && /Voice pass fetched in \d+ ms/.test(end.log) && /Voice line open in/.test(end.log), "the line didn't come back once a voice pass could be fetched: " + end.status + " " + end.log.slice(-300));
+  ok(!end.downAt && !end.timer && end.spoken === 2 && /The phone said: "Still trying to reconnect\."/.test(end.log), "the spoken reconnect lines didn't stop when the line came back, or weren't logged: " + JSON.stringify(end));
+});
+test("Ara: Move to Cultivation is refused while the criteria are missing, by voice and at the save", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await ara(p, "show_contact_draft", { first: "Vera", last: "Quill", email: "vera@example.org", capacity: "C" });
+  for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
+  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  await p.evaluate(() => { const c = S.contacts.find(x => x.first === "Vera"); S.opps.push({ id: "o_vq", contactId: c.id, name: "Quill, Vera - 2026", stage: "Qualification", asks: [], fund: "", campaign: "", officer: OFFICER, participants: "", createdOn: todayISO() }); save(); });
+  const r = await ara(p, "show_cultivation_decision", { contact_name: "Vera Quill", decision: "Move to Cultivation" });
+  ok(r.ok === false && /still needs .*a substantive interaction/.test(r.error || ""), "the move was offered without a substantive interaction: " + JSON.stringify(r));
+  ok(!(await p.evaluate(() => !!document.getElementById("draftForm"))), "the Cultivation form opened anyway");
+});
 };
