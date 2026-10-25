@@ -104,6 +104,7 @@ async function converse(browser, base, flow, n) {
       if (savedDone()) break;
       if (/substantive/i.test(last) && /\?\s*$/.test(last.trim())) say = flow.subst || "Yes.";
       else if (/\b(save|saving)\b[^.?!]*\?|shall i (save|record)|say yes|is that (right|correct)\?|correct\?|confirm/i.test(last) && !/would you like to (add|fill)/i.test(last)) say = "Yes.";
+      else if (/say neither|neither to move on/i.test(whole) && /\?|neither/i.test(last)) say = "Neither.";
       else if (/fill it in,? or move on|or move on\?/i.test(last) && !/^(Let's go with capacity|Add a capacity)/.test(script[0] || "")) { say = "Move on."; saidNo++; }
       else if (/would you like to (add|fill|include)|anything else|want to add|any (other|more) details|optional/i.test(last) && (!script.length || saidNo < 2)) { say = "No."; saidNo++; }
       else if (script.length) say = script.shift();
