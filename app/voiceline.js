@@ -228,9 +228,10 @@ function micMuted(tr) {
 // Used where the words matter and Ara used to stop or change them (Oct 24: "Say only ..." left her silent mid-form).
 // If xAI doesn't play it, Ara is asked to say it instead (fallback), so the officer always hears it.
 function forceSay(text, then, fallback, waited = 0) {
-  if (!G.live) return;
+  if (!G.live) { G.pendingForce = null; return; }
+  if (!waited) G.pendingForce = text;
   if ((G.responding || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
-  G.forced = { text, then, fallback: fallback || `Say exactly: "${text}"`, started: false };
+  G.forced = { text, then, fallback: fallback || `Say exactly: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;
   send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
   vlog("scripted line: " + text);
   clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(f.fallback); } }, FORCE_WAIT_MS);
@@ -238,5 +239,5 @@ function forceSay(text, then, fallback, waited = 0) {
 function forcedEvent(t) {
   const f = G.forced;
   if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); }
-  else if (t === "response.done" && f.started) { G.forced = null; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => guide(f.then), 0); }
+  else if (t === "response.done" && f.started) { G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => guide(f.then), 0); }
 }

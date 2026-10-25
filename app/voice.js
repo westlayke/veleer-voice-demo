@@ -21,7 +21,8 @@ function spelledWords() {
 function officerRated() {
   const lines = (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-3).map(l => l.slice(9).toLowerCase().trim());
   return lines.some(t => /\b(capacity|rating|rated|rate them|rate her|rate him)\b/.test(t) || /\$\s?\d|\b\d+\s?(k|thousand|million)\b|\b(thousand|million|grand)\b|\b(donat\w*|gives?|gave|giving)\b.*\b(dollars?|a year|annually)\b|\bunder (five|5)\b/.test(t)
-    || /^(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)[.!]?( please)?[.!]?$/.test(t.replace(/^(it's|its|make it|let's say|lets say|say|um|uh|okay|ok)[, ]+/, "")));
+    || /^(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)[.!]?( please)?[.!]?$/.test(t.replace(/^(it's|its|make it|let's say|lets say|say|um|uh|okay|ok)[, ]+/, ""))
+    || /\b(let's do|lets do|go with|i'd say|i would say|make (it|him|her|them)|set (it|him|her|them)( to| at)?|put (him|her|them) (at|as|down as)|rate (him|her|them)( as| at)?)\s+(an? )?(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)\b/.test(t)); // "Let's do C." after hearing the choices (Oct 25)
 }
 // the officer's last words turn texting on or off ("texting is permitted", "you can text him", "no texts"), or null if they didn't mention texting
 function officerSaidTexting() {
@@ -151,7 +152,7 @@ function crmSnapshot() {
 }
 const SPOOKY_RULES = `SPOOKY MODE IS ON. The officer asked for some Halloween fun, so play a warm, theatrical haunted-house host: speak a little slower, with relish, and now and then (not every turn, at most one per turn) add a short spooky aside about the house itself, such as "Mind the cobwebs.", "The candles flicker in approval.", "Ooh, I heard the floorboards creak." or "Welcome back to the haunted CRM.". Vary them. Everything else is unchanged: every fact, name, number, date and question is exactly as normal, any words you're told to say exactly are said exactly, and all the saving rules apply. The asides are never about investors, money, giving, flags or the officer's mistakes. If they say "normal mode", call set_spooky_mode with on false.`;
 const XMAS_RULES = `CHRISTMAS MODE IS ON. The officer asked for some Christmas cheer, so be a warm, jolly, traditional Christmas host: cheerful and kind, and now and then (not every turn, at most one per turn) add a short festive aside about the season, such as "The tree lights are twinkling.", "I can hear sleigh bells.", "Fresh snow on the rooftops tonight." or "The elves are busy in the workshop.". Vary them. Everything else is unchanged: every fact, name, number, date and question is exactly as normal, any words you're told to say exactly are said exactly, and all the saving rules apply. The asides are never about investors, money, giving, flags or the officer's mistakes, and never joke about the nativity, Jesus or anyone's faith. If they say "normal mode", call set_christmas_mode with on false; if they say "spooky mode", call set_spooky_mode with on true.`;
-const HF_RULES = `HANDS-FREE MODE IS ON. The officer is probably driving and can't look at or tap the screen, so this overrides "You never save anything" and every "tap the button". Keep each turn short and never describe what's on screen. When a draft has everything it needs, don't ask them to tap: call save_form with confirmed false and say the read-back it gives you, word for word. Call save_form with confirmed true only right after the officer says yes to that read-back; the app checks their words too. If they change something, update the draft and read it back again. Scheduling a meeting needs Google Calendar on screen, so keep it as a draft for when they've parked. If they say they've parked or want to tap themselves, call set_hands_free with on false.`;
+const HF_RULES = `HANDS-FREE MODE IS ON. The officer is probably driving and can't look at or tap the screen, so this overrides "You never save anything" and every "tap the button". Keep each turn short and never describe what's on screen. When a draft has everything it needs, the app reads it back itself and asks "Shall I save it?": never read it back yourself or ask whether it's correct, and never ask them to tap. Call save_form with confirmed true only right after the officer says yes to the app's read-back; the app checks their words too. If they change something, update the draft and the app reads it back again. Scheduling a meeting needs Google Calendar on screen, so keep it as a draft for when they've parked. If they say they've parked or want to tap themselves, call set_hands_free with on false.`;
 function grokInstructions() {
   const first = OFFICER.split(" ")[0];
   return `## Role & Persona
@@ -582,7 +583,10 @@ function voiceCommand(text) {
 }
 // Guidance for Ara's next reply only: it travels with the reply request (xAI's per-response instructions), so it never sits in the
 // conversation where she could read it aloud (Oct 24: "Skip it and move on. Then ask exactly" was spoken). Nothing to remember goes here.
-function guide(text) { G.qGuide = G.qGuide ? G.qGuide + "\n" + text : text; whenIdle("create"); }
+function guide(text) {
+  // a scripted line is on its way: Ara must not say the same words herself (Oct 25: the hands-free line was heard twice)
+  const pf = G.forced ? G.forced.text : G.pendingForce; if (pf) text = `The app is saying this itself, in your voice, so don't say it or anything like it: "${pf}". ` + text;
+  G.qGuide = G.qGuide ? G.qGuide + "\n" + text : text; whenIdle("create"); }
 // Something the officer did on screen that stands for their words (a tapped request): a conversation item, since it is their input
 function notice(text) {
   send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "(The officer did this on screen, not spoken) " + text }] } });
@@ -638,6 +642,7 @@ function onEvent(e) {
   if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
   else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
     if (t === "response.done" && G.idleEnding) { clearTimeout(G.idleTimer); const left = G.ctx ? Math.max(0, G.playHead - G.ctx.currentTime) : 0; G.idleTimer = setTimeout(idleHangUp, left * 1000 + 500); }
+    if (t === "response.done" && G.lateForced && G.lateForced.resp === G.respSeq) G.lateForced.firstAudio = G.audioSamples || 0;
     if (t === "response.done") { if (G.tourEnding) { G.tour = false; G.tourEnding = false; } G.audioOn = false; setTimeout(() => { G.audioSamples = 0; }, 0); if (G.echoPeak) vlog(`mic while Grok spoke: peak ${G.echoPeak.toFixed(3)}, ${G.barge || 0} loud frames passed (interrupt level ${BARGE_RMS})`); G.echoPeak = 0; G.barge = 0; }
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
@@ -645,7 +650,7 @@ function onEvent(e) {
   if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript); }
   if (G.forced) forcedEvent(t, e);
   if (t === "response.done" && G.bot) { act("grok", G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
-  if (t === "response.done") replyCheck(e.response || {});
+  if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
   else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
@@ -674,6 +679,7 @@ function lateForcedCheck() {
   if (said.length < 12 || !want.startsWith(said.slice(0, 40))) return; // not (yet) the scripted words
   if (!lf.resp) { lf.resp = G.respSeq; return; } // the first telling plays, whichever it is
   if (lf.resp === G.respSeq) return;
+  if (!(lf.firstAudio > 12000)) { G.lateForced = null; vlog("scripted line played late, but the first telling had no sound: let it play"); return; } // the officer may not have heard the first one (Oct 25)
   G.lateForced = null; vlog("scripted line played late: duplicate cut"); act("step", "Scripted line played late after Ara said it: cut the repeat");
   send({ type: "response.cancel" }); stopPlayback(); G.dropNext = true;
 }
