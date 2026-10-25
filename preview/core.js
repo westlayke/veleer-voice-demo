@@ -59,6 +59,8 @@ const mic = (s) => MIC.replace(/SZ/g, s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const money = (n) => n == null || n === "" || isNaN(n) ? "$0" : "$" + Math.round(Number(n)).toLocaleString("en-US");
 const toNum = (v) => { if (v == null || v === "") return null; const n = Number(String(v).replace(/[^0-9.]/g, "")); return isNaN(n) ? null : n; };
+// a field counts as blank when empty, or when a money field is $0 or less (Oct 25: Grok sent amount 0 on a planned ask, it read back "Amount: $0" and saved)
+const fieldBlank = (f, v) => v === null || v === undefined || String(v).trim() === "" || (f && f.type === "money" && !(toNum(v) > 0));
 const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const fmtDate = (s) => { if (!s) return ""; const d = new Date(s + "T12:00:00"); return isNaN(d) ? s : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined }); };
 const longToday = () => new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });

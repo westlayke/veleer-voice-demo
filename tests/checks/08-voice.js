@@ -105,6 +105,19 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   ok(back.stopped && /status line was cut short/.test(back.log) && !/You're back with Ara/.test(back.log), "the status recording wasn't cut when the line returned: " + JSON.stringify(back));
 });
 
+test("A $0 amount from the voice model counts as missing: the form shows it blank, Ara is told, and Save asks for it", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await said(p, "Plan an ask for Ruth.");
+  const r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "National", plannedDate: "2026-12-01", amount: 0 });
+  ok((r.still_needed || []).some(x => /^Amount/.test(x)), "a $0 amount was not asked for: " + JSON.stringify(r).slice(0, 300));
+  ok(/amount of \$0/.test(JSON.stringify(r)), "Ara wasn't told the $0 was left out: " + JSON.stringify(r).slice(0, 300));
+  ok((await p.inputValue("#f_amount")) === "", "the form shows the $0: " + (await p.inputValue("#f_amount")));
+  await p.fill("#f_amount", "0"); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  ok((await p.isVisible("#draftErr")) && /Amount/.test(await p.textContent("#draftErr")), "Save accepted a $0 amount");
+  await p.fill("#f_amount", "25000"); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  ok((await state(p)).opps.some(o => o.asks && o.asks.some(a => a.amount === 25000)), "the real amount did not save");
+});
+
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });

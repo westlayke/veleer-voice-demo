@@ -126,7 +126,7 @@ const OPP_MARK = '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="t
 function fieldHTML(f, d, fromVoice) {
   const v = d[f.k];
   const voiced = fromVoice.has(f.k) && !f.fixed;
-  const missing = f.req && (v === null || v === undefined || v === "");
+  const missing = f.req && fieldBlank(f, v);
   const same = V && V.action === "editContact" && V.target.contact && (V.target.contact[f.k] || "") === (v || ""); // unchanged on an edit: nothing to check
   const cls = ["fld", voiced ? "v" : "", missing ? "miss" : "", f.check && v && !same ? "chk" : ""].join(" ");
   const tag = voiced ? `<span class="via">${mic(12)} <span class="vt">from voice</span></span>` : (f.fixed ? `<span class="via" style="color:var(--muted)">filled in</span>` : "");
@@ -265,7 +265,7 @@ function needsNextStep(action, d, t) {
 function hfNotice(text) { if (G.hfTry) G.hfTry.msg = text; else guide(text); }
 function saveDraft() {
   const d = readDraft(), A = ACTIONS[V.action];
-  const miss = A.fields.filter(f => f.req && (d[f.k] === null || d[f.k] === undefined || d[f.k] === ""));
+  const miss = A.fields.filter(f => f.req && fieldBlank(f, d[f.k]));
   if (!miss.length && (needsNextStep(V.action, d, V.target) || (V.action === "ask" && d.response !== "Declined"))) {
     const need = [!String(d.nextStep || "").trim() && "Next step", !d.nextDue && "Next step due"].filter(Boolean);
     if (need.length) {
