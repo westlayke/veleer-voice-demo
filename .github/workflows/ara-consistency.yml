@@ -1,0 +1,41 @@
+name: Ara consistency run
+# Real typed conversations with xAI Grok through the preview build, scored against Ara's rules (tests/ara-consistency/).
+# Costs real money (the ARA_CONSISTENCY_KEY xAI key); the script stops itself at the budget. Run by hand only.
+on:
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: "Most to spend in this run, in dollars"
+        default: "0.5"
+      max_conversations:
+        description: "Most conversations (5 for a price probe)"
+        default: "5"
+      jobs:
+        description: "Conversations at once"
+        default: "3"
+      flows:
+        description: "Only these flows, comma separated (blank = all)"
+        default: ""
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Talk to Grok
+        env:
+          ARA_CONSISTENCY_KEY: ${{ secrets.ARA_CONSISTENCY_KEY }}
+          BUDGET: ${{ inputs.budget }}
+          MAX_CONVS: ${{ inputs.max_conversations }}
+          JOBS: ${{ inputs.jobs }}
+          FLOWS: ${{ inputs.flows }}
+        run: node tests/ara-consistency/run.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ara-consistency-results
+          path: tests/ara-consistency/results/
+          retention-days: 30

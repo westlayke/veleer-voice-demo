@@ -1,3 +1,4 @@
 tests/results/
 node_modules/
 tests-live/
+tests/ara-consistency/results/
