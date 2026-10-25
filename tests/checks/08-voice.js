@@ -295,7 +295,8 @@ test("Ara: no reply at the first tick on a slow line gets a fresh line at once, 
   const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
   await p.evaluate(() => { const f = window.fetch; window.__fetch0 = f; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res, rej) => { const t = setTimeout(() => res(new Response("{}")), 2800); o && o.signal && o.signal.addEventListener("abort", () => { clearTimeout(t); rej(new Error("aborted")); }); }) : f(u, o); window.__ws1 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; G.responding = false; });
   await p.evaluate(() => notice("Ask the officer the next question."));
-  await p.waitForTimeout(7500);
+  // 4 s tick + 2.5 s line test + 1 s before the reconnect; the log line below proves it came from the early test, not the 10 s re-ask
+  await p.waitForFunction(() => __ws !== __ws1, null, { timeout: 11000 }).catch(() => {});
   ok(await p.evaluate(() => __ws !== __ws1 && G.live), "no reply at the first tick on a slow line didn't get a fresh line before the 10 s re-ask");
   ok(/No reply started after 4 s on a slow line \(test request no answer in 2.5 s\): fresh line/.test(await logged()), "the early slow-line check wasn't logged");
   // the next line hangs without opening: after 5 s a second one is tried alongside, and the first to open is kept
