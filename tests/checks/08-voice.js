@@ -65,6 +65,46 @@ test("Ara: a rating the officer never gave is dropped and the reply says so; han
   ok(forced.length && forced.every(t => !/What would you like to do\?/.test(t)) && /Hands-free is on/.test(forced[0]), "the hands-free line asked what to do although the officer had just said (Oct 25 call): " + JSON.stringify(forced));
 });
 
+test("Oct 25 call notes: a new form opens only on the officer's word, a repeated optional answer after a drop is ignored and the campaign is asked, next step explained then asked, Speaking follows the sound, a cut status line", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  // 5. after "Yes." to "Shall I save it?" Grok opened the ask-result form: refused until Ara offers it and the officer says yes
+  await p.evaluate(() => { G.lastSaved = { at: Date.now() }; recent(botName(), "Add planned ask for Ruth Abernathy. Amount: $10,000. Shall I save it?"); }); await said(p, "Yes.");
+  let r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", amount: 10000 });
+  ok(r.ok === false && /hasn't asked for the .* form/.test(r.error || "") && /Want to do that now/.test(r.error || "") && !(await p.evaluate(() => V && V.action === "ask")), "an unasked form opened: " + JSON.stringify(r));
+  await p.evaluate(() => recent(botName(), "Next could be recording the ask. Want to do that now?")); await said(p, "Yes, let's do that.");
+  r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", amount: 10000 });
+  ok(await p.evaluate(() => V && V.action === "ask"), "the form didn't open after the officer's yes to Ara's offer: " + JSON.stringify(r));
+  await p.evaluate(() => { V = null; renderOverlay(); });
+  await said(p, "I met Ken Ito at the Halloween party yesterday.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: "2026-10-24", meetingType: "Event", summary: "Met Ken at the Halloween party." });
+  ok(await p.evaluate(() => V && V.action === "interaction"), "a form the officer asked for in their own words didn't open: " + JSON.stringify(r));
+  // 3. the next step is explained, then asked, never suggested
+  await said(p, "Yes, it was substantive.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true });
+  const need = (r.still_needed || []).find(x => /^Next step/.test(x)) || "";
+  ok(/becomes a Task for the officer/.test(need) && /ask whether they want to set it now/.test(need) && /never suggest/.test(need) && !/follow-up call next week/.test(need), "the next-step prompt still suggests a step or doesn't explain it: " + need);
+  // 1. the optional campaign question: a repeat of the entity answer after a drop is not a campaign answer
+  await p.evaluate(() => { V = null; renderOverlay(); const c = S.contacts.find(x => x.first === "Ken"); c.capacity = "B"; S.opps = S.opps.filter(o => o.contactId !== c.id); save(); });
+  await said(p, "Yes, create an opportunity for Ken.");
+  r = await ara(p, "show_opportunity_draft", { contact_name: "Ken Ito" });
+  ok(/entity/.test(r.ask_exactly || ""), "the opportunity's optional questions didn't start with the entity: " + JSON.stringify(r));
+  await said(p, "The Idaho entity."); r = await ara(p, "optional_fields", { step: "answer", value: "The Idaho entity" });
+  await said(p, "The PAC."); r = await ara(p, "optional_fields", { step: "answer", value: "C.A. Idaho PAC" });
+  ok(/Which campaign: National, or Idaho\?/.test(r.ask_exactly || ""), "the campaign wasn't asked after the entity: " + JSON.stringify(r));
+  r = await ara(p, "optional_fields", { step: "answer", value: "The PAC. C.A. Idaho PAC." }); // Grok re-sent the entity answer after a reconnect (Oct 25)
+  let d = await p.evaluate(() => V && V.data);
+  ok(!d.campaign && /Which campaign: National, or Idaho\?/.test(r.ask_exactly || ""), "the repeated entity answer filled the campaign: " + JSON.stringify({ campaign: d.campaign, r }));
+  await said(p, "Idaho."); r = await ara(p, "optional_fields", { step: "answer", value: "Idaho" });
+  d = await p.evaluate(() => V && V.data);
+  ok(d.campaign === "Idaho" && /potential amount/.test(r.ask_exactly || ""), "the campaign the officer gave wasn't taken: " + JSON.stringify({ campaign: d.campaign, r }));
+  // 2. "Speaking" only while sound is scheduled to play
+  const st = await p.evaluate(() => { G.status = "Speaking"; G.playHead = 0; G.sources = []; idleCheck(); return G.status; });
+  ok(st === "Listening", "the screen kept saying Speaking with nothing playing: " + st);
+  // 4. a status recording still playing when the line returns is cut, and "You're back" isn't said over it
+  const back = await p.evaluate(() => { const n = ACT.q.length; G.downAt = Date.now() - 6000; G.lineEndAt = Date.now() + 2000; G.lineSrc = { stop() { window.__lineStopped = true; } }; downEnd(true); return { stopped: window.__lineStopped, log: ACT.q.slice(n).map(a => a.text).join(" | ") }; });
+  ok(back.stopped && /status line was cut short/.test(back.log) && !/You're back with Ara/.test(back.log), "the status recording wasn't cut when the line returned: " + JSON.stringify(back));
+});
+
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });

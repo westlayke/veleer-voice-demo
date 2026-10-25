@@ -59,6 +59,32 @@ function officerGaveNextStep() { const ls = officerLines(4), last = ls[ls.length
 // did the officer say something that matches the outcome Grok picked?
 const OUTCOME_WORDS = { "Interested, continue cultivation": /\b(interested|keen|excited|enthusiastic|positive|receptive|engaged|on board|liked it|loved it)\b|went (really |very )?well|(good|great) (meeting|call|conversation)|keep cultivating/, "Ask made": /\bask(ed)?\b|proposed|pitched|requested|invited (him|her|them) to give/, "Ask accepted": /accept|agreed|said yes|yes to|committed|he's in|she's in|they're in|pledg|handed|check/, "Not now, revisit": /not now|later|revisit|next year|next quarter|hold off|wait|timing|busy|not yet|down the road/, "Not interested": /not interested|no interest|declined|turned (me|us|it) down|passed|no thanks|not for (him|her|them)/, "Referred elsewhere": /refer|pointed (me|us) to|sent (me|us) to|someone else|better fit/ };
 function officerGaveOutcome(o) { const re = OUTCOME_WORDS[o]; if (!re) return false; return officerLines(4).some(t => re.test(t)); }
+// which words in the officer's own lines ask for each form (a new form opens only on their word, Oct 25: Ara opened the ask-result form unasked after a save)
+const FORM_WORDS = {
+  contact: /\b(contact|person|someone|somebody|new (guy|woman|man|donor|investor)|add (him|her|them)|met (a|someone)|prospect)\b/,
+  editContact: /\b(change|edit|update|fix|correct|wrong|rename|spell|email|mobile|phone number|address|texting|flag|ally|do not|capacity|rating)\b/,
+  interaction: /\b(met|meeting|meet|talked|spoke|speak|call(ed)?|conversation|interaction|report|log|visit(ed)?|lunch|coffee|dinner|breakfast|event|party|email(ed)?|caught up|ran into|saw|chat(ted)?)\b/,
+  editInteraction: /\b(change|edit|update|fix|correct|wrong|report|interaction|summary)\b/,
+  meeting: /\b(schedule|set up|book|calendar|meeting|invite|appointment|get together)\b/,
+  task: /\b(task|remind|to-do|todo|follow[- ]?up|reminder|note to)\b/,
+  editTask: /\b(change|edit|update|fix|correct|wrong|task|due|move it|push|postpone|done)\b/,
+  opportunity: /\b(opportunit)/,
+  plan: /\b(plan|planned|ask planning|planning)\b/,
+  editPlan: /\b(change|edit|update|fix|correct|wrong|plan|planned|amount|date)\b/,
+  ask: /\b(ask|asked|asking|response|answer|accepted|declined|countered|said yes|said no|turned|agreed|proposal|pitch|result|outcome)\b/,
+  pledge: /\b(pledge|promise|commit)/,
+  cultivate: /\b(cultivat|move (him|her|them|it)|defer|ready|qualif)/,
+  gift: /\b(gift|check|cheque|donat|gave|give|money|payment|paid|received|wire|cash|credit card|stock|contribution)\b/,
+  payment: /\b(payment|paid|pay|check|cheque|money|received|installment|gift|wire|cash)\b/,
+};
+function formAskedFor(action) {
+  const re = FORM_WORDS[action]; if (!re || !G.live) return true;
+  if (!(G.lastSaved && Date.now() - G.lastSaved.at < 120000)) return true; // the rule bites where the problem was: moving on to another form right after a save
+  const ls = officerLines(3).filter(t => !/^((turn on |switch on |start |use )?(hands ?free|driving)( mode)?( on)?|(i'm|i am) driving( now)?)[.!]?$/.test(t.trim())); if (!ls.length) return true; // nothing said yet (or only "I'm driving"): a tap or typed flow
+  if (ls.some(t => re.test(t))) return true;
+  const last = ls[ls.length - 1], a = askedBefore(); // a yes to Ara offering that form counts; a yes to "shall I save it?" doesn't, even when the read-back names the form
+  return (hfYes(last) || /^(yes|yeah|yep|sure|ok|okay|please|go ahead|let's|lets|do it)\b/.test(last)) && re.test(a) && !/shall i save|save it\?|is that (right|correct)|ok to save|ready to save/.test(a);
+}
 function normCap(v) {
   if (v == null) return null; const t = String(v).trim(); if (!t) return null;
   let m = t.match(/^([A-Ea-e])(?![a-z])/); if (m) return m[1].toUpperCase();
@@ -193,7 +219,7 @@ function grokInstructions() {
 - New contact: always ask for their email and their mobile number (one question at a time, skipping any the officer already gave), explaining briefly that a contact needs at least one; without either it can't be saved. Then the app has you ask once whether they'd like to add more details; if yes, call optional_fields with step start and let the app lead: it asks one question at a time and fills in each answer itself. Pass every answer to optional_fields (step answer, their words as value); "skip" and "that's enough" are steps skip and stop. Never list all the optional fields at once, and never jump ahead of the app's questions. The same goes for a new opportunity's optional details.
 - Existing contact: to change their details call show_contact_edit_draft with only what changes; never use show_contact_draft for someone who is already a contact.
 - Logging a meeting (show_interaction_draft) or recording an ask (show_ask_result_draft): if the officer hasn't said how it happened, ask "Was it in person, a phone call, or a video call?" Always pass date (resolved from what they said, for example yesterday) and meetingType; leaving them out puts today and In person on the draft.
-- A substantive meeting whose outcome isn't Not interested or Referred elsewhere needs a next step and its due date, and so does an ask unless the investor declined: if not said, ask "What's the next step, and when is it due?" before asking them to save.
+- A substantive meeting whose outcome isn't Not interested or Referred elsewhere needs a next step and its due date, and so does an ask unless the investor declined: if not said, explain in one sentence that it becomes a Task for them, then ask whether they want to set it now and what it is and when it's due, before asking them to save. Never suggest the step, the date or the way of contacting anyone.
 - Booking a future meeting is show_meeting_draft (ask for the day and start time if not said). After they tap Add to Google Calendar, Google Calendar opens and the conversation ends.
 - Adding a task: always ask for the due date if none was said ("When is it due?"). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
 - Task status: when the officer says a task is done, started, or that they're waiting on someone, call set_task_status (confirmed false), read back the change, and only after they say yes call it again with confirmed true.
@@ -228,7 +254,7 @@ ${flowScript()}
 ${G.hands ? "### Hands-free mode\n- " + HF_RULES + "\n" : ""}
 ## Guardrails
 - Ask at most one question at a time, and only for a required field the officer hasn't said. Never ask about optional fields, except the ones named above (email and mobile and the optional-fields questions the app gives you for a new contact or opportunity, and the next step for a substantive meeting).
-- Never make up details: leave out anything the officer didn't say, such as a capacity rating, whether a meeting was substantive, its outcome or a next step. A field you could guess from context is still a field to leave empty: the app asks the officer for what it needs, and a guessed value that the officer confirms by habit is worse than a question.
+- Never make up details: leave out anything the officer didn't say, such as a capacity rating, whether a meeting was substantive, its outcome or a next step. Never suggest a next step, a date or a way of contacting someone: ask, and let the officer decide (Carverhill, Oct 25). A field you could guess from context is still a field to leave empty: the app asks the officer for what it needs, and a guessed value that the officer confirms by habit is worse than a question.
 - Call the money's recipient the "entity" (C3, C4 or PAC), never "fund". The only entities, by state: ${ENTITIES_BY_STATE()}. Never name any other; when asked about a state, list exactly those.
 - Say "gift", never "payment". Write spoken email addresses as real addresses. Resolve relative dates against today.
 - When the officer spells something letter by letter, use exactly those letters in the field they mean; "T as in Tom" and words like Tango or Delta stand for their first letter. When they correct how a name is spelled, ask once whether the email address should change to match.
@@ -674,7 +700,7 @@ function onEvent(e) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)
     G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
   else if (t === "response.created") { G.respSeq = (G.respSeq || 0) + 1; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
-  else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); if (G.status !== "Speaking") { G.status = "Speaking"; paintCall(); } }
+  else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); lateForcedCheck(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);

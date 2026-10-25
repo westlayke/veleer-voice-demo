@@ -274,6 +274,10 @@ function draftTool(callId, name, data) {
   const target = resolveTarget(tool.action, data.contact_name, { date: data.which_date ? normDate(data.which_date) : "", which: data.which });
   if (target.error) { toolReply(callId, { ok: false, error: target.error }); return; }
   if (target.route) { tool = TOOLS.find(t => t.action === target.route); delete data.fund; } // Record gift in Commitment: applied to the pledge
+  // a new form opens only when the officer asked for it, or said yes to Ara offering it (Carverhill, Oct 25: "always prompt me to go to the next step")
+  if ((!V || V.action !== tool.action) && typeof formAskedFor === "function" && !formAskedFor(tool.action)) { const A0 = ACTIONS[tool.action];
+    act("step", `${name} refused: the officer hasn't asked for the ${A0.title} form`);
+    toolReply(callId, { ok: false, opened: false, error: `The officer hasn't asked for the ${A0.title} form, and a form opens only on their word. Offer it in one short question, for example "Next could be ${A0.title.toLowerCase()}. Want to do that now?", and call this tool only after they say yes. If they asked for something else, do that instead.` }); return; }
   if (V && V.action === tool.action && ((V.target.contact || null) !== (target.contact || null) || (V.target.item || null) !== (target.item || null)) && settle()) return;
   delete data.contact_name; delete data.which; delete data.which_date;
   // the voice model sometimes files the officer's words under a name the tool doesn't have (notes, description...); put them where they belong, and note any other stray field in the Voice log
@@ -332,7 +336,7 @@ function draftTool(callId, name, data) {
   if ((tool.action === "contact" || tool.action === "editContact") && empty(d.email) && empty(d.mobile)) missing.push("Email or mobile");
   if (stateNote) { missing.unshift(`Entity of interest (${stateNote.trim()})`); stateNote = ""; } // the entity isn't a required field, but the officer asked for one in that state
   if (oppNeedsCampaign(tool.action, d)) missing.push(`Campaign of interest (${d.fund} can be ${campaignsFor(d.fund).join(" or ")}: ask which)`); // Carverhill: always ask the campaign when there is a choice
-  if ((needsNextStep(tool.action, d, target) || (tool.action === "ask" && d.response && d.response !== "Declined")) && (empty(d.nextStep) || empty(d.nextDue))) missing.push("Next step and its due date (a substantive interaction needs one, and it becomes a Task: say so, suggest one such as a follow-up call next week, and ask when)");
+  if ((needsNextStep(tool.action, d, target) || (tool.action === "ask" && d.response && d.response !== "Declined")) && (empty(d.nextStep) || empty(d.nextDue))) missing.push("Next step and its due date (a substantive interaction needs one, and it becomes a Task for the officer: explain that in one sentence, then ask whether they want to set it now and, if so, what it is and when it's due; never suggest a step, a date or a way of contacting anyone, the officer decides)");
   // a new contact: ask once for the other of email/mobile, then once about the optional fields (the app drives this so it never gets skipped)
   if (missedSpelling.length) { toolReply(callId, { ok: true, button: A.saveLabel, status: `The officer just spelled out ${missedSpelling.map(w => `"${spellOut(w)}" (${w.charAt(0) + w.slice(1).toLowerCase()})`).join(" and ")}, but this update didn't use it. Call this tool again now with that exact spelling in the field they named (for a name, first or last as they said; for an email, the part before the @). If they changed how a name is spelled and the email uses that name, ask once whether the email should change to match. Don't ask them to repeat it.` }); return; }
   // every interaction report: ask whether it was substantive (Oct 24: saved as not substantive without asking, which kept the opportunity in Qualification)

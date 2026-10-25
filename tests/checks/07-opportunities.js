@@ -85,9 +85,11 @@ test("Planning an ask: the entity set on the opportunity is on the form, and Ara
   await said(p, "B."); await ara(p, "show_contact_draft", { first: "Lee", last: "Park", email: "lee@example.org", capacity: "B" });
   for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  await said(p, "Create an opportunity for Lee.");
   await ara(p, "show_opportunity_draft", { contact_name: "Lee Park" });
   await p.selectOption("#f_fund", "C.A. North Dakota C4"); await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   await p.evaluate(() => { window.__demo.state.opps.find(o => o.name.startsWith("Park")).stage = "Cultivation"; });
+  await said(p, "Plan an ask for Lee.");
   const r = await ara(p, "show_ask_plan_draft", { contact_name: "Lee Park" });
   ok((await p.inputValue("#f_fund")) === "C.A. North Dakota C4", "the planned ask form did not take the opportunity's entity");
   ok(/Already on the form[^.]*Entity: C\.A\. North Dakota C4/.test(r.status) && /Never ask for these again/.test(r.status), "Ara was not told the entity is already set: " + JSON.stringify(r));

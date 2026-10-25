@@ -114,6 +114,7 @@ test("New contact and new opportunity forms show every field, and Ara offers the
   for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   const ready = "Ana Ruiz";
+  await said(p, "Create an opportunity for Ana.");
   let r = await ara(p, "show_opportunity_draft", { contact_name: ready });
   ok(!(await p.isVisible("details.more")) && (await p.isVisible("#f_potential")) && (await p.isVisible("#f_notes")), "the new opportunity form still hides fields under More details");
   ok(/one at a time/.test(r.ask_exactly || r.status || ""), "the opportunity's optional fields weren't offered: " + JSON.stringify(r));

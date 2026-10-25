@@ -37,6 +37,7 @@ function optParse(k, raw) { // the officer's answer in their words -> the field'
     if (ally || dnc) return { ally, dnc }; return none ? { ally: false, dnc: false } : null; }
   if (k === "fund") { const { hits } = matchEntity(t); return hits.length === 1 ? hits[0] : null; }
   if (k === "campaign") { const f = readDraft().fund, ok = campaignsFor(f), st = ENTITY_STATE[f];
+    if (!/\bcampaign\b/.test(l) && /\b(pac|c3|c4|c\.a\.|citizens|alliance|entity)\b/.test(l)) return null; // "The PAC. C.A. Idaho PAC." names an entity, not a campaign (Oct 25: a repeat after a drop filled the campaign)
     if (/\bnational\b/.test(l)) return "National"; if (st && (l.includes(st.toLowerCase()) || /\bstate\b/.test(l))) return st; return null; }
   if (k === "potential") return spokenAmount(t);
   return t || null; // how we met, texting source, notes: their words
@@ -72,6 +73,10 @@ function optStep(callId, data) {
     else { toolReply(callId, { ok: true, field: want.k, ask_exactly: `Sure, back to that. ${want.q(optWho())}`, next: "After the officer answers, call optional_fields with step answer." }); return; }
   }
   let k = V.opt.cur; if (!k) { optAsk(callId); return; }
+  // the same answer again within half a minute is the voice model re-sending it after a drop, not an answer to the next question (Oct 25)
+  const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (step === "answer" && V.opt.lastVal && norm(data.value) && (norm(data.value) === V.opt.lastVal || norm(data.value).includes(V.opt.lastVal)) && Date.now() - (V.opt.lastAt || 0) < 30000 && V.opt.done.includes(V.opt.lastK)) {
+    act("step", `optional fields: "${data.value}" repeats the last answer (${V.opt.lastK}); asking the ${k} question again`); optAsk(callId); return; }
   // an answer that fits an earlier question better ("it's one of the New Hampshire entities" while the amount was asked, Oct 24): take it for that one
   if (k !== "fund" && V.opt.done.includes("fund") && OPT_STEPS[V.action].some(st => st.k === "fund") && optEmpty(readDraft().fund) && optParse(k, data.value) === null && matchEntity(data.value || "").hits.length) {
     act("step", "optional fields: answer taken for the entity"); V.opt.done = V.opt.done.filter(x => x !== "fund" && x !== "campaign"); V.opt.cur = k = "fund"; }
@@ -81,7 +86,7 @@ function optStep(callId, data) {
   if (v === null) { const st = OPT_STEPS[V.action].find(s => s.k === k);
     toolReply(callId, { ok: false, field: k, error: `The app couldn't read "${data.value || ""}" as an answer to this question.`, say: k === "fund" ? (() => { const { hits } = matchEntity(data.value); return hits.length > 1 ? `Ask which one they mean: ${hits.join(", or ")}.` : `Say you didn't catch which entity. Give the short version: Citizens Alliance C3, C.A. of America Action C4, C.A. Fed PAC, or a state C4 or PAC in Idaho, North Dakota, New Hampshire or Pennsylvania. Ask which.`; })() : `Say in a few words that you didn't catch that, then ask again: "${st.q(optWho())}"` }); return; }
   if (k === "flags") { optSet("ally", v.ally); optSet("dnc", v.dnc); } else optSet(k, v);
-  V.opt.done.push(k); act("step", "optional field " + k + ": " + JSON.stringify(v));
+  V.opt.done.push(k); V.opt.lastK = k; V.opt.lastVal = norm(data.value); V.opt.lastAt = Date.now(); act("step", "optional field " + k + ": " + JSON.stringify(v));
   const heard = k === "capacity" ? `Rating ${v} is on the form.` : k === "permText" ? (v ? "Texting is now permitted on the form." : "Texting stays off.") : k === "flags" ? (v.ally || v.dnc ? `${[v.ally && "Ally - Do Not Solicit", v.dnc && "Do Not Contact"].filter(Boolean).join(" and ")} is now on the form.` : "Neither flag is set.") : k === "potential" ? `${money(v)} is on the form.` : k === "fund" ? (campaignsFor(v).length === 1 ? `${v} is on the form, with the National campaign, its only campaign.` : `${v} is on the form.`) : k === "campaign" ? `The ${v} campaign is on the form.` : "That's on the form.";
   optAsk(callId, heard);
 }
@@ -190,7 +195,7 @@ async function hfSave(callId, data, lead) {
     const cur = readDraft(); cur.substantive = v; V.fromVoice.add("substantive"); V.data = prefill(V.action, cur, V.target); renderOverlay(); act("step", `substantive ${v}, from the officer's words`);
   }
   { const d = readDraft(); if ((needsNextStep(V.action, d, V.target) || (V.action === "ask" && d.response && d.response !== "Declined")) && (optEmpty(d.nextStep) || optEmpty(d.nextDue))) {
-    toolReply(callId, { ok: false, saved: false, field: "nextStep", ask_exactly: `${lead ? lead + " " : ""}A substantive interaction needs a next step, which becomes a Task. What's the next step, and when is it due? For example, a follow-up call next week.`, error: "Not read back yet: a substantive interaction (or an ask that wasn't declined) needs a next step and its due date. After the answer, call the draft tool with nextStep and nextDue." }); return; } }
+    toolReply(callId, { ok: false, saved: false, field: "nextStep", ask_exactly: `${lead ? lead + " " : ""}A substantive interaction needs a next step, which becomes a Task for you. Do you want to set that now? If so, tell me the step and when it's due.`, error: "Not read back yet: a substantive interaction (or an ask that wasn't declined) needs a next step and its due date. After the answer, call the draft tool with nextStep and nextDue." }); return; } }
   const key = V.action + JSON.stringify(readDraft()); let c = G.saveCheck;
   if (data.confirmed === true && !(c && c.key === key) && araReadBack()) { c = G.saveCheck = { key, step: "read", n: (G.heardN || 1) - 1 }; act("step", "Ara read the form back herself, in full, and the officer said yes: taken as the read-back"); }
   if (data.confirmed !== true || !c || c.key !== key) {
