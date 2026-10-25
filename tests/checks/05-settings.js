@@ -5,6 +5,8 @@ test("Settings: speaking speed saves, Restart asks first", async (p) => {
   await signIn(p); await p.tap("[data-go=settings] >> nth=0"); await p.waitForTimeout(400);
   ok(await titleOf(p) === "Settings", "Settings did not open");
   ok(await p.isVisible("text=No audio is kept"), "privacy notice missing from Settings");
+  const ver = await p.evaluate(() => { const h = [...document.querySelectorAll(".ph h2")].find(x => x.textContent === "Version"); return h ? h.nextElementSibling.textContent : ""; });
+  ok(/^[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d\d [AP]M ET$/.test(ver), "the Version line isn't the build stamp (iPhone showed Invalid Date, Oct 25): " + JSON.stringify(ver));
   await p.selectOption("#speedSel", { index: 3 }); await p.waitForTimeout(200);
   ok((await state(p)).settings.speed > 1, "speed not saved");
   const n = (await state(p)).tasks.length;
