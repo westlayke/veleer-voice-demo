@@ -279,7 +279,7 @@ ${ctxNow()}`;
 function ctxNow() {
   const f = focusContact();
   return `${(G.saves || []).length ? `Saved so far in this conversation: ${G.saves.join("; ")}.` : "Nothing has been saved yet in this conversation."}
-${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.\n` : ""}${V && document.getElementById("draftForm") ? draftSummary() + " If the officer asks about it, carry on with it; don't open a new form for the same person.\n" : ""}Contacts and opportunities: ${crmSnapshot()}.`;
+${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.\n` : ""}${V && document.getElementById("draftForm") ? draftSummary() + " If the officer asks about it, carry on with it; don't open a new form for the same person.\n" : ""}${G.justNow && Date.now() - G.justNow.at < 180000 ? "Just now: " + G.justNow.text + "\n" : ""}Contacts and opportunities: ${crmSnapshot()}.`;
 }
 // what changes Ara's rules, so the full instructions go again only when one of these does
 const rulesKey = () => JSON.stringify([!!G.hands, S.settings.userName || "", botName(), spookyMode(), xmasMode()]);
@@ -550,7 +550,7 @@ function draftSummary() {
 function interrupted(why) {
   if (!G.live || G.interrupting) return; G.interrupting = true;
   vlog("conversation interrupted: " + why);
-  G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "", hands: !!G.hands };
+  G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), where: (typeof formPosition === "function" && formPosition() || {}).where || "", what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "", hands: !!G.hands };
   endCall("interrupted: " + why); G.interrupting = false;
   if (document.visibilityState === "visible") resumeModal(); else G.endedByLock = true;
 }
@@ -566,7 +566,7 @@ function resumeModal() {
   document.getElementById("rsmX").onclick = () => { G.resume = null; h.innerHTML = ""; };
   document.getElementById("rsmGo").onclick = () => { h.innerHTML = ""; const r2 = G.resume; G.resume = null; G.recent = r2.lines.slice(); G.keepRecent = true; G.keepHands = r2.hands; startCall(resumeLine(r2)); };
 }
-const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
+const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " + (r.where ? r.where + " " : "") : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; G.hands = false; G.saveCheck = null; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();

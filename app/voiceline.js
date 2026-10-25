@@ -179,7 +179,11 @@ async function reconnect(why) {
   }
   if (!G.live) return;
   if (G.spokeInGap) act("step", "The officer talked while the line was down: Ara will ask them to repeat it");
-  G.heardAt = G.lastMsg || G.heardAt || Date.now(); G.lastMsg = 0; openSocket(token, () => guide(reconnectLine()));
+  G.heardAt = G.lastMsg || G.heardAt || Date.now(); G.lastMsg = 0;
+  // the app says where the form stands and, when a question is pending, asks it again itself as a scripted line; the context goes in Ara's instructions (Right now)
+  openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null;
+    if (fp && fp.ask) { G.justNow = { text: reconnectLine() + " " + fp.where, at: Date.now() }; act("step", `Reconnected: the app asks the pending question itself (${fp.where})`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${fp.ask}`); }
+    else guide(reconnectLine() + (fp ? " " + fp.where : "")); });
 }
 const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "",
