@@ -148,9 +148,10 @@ function hfAnnounce() {
   const on = G.hands, line = on ? "Hands-free is on. I'll read back all the information on the form and save it when you say yes." : "Hands-free is off. You'll tap Save yourself again.";
   const q = [...(G.recent || [])].reverse().find(l => !l.startsWith("Officer: ") && !l.startsWith("App: ") && /\?$/.test(l.trim()));
   // the follow-up is in the same scripted line: the form's last question, or what they'd like to do (Oct 25: a second turn after the line never came)
-  const text = `${line} ${V && ACTIONS[V.action] ? (q ? (q.replace(/^[^:]+: /, "").trim().match(/[^.!?]*\?$/) || [""])[0].trim() : "") : "What would you like to do?"}`.trim();
+  const askedFor = /\b(contact|opportunity|interaction|meeting|task|ask|pledge|gift|payment|report|log|record|create|add|plan|new)\b/i.test(((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "")); // "hands-free, then a new contact": no "what would you like to do?" (Oct 25)
+  const text = `${line} ${V && ACTIONS[V.action] ? (q ? (q.replace(/^[^:]+: /, "").trim().match(/[^.!?]*\?$/) || [""])[0].trim() : "") : askedFor ? "" : "What would you like to do?"}`.trim();
   const go = hfSwitchLine(on).replace(/^Say "[^"]*"\.?\s*Then,?\s*/, "");
-  forceSay(text, V && !q ? `The app just said "${text}" in your voice; don't say it again. Now ${go.charAt(0).toLowerCase() + go.slice(1)}` : null, hfSwitchLine(on));
+  forceSay(text, V && !q ? `The app just said "${text}" in your voice; don't say it again. Now ${go.charAt(0).toLowerCase() + go.slice(1)}` : !V && askedFor ? `The app just said "${text}" in your voice; don't say it again and don't ask what they'd like to do: the officer already said. Carry on with it now (open its form and ask for the first missing field).` : null, hfSwitchLine(on));
 }
 function setHandsFree(on) {
   G.hands = !!on && G.live; G.saveCheck = null; act("step", "hands-free " + (G.hands ? "on" : "off")); vlog("hands-free " + (G.hands ? "on" : "off"));

@@ -41,7 +41,28 @@ test("Ara: an interaction report keeps only what the officer said (substantive, 
   r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", date: "2026-10-25", meetingType: "In person", summary: "Substantive meeting with Ruth; she is interested.", substantive: true, outcome: "Interested, continue cultivation", nextStep: "Follow-up call", nextDue: "2026-10-30" });
   d = await p.evaluate(() => V && V.data);
   ok(d && d.substantive === true && d.outcome === "Interested, continue cultivation" && d.nextStep === "Follow-up call", "fields the officer did say were dropped: " + JSON.stringify(d && { nextStep: d.nextStep, outcome: d.outcome, substantive: d.substantive }));
-  ok(!r.ask_exactly && !r.still_needed?.length, "the substantive question was asked although the officer said the word: " + JSON.stringify(r));
+  ok(!r.ask_exactly && !r.still_needed?.length, "the substantive question was asked although the officer said the word: " + JSON.stringify(r));  // "we talked about his interest in the work" is not the officer calling him interested (Oct 25 rerun, 1 of 10)
+  await p.evaluate(() => { V = null; G.recent = []; renderOverlay(); }); // a fresh exchange: the earlier "she's interested" about Ruth is gone
+  await said(p, "Had a substantive call with Ken Ito, we talked about his interest in the North Dakota work, next step is a follow-up call Friday.");
+  await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: "2026-10-25", meetingType: "Phone call", summary: "Talked about his interest in the North Dakota work.", substantive: true, outcome: "Interested, continue cultivation", nextStep: "Follow-up call", nextDue: "2026-10-30" });
+  d = await p.evaluate(() => V && V.data);
+  ok(d && !d.outcome && d.substantive === true && d.nextStep === "Follow-up call", "an outcome matched on the word interest in passing was kept: " + JSON.stringify(d && { outcome: d.outcome, substantive: d.substantive, nextStep: d.nextStep }));
+});
+
+test("Ara: a rating the officer never gave is dropped and the reply says so; hands-free asked for with a task doesn't ask what to do", async (p) => {
+  await signIn(p);
+  await said(p, "Let's just do email. It's bg at example dot org.");
+  let r = await ara(p, "show_contact_draft", { first: "Barry", last: "Good", email: "bg@example.org", ally: false, dnc: false, capacity: "E" });
+  const cap = await p.evaluate(() => V && V.data && V.data.capacity);
+  ok(!cap, "the rating nobody gave stayed on the form: " + JSON.stringify(cap));
+  ok(/Left out of the form because the officer never said it: capacity rating/.test(r.status || ""), "Ara wasn't told the rating was left out (Oct 25: she read back her own E): " + JSON.stringify(r));
+  await p.evaluate(() => { V = null; renderOverlay(); });
+  await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 });
+  const n = await p.evaluate(() => __sent.length);
+  await said(p, "Can you put me in hands-free mode, please? And then I'd like to create a new contact.");
+  await ara(p, "set_hands_free", { on: true }); await p.waitForTimeout(600);
+  const forced = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
+  ok(forced.length && forced.every(t => !/What would you like to do\?/.test(t)) && /Hands-free is on/.test(forced[0]), "the hands-free line asked what to do although the officer had just said (Oct 25 call): " + JSON.stringify(forced));
 });
 
 test("Ara: optional fields one at a time, filled in by the app (rating, how met, texting and its source, flags)", async (p) => {
@@ -305,7 +326,7 @@ test("Ara: when Grok goes silent after the app asks for a reply, the app asks on
   await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(1500);
   ok(await p.evaluate(() => __ws !== __ws0 && G.live), "a second silent reply did not open a fresh line");
   const q = await logged();
-  ok(/empty reply, asked again/.test(q) && /after asking again/.test(q) && /Reconnecting \(1 of 3\)/.test(q) && /Grok error: Something broke upstream/.test(q), "the silent replies, the reconnect or the Grok error were not logged");
+  ok(/empty reply, asked again/.test(q) && /after asking again/.test(q) && /Reconnecting \(1\)/.test(q) && /Grok error: Something broke upstream/.test(q), "the silent replies, the reconnect or the Grok error were not logged");
   // a slow line: no asking again, a fresh line straight away
   await p.waitForFunction(() => G.status === "Listening", null, { timeout: 5000 });
   await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise(res => setTimeout(() => res(new Response("{}")), 2500)) : f(u, o); window.__ws1 = __ws; G.drops = 0; });
@@ -315,7 +336,7 @@ test("Ara: when Grok goes silent after the app asks for a reply, the app asks on
   ok(await p.evaluate(() => __ws !== __ws1) && await creates() >= c1, "a silent reply on a slow line didn't go straight to a fresh line");
   ok(/on a slow line \(test request \d+ ms\): fresh line/.test(await logged()), "the slow-line reconnect wasn't logged");
 });
-test("Ara: a dropped voice line reconnects and picks up where it left off; after 3 failed tries the phone says the voice service is unavailable", async (p) => {
+test("Ara: a dropped voice line reconnects and picks up where it left off; it keeps reconnecting past 3 tries, and only 2 minutes without a working line ends the call", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   await p.evaluate(() => recent(botName(), "Which entity is the ask for?"));
@@ -324,10 +345,15 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; after
   ok(back.newLine && back.live && back.sorry, "the dropped line wasn't reopened with the last question and the open form");
   ok(await p.evaluate(() => !!document.getElementById("draftForm")), "the planned ask form closed when the line dropped");
   await p.evaluate(() => { window.speechSynthesis.speak = (u) => { window.__spoke = u.text; }; });
-  await p.evaluate(() => { G.drops = 3; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
+  // a fourth drop with the line heard from recently keeps reconnecting (Oct 25: a driveway dead spot took 4 tries and the call was hung up)
+  await p.evaluate(() => { G.drops = 3; G.lastMsg = Date.now() - 20000; window.__ws1 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1200);
+  const four = await p.evaluate(() => ({ live: G.live, drops: G.drops, log: ACT.q.map(a => a.text).join(" | ") }));
+  ok(four.live && four.drops === 4 && /Reconnecting \(4\)/.test(four.log), "the fourth drop ended the call instead of reconnecting: " + JSON.stringify({ live: four.live, drops: four.drops }));
+  await p.waitForFunction(() => window.__ws !== window.__ws1, null, { timeout: 12000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { G.lastMsg = Date.now() - 130000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
   const out = await p.evaluate(() => ({ live: G.live, spoke: window.__spoke || "", log: ACT.q.map(a => a.text).join(" | ") + __logs.map(l => JSON.stringify(l)).join(" ") }));
   ok(!out.live && /isn't answering/.test(out.spoke), "after the tries ran out the call didn't end with a spoken line");
-  ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 3 tries/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
+  ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 2 minutes without a working line/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
 });
 test("Ara: no reply at the first tick on a slow line gets a fresh line at once, and a new line that won't open gets a second line alongside", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
