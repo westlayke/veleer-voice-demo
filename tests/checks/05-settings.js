@@ -213,4 +213,22 @@ test("Halloween: an owl asks for a tap so sounds can play, hoots when tapped, an
   await p.evaluate(() => { window.__demo.owlHint(); }); await p.waitForTimeout(400);
   ok(!(await p.isVisible(".owlhint")), "the owl came back although sound was already on");
 });
+
+test("Settings: the location switch asks the phone first, and connection notes carry the spot only while it is on", async (p) => {
+  await signIn(p);
+  await p.evaluate(() => { const pos = { coords: { latitude: 40.12345, longitude: -74.56789, accuracy: 12 } };
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (ok) => ok(pos), watchPosition: (ok) => { ok(pos); return 7; }, clearWatch: () => {} } }); });
+  await p.tap("[data-go=settings] >> nth=0"); await p.waitForTimeout(400);
+  ok(await p.isVisible("text=Your exact location is added to the notes about the voice line only if you turn that on in Settings"), "the privacy notice doesn't mention the location switch");
+  ok(!(await p.isChecked("#locTgl")), "the location switch is not off by default");
+  ok(!(await p.evaluate(() => locInfo())), "a connection row carried a location while the switch was off");
+  await p.click("#locTgl"); await p.waitForTimeout(300);
+  ok((await state(p)).settings.shareLocation === true, "the switch did not save");
+  const row = await p.evaluate(() => { locStart(); netLog("Test", 5); return ACT.q[ACT.q.length - 1].text; });
+  ok(/^Connection: Test\. .*test request 5 ms, at 40\.12345,-74\.56789 \(±12 m\)$/.test(row), "the connection row has no location: " + row);
+  await p.click("#locTgl"); await p.waitForTimeout(300);
+  ok(!(await state(p)).settings.shareLocation, "the switch did not turn off");
+  const row2 = await p.evaluate(() => { netLog("Test", 5); return ACT.q[ACT.q.length - 1].text; });
+  ok(!/40\.12345/.test(row2), "a connection row still carried the location after the switch was turned off: " + row2);
+});
 };

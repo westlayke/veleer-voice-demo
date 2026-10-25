@@ -29,6 +29,7 @@ const DOWN_GIVE_UP_MS = 120000;              // a line down this long (no voice 
 const SAY_DOWN_MS = 5000, SAY_STILL_MS = 12000, SAY_REPEAT_MS = 10000; // the phone's own spoken lines while the line is down (Carverhill, Oct 25)
 const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."]; // recorded in sounds/ (line-dropped, still-trying, line-back): the phone's own speech is silent during a call on an iPhone (Oct 25)
 const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3" }, lineRaw = {}, lineBuf = {};
+const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
 
@@ -130,6 +131,12 @@ function openSocket(token, first, second) {
 }
 function closeTries() { if (G.tries) G.tries.forEach(o => { if (o !== G.ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; }
 // what the phone says about its connection; iPhones don't report the network type or speed, only online or offline
+// where the phone is, for connection rows only, and only while the Settings switch "Record my location in connection logs" is on
+function locWanted() { return !!(S.settings.shareLocation && navigator.geolocation); }
+function locStart() { locStop(); if (!locWanted()) return;
+  try { G.locWatch = navigator.geolocation.watchPosition(pos => { G.pos = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy, at: Date.now() }; }, err => { G.posErr = err && err.message; }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }); } catch (e) {} }
+function locStop() { if (G.locWatch != null) { try { navigator.geolocation.clearWatch(G.locWatch); } catch (e) {} G.locWatch = null; } }
+function locInfo() { if (!locWanted()) return ""; const p = G.pos; if (!p || Date.now() - p.at > LOC_FRESH_MS) return ", location not available yet"; return `, at ${p.lat.toFixed(5)},${p.lon.toFixed(5)} (±${Math.round(p.acc || 0)} m)`; }
 function netInfo() {
   const c = navigator.connection, bits = [navigator.onLine === false ? "offline" : "online"];
   if (c) { if (c.type) bits.push(c.type); if (c.effectiveType) bits.push(c.effectiveType); if (c.downlink != null) bits.push(c.downlink + " Mbps"); if (c.rtt != null) bits.push("round trip " + c.rtt + " ms"); }
@@ -142,7 +149,7 @@ async function pingMs(limit = 8000) {
   if (!tokenUrl()) return null; const t0 = performance.now(), ac = new AbortController(), to = setTimeout(() => ac.abort(), limit);
   try { await fetch(tokenUrl().replace(/\/$/, "") + "/log?ping=" + Date.now(), { cache: "no-store", signal: ac.signal }); return Math.round(performance.now() - t0); } catch (e) { return ac.signal.aborted ? `no answer in ${limit / 1000} s` : "failed"; } finally { clearTimeout(to); }
 }
-async function netLog(what, known) { const sess = G.session, info = netInfo(), ms = known !== undefined ? known : await pingMs(); act("step", `Connection: ${what}. ${info}${ms == null ? "" : typeof ms === "number" ? `, test request ${ms} ms` : `, test request ${ms}`}`, sess); }
+async function netLog(what, known) { const sess = G.session, info = netInfo(), ms = known !== undefined ? known : await pingMs(); act("step", `Connection: ${what}. ${info}${ms == null ? "" : typeof ms === "number" ? `, test request ${ms} ms` : `, test request ${ms}`}${locInfo()}`, sess); }
 // the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
 async function reconnect(why) {
   if (!G.live) return;

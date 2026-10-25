@@ -65,7 +65,8 @@ function settingsScreen() {
     ${saveTip(true)}</div></section>
   <section class="panel"><div class="ph"><h2>Your first name</h2></div><div class="sb set">
     <label for="userName">Your first name (the assistant uses it)<input id="userName" name="vcrm-first-name-y" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="For example, Sam" enterkeyhint="done" value="${esc(S.settings.userName || "")}"></label>
-    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This proof of concept saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, how well your connection to the voice service holds up during a conversation, with your first name, a random ID for this phone and your rough location (city), to improve the proof of concept. No audio is kept. Kept for 90 days.</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.4">This proof of concept saves when you open the app, what you say to the assistant and its replies, what you tap, and what is in each form when you tap Save, how well your connection to the voice service holds up during a conversation, with your first name, a random ID for this phone and your rough location (city), to improve the proof of concept. Your exact location is added to the notes about the voice line only if you turn that on in Settings. No audio is kept. Kept for 90 days.</div>
+    <label class="hint-tgl" for="locTgl"><input type="checkbox" id="locTgl" ${S.settings.shareLocation ? "checked" : ""}> Record my location in connection logs: where this phone is, to about 10 metres, is added to each note about the voice line dropping, reconnecting or ending, so weak spots can be found. Off unless you turn it on.</label>
   </div></section>
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
@@ -173,6 +174,11 @@ document.addEventListener("change", (e) => { const id = e.target.id;
   else if (id === "xmasMode") { setXmas(e.target.checked); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(e.target.checked ? "Christmas mode is on. Ho ho ho! 🎄" : "Back to normal"); }
   else if (id === "xmasTgl") { if (e.target.checked) delete S.settings.noXmas; else S.settings.noXmas = true; save(); toast(e.target.checked ? "Merry Christmas! 🎄" : "Christmas visitors are off"); }
   else if (id === "spookyTgl") { if (e.target.checked) delete S.settings.noSpooky; else S.settings.noSpooky = true; save(); toast(e.target.checked ? "Happy Halloween! 🎃" : "Halloween visitors are off"); }
+  else if (id === "locTgl") { const el = e.target;
+    if (!el.checked) { delete S.settings.shareLocation; save(); locStop(); toast("Location is no longer recorded"); }
+    else if (!navigator.geolocation) { el.checked = false; toast("This phone can't share its location"); }
+    else navigator.geolocation.getCurrentPosition(pos => { S.settings.shareLocation = true; save(); G.pos = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy, at: Date.now() }; if (G.live) locStart(); toast("Location will be recorded in connection logs"); },
+      err => { const t = document.getElementById("locTgl"); if (t) t.checked = false; toast("The phone didn't allow location" + (err && err.message ? " (" + err.message + ")" : "")); }, { enableHighAccuracy: true, timeout: 20000 }); }
   else if (id === "hintsTgl") { if (e.target.checked) delete S.settings.noHints; else S.settings.noHints = true; save(); toast(e.target.checked ? "Hints are on" : "Hints are off"); } });
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.target.id === "userName" || e.target.id === "botName")) e.target.blur(); });
 function doRestart() { const keep = S.settings; if (G.live) endCall(); S = fresh(); seedActivity(S); S.seed2 = true; S.permFix1 = true; S.dataVersion = DATA_VERSION; S.settings.deviceId = keep.deviceId; S.settings.demoCode = keep.demoCode || ""; // a restart puts every setting back to its default (voice, assistant name, hints, first name); only the phone ID and code word stay

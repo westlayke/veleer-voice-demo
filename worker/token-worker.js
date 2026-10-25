@@ -88,6 +88,7 @@ a{color:#1f5fbf}</style></head><body>${body}</body></html>`, { headers: { "Conte
     FROM events ${device ? "WHERE device = ?" : ""} GROUP BY session ORDER BY start DESC LIMIT ${device ? 200 : 50}`).bind(...(device ? [device] : [])).all()).results;
   const ids = sessions.map(s => s.session);
   const rows = ids.length ? (await env.DB.prepare(`SELECT session, at, role, text FROM events WHERE session IN (${ids.map(() => "?").join(",")}) ORDER BY id`).bind(...ids).all()).results : [];
+  const mapLinks = t => t.replace(/at (-?\d+\.\d+),(-?\d+\.\d+) \(/g, (m, a, b) => `at <a href="https://maps.google.com/?q=${a},${b}" target="_blank" rel="noopener">${a},${b}</a> (`); // "at 40.12345,-74.56789 (±12 m)" from the app's location switch
   const label = { user: "They said", grok: "Grok", step: "Step", saved: "Saved", start: "Started", end: "Ended", tap: "Tapped", open: "Opened", form: "Form saved", question: "Question for the team" };
   let h = `<h1>Citizens VCRM activity</h1><div class="meta">Times are US Eastern. Location is approximate, from the phone's internet connection. Kept ${KEEP_DAYS} days.</div>`;
   const day = (t) => { try { return new Date(t).toLocaleDateString("en-US", { timeZone: "America/New_York" }); } catch (e) { return ""; } };
@@ -107,6 +108,6 @@ a{color:#1f5fbf}</style></head><body>${body}</body></html>`, { headers: { "Conte
     + phones.map(p => `<tr><td>${esc(p.name || "no name")}</td><td>${when(p.last)}</td><td>${p.convs}</td><td>${esc(place(p))}</td><td><a href="?device=${encodeURIComponent(p.device)}">${esc(String(p.device).slice(0, 8))}</a></td></tr>`).join("") + "</table>";
   h += `<h2>${device ? `Conversations from phone ${esc(device.slice(0, 8))} · <a href="/activity">show all</a>` : "Latest conversations"}</h2>`;
   h += sessions.map(s => `<div class="conv"><div class="meta"><b>${esc(s.name || "no name")}</b> · ${when(s.start)} · ${esc(place(s))} · ${esc(s.page || "")} · phone ${esc(String(s.device).slice(0, 8))}</div>`
-    + rows.filter(r => r.session === s.session).map(r => `<div class="r ${r.role === "user" ? "user" : r.role === "grok" ? "grok" : r.role === "step" ? "step" : r.role === "question" ? "q" : "sys"}"><b>${label[r.role] || esc(r.role)}:</b> ${esc(r.text)}</div>`).join("") + "</div>").join("") || "<p>No conversations yet.</p>";
+    + rows.filter(r => r.session === s.session).map(r => `<div class="r ${r.role === "user" ? "user" : r.role === "grok" ? "grok" : r.role === "step" ? "step" : r.role === "question" ? "q" : "sys"}"><b>${label[r.role] || esc(r.role)}:</b> ${mapLinks(esc(r.text))}</div>`).join("") + "</div>").join("") || "<p>No conversations yet.</p>";
   return page(h);
 }
