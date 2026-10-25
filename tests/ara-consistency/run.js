@@ -61,7 +61,7 @@ async function converse(browser, base, flow, n) {
     ws.on("framesent", f => { const s = String(f.payload); if (s.includes('"input_audio_buffer.append"')) return; let e; try { e = JSON.parse(s); } catch (x) { return; }
       if (e.type === "conversation.item.create") { items++; conv.items++; if (e.item && e.item.type === "force_message") sentForced.push(e.item.content[0].text); }
       if (e.type === "conversation.item.create" && e.item && e.item.type === "function_call_output") conv.tools.length && (conv.tools[conv.tools.length - 1].out = conv.tools[conv.tools.length - 1].out || e.item.output.slice(0, 600));
-      if (e.type === "response.create" && e.response && e.response.instructions) conv.lastGuide = e.response.instructions; });
+      if (e.type === "response.create" && e.response && e.response.instructions) { conv.lastGuide = e.response.instructions; const m = e.response.instructions.match(/Left out of the form because the officer never said it: ([^.]*)/); if (m) (conv.leftOut = conv.leftOut || []).push(m[1]); } });
     ws.on("framereceived", f => { const s = String(f.payload); lastFrame = Date.now(); if (s.includes('audio.delta"')) return; let e; try { e = JSON.parse(s); } catch (x) { return; }
       if (e.type === "response.created") cur = { text: "", at: Date.now(), turn: conv.turns.length, forced: sentForced.length ? sentForced[sentForced.length - 1] : null, forcedN: sentForced.length };
       else if (/transcript\.delta$/.test(e.type) && !/input_audio/.test(e.type) && cur) { (conv.kinds = conv.kinds || {})[e.type] = 1; if (!cur.kind) cur.kind = e.type; if (cur.kind === e.type) cur.text += e.delta || ""; }
@@ -208,7 +208,7 @@ function report(convs, extra) {
       if (!firstLogged && c.replies.length) { firstLogged = true; console.log("MILESTONE first-grok-reply: " + JSON.stringify(c.replies[0].text.slice(0, 200))); }
       console.log(`${convs.length}. ${c.flow} #${c.n}: ${c.turns.length} turns, ${(c.lineMs / 1000).toFixed(0)} s, $${c.cost.toFixed(3)}, saved: ${c.saved.map(s => s.text).join(" | ") || "nothing"}${c.errors.length ? ", errors: " + c.errors.slice(0, 2).join("; ") : ""}  [total $${spent().toFixed(3)}]`);
       if (!half.said && spent() >= BUDGET / 2) { half.said = true; console.log(`MILESTONE halfway: ${convs.length} conversations, $${spent().toFixed(3)}`); }
-      console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)]), saved: c.saved.map(s => s.text), errors: c.errors.slice(0, 3) }));
+      console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)]), saved: c.saved.map(s => s.text), leftOut: c.leftOut || [], errors: c.errors.slice(0, 3) }));
       fs.writeFileSync(path.join(OUT, "conversations.json"), JSON.stringify(convs, null, 1));
     }
   }
