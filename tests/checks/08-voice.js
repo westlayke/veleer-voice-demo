@@ -422,6 +422,9 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; it ke
   await p.evaluate(() => { G.drops = 3; G.lastMsg = Date.now() - 20000; window.__ws1 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1200);
   const four = await p.evaluate(() => ({ live: G.live, drops: G.drops, log: ACT.q.map(a => a.text).join(" | ") }));
   ok(four.live && four.drops === 4 && /Reconnecting \(4\)/.test(four.log), "the fourth drop ended the call instead of reconnecting: " + JSON.stringify({ live: four.live, drops: four.drops }));
+  // a new line that doesn't open (G.lastMsg is 0 while it opens) counts from when the service was last heard, not from the call's start (Oct 25 3:42 PM: gave up after one try)
+  await p.evaluate(() => { G.t0 = Date.now() - 300000; G.lastMsg = 0; G.lastHeard = Date.now() - 15000; reconnect("the line didn't open"); }); await p.waitForTimeout(600);
+  ok(await p.evaluate(() => G.live && G.drops === 5), "a line that didn't open ended the call although the service was heard 15 s ago");
   await p.waitForFunction(() => window.__ws !== window.__ws1, null, { timeout: 12000 }); await p.waitForTimeout(300);
   await p.evaluate(() => { G.lastMsg = Date.now() - 130000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
   const out = await p.evaluate(() => ({ live: G.live, spoke: window.__spoke || "", log: ACT.q.map(a => a.text).join(" | ") + __logs.map(l => JSON.stringify(l)).join(" ") }));

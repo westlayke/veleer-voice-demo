@@ -492,7 +492,7 @@ async function startCall(opening) {
   if (!G.keepRecent) { G.recent = []; G.saves = []; G.convId = null; } G.keepRecent = false;
   G.live = true; if (typeof locStart === "function") locStart(); if (G.keepHands) { G.hands = true; act("step", "hands-free kept on after Carry on"); } G.keepHands = false; { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
-    G.t0 = Date.now(); G.passReady = !!TOK.p;
+    G.t0 = Date.now(); G.lastHeard = 0; G.passReady = !!TOK.p;
     G.ctx = new (window.AudioContext || window.webkitAudioContext)();
     G.ctx.resume();
     // the mic, the voice pass and the audio code all at once, not one after another
