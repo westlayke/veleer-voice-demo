@@ -44,6 +44,7 @@ test("A computer screen gets a left menu, a two-column Home and the Opportunitie
   await p.setViewportSize({ width: 1440, height: 900 }); await p.waitForTimeout(400);
   ok(await p.$("main.home-wide .hcol"), "Home didn't switch to two columns on a wide screen");
   ok(await p.evaluate(() => getComputedStyle(document.querySelector(".tabbar")).width === "220px"), "the tab bar didn't become a left menu");
+  ok(await p.evaluate(() => getComputedStyle(document.body, "::before").left === "220px"), "the band behind the call bar covers the left menu's mic");
   await p.evaluate(() => go("board")); await p.waitForTimeout(300);
   const first = await p.$eval(".split-list [aria-current=true]", r => r.dataset.opp).catch(() => null);
   ok(first && await p.$(".split-detail .stepper, .split-detail h2, .split-detail section"), "the list and the open opportunity aren't side by side");
