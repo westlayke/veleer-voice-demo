@@ -417,4 +417,8 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
   .row.tap:hover { background: var(--surface2); } .split-list [aria-current="true"]:hover { background: var(--brand-soft); }
   .toast { bottom: 24px; left: calc(50% + 110px); }
   .callbar { left: 220px; }
+  body::before { left: 220px; } /* the band behind the call bar stays off the left menu, so the mic shows during a call (Oct 24) */
+  :root.spooky .app::before, :root.spooky .app::after { top: calc(env(safe-area-inset-top, 0px) + 64px); } /* cobwebs in the corners of the page, under its header */
+  :root.spooky .app::before { left: 220px; } :root.spooky .app::after { right: 0; }
+  body.incall .app::before, body.incall .app::after { top: calc(env(safe-area-inset-top, 0px) + 134px) !important; }
 }
