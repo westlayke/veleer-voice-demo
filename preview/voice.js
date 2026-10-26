@@ -484,31 +484,26 @@ const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
 const busy = () => { G.lastAct = Date.now(); };
 document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
 document.addEventListener("input", () => { if (G.live) busy(); }, true);
-async function startCall(opening) {
-  try { if (spkCtx && spkCtx.state === "running") spkCtx.suspend(); } catch (e) {} // the Halloween sound engine rests during a conversation
-  vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
-  if (navigator.audioSession) vlog("audio session: " + navigator.audioSession.type);
-  G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
-  if (!G.keepRecent) { G.recent = []; G.saves = []; G.convId = null; } G.keepRecent = false;
-  G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
-  try {
-    G.t0 = Date.now(); G.heardAt = 0; G.passReady = !!TOK.p;
-    G.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Ara's voice goes through a gain and an analyser, so the phone can tell whether it produced any sound (heard.js)
-    try { G.out = G.ctx.createGain(); G.outAn = G.ctx.createAnalyser(); G.outAn.fftSize = 2048; G.out.connect(G.outAn); G.outAn.connect(G.ctx.destination); } catch (e) { G.out = G.outAn = null; }
-    G.ctx.resume();
-    // the mic, the voice pass and the audio code all at once, not one after another
-    const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(st => (G.stream = st));
-    const tokP = getToken(), wkP = G.ctx.audioWorklet ? G.ctx.audioWorklet.addModule(WORKLET_URL).then(() => true, () => false) : Promise.resolve(false);
-    tokP.catch(() => {}); micP.catch(() => {});
-    const [, token, worklet] = await Promise.all([micP, tokP, wkP]);
-    if (!G.live) { try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (x) {} G.stream = null; return; } // hung up while connecting
-    // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
-    const ctx = G.ctx; ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") soundPaused(ctx); };
-    G.stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && G.status !== "Connecting…") micMuted(tr); }; tr.onended = () => { if (G.live) interrupted("mic ended"); }; });
-    const srcNode = G.ctx.createMediaStreamSource(G.stream);
-    const onPcm = (f32) => {
-      if (!G.ctx) return;
+// The call's sound and mic: a fresh audio context, Ara's output chain (gain + analyser for heard.js), the mic, and the capture node
+// that streams PCM to the line. Used at the start of a call and again after the phone was locked: iOS brings a web page's sound back
+// on the earpiece after a lock, not the speaker the call started on (Carverhill, Oct 26), and a fresh start puts it back where it was.
+async function openAudio() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)(); G.ctx = ctx;
+  try { G.out = ctx.createGain(); G.outAn = ctx.createAnalyser(); G.outAn.fftSize = 2048; G.out.connect(G.outAn); G.outAn.connect(ctx.destination); } catch (e) { G.out = G.outAn = null; }
+  ctx.resume();
+  const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  const wkP = ctx.audioWorklet ? ctx.audioWorklet.addModule(WORKLET_URL).then(() => true, () => false) : Promise.resolve(false);
+  micP.catch(() => {});
+  const [stream, worklet] = await Promise.all([micP, wkP]);
+  if (!G.live || G.ctx !== ctx) { try { stream.getTracks().forEach(t => t.stop()); } catch (x) {} return false; } // hung up, or started over, while the mic was asked for
+  G.stream = stream;
+  // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
+  ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") soundPaused(ctx); };
+  const mine = (tr) => G.stream && G.stream.getAudioTracks().includes(tr); // a mic replaced after a lock no longer speaks for the call
+  stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && mine(tr) && G.status !== "Connecting…") micMuted(tr); }; tr.onended = () => { if (G.live && mine(tr)) interrupted("mic ended"); }; });
+  const srcNode = ctx.createMediaStreamSource(stream);
+  const onPcm = (f32) => {
+    if (G.ctx !== ctx) return;
       // Echo guard: while Grok's voice is playing, the phone's mic can hear the speaker and Grok cuts itself off.
       // Quiet sound during playback is sent as silence; speaking up over Grok still interrupts it.
       if (G.playHead > G.ctx.currentTime + 0.03) {
@@ -525,10 +520,44 @@ async function startCall(opening) {
       G.buf.forEach(a => { for (let i = 0; i < a.length; i++) { const v = Math.max(-1, Math.min(1, a[i])); i16[o++] = v < 0 ? v * 0x8000 : v * 0x7fff; } }); G.buf = [];
       send({ type: "input_audio_buffer.append", audio: b64FromInt16(i16) });
     };
-    if (worklet) { G.node = new AudioWorkletNode(G.ctx, "cap"); G.node.port.onmessage = (ev) => onPcm(ev.data); }
-    else { G.node = G.ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
+    if (worklet) { G.node = new AudioWorkletNode(ctx, "cap"); G.node.port.onmessage = (ev) => onPcm(ev.data); }
+    else { G.node = ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
     srcNode.connect(G.node);
-    const mute = G.ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(G.ctx.destination);
+    const mute = ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(ctx.destination);
+    return true;
+}
+// After a lock: start the sound and mic afresh (see openAudio); if the phone refuses (no running sound in a moment), the old ones stay
+async function restartAudio() {
+  const oldCtx = G.ctx, oldStream = G.stream, oldOut = G.out, oldAn = G.outAn, oldNode = G.node;
+  stopPlayback(); G.buf = []; G.soundPausedAt = 0; G.micMutedAt = 0;
+  try {
+    if (!await openAudio()) throw new Error("not opened");
+    const ctx = G.ctx; for (let i = 0; i < 15 && ctx.state !== "running"; i++) { try { await ctx.resume(); } catch (e) {} await new Promise(r => setTimeout(r, 100)); }
+    if (ctx.state !== "running") throw new Error("sound " + ctx.state);
+    try { oldStream && oldStream.getTracks().forEach(t => t.stop()); } catch (e) {} try { oldCtx && oldCtx.close(); } catch (e) {}
+    if (typeof linePrep === "function") linePrep();
+    act("step", "Sound and mic started afresh after the lock, so Ara comes back on the speaker the call started on, not the earpiece");
+    return true;
+  } catch (e) {
+    try { G.ctx && G.ctx !== oldCtx && G.ctx.close(); } catch (x) {} try { G.stream && G.stream !== oldStream && G.stream.getTracks().forEach(t => t.stop()); } catch (x) {}
+    G.ctx = oldCtx; G.stream = oldStream; G.out = oldOut; G.outAn = oldAn; G.node = oldNode; if (oldCtx && oldCtx.state !== "running") oldCtx.resume().catch(() => {});
+    act("step", "Couldn't start the sound afresh after the lock (" + String(e && e.message || e).slice(0, 60) + "): keeping the old sound and mic");
+    return false;
+  }
+}
+async function startCall(opening) {
+  try { if (spkCtx && spkCtx.state === "running") spkCtx.suspend(); } catch (e) {} // the Halloween sound engine rests during a conversation
+  vlog("=== conversation started" + (opening ? ": " + opening.slice(0, 80) : ""));
+  if (navigator.audioSession) vlog("audio session: " + navigator.audioSession.type);
+  G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
+  if (!G.keepRecent) { G.recent = []; G.saves = []; G.convId = null; } G.keepRecent = false;
+  G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
+  try {
+    G.t0 = Date.now(); G.heardAt = 0; G.passReady = !!TOK.p;
+    const tokP = getToken(); tokP.catch(() => {});
+    const [token, audio] = await Promise.all([tokP, openAudio()]); // the mic, the voice pass and the audio code all at once, not one after another
+    if (!G.live) return; // hung up while connecting
+    if (!audio) throw new Error("no sound");
     // spooky or Christmas mode: Ara is the host from her very first words
     const boo = spookyMode() ? "Mwahaha... welcome to the haunted CRM. " : xmasMode() ? "Ho ho ho... Merry Christmas, and welcome to the Christmas CRM. " : "";
     const hello = S.settings.userName ? `${boo}Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, what would you like to do?` : `${boo}Hi, I'm ${botName()}, what's your first name?`;

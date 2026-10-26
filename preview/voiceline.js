@@ -308,6 +308,8 @@ function lockPause(why) { // close the line while the phone is locked; the conve
 async function lockResume() { // the app is back: reopen the line on the same conversation, no tone, no "line dropped" recording
   if (!G.live || G.ws) return;
   G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.stalled = false; paintCall();
+  if (typeof restartAudio === "function") await restartAudio(); // iOS brings the sound back on the earpiece after a lock: a fresh start puts it on the speaker again (Carverhill, Oct 26)
+  if (!G.live || G.ws || !G.lockResume) return;
   await openAgain(true);
 }
 const hiddenLimit = (ms) => document.visibilityState === "hidden" || G.hiddenAt ? Math.max(ms, LOCK_MAX_MS) : ms; // while the page is hidden, the hidden wait decides (the sound and mic are the phone's doing)

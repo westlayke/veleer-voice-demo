@@ -326,7 +326,7 @@ test("Hands-free: a planned ask with no entity said is read back without one and
 
 test("The phone locking (page hidden) closes the line a few seconds later and reopens the same conversation when the app is back, no Carry on tap", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  await p.evaluate(() => { G.convId = "conv_locktest"; G.convAt = Date.now(); window.__lockWs = window.__ws; Object.defineProperty(document, "visibilityState", { get: () => "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
+  await p.evaluate(() => { G.convId = "conv_locktest"; G.convAt = Date.now(); window.__lockWs = window.__ws; window.__lockCtx = G.ctx; window.__lockStream = G.stream; Object.defineProperty(document, "visibilityState", { get: () => "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
   await p.waitForTimeout(1500);
   ok(await p.evaluate(() => G.live && !!G.hiddenAt && !G.lockPaused && G.ws === window.__lockWs), "the line was closed within 1.5 s of the page going hidden (a quick app switch shouldn't drop it)");
   await p.waitForTimeout(3000);
@@ -334,9 +334,10 @@ test("The phone locking (page hidden) closes the line a few seconds later and re
   await p.evaluate(() => { Object.defineProperty(document, "visibilityState", { get: () => "visible", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
   await p.waitForFunction(() => G.ws && G.ws !== window.__lockWs && G.status === "Listening", null, { timeout: 5000 }).catch(() => {});
   ok(await p.evaluate(() => G.live && !G.hiddenAt && !G.lockPaused && G.ws && G.ws !== window.__lockWs && G.status === "Listening" && !document.querySelector(".scrim")), "the line didn't reopen when the page came back, or a Carry on card appeared: " + await p.evaluate(() => G.status));
+  ok(await p.evaluate(() => G.ctx && G.ctx !== window.__lockCtx && G.ctx.state === "running" && G.stream && G.stream !== window.__lockStream && window.__lockStream.getTracks().every(t => t.readyState === "ended") && G.outAn && G.outAn.context === G.ctx), "the sound and mic weren't started afresh after the lock (iOS brings the sound back on the earpiece otherwise)");
   ok(await p.evaluate(() => /conversation_id=conv_locktest/.test(window.__wsUrls[window.__wsUrls.length - 1])), "the reopened line didn't pick up the same conversation: " + await p.evaluate(() => window.__wsUrls.slice(-1)[0]));
   const steps = await p.evaluate(() => __logs.flatMap(b => b.events.map(e => e.text)).concat(ACT.q.map(e => e.text))); /* sent rows plus the ones still queued (the 4 s flush restarts on every row) */
-  ok(steps.some(t => /Phone locked: voice line closed after [\d.]+ s/.test(t)) && steps.some(t => /App hidden for [\d.]+ s: reopening the line/.test(t)), "the lock pause wasn't logged: " + steps.slice(-6).join(" | "));
+  ok(steps.some(t => /Phone locked: voice line closed after [\d.]+ s/.test(t)) && steps.some(t => /App hidden for [\d.]+ s: reopening the line/.test(t)) && steps.some(t => /Sound and mic started afresh after the lock/.test(t)), "the lock pause or the audio restart wasn't logged: " + steps.slice(-6).join(" | "));
 });
 
 };

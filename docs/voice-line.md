@@ -39,8 +39,11 @@ the sound or mic to come back, ending the call only if it does not (`soundPaused
 pauses the sound anyway, so `appHidden` closes the line `LOCK_CLOSE_MS` (3 s) after the page hides (`lockPause`; nothing is
 charged while the phone sits locked), keeps the conversation id, and the moment the app is back `lockResume` reopens the
 line on the same conversation through `openAgain`, the shared tail of `reconnect`: a voice pass, then `openSocket`, then
-the pending question asked again as a scripted line. No drop tone, no "line dropped" recording, no Carry on tap. The sound
-and mic waits start again at the unlock, since the phone brings both back in its own time. Hidden longer than `LOCK_MAX_MS`
+the pending question asked again as a scripted line. No drop tone, no "line dropped" recording, no Carry on tap. Before the
+line reopens, `restartAudio` (voice.js) starts the sound and mic afresh through `openAudio`, the call's audio set-up: iOS
+brings a web page's sound back on the earpiece after a lock, not the speaker the call started on (Oct 26), and a fresh start puts
+it back; if the phone refuses (no running sound within 1.5 s) the old sound and mic stay. The sound and mic waits start again
+at the unlock, since the phone brings both back in its own time. Hidden longer than `LOCK_MAX_MS`
 (`RESUME_MS`, 25 minutes, as long as xAI keeps the conversation) the call ends and the Carry on card shows. Tapping OK on the
 iOS dialog ends the mic track, which still ends the call (the phone's doing). Before October 26 the call ended the moment the
 phone locked.
