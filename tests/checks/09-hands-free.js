@@ -247,6 +247,9 @@ test("Turning on hands-free mid-form: Ara says she'll read back all the informat
   // a mic muted for a moment doesn't end the call
   const kept = await p.evaluate(async () => { const tr = { muted: true }; G.stream = { getAudioTracks: () => [tr], getTracks: () => [] }; micMuted(tr); await new Promise(r => setTimeout(r, 700)); tr.muted = false; await new Promise(r => setTimeout(r, 700)); return G.live && !G.micMutedAt; });
   ok(kept, "a short mic mute ended the call");
+  // the iOS "Stop audio recording?" dialog mutes the mic until the officer taps Cancel: the call waits well past the 6 s sound wait (Oct 26 drive)
+  const kept2 = await p.evaluate(async () => { const tr = { muted: true }; G.stream = { getAudioTracks: () => [tr], getTracks: () => [] }; micMuted(tr); await new Promise(r => setTimeout(r, 7500)); const still = G.live && !!G.micMutedAt; tr.muted = false; await new Promise(r => setTimeout(r, 700)); return still && G.live && MIC_BACK_MS >= 30000; });
+  ok(kept2, "a mic muted for 7 s ended the call (the Stop audio recording dialog needs a reach)");
 });
 
 test("Hands-free: an interaction report is never read back without the substantive answer, and a due date today is said as today", async (p) => {
@@ -310,4 +313,15 @@ test("Hands-free: when Ara reads a form back herself, in full, and the officer s
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved === false && /Shall I save it\?$/.test(r.read_back || "") && !(await state(p)).contacts.some(c => c.last === "Moss"), "an incomplete read-back by Ara was accepted: " + JSON.stringify(r));
 });
+test("Hands-free: a planned ask with no entity said is read back without one and the entity is asked (never the first in the list)", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await said(p, "Plan an ask for Ruth for today, seventy-five thousand dollars.");
+  await p.evaluate(() => { const c = S.contacts.find(x => x.last === "Abernathy"); S.opps.filter(o => o.contactId === c.id).forEach(o => { o.fund = null; o.campaign = null; }); save(); }); // an opportunity with no entity of interest yet
+  const r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", plannedDate: "2026-10-26", amount: 75000, fund: "C.A. Idaho PAC" }, 900);
+  const d = await p.evaluate(() => readDraft());
+  ok(d.fund === "" || d.fund === undefined, "a blank entity became the first in the list (the Oct 26 drive saved Citizens Alliance C3 for an Idaho PAC ask): " + JSON.stringify(d.fund));
+  const txt = [r.ask_exactly, r.read_back, r.status, r.say, (r.still_needed || []).join(" ")].join(" ");
+  ok(/entity/i.test(txt) && !/Citizens Alliance C3/.test(txt), "the app didn't ask for the entity, or named one: " + txt.slice(0, 300));
+});
+
 };

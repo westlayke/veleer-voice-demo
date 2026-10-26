@@ -41,6 +41,7 @@ function amountSaid(n, lines) {
 }
 function entitySaid(fund, lines) {
   const fw = entityWords(fund).filter(w => !["citizens", "alliance"].includes(w)), st = (ENTITY_STATE[fund] || "").toLowerCase();
+  const aw = entityWords(lines.join(" ")); if (fw.length && fw.every(w => aw.includes(w))) return true; // "the Idaho entity" then "the PAC" (Oct 26 drive)
   return lines.some(t => { const tw = entityWords(t); if (fw.length && fw.every(w => tw.includes(w))) return true;
     if (st && t.includes(st) && FUNDS.filter(f => ENTITY_STATE[f] === ENTITY_STATE[fund]).length === 1) return true; // the only entity in the state the officer named
     return !st && fw.length === 1 && /\bc3\b|\bc 3\b|\bthe c-?3\b/.test(t) && fw[0] === "c3"; });

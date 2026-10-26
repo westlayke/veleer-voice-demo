@@ -34,7 +34,8 @@ const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying 
 const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3" }, lineRaw = {}, lineBuf = {};
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
-const SOUND_BACK_MS = 6000;                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
+const SOUND_BACK_MS = 6000;
+const MIC_BACK_MS = 45000;                   // a muted mic gets longer: iOS shows "Audio Recording / Stop audio recording?" and the mic is back on Cancel, which takes a reach (Oct 26 drive)                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
 
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
 const TOK = { p: null, at: 0 };
@@ -289,7 +290,7 @@ function micMuted(tr) {
   const tick = setInterval(() => {
     if (!G.live || !G.stream || !G.stream.getAudioTracks().includes(tr)) { clearInterval(tick); G.micMutedAt = 0; return; }
     if (!tr.muted) { clearInterval(tick); const s = ((Date.now() - G.micMutedAt) / 1000).toFixed(1); G.micMutedAt = 0; act("step", "Mic muted by the phone for " + s + " s, then came back"); return; }
-    if (Date.now() - G.micMutedAt > SOUND_BACK_MS) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back"); }
+    if (Date.now() - G.micMutedAt > MIC_BACK_MS) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back in " + Math.round(MIC_BACK_MS / 1000) + " s"); }
   }, 500);
 }
 

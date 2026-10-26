@@ -72,6 +72,8 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   await p.evaluate(() => { G.lastSaved = { at: Date.now() }; recent(botName(), "Add planned ask for Ruth Abernathy. Amount: $10,000. Shall I save it?"); }); await said(p, "Yes.");
   let r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", amount: 10000 });
   ok(r.ok === false && /hasn't asked for the .* form/.test(r.error || "") && /Want to do that now/.test(r.error || "") && !(await p.evaluate(() => V && V.action === "ask")), "an unasked form opened: " + JSON.stringify(r));
+  // "let's go add an ask" asks for the planned ask form by name (refused on the Oct 26 drive)
+  await said(p, "Yeah, let's go add an ask."); ok(await p.evaluate(() => formAskedFor("plan")), "\"let's go add an ask\" didn't count as asking for the planned ask form");
   await p.evaluate(() => recent(botName(), "Next could be recording the ask. Want to do that now?")); await said(p, "Yes, let's do that.");
   r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", amount: 10000 });
   ok(await p.evaluate(() => V && V.action === "ask"), "the form didn't open after the officer's yes to Ara's offer: " + JSON.stringify(r));

@@ -119,7 +119,7 @@ const ACTIONS = {
   plan: { title: "Add planned ask", saved: "Planned ask saved", saveLabel: "Save planned ask",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true }, { k: "campaign", label: "Campaign", type: "select", opts: (d) => { const c = campaignsFor(d.fund); return c.length > 1 ? ["", ...c] : c; }, req: true },
+      { k: "fund", label: "Entity", type: "select", opts: ["", ...FUNDS], req: true }, { k: "campaign", label: "Campaign", type: "select", opts: (d) => { const c = campaignsFor(d.fund); return c.length > 1 ? ["", ...c] : c; }, req: true },
       { k: "plannedDate", label: "Planned ask date", type: "date", req: true }, { k: "amount", label: "Amount", type: "money", req: true },
       { k: "askType", label: "Ask type", type: "select", opts: ["Outright", "Pledge", "Planned gift"] },
       { k: "officer", label: "Gift officer", fixed: true }, { k: "participants", label: "Participants in the ask" } ],
@@ -128,7 +128,7 @@ const ACTIONS = {
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
       ...F_WHEN(),
-      { k: "amount", label: "Amount asked", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
+      { k: "amount", label: "Amount asked", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: ["", ...FUNDS], req: true },
       { k: "response", label: "Response", type: "select", opts: ["", ...RESPONSES], req: true },
       { k: "agreedAmount", label: "Agreed or counter amount (verbal)", type: "money" }, { k: "lostReason", label: "Reason (if declined)" }, { k: "summary", label: "Summary", type: "area", req: true },
       ...F_NEXT() ],
@@ -137,7 +137,7 @@ const ACTIONS = {
   pledge: { title: "Record pledge", saved: "Pledge recorded", saveLabel: "Record pledge",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "amount", label: "Pledge amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
+      { k: "amount", label: "Pledge amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: ["", ...FUNDS], req: true },
       { k: "confirmedBy", label: "Confirmed by", type: "select", opts: ["Email", "Phone", "In person"], req: true }, { k: "confirmedDate", label: "Confirmed on", type: "date", req: true },
       { k: "installments", label: "Payments", type: "money", num: true }, { k: "frequency", label: "Frequency", type: "select", opts: ["Annual", "Quarterly", "Monthly", "One payment"] },
       { k: "firstAmount", label: "First payment", type: "money" }, { k: "firstDue", label: "First payment due", type: "date", req: true } ],
@@ -152,7 +152,7 @@ const ACTIONS = {
   gift: { title: "Record gift", saved: "Gift recorded", saveLabel: "Record gift",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "amount", label: "Gift amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: FUNDS, req: true },
+      { k: "amount", label: "Gift amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: ["", ...FUNDS], req: true },
       ...F_RECEIVED() ],
     pairs: [["amount", "fund"], ["date", "method"]],
     left: "A gift that arrives while the ask is open is an implied commitment: the opportunity passes through Commitment and closes as Closed Won." },

@@ -33,7 +33,7 @@ Five signals, in the order they tend to fire on a drive:
 | **Opening hangs** | `openSocket` | A new line not open after `SECOND_LINE_MS` (5 s) gets a second socket opened alongside and the first to open wins; not open after `OPEN_TIMEOUT_MS` (10 s) counts as a failed try. | `reconnect("the line didn't open")` |
 
 Two things that look like trouble but are not handled as drops: the phone **pausing the app's sound** (a notification,
-Siri, a headset change) and the phone **muting the mic**. Both keep the line open and wait `SOUND_BACK_MS` (6 s) for
+Siri, a headset change) and the phone **muting the mic**. Both keep the line open and wait, `SOUND_BACK_MS` (6 s) for sound and `MIC_BACK_MS` (45 s) for the mic, because iOS shows an "Audio Recording / Stop audio recording?" dialog when the phone locks during a call and the mic is back only once the officer taps Cancel (Oct 26), for
 the sound or mic to come back, ending the call only if it does not (`soundPaused`, `micMuted`).
 
 ## The reconnect loop

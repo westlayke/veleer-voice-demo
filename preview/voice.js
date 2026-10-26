@@ -69,7 +69,7 @@ const FORM_WORDS = {
   task: /\b(task|remind|to-do|todo|follow[- ]?up|reminder|note to)\b/,
   editTask: /\b(change|edit|update|fix|correct|wrong|task|due|move it|push|postpone|done)\b/,
   opportunity: /\b(opportunit)/,
-  plan: /\b(plan|planned|ask planning|planning)\b/,
+  plan: /\b(plan|planned|ask planning|planning|add (an |a |the )?ask|an ask)\b/, /* "let's go add an ask" was refused on the Oct 26 drive */
   editPlan: /\b(change|edit|update|fix|correct|wrong|plan|planned|amount|date)\b/,
   ask: /\b(ask|asked|asking|response|answer|accepted|declined|countered|said yes|said no|turned|agreed|proposal|pitch|result|outcome)\b/,
   pledge: /\b(pledge|promise|commit)/,
@@ -447,8 +447,8 @@ function stopPlayback() { if (G.sources.length) vlog(`playback stopped (${G.sour
 
 // keep the screen on while a conversation runs (the phone would otherwise auto-lock and pause the web app)
 async function keepAwake() {
-  try { if (G.live && navigator.wakeLock && !G.wake) { G.wake = await navigator.wakeLock.request("screen"); G.wake.addEventListener("release", () => { G.wake = null; }); vlog("screen kept on"); } }
-  catch (e) { vlog("screen wake lock refused: " + (e && e.name)); }
+  try { if (G.live && navigator.wakeLock && !G.wake) { G.wake = await navigator.wakeLock.request("screen"); G.wake.addEventListener("release", () => { G.wake = null; if (G.live) act("step", "Screen wake lock released by the phone"); }); vlog("screen kept on"); act("step", "Screen kept on (wake lock)"); } else if (G.live && !navigator.wakeLock) act("step", "No screen wake lock on this phone"); }
+  catch (e) { vlog("screen wake lock refused: " + (e && e.name)); act("step", "Screen wake lock refused: " + (e && e.name)); }
 }
 function letSleep() { try { G.wake && G.wake.release(); } catch (e) {} G.wake = null; }
 // locking the phone pauses the page, which cuts the mic and Grok's connection: end the conversation cleanly instead of leaving it hanging

@@ -152,7 +152,7 @@ const TOOL_HANDLERS = {
     if (!o) { toolReply(callId, { ok: false, error: `${nameOf(c)} has no opportunity yet. Offer to create one.` }); return; }
     S.sel.contact = c.id; S.sel.opp = o.id; go("opp"); whenIdle("instr");
     const F = (value, change) => ({ value, who_can_change: change }), SYS = "The system, from what you record", MONEY = "Recorded amounts can only be corrected by a Veleer administrator";
-    const NEXT = { Qualification: "Log interaction, or Move to Cultivation when Ready for Cultivation shows", Cultivation: "Add ask", "Ask Planning": "Record the ask", "Ask Made": "Record pledge or Record gift", Commitment: "Record gift" };
+    const NEXT = { Qualification: "Log interaction, or Move to Cultivation when Ready for Cultivation shows", Cultivation: "Add planned ask", "Ask Planning": "Record the ask", "Ask Made": "Record pledge or Record gift", Commitment: "Record gift" };
     const asks = o.asks.slice().reverse().map((a, i, all) => ({ order: i === 0 ? "original ask" : i === all.length - 1 ? "latest (revised) ask" : "revised ask " + i,
       amount: money(a.amount), ask_type: a.askType || "Outright", entity: a.fund, campaign: a.campaign || "National", planned_ask_date: a.plannedDate ? fmtDate(a.plannedDate) : "Not set",
       asked_on: a.askedOn ? fmtDate(a.askedOn) : "Not asked yet", participants: a.participants || "None", status: a.status, response: a.response || "", decline_reason: a.reason || "",
