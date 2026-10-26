@@ -51,8 +51,10 @@ test("Ara: talk faster is remembered", async (p) => {
 });
 test("Halloween: in October a spider, pumpkin or ghost crosses without blocking taps, and Settings turns it off", async (p) => {
   await signIn(p);
-  const kinds = await p.evaluate(() => ["spider", "pumpkin", "ghost"].map(k => { const el = window.__demo.spookyOnce(k); el.dataset.t = "1"; return getComputedStyle(el).pointerEvents; }));
+  const kinds = await p.evaluate(() => ["spider", "pumpkin", "ghost", "skeleton"].map(k => { const el = window.__demo.spookyOnce(k); el.dataset.t = "1"; return getComputedStyle(el).pointerEvents; }));
   ok(kinds.every(x => x === "none"), "a Halloween visitor would block taps");
+  ok(await p.evaluate(() => !!document.querySelector(".spk-skeleton svg .sk-arm")), "the skeleton visitor has no waving arm");
+  await p.waitForTimeout(3200); ok(await p.evaluate(() => document.querySelector(".spk-skeleton").classList.contains("sk-waving")), "the skeleton didn't start waving once he stopped");
   await p.waitForTimeout(9500);
   ok(!(await p.$(".spk[data-t]")), "Halloween visitors should leave the screen when done");
   await p.tap("[data-go=settings]"); await p.waitForTimeout(400);

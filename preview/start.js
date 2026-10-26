@@ -133,7 +133,7 @@ function spookySound(kind, retried) {
 const XMAS_SOUND = { snow: "twinkle", gift: "jingle", elf: "giggle", reindeer: "bells", sleigh: "sleigh", tree: "twinkle" };
 function spookyOnce(kind) {
   const kinds = xmasOn() ? (xmasMode() ? ["snow", "gift", "elf", "reindeer", "sleigh", "tree"] : ["snow", "gift", "elf", "reindeer"])
-    : spookyMode() ? ["spider", "pumpkin", "ghost", "bat", "owl"] : ["spider", "pumpkin", "ghost"];
+    : spookyMode() ? ["spider", "pumpkin", "ghost", "bat", "owl", "skeleton"] : ["spider", "pumpkin", "ghost"];
   kind = kind || kinds[Math.floor(Math.random() * kinds.length)];
   const el = document.createElement("div"); el.className = "spk spk-" + kind; el.setAttribute("aria-hidden", "true");
   const w = window.innerWidth, h = window.innerHeight, done = () => el.remove();
@@ -151,6 +151,12 @@ function spookyOnce(kind) {
     el.textContent = "🦉"; const fromLeft = Math.random() < 0.5, perchX = Math.round(w * (0.25 + Math.random() * 0.5)), y = Math.round(80 + Math.random() * h * 0.15);
     el.style.top = y + "px"; const a = fromLeft ? -70 : w + 20, b = fromLeft ? w + 20 : -70;
     el.animate([{ transform: `translate(${a}px, -60px)` }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.2 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.4 }, { transform: `translate(${perchX}px, 0) scaleY(0.85)`, offset: 0.43 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.46 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.75 }, { transform: `translate(${b}px, -50px)` }], { duration: 7000, easing: "ease-in-out" }).onfinish = done;
+  } else if (kind === "skeleton") { // strolls in from the right along the bottom, stops, tips his skull and waves with a long cackle, then strolls off left (Oct 26)
+    el.innerHTML = SKELETON; const stopX = Math.round(w * 0.55);
+    const step = (x, i) => ({ transform: `translate(${x}px, ${i % 2 ? -5 : 0}px)` });
+    el.animate([step(w + 20, 0), step(w * 0.9, 1), step(w * 0.8, 2), step(w * 0.7, 3), { ...step(stopX, 4), offset: 0.3 }, { transform: `translate(${stopX}px, 0) rotate(-8deg)`, offset: 0.36 }, { transform: `translate(${stopX}px, 0) rotate(-8deg)`, offset: 0.66 }, { transform: `translate(${stopX}px, 0)`, offset: 0.72 },
+      { ...step(w * 0.4, 5), offset: 0.8 }, { ...step(w * 0.25, 6), offset: 0.87 }, { ...step(w * 0.1, 7), offset: 0.94 }, step(-90, 8)], { duration: 9000, easing: "linear" }).onfinish = done;
+    setTimeout(() => { if (el.isConnected) { el.classList.add("sk-waving"); spookySound("cackle"); } }, 2900);
   } else if (kind === "snow") { // a flurry of snowflakes drifting down
     el.style.cssText = "left:0;top:0;width:100%;height:100%"; const calm = calmMotion();
     for (let i = 0; i < 16; i++) { const f = document.createElement("i"), x = Math.round(Math.random() * (w - 24)), sz = 14 + Math.round(Math.random() * 14), dur = 6000 + Math.random() * 3000;
@@ -180,7 +186,7 @@ function spookyOnce(kind) {
   if (calmMotion()) { el.getAnimations({ subtree: true }).forEach(a => a.cancel()); el.classList.add("spk-calm");
     if (kind !== "snow") el.style.transform = `translate(${Math.round(w * (0.15 + Math.random() * 0.6))}px, ${kind === "spider" ? Math.round(h * 0.3) : 0}px)`;
     el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: 4500 }).onfinish = done; }
-  spookySound(XMAS_SOUND[kind] || kind); return el;
+  if (kind !== "skeleton") spookySound(XMAS_SOUND[kind] || kind); /* the skeleton cackles once he has stopped */ return el;
 }
 // a visitor every 40 to 90 seconds; in spooky mode every 15 to 20
 let spkLoopT = null;
