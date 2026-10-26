@@ -249,11 +249,11 @@ test("Hey Ara start-up address (#call): one big mic, one tap starts the conversa
   await p.tap("[data-go=settings] >> nth=0"); await p.waitForTimeout(400);
   ok(/#call$/.test(await p.inputValue("#callUrl")), "Settings does not show the start-up address");
   ok(await p.isVisible("text=Vocal Shortcuts"), "the Shortcut steps are missing from Settings");
-});
+}, { page: "preview-flow.html" }); /* the start-up address is on preview only until Carverhill has tried it (Oct 26) */
 test("The #call address on a first visit leaves the welcome in place", async (p) => {
   await p.goto(p.url().split("#")[0] + "?a=1#call"); await p.waitForTimeout(900);
   ok(await p.isVisible("text=Meet your new voice assistant!"), "the welcome is missing");
   ok(!(await p.isVisible("text=Talk to Ara")), "the start-up screen covered the welcome");
-});
+}, { page: "preview-flow.html" });
 
 };
