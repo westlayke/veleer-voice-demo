@@ -1,0 +1,50 @@
+name: Reconnect sound clip
+# One real conversation with Ara, recorded as the phone would play it, with the voice line cut during the read-back
+# (tests/ara-consistency/record-reconnect.js). Costs about a dollar of the ARA_CONSISTENCY_KEY xAI key. Run by hand only.
+# The clip is committed to clips/ on main so it can be linked from documents (GitHub Pages serves it).
+on:
+  workflow_dispatch:
+    inputs:
+      down_seconds:
+        description: "How long the line stays down (under 15, so the same conversation is picked up)"
+        default: "13"
+      officer_voice:
+        description: "Grok voice for the officer (eve, rex, sal, leo)"
+        default: "rex"
+      commit:
+        description: "Commit the clip to clips/ on main (yes/no)"
+        default: "yes"
+permissions:
+  contents: write
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Record the conversation
+        env:
+          ARA_CONSISTENCY_KEY: ${{ secrets.ARA_CONSISTENCY_KEY }}
+          DOWN_MS: ${{ inputs.down_seconds }}000
+          OFFICER_VOICE: ${{ inputs.officer_voice }}
+        run: node tests/ara-consistency/record-reconnect.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reconnect-clip
+          path: tests/ara-consistency/results/reconnect/
+          retention-days: 30
+      - name: Commit the clip
+        if: inputs.commit == 'yes'
+        run: |
+          mkdir -p clips
+          cp tests/ara-consistency/results/reconnect/reconnect-clip.mp3 clips/reconnect-clip.mp3
+          cp tests/ara-consistency/results/reconnect/reconnect-clip.md clips/reconnect-clip.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add clips/reconnect-clip.mp3 clips/reconnect-clip.md
+          git commit -m "Reconnect sound clip from the harness [skip ci]" -m "Recorded by the Reconnect sound clip workflow (run ${{ github.run_id }})."
+          git push
