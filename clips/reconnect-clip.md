@@ -1,6 +1,6 @@
 # Reconnect sound clip
 
-Recorded 2026-10-26T00:17:48.475Z from a real conversation with Ara (preview build), the officer spoken by Grok's rex voice. The network was cut 1:09 into the clip during the read-back and restored 13 s later. Length 134 s.
+Recorded 2026-10-26T00:17:48.475Z from a real conversation with Ara (preview build), the officer spoken by Grok's rex voice. The network was cut 1:09 into the clip during the read-back and restored 13 s later. Length 134 s as recorded; the published mp3 starts at 0:08 (the greeting had played twice: the app did not register the scripted greeting starting in the headless browser and had Ara say it again), so times below are 8 s later than in the file.
 
 | Time | Who | Said |
 |---|---|---|
