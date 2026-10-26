@@ -3,6 +3,13 @@
  "changes": [
     {
       "date": "Oct 26, 6:21 PM",
+      "change": "Live: the skeleton visitor in spooky mode (original drawing; walks to mid screen, nods his skull and waves while Carverhill's recording plays, then walks off). The Hey Ara start-up address stays preview-only.",
+      "area": "Visitors (spooky mode)",
+      "requestedBy": "Carverhill",
+      "why": "\"Make it live\""
+    },
+    {
+      "date": "Oct 26, 6:21 PM",
       "change": "Preview: the skeleton's skull now nods on its own when he stops (32 degrees over 1.6 s); the faint whole-body tilt is gone.",
       "area": "Visitors (spooky mode)",
       "requestedBy": "Carverhill",

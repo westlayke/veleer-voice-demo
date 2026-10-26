@@ -342,6 +342,11 @@ body.incall .sheet { max-height: calc(100% - 96px - env(safe-area-inset-top, 0px
 .spk { position: fixed; z-index: 55; pointer-events: none; user-select: none; font-size: 42px; line-height: 1; left: 0; }
 .spk-pumpkin { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 .spk-spider { font-size: 34px; }
+.spk-skeleton { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); width: 72px; height: 156px; } .spk-skeleton svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+.spk-skeleton .sk-arm { transform-origin: 80px 104px; } .spk-skeleton.sk-waving .sk-arm { animation: skwave .4s ease-in-out 13 alternate; }
+@keyframes skwave { to { transform: rotate(-28deg); } }
+.spk-skeleton .sk-skull { transform-origin: 60px 92px; } .spk-skeleton.sk-waving .sk-skull { animation: sktip 1.6s ease-in-out 1; } @keyframes sktip { 35%, 65% { transform: rotate(32deg); } }
+@media (prefers-reduced-motion: reduce) { .spk-skeleton.sk-waving .sk-arm, .spk-skeleton.sk-waving .sk-skull { animation: none; } }
 .spk-thread { position: absolute; left: 50%; bottom: 70%; width: 1px; height: 100vh; background: var(--muted); opacity: .55; }
 /* Spooky mode: a night look with orange and purple, cobwebs in the top corners, a flickering candle by the logo (labels unchanged) */
 :root.spooky {
