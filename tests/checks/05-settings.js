@@ -53,7 +53,7 @@ test("Halloween: in October a spider, pumpkin or ghost crosses without blocking 
   await signIn(p);
   const kinds = await p.evaluate(() => ["spider", "pumpkin", "ghost", "skeleton"].map(k => { const el = window.__demo.spookyOnce(k); el.dataset.t = "1"; return getComputedStyle(el).pointerEvents; }));
   ok(kinds.every(x => x === "none"), "a Halloween visitor would block taps");
-  ok(await p.evaluate(() => !!document.querySelector(".spk-skeleton svg .sk-arm")), "the skeleton visitor has no waving arm");
+  ok(await p.evaluate(() => !!document.querySelector(".spk-skeleton svg .sk-arm") && !!document.querySelector(".spk-skeleton svg .sk-skull")), "the skeleton visitor has no waving arm or nodding skull");
   ok(await p.evaluate(() => fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES.skeleton).then(r => r.ok && r.headers.get("content-length") !== "0")), "the skeleton's recording is missing");
   await p.waitForTimeout(3200); ok(await p.evaluate(() => document.querySelector(".spk-skeleton").classList.contains("sk-waving")), "the skeleton didn't start waving once he stopped");
   await p.waitForTimeout(9500);

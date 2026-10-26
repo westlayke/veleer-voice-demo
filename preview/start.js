@@ -155,9 +155,9 @@ function spookyOnce(kind) {
   } else if (kind === "skeleton") { // strolls in from the right along the bottom to mid screen, stops, tips his skull and waves while his recording plays (5.5 s), then strolls off left (Oct 26)
     el.innerHTML = SKELETON; const stopX = Math.round(w / 2 - 36); /* centred: the figure is 72 px wide */
     const step = (x, i) => ({ transform: `translate(${x}px, ${i % 2 ? -5 : 0}px)` });
-    el.animate([step(w + 20, 0), step(w * 0.9, 1), step(w * 0.8, 2), step(w * 0.7, 3), { ...step(stopX, 4), offset: 0.22 }, { transform: `translate(${stopX}px, 0) rotate(-8deg)`, offset: 0.26 }, { transform: `translate(${stopX}px, 0) rotate(-8deg)`, offset: 0.7 }, { transform: `translate(${stopX}px, 0)`, offset: 0.74 },
+    el.animate([step(w + 20, 0), step(w * 0.9, 1), step(w * 0.8, 2), step(w * 0.7, 3), { ...step(stopX, 4), offset: 0.22 }, { transform: `translate(${stopX}px, 0)`, offset: 0.74 },
       { ...step(w * 0.35, 5), offset: 0.82 }, { ...step(w * 0.2, 6), offset: 0.89 }, { ...step(w * 0.05, 7), offset: 0.95 }, step(-90, 8)], { duration: 12000, easing: "linear" }).onfinish = done;
-    setTimeout(() => { if (el.isConnected) { el.classList.add("sk-waving"); spookySound("skeleton"); } }, 2900); /* he has stopped: the recording plays while he waves */
+    setTimeout(() => { if (el.isConnected) { el.classList.add("sk-waving"); spookySound("skeleton"); } }, 2900); /* he has stopped: the skull nods (css sk-skull) and the recording plays while he waves */
   } else if (kind === "snow") { // a flurry of snowflakes drifting down
     el.style.cssText = "left:0;top:0;width:100%;height:100%"; const calm = calmMotion();
     for (let i = 0; i < 16; i++) { const f = document.createElement("i"), x = Math.round(Math.random() * (w - 24)), sz = 14 + Math.round(Math.random() * 14), dur = 6000 + Math.random() * 3000;
