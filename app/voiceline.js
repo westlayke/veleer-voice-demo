@@ -34,7 +34,11 @@ const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying 
 const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3" }, lineRaw = {}, lineBuf = {};
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
-const SOUND_BACK_MS = 6000;                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
+const SOUND_BACK_MS = 6000;
+const MIC_BACK_MS = 45000;
+const LOCK_CLOSE_MS = 3000;                  // the phone locking (or a switch to another app) hides the page: the line is closed this long after, so nothing is charged while the phone sits locked, and reopened when the app is back (Oct 26 pocket tests: a locked iPhone mutes the mic and pauses the sound anyway)
+const LOCK_MAX_MS = RESUME_MS;               // hidden longer than this (the conversation can no longer be picked up on xAI) ends the call with the Carry on card
+/* MIC_BACK_MS: a muted mic gets longer than the sound, since iOS shows "Audio Recording / Stop audio recording?" and the mic is back on Cancel, which takes a reach (Oct 26 drive). SOUND_BACK_MS: when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back */
 
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
 const TOK = { p: null, at: 0 };
@@ -65,7 +69,7 @@ function idleCheck() {
   if (G.live && ((G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS) || (/^Reconnecting/.test(G.status) && !(G.downAt && Date.now() - G.downAt >= SAY_DOWN_MS))) && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); cue("wait"); vlog("still working: tick"); }
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
-  if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
   const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
   if (G.probing) return;
@@ -95,7 +99,7 @@ function openSocket(token, first, second) {
   ws.resumed = resume;
   if (second) G.tries.add(ws); else { G.ws = ws; G.tries = new Set([ws]); }
   const t0 = Date.now();
-  if (G.drops && !second) {
+  if ((G.drops || G.lockResume) && !second) {
     // not open after 5 s: try a second line alongside, and keep whichever opens first (seen Oct 24: the first try hung for 10 s)
     setTimeout(async () => { if (!G.live || G.ws !== ws || ws.readyState !== 0) return;
       act("step", `Voice line not open after ${SECOND_LINE_MS / 1000} s: trying a second line alongside`);
@@ -106,7 +110,7 @@ function openSocket(token, first, second) {
   }
   ws.onopen = () => {
     if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
-    if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws;
+    if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws; G.lockResume = false;
     send({ type: "session.update", session: sessionCfg() }); sendExtras(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep();
     if (ws.resumed) netLog("Picked up the same conversation");
@@ -126,9 +130,9 @@ function openSocket(token, first, second) {
     vlog("connection closed " + (ev && ev.code));
     const opened = !!G.lastMsg && G.status !== "Connecting…";
     netLog(`Voice line closed (code ${ev && ev.code}${ev && ev.reason ? ", " + String(ev.reason).slice(0, 120) : ""})${opened ? "" : " before it opened"}`);
-    if (document.visibilityState === "hidden") { interrupted("connection closed while away"); return; }
+    if (document.visibilityState === "hidden") { if (G.hiddenAt) { lockPause("the line closed by itself"); return; } interrupted("connection closed while away"); return; } // locked: the line reopens when the app is back
     if (!opened && ws.resumed) { G.convId = null; act("step", "Couldn't pick up the same conversation: opening a new one"); reconnect("the conversation couldn't be picked up"); return; }
-    if (!opened && !G.drops) { endCall("couldn't connect"); toast("Couldn't connect to Grok voice. Try again in a moment."); return; }
+    if (!opened && !G.drops && !G.lockResume) { endCall("couldn't connect"); toast("Couldn't connect to Grok voice. Try again in a moment."); return; }
     if (opened && G.drops && Date.now() - (G.openedAt || 0) > STABLE_MS) { vlog("the line had been up a while: reconnect count starts afresh"); G.drops = 0; }
     reconnect("the voice line dropped");
   };
@@ -168,6 +172,10 @@ async function reconnect(why) {
   await new Promise(r => setTimeout(r, RECONNECT_DELAYS[Math.min(G.drops, MAX_DROPS)] || RECONNECT_DELAYS[RECONNECT_DELAYS.length - 1])); // spread out, so a short dead spot can pass
   if (navigator.onLine === false) await new Promise(r => { const t = setTimeout(r, OFFLINE_WAIT_MS); window.addEventListener("online", () => { clearTimeout(t); r(); }, { once: true }); });
   if (!G.live) return;
+  await openAgain();
+}
+// the rest of a reconnect, shared with the reopen after a lock: a voice pass, then the line, then the pending question
+async function openAgain(lock) {
   // a voice pass, tried again every few seconds while the phone is in a dead spot (each try is time-limited, so the reconnect can't hang)
   let token;
   while (true) {
@@ -178,18 +186,19 @@ async function reconnect(why) {
       act("step", `No voice pass yet (${msg}): trying again in ${TOKEN_RETRY_MS / 1000} s`); await new Promise(r => setTimeout(r, TOKEN_RETRY_MS)); }
   }
   if (!G.live) return;
+  if (G.hiddenAt) { G.lockResume = false; return; } // locked again while the pass was fetched: the next unlock reopens the line
   if (G.spokeInGap) act("step", "The officer talked while the line was down: Ara will ask them to repeat it");
   G.heardAt = G.lastMsg || G.heardAt || Date.now(); G.lastMsg = 0;
   // the app says where the form stands and, when a question is pending, asks it again itself as a scripted line; the context goes in Ara's instructions (Right now)
   openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null;
-    if (fp && fp.ask) { G.justNow = { text: reconnectLine() + " " + fp.where, at: Date.now() }; act("step", `Reconnected: the app asks the pending question itself (${fp.where})`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${fp.ask}`); }
-    else guide(reconnectLine() + (fp ? " " + fp.where : "")); });
+    if (fp && fp.ask) { G.justNow = { text: reconnectLine(lock) + " " + fp.where, at: Date.now() }; act("step", `${lock ? "Line reopened" : "Reconnected"}: the app asks the pending question itself (${fp.where})`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${fp.ask}`); }
+    else guide(reconnectLine(lock) + (fp ? " " + fp.where : "")); });
 }
-const reconnectLine = () => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
+const reconnectLine = (lock) => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "",
     carryOn = !V && G.lastSaved && Date.now() - G.lastSaved.at < 10 * 60e3 ? `You were working on ${G.lastSaved.who}: after the sorry line, ${G.lastSaved.next} Never ask whether they want to work on someone else. ` : "",
     hf = G.hands ? "Hands-free is on: the app reads each finished form back and asks \"Shall I save it?\" itself, so never read a form back or ask whether it's correct yourself. " : "";
-  return `The connection to the officer dropped for a moment (they may be driving) and the app reconnected you. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${carryOn}${hf}${d ? d + " " : ""}${G.spokeInGap ? "The officer was talking while the line was down and you didn't hear it: right after the sorry line, ask them to say that again. " : G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}If they ask whether you're there, say yes in two words and carry on with what you were doing; never ask "what would you like to do" while a form is open, and don't say "welcome back". Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} with no ${spookyMode() ? "spooky" : xmasMode() ? "festive" : "other"} aside in this reply. Then ask just one question: if the last thing said was a question to the officer and they haven't answered it in the lines above, ask it again; otherwise ask the next question needed to finish. If the officer's answer is in the lines above, use it (call the draft tool with it) instead of asking. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
+  return `${lock ? "The officer's phone was locked for a moment and the app reopened the line to you" : "The connection to the officer dropped for a moment (they may be driving) and the app reconnected you"}. ${l.length ? `The last things said were:\n${l.join("\n")}\n` : ""}${sv}${justSaved}${carryOn}${hf}${d ? d + " " : ""}${G.spokeInGap ? "The officer was talking while the line was down and you didn't hear it: right after the sorry line, ask them to say that again. " : G.stalled ? "The officer may have answered while the line was down and you didn't hear it. " : ""}If they ask whether you're there, say yes in two words and carry on with what you were doing; never ask "what would you like to do" while a form is open, and don't say "welcome back". Say "Sorry, I lost you for a moment."${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} with no ${spookyMode() ? "spooky" : xmasMode() ? "festive" : "other"} aside in this reply. Then ask just one question: if the last thing said was a question to the officer and they haven't answered it in the lines above, ask it again; otherwise ask the next question needed to finish. If the officer's answer is in the lines above, use it (call the draft tool with it) instead of asking. Do not start over or ask for anything already filled in. Anything already done stays done; never redo it${spookyMode() || xmasMode() ? ", and don't turn the theme on again or announce it" : ""}.`; };
 // while the line is down the phone itself speaks, since Grok can't: "The line dropped..." at 5 s, "Still trying..." at 12 s and every 10 s after (Carverhill, Oct 25: he had no idea what was going on)
 function linePrep() { // fetch and decode the recorded lines, so they can play the moment the line drops
   Object.entries(LINE_FILES).forEach(([k, f]) => { if (!lineRaw[k]) lineRaw[k] = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + f).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); });
@@ -272,15 +281,49 @@ function replyCheck(r) {
 // An iPhone pauses a web page's sound when something else takes the speaker for a moment: a notification sound, Siri, another
 // app's audio, a headset or Bluetooth change. Seen twice on Oct 24 with the line still healthy. Ending the call at once cut the
 // officer off mid-sentence, so keep the line open and try to restart the sound; end only if it doesn't come back.
+// The page went hidden: on an iPhone that is usually the phone locking, which mutes the mic and pauses the sound anyway (Oct 26 pocket
+// tests), so an open line would only cost money. Lock = pause: the line is closed LOCK_CLOSE_MS after the page hides and reopened on the
+// same conversation the moment the app is back, with the pending question asked again (like a reconnect after a dead spot, no Carry on tap).
+// Hidden longer than LOCK_MAX_MS, the call ends and the Carry on card shows. The call used to end the moment the phone locked.
+function appHidden() {
+  if (G.hiddenAt || !G.live) return; G.hiddenAt = Date.now(); G.lockPaused = 0; vlog("app hidden"); netLog(`App hidden (phone locked or switched away): the line closes in ${LOCK_CLOSE_MS / 1000} s and reopens when the app is back`);
+  const tick = setInterval(() => {
+    if (!G.live) { clearInterval(tick); G.hiddenAt = 0; G.lockPaused = 0; return; }
+    if (document.visibilityState === "visible") {
+      clearInterval(tick); const s = ((Date.now() - G.hiddenAt) / 1000).toFixed(1), paused = G.lockPaused; G.hiddenAt = 0; G.lockPaused = 0; vlog("app visible again after " + s + " s");
+      if (G.soundPausedAt) G.soundPausedAt = Date.now(); if (G.micMutedAt) G.micMutedAt = Date.now(); // their waits start again now: the phone brings both back on unlock, in its own time
+      if (G.ctx && G.ctx.state !== "running") G.ctx.resume().catch(() => {});
+      if (paused) { act("step", `App hidden for ${s} s: reopening the line on the same conversation`); lockResume(); } else act("step", "App hidden for " + s + " s, then back (line still open)");
+      return; }
+    if (!G.lockPaused && Date.now() - G.hiddenAt > LOCK_CLOSE_MS) lockPause();
+    if (Date.now() - G.hiddenAt > LOCK_MAX_MS) { clearInterval(tick); G.hiddenAt = 0; G.lockPaused = 0; G.endedByLock = true; interrupted("app hidden for " + Math.round(LOCK_MAX_MS / 60000) + " minutes"); }
+  }, 500);
+}
+function lockPause(why) { // close the line while the phone is locked; the conversation is kept on xAI for RESUME_MS
+  if (G.lockPaused) return; G.lockPaused = Date.now(); G.status = "Paused (phone locked)"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.retriedAt = 0; G.dropNext = false;
+  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); clearTimeout(G.forceTimer); G.forced = null; G.pendingForce = null; stopPlayback();
+  const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries(); paintCall();
+  netLog(why ? `Voice line closed while the phone was locked (${why}): it reopens when the app is back` : `Phone locked: voice line closed after ${((Date.now() - G.hiddenAt) / 1000).toFixed(1)} s (nothing is charged while the phone is locked); the conversation is kept for ${RESUME_MS / 60000} minutes`);
+}
+async function lockResume() { // the app is back: reopen the line on the same conversation, no tone, no "line dropped" recording
+  if (!G.live || G.ws) return;
+  G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.stalled = false; paintCall();
+  if (typeof restartAudio === "function") await restartAudio(); // iOS brings the sound back on the earpiece after a lock: a fresh start puts it on the speaker again (Carverhill, Oct 26)
+  if (G.live && typeof keepAwake === "function") keepAwake(); // the wake lock was released at the lock: ask for it again
+  if (!G.live || G.ws || !G.lockResume) return;
+  await openAgain(true);
+}
+const hiddenLimit = (ms) => document.visibilityState === "hidden" || G.hiddenAt ? Math.max(ms, LOCK_MAX_MS) : ms; // while the page is hidden, the hidden wait decides (the sound and mic are the phone's doing)
 function soundPaused(ctx) {
   if (G.soundPausedAt) return; G.soundPausedAt = Date.now();
   const why = `Sound paused by the phone (${ctx.state}; app ${document.visibilityState}${document.hasFocus && !document.hasFocus() ? ", not in focus" : ""})`;
   vlog(why); netLog(why);
   const tick = setInterval(() => {
     if (!G.live || G.ctx !== ctx) { clearInterval(tick); G.soundPausedAt = 0; return; }
+    if (!G.soundPausedAt) { clearInterval(tick); return; }
     if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); return; }
     if (document.visibilityState === "visible") ctx.resume().catch(() => {});
-    if (Date.now() - G.soundPausedAt > SOUND_BACK_MS) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
+    if (Date.now() - G.soundPausedAt > hiddenLimit(SOUND_BACK_MS)) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
   }, 500);
 }
 // the same for the mic: an iPhone mutes it for a moment (seen Oct 24, 4 s into a call); end only if it stays muted
@@ -288,8 +331,9 @@ function micMuted(tr) {
   if (G.micMutedAt) return; G.micMutedAt = Date.now(); vlog("mic muted by the phone"); netLog("Mic muted by the phone");
   const tick = setInterval(() => {
     if (!G.live || !G.stream || !G.stream.getAudioTracks().includes(tr)) { clearInterval(tick); G.micMutedAt = 0; return; }
+    if (!G.micMutedAt) { clearInterval(tick); return; }
     if (!tr.muted) { clearInterval(tick); const s = ((Date.now() - G.micMutedAt) / 1000).toFixed(1); G.micMutedAt = 0; act("step", "Mic muted by the phone for " + s + " s, then came back"); return; }
-    if (Date.now() - G.micMutedAt > SOUND_BACK_MS) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back"); }
+    if (Date.now() - G.micMutedAt > hiddenLimit(MIC_BACK_MS)) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back in " + Math.round(MIC_BACK_MS / 1000) + " s"); }
   }, 500);
 }
 

@@ -144,6 +144,8 @@ document.addEventListener("click", (e) => {
   else if (act === "flowat") { S.flowBack = "opp"; highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
   else if (act === "copylog") { const txt = VLOG.join("\n"); const done = () => toast("Log copied. Paste it to Claude.");
     (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("vlogTxt"); el.value = txt; el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the text and copy it."); } }); }
+  else if (act === "copycall") { const txt = CALL_URL(); const done = () => toast("Start-up address copied. Paste it into the Shortcut.");
+    (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("callUrl"); el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the address and copy it."); } }); }
   else if (act === "clearlog") { VLOG = []; try { localStorage.removeItem(LOGKEY); } catch (e) {} render(); toast("Log cleared"); }
   else if (act === "help") helpModal();
   else if (act === "saymore") { S.sayMore = !S.sayMore; save(); render(); }
