@@ -179,7 +179,8 @@ async function record(browser, base, voices) {
 }
 
 // ---------- the timeline, mixed into one sound file ----------
-function decodeMp3(file) { return execFileSync("ffmpeg", ["-v", "error", "-i", file, "-f", "s16le", "-ac", "1", "-ar", String(RATE), "-"], { maxBuffer: 64 << 20 }); }
+const FFMPEG = process.env.FFMPEG || (() => { try { const d = path.join(process.env.HOME || "", ".cache", "ms-playwright"); return fs.readdirSync(d).filter(x => x.startsWith("ffmpeg-")).map(x => path.join(d, x, "ffmpeg-linux")).find(fs.existsSync) || "ffmpeg"; } catch (e) { return "ffmpeg"; } })(); // the runner has no ffmpeg of its own; Playwright brings one
+function decodeMp3(file) { return execFileSync(FFMPEG, ["-v", "error", "-i", file, "-f", "s16le", "-ac", "1", "-ar", String(RATE), "-"], { maxBuffer: 64 << 20 }); }
 function mix(rec) {
   const t0 = Math.min(...rec.officer.map(o => o.at), ...rec.ara.filter(a => a.at).map(a => a.at)) - 500;
   const end = (rec.endAt || Date.now()) + 500, total = Math.ceil((end - t0) / 1000 * RATE), out = new Float32Array(total);
@@ -220,9 +221,10 @@ function mix(rec) {
   console.log("Talking to Ara (the line is cut for " + DOWN_MS / 1000 + " s during the read-back)...");
   const rec = await record(browser, base, voices.pcm);
   await browser.close(); server.close();
+  fs.writeFileSync(path.join(OUT, "recording.json"), JSON.stringify({ officer: rec.officer.map(o => ({ at: o.at, text: o.text })), ara: rec.ara.map(a => ({ at: a.at, text: a.text, status: a.status, chunks: a.chunks.length })), phone: rec.phone, cuts: rec.cuts, steps: rec.steps, dropAt: rec.dropAt, backAt: rec.backAt, acts: rec.acts, errors: rec.errors }, null, 1)); // kept before the mix, so a sound-tool failure loses nothing
   const m = mix(rec);
   fs.writeFileSync(path.join(OUT, "reconnect-clip.wav"), m.wav);
-  execFileSync("ffmpeg", ["-v", "error", "-y", "-i", path.join(OUT, "reconnect-clip.wav"), "-codec:a", "libmp3lame", "-q:a", "4", path.join(OUT, "reconnect-clip.mp3")]);
+  execFileSync(FFMPEG, ["-v", "error", "-y", "-i", path.join(OUT, "reconnect-clip.wav"), "-codec:a", "libmp3lame", "-q:a", "4", path.join(OUT, "reconnect-clip.mp3")]);
   const stamp = (at) => { const s = (at - m.t0) / 1000; return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`; };
   const md = `# Reconnect sound clip\n\nRecorded ${rec.started} from a real conversation with Ara (preview build), the officer spoken by Grok's ${OFFICER_VOICE} voice. ` +
     `The network was cut ${rec.dropAt ? stamp(rec.dropAt) : "(not cut)"} into the clip during the read-back and restored ${DOWN_MS / 1000} s later. Length ${m.seconds.toFixed(0)} s.\n\n` +
@@ -230,7 +232,6 @@ function mix(rec) {
     `## What the app logged\n\n` + (rec.acts || []).filter(a => a.role === "step" || a.role === "saved").map(a => `- ${stamp(a.at)} ${a.text.replace(/\n/g, " ").slice(0, 200)}`).join("\n") + "\n" +
     (rec.errors.length ? `\n## Errors\n\n${rec.errors.map(e => "- " + e).join("\n")}\n` : "");
   fs.writeFileSync(path.join(OUT, "reconnect-clip.md"), md);
-  fs.writeFileSync(path.join(OUT, "recording.json"), JSON.stringify({ officer: rec.officer.map(o => ({ at: o.at, text: o.text })), ara: rec.ara.map(a => ({ at: a.at, text: a.text, status: a.status, chunks: a.chunks.length })), phone: rec.phone, cuts: rec.cuts, steps: rec.steps, dropAt: rec.dropAt, backAt: rec.backAt, acts: rec.acts, errors: rec.errors }, null, 1));
   console.log(md);
   const saved = (rec.acts || []).some(a => a.role === "saved" && SAVED.test(a.text));
   console.log(`CLIP ${m.seconds.toFixed(0)} s, drop ${rec.dropAt ? "yes" : "NO"}, back ${rec.backAt ? "yes" : "NO"}, saved ${saved ? "yes" : "NO"}, errors ${rec.errors.length}`);
