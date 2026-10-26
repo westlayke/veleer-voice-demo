@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
     {
+      "date": "Oct 26, 6:21 PM",
+      "change": "Preview: the skeleton's skull now nods on its own when he stops (32 degrees over 1.6 s); the faint whole-body tilt is gone.",
+      "area": "Visitors (spooky mode)",
+      "requestedBy": "Carverhill",
+      "why": "\"He does not tip his skull, but he does wave\""
+    },
+    {
       "date": "Oct 26, 6:14 PM",
       "change": "Preview: the skeleton visitor walks to mid screen, stops, plays his recording while he tips his skull and waves, then walks off (12 s in all).",
       "area": "Visitors (spooky mode)",
