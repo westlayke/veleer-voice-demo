@@ -56,6 +56,10 @@ test("Halloween: in October a spider, pumpkin or ghost crosses without blocking 
   ok(await p.evaluate(() => !!document.querySelector(".spk-skeleton svg .sk-arm") && !!document.querySelector(".spk-skeleton svg .sk-skull")), "the skeleton visitor has no waving arm or nodding skull");
   ok(await p.evaluate(() => fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES.skeleton).then(r => r.ok && r.headers.get("content-length") !== "0")), "the skeleton's recording is missing");
   await p.waitForTimeout(3200); ok(await p.evaluate(() => document.querySelector(".spk-skeleton").classList.contains("sk-waving")), "the skeleton didn't start waving once he stopped");
+  const picks = await p.evaluate(() => { const out = []; for (let i = 0; i < 40; i++) { const el = window.__demo.spookyOnce(); out.push(el.className.replace("spk spk-", "").split(" ")[0]); el.remove(); } return out; });
+  ok(picks.every((k, i) => i === 0 || k !== picks[i - 1]), "a visitor came twice running: " + picks.join(","));
+  const drops = await p.evaluate(() => { let n = 0; for (let i = 0; i < 40; i++) { const el = window.__demo.spookyOnce("pumpkin"); if (/translate\(.*-\d+px\) rotate\(0deg\)/.test(el.getAnimations()[0].effect.getKeyframes()[0].transform)) n++; el.remove(); } return n; });
+  ok(drops > 5 && drops < 35, "the pumpkin dropped from the top " + drops + " times in 40");
   await p.waitForTimeout(9500);
   ok(!(await p.$(".spk[data-t]")), "Halloween visitors should leave the screen when done");
   await p.tap("[data-go=settings]"); await p.waitForTimeout(400);

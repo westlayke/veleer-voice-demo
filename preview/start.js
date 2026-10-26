@@ -60,7 +60,7 @@ function xmasPlay(c, kind, delay = 0) {
   spkPlayed++; return true;
 }
 // spooky sounds, made by the phone (no sound files): quiet, only after the first tap, never during a conversation with Ara
-let spkCtx = null, spkPlayed = 0;
+let spkCtx = null, spkPlayed = 0, spkLast = "";
 // iPhones only allow sound after a tap: start the sound engine in the tap (touchend and click count on an iPhone, pointerdown doesn't) and play a silent blip.
 // The page never changes the phone's audio mode: doing that left Ara silent on iPhones (Oct 24)
 function spkUnlock() {
@@ -135,16 +135,20 @@ const XMAS_SOUND = { snow: "twinkle", gift: "jingle", elf: "giggle", reindeer: "
 function spookyOnce(kind) {
   const kinds = xmasOn() ? (xmasMode() ? ["snow", "gift", "elf", "reindeer", "sleigh", "tree"] : ["snow", "gift", "elf", "reindeer"])
     : spookyMode() ? ["spider", "pumpkin", "ghost", "bat", "owl", "skeleton"] : ["spider", "pumpkin", "ghost"];
-  kind = kind || kinds[Math.floor(Math.random() * kinds.length)];
+  if (!kind) { const pick = kinds.length > 1 ? kinds.filter(k => k !== spkLast) : kinds; kind = pick[Math.floor(Math.random() * pick.length)]; } /* never the same visitor twice running (Carverhill, Oct 26) */
+  spkLast = kind;
   const el = document.createElement("div"); el.className = "spk spk-" + kind; el.setAttribute("aria-hidden", "true");
   const w = window.innerWidth, h = window.innerHeight, done = () => el.remove();
   if (kind === "spider") { // drops from the top on its thread, looks around, climbs back up
     el.innerHTML = '<span class="spk-thread"></span>🕷️'; el.style.left = Math.round(40 + Math.random() * (w - 80)) + "px"; el.style.top = "0";
     const low = Math.round(h * (0.2 + Math.random() * 0.25));
     el.animate([{ transform: "translateY(-60px)" }, { transform: `translateY(${low}px)`, offset: 0.4 }, { transform: `translateY(${low - 12}px)`, offset: 0.55 }, { transform: `translateY(${low}px)`, offset: 0.7 }, { transform: "translateY(-60px)" }], { duration: 7000, easing: "ease-in-out" }).onfinish = done;
-  } else if (kind === "pumpkin") { // rolls along the bottom, right to left
+  } else if (kind === "pumpkin") { // rolls along the bottom, right to left; half the time it drops from the top instead, bounces, then rolls off left (Oct 26)
     el.textContent = "🎃";
-    el.animate([{ transform: `translateX(${w + 20}px) rotate(0deg)` }, { transform: "translateX(-70px) rotate(-720deg)" }], { duration: 6500, easing: "linear" }).onfinish = done;
+    if (Math.random() < 0.5) { const x = Math.round(w * (0.3 + Math.random() * 0.5)), top = -(h + 60);
+      el.animate([{ transform: `translate(${x}px, ${top}px) rotate(0deg)`, easing: "ease-in" }, { transform: `translate(${x}px, 0) rotate(180deg)`, offset: 0.4, easing: "ease-out" }, { transform: `translate(${x - 30}px, ${-Math.round(h * 0.12)}px) rotate(260deg)`, offset: 0.52, easing: "ease-in" },
+        { transform: `translate(${x - 60}px, 0) rotate(340deg)`, offset: 0.64, easing: "ease-out" }, { transform: `translate(${x - 75}px, -24px) rotate(380deg)`, offset: 0.7, easing: "ease-in" }, { transform: `translate(${x - 90}px, 0) rotate(420deg)`, offset: 0.76, easing: "linear" }, { transform: "translate(-70px, 0) rotate(60deg)" }], { duration: 7500 }).onfinish = done;
+    } else el.animate([{ transform: `translateX(${w + 20}px) rotate(0deg)` }, { transform: "translateX(-70px) rotate(-720deg)" }], { duration: 6500, easing: "linear" }).onfinish = done;
   } else if (kind === "bat") { // a few bats flap across the top of the screen, left to right
     el.innerHTML = '<i>🦇</i><i>🦇</i><i>🦇</i>'; el.style.top = Math.round(70 + Math.random() * h * 0.2) + "px";
     el.animate([{ transform: "translate(-140px, 0)" }, { transform: `translate(${w * 0.3}px, 30px)`, offset: 0.3 }, { transform: `translate(${w * 0.6}px, -10px)`, offset: 0.6 }, { transform: `translate(${w + 40}px, 20px)` }], { duration: 5000, easing: "linear" }).onfinish = done;
