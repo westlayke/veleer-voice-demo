@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
     {
+      "date": "Oct 26, 6:07 PM",
+      "change": "Preview: the skeleton visitor plays Carverhill's recording (skeleton.mp3, 5.5 s, ElevenLabs) as he walks across the screen, instead of the cackle.",
+      "area": "Visitors (spooky mode)",
+      "requestedBy": "Carverhill",
+      "why": "\"can you have the skeleton visitor play this mp3 as he goes across the screen\""
+    },
+    {
       "date": "Oct 26, 5:28 PM",
       "change": "Preview: a skeleton visitor in spooky mode. He strolls in along the bottom, stops, tips his skull, waves with a cackle and strolls off. An original drawing (the licensed character's photo stays out of the public app).",
       "area": "Visitors (spooky mode)",
