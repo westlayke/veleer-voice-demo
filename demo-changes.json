@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
     {
+      "date": "Oct 26, 6:47 PM",
+      "change": "Preview: visitors never come twice running (the picker skips the last one, in every theme). The pumpkin drops from the top half the time, bounces along the bottom and rolls off left; the other half it rolls along the bottom as before.",
+      "area": "Visitors (themes)",
+      "requestedBy": "Carverhill",
+      "why": "\"Can you make it so none of the visitors can play twice in a row... Also can you have pumpkin sometime come from top and go to bottom?\""
+    },
+    {
       "date": "Oct 26, 6:21 PM",
       "change": "Live: the skeleton visitor in spooky mode (original drawing; walks to mid screen, nods his skull and waves while Carverhill's recording plays, then walks off). The Hey Ara start-up address stays preview-only.",
       "area": "Visitors (spooky mode)",
