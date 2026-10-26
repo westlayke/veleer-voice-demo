@@ -451,9 +451,9 @@ async function keepAwake() {
   catch (e) { vlog("screen wake lock refused: " + (e && e.name)); act("step", "Screen wake lock refused: " + (e && e.name)); }
 }
 function letSleep() { try { G.wake && G.wake.release(); } catch (e) {} G.wake = null; }
-// locking the phone pauses the page, which cuts the mic and Grok's connection: end the conversation cleanly instead of leaving it hanging
+// locking the phone hides the page: the line is kept for a while (appHidden, voiceline.js) and the call ends only if the page stays hidden
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden" && G.live) { vlog("phone locked or app hidden: ending conversation"); G.endedByLock = true; interrupted("app hidden"); }
+  if (document.visibilityState === "hidden" && G.live) appHidden();
   else if (document.visibilityState === "visible" && G.leftFor) { const was = G.leftFor; G.leftFor = null; G.endedByLock = false; toast(was === "calendar-live" ? "Welcome back. The conversation paused while you were in Google Calendar; tap the mic to carry on." : "Welcome back. If you tapped Save in Google Calendar, the meeting is in your calendar."); }
   else if (document.visibilityState === "visible" && S.pendingCall) { G.endedByLock = false; callDoneModal(); }
   else if (document.visibilityState === "visible" && G.endedByLock) { G.endedByLock = false; resumeModal(); }
@@ -551,7 +551,7 @@ function interrupted(why) {
   if (!G.live || G.interrupting) return; G.interrupting = true;
   vlog("conversation interrupted: " + why);
   G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), where: (typeof formPosition === "function" && formPosition() || {}).where || "", what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "", hands: !!G.hands };
-  endCall("interrupted: " + why); G.interrupting = false;
+  endCall("interrupted: " + why); G.interrupting = false; G.hiddenAt = 0;
   if (document.visibilityState === "visible") resumeModal(); else G.endedByLock = true;
 }
 function resumeModal() {

@@ -324,4 +324,16 @@ test("Hands-free: a planned ask with no entity said is read back without one and
   ok(/entity/i.test(txt) && !/Citizens Alliance C3/.test(txt), "the app didn't ask for the entity, or named one: " + txt.slice(0, 300));
 });
 
+test("The phone locking (page hidden) keeps the line for a while instead of ending the call, and logs the return", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { Object.defineProperty(document, "visibilityState", { get: () => "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
+  await p.waitForTimeout(7500);
+  ok(await p.evaluate(() => G.live && !!G.hiddenAt && HIDDEN_BACK_MS >= 30000), "the call ended within 7 s of the page going hidden (the Oct 26 pocket test ended at the lock)");
+  await p.evaluate(() => { Object.defineProperty(document, "visibilityState", { get: () => "visible", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
+  await p.waitForTimeout(800);
+  ok(await p.evaluate(() => G.live && !G.hiddenAt && !document.querySelector(".scrim")), "the call didn't carry on when the page came back, or a Carry on card appeared");
+  const steps = await p.evaluate(() => __logs.flatMap(b => b.events.map(e => e.text)).concat(ACT.q.map(e => e.text))); /* sent rows plus the ones still queued (the 4 s flush restarts on every row) */
+  ok(steps.some(t => /App hidden \(phone locked or switched away\): keeping the line/.test(t)) && steps.some(t => /App hidden for [\d.]+ s, then back/.test(t)), "the hidden spell wasn't logged: " + steps.slice(-6).join(" | "));
+});
+
 };

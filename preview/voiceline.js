@@ -35,7 +35,8 @@ const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", bac
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;
-const MIC_BACK_MS = 45000;                   // a muted mic gets longer: iOS shows "Audio Recording / Stop audio recording?" and the mic is back on Cancel, which takes a reach (Oct 26 drive)                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
+const MIC_BACK_MS = 45000;
+const HIDDEN_BACK_MS = 45000;                // the phone locking (or a switch to another app) hides the page: the line is kept this long to see whether the call survives the lock (Oct 26 pocket test)                   // a muted mic gets longer: iOS shows "Audio Recording / Stop audio recording?" and the mic is back on Cancel, which takes a reach (Oct 26 drive)                  // when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back
 
 // a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
 const TOK = { p: null, at: 0 };
@@ -66,7 +67,7 @@ function idleCheck() {
   if (G.live && ((G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS) || (/^Reconnecting/.test(G.status) && !(G.downAt && Date.now() - G.downAt >= SAY_DOWN_MS))) && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); cue("wait"); vlog("still working: tick"); }
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
-  if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
   const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
   if (G.probing) return;
@@ -273,6 +274,17 @@ function replyCheck(r) {
 // An iPhone pauses a web page's sound when something else takes the speaker for a moment: a notification sound, Siri, another
 // app's audio, a headset or Bluetooth change. Seen twice on Oct 24 with the line still healthy. Ending the call at once cut the
 // officer off mid-sentence, so keep the line open and try to restart the sound; end only if it doesn't come back.
+// The page went hidden: on an iPhone that is usually the phone locking. The call used to end at once; now the line is kept for HIDDEN_BACK_MS
+// and the log says what the phone did to the sound and the mic meanwhile, so a locked phone in a pocket can be tested (Oct 26)
+function appHidden() {
+  if (G.hiddenAt || !G.live) return; G.hiddenAt = Date.now(); vlog("app hidden: keeping the line"); netLog(`App hidden (phone locked or switched away): keeping the line for ${HIDDEN_BACK_MS / 1000} s`);
+  const tick = setInterval(() => {
+    if (!G.live) { clearInterval(tick); G.hiddenAt = 0; return; }
+    if (document.visibilityState === "visible") { clearInterval(tick); const s = ((Date.now() - G.hiddenAt) / 1000).toFixed(1); G.hiddenAt = 0; vlog("app visible again after " + s + " s"); act("step", "App hidden for " + s + " s, then back"); if (G.ctx && G.ctx.state !== "running") G.ctx.resume().catch(() => {}); return; }
+    if (Date.now() - G.hiddenAt > HIDDEN_BACK_MS) { clearInterval(tick); G.hiddenAt = 0; G.endedByLock = true; interrupted("app hidden for " + Math.round(HIDDEN_BACK_MS / 1000) + " s"); }
+  }, 500);
+}
+const hiddenLimit = (ms) => document.visibilityState === "hidden" || G.hiddenAt ? Math.max(ms, HIDDEN_BACK_MS) : ms; // while the page is hidden, the hidden wait decides
 function soundPaused(ctx) {
   if (G.soundPausedAt) return; G.soundPausedAt = Date.now();
   const why = `Sound paused by the phone (${ctx.state}; app ${document.visibilityState}${document.hasFocus && !document.hasFocus() ? ", not in focus" : ""})`;
@@ -281,7 +293,7 @@ function soundPaused(ctx) {
     if (!G.live || G.ctx !== ctx) { clearInterval(tick); G.soundPausedAt = 0; return; }
     if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); return; }
     if (document.visibilityState === "visible") ctx.resume().catch(() => {});
-    if (Date.now() - G.soundPausedAt > SOUND_BACK_MS) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
+    if (Date.now() - G.soundPausedAt > hiddenLimit(SOUND_BACK_MS)) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
   }, 500);
 }
 // the same for the mic: an iPhone mutes it for a moment (seen Oct 24, 4 s into a call); end only if it stays muted
@@ -290,7 +302,7 @@ function micMuted(tr) {
   const tick = setInterval(() => {
     if (!G.live || !G.stream || !G.stream.getAudioTracks().includes(tr)) { clearInterval(tick); G.micMutedAt = 0; return; }
     if (!tr.muted) { clearInterval(tick); const s = ((Date.now() - G.micMutedAt) / 1000).toFixed(1); G.micMutedAt = 0; act("step", "Mic muted by the phone for " + s + " s, then came back"); return; }
-    if (Date.now() - G.micMutedAt > MIC_BACK_MS) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back in " + Math.round(MIC_BACK_MS / 1000) + " s"); }
+    if (Date.now() - G.micMutedAt > hiddenLimit(MIC_BACK_MS)) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back in " + Math.round(MIC_BACK_MS / 1000) + " s"); }
   }, 500);
 }
 

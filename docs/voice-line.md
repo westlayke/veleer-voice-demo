@@ -34,7 +34,10 @@ Five signals, in the order they tend to fire on a drive:
 
 Two things that look like trouble but are not handled as drops: the phone **pausing the app's sound** (a notification,
 Siri, a headset change) and the phone **muting the mic**. Both keep the line open and wait, `SOUND_BACK_MS` (6 s) for sound and `MIC_BACK_MS` (45 s) for the mic, because iOS shows an "Audio Recording / Stop audio recording?" dialog when the phone locks during a call and the mic is back only once the officer taps Cancel (Oct 26), for
-the sound or mic to come back, ending the call only if it does not (`soundPaused`, `micMuted`).
+the sound or mic to come back, ending the call only if it does not (`soundPaused`, `micMuted`). The **page going hidden**
+(the phone locking, or a switch to another app) is handled the same way since October 26: `appHidden` keeps the line for
+`HIDDEN_BACK_MS` (45 s) and logs what the phone does to the sound and mic meanwhile; while hidden, the sound and mic waits
+stretch to the same limit. Before that the call ended the moment the phone locked.
 
 ## The reconnect loop
 
