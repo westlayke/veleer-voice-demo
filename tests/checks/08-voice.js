@@ -684,4 +684,14 @@ test("Ara: Move to Cultivation is refused while the criteria are missing, by voi
   ok(r.ok === false && /still needs .*a substantive interaction/.test(r.error || ""), "the move was offered without a substantive interaction: " + JSON.stringify(r));
   ok(!(await p.evaluate(() => !!document.getElementById("draftForm"))), "the Cultivation form opened anyway");
 });
+test("A voice pass refused by the key holder ends the call with the reason in the activity log and on screen", async (p) => {
+  await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(400);
+  await p.evaluate(() => { TOK.p = null; TOK.t = 0; const f = window.fetch; window.fetch = (u, o) => /workers\.dev\/log/.test(String(u)) ? f(u, o) : Promise.resolve(new Response('{"error":"rate"}', { status: 429 })); });
+  await p.tap("nav .micbtn"); await p.waitForTimeout(1500);
+  ok(!(await p.evaluate(() => G.live)), "the call stayed live without a voice pass");
+  ok(await p.isVisible("text=The voice service didn't answer (429)"), "the screen didn't name the refusal");
+  await p.waitForTimeout(4600); const ends = (await p.evaluate(() => __logs)).flatMap(b => b.events.filter(e => e.role === "end").map(e => e.text));
+  ok(ends.some(t => /couldn't start: service_429/.test(t)), "the end row doesn't carry the reason: " + ends.join(" | "));
+});
+
 };

@@ -535,7 +535,7 @@ async function startCall(opening) {
     // the greeting is scripted (said word for word by the app's line); a tapped request is the officer's input, with the greeting folded in
     const first = opening ? () => notice(S.settings.userName ? opening : opening + ` You don't know their name yet: first say "${hello}", then call set_user_name, then help with that.`) : () => forceSay(hello);
     G.drops = 0; openSocket(token, first);
-  } catch (e) { endCall(); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); }
+  } catch (e) { endCall("couldn't start: " + String(e && e.message || e)); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); } /* the reason goes to the activity log (four silent ends on Oct 26) */
 }
 /* ---------- interrupted conversations: a phone call, timer, Siri or locking the phone cuts the mic and speaker ---------- */
 // keep the last few lines said, so a new conversation can pick up where the old one stopped
