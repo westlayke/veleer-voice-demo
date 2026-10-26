@@ -55,6 +55,7 @@ test("Halloween: in October a spider, pumpkin or ghost crosses without blocking 
   ok(kinds.every(x => x === "none"), "a Halloween visitor would block taps");
   ok(await p.evaluate(() => !!document.querySelector(".spk-skeleton svg .sk-arm") && !!document.querySelector(".spk-skeleton svg .sk-skull")), "the skeleton visitor has no waving arm or nodding skull");
   ok(await p.evaluate(() => fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES.skeleton).then(r => r.ok && r.headers.get("content-length") !== "0")), "the skeleton's recording is missing");
+  ok(await p.evaluate(() => fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES.laugh).then(r => r.ok && r.headers.get("content-length") !== "0")), "the skeleton's laugh recording is missing");
   await p.waitForTimeout(3200); ok(await p.evaluate(() => document.querySelector(".spk-skeleton").classList.contains("sk-waving")), "the skeleton didn't start waving once he stopped");
   const picks = await p.evaluate(() => { const out = []; for (let i = 0; i < 40; i++) { const el = window.__demo.spookyOnce(); out.push(el.className.replace("spk spk-", "").split(" ")[0]); el.remove(); } return out; });
   ok(picks.every((k, i) => i === 0 || k !== picks[i - 1]), "a visitor came twice running: " + picks.join(","));
