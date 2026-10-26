@@ -1,6 +1,13 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
+    {
+      "date": "Oct 26, 5:28 PM",
+      "change": "Preview: a skeleton visitor in spooky mode. He strolls in along the bottom, stops, tips his skull, waves with a cackle and strolls off. An original drawing (the licensed character's photo stays out of the public app).",
+      "area": "Visitors (spooky mode)",
+      "requestedBy": "Carverhill",
+      "why": "Asked whether the Jack Skellington image could be used, then \"go ahead and add him in to the preview!\""
+    },
     {"date": "Oct 26, 11:17 AM", "change": "Finding, no code change: the screen wake lock holds in the app added to the home screen (a live call ran past a 30 s Auto-Lock; 14 of the 18 Oct 25 calls ran past 3 minutes) but not in the preview opened from a link in Safari, which locked at 30 s every time. The lock = pause build stays as a safety net for locks iOS does anyway. To test the preview the same way, add it to the home screen too.", "area": "Connection"},
     {"date": "Oct 26, 11:00 AM", "change": "Live 11:00 AM: a call no longer ends itself at the unlock (the fresh sound start had cleared the mic wait while the old mic's timer still ran: \"mic muted, didn't come back in 45 s\" five seconds after a lock, 10:53 AM). The fresh-start-into-every-call experiment is taken out: both 10:52 and 10:53 AM calls still locked 30 s after the tap. Lock = pause and the speaker fix held in all three locks of those calls.", "area": "Connection"},
     {"date": "Oct 26, 10:49 AM", "change": "Taken out at 11:00 AM, an experiment: a few seconds into every call, at a quiet moment, the app starts its sound and mic afresh once (the same fresh start that follows a lock), and after any lock it asks for the screen wake lock again. In the 10:39 AM test the phone stopped locking the screen for the rest of the call after the first fresh start, so this may keep the screen on from the start.", "area": "Connection"},
