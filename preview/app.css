@@ -96,7 +96,7 @@ main { gap: 18px; } main .panel { border: 1.5px solid var(--line-strong); box-sh
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; } .seg button { font: inherit; font-size: 12.5px; padding: 4px 10px; border: 0; background: transparent; color: var(--muted); } .seg button.on { background: var(--blue, #2f74d0); color: #fff; }
 .lgroup { padding: 8px 14px 6px; font-size: 12.5px; font-weight: 700; color: var(--muted); background: var(--bg, #f3f5f9); border-top: 1px solid var(--line); } .lgroup span { font-weight: 400; }
 .flag.dnc { color: var(--bad); border-color: currentColor; }
-.search { font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; background: #fff; }
+.search { font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; background: var(--surface); color: var(--fg); }
 details.trouble > summary { list-style: none; cursor: pointer; } details.trouble > summary::-webkit-details-marker { display: none; } details.trouble:not([open]) > summary { border-bottom: 0; }
 .flags { display: flex; gap: 6px; flex-wrap: wrap; }
 .hero { padding: 14px; display: flex; flex-direction: column; gap: 8px; }

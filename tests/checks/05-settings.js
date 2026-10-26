@@ -87,6 +87,9 @@ test("Spooky mode: Ara turns it on and off, with the night look, slower host voi
   ok(on.ok && on.spooky, "Ara couldn't turn spooky mode on");
   const look = await p.evaluate(() => ({ cls: document.documentElement.classList.contains("spooky"), candle: !!document.querySelector(".top .candle"), bg: getComputedStyle(document.body).backgroundColor }));
   ok(look.cls && look.candle, "the night look or the candle by the logo didn't appear");
+  await tab(p, "Contacts"); const sb = await p.evaluate(() => getComputedStyle(document.querySelector(".search")).backgroundColor);
+  ok(sb !== "rgb(255, 255, 255)", "the search box stayed white in spooky mode (Carverhill's screenshot, Oct 26): " + sb);
+  await tab(p, "Home");
   const upd = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.audio).at(-1), n);
   ok(upd && /SPOOKY MODE IS ON/.test(upd.session.instructions), "Ara wasn't given the spooky rules");
   ok(Math.abs(upd.session.audio.output.speed - 0.9) < 0.001, "Ara's voice didn't slow down a touch");
