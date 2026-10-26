@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
     {
+      "date": "Oct 26, 6:14 PM",
+      "change": "Preview: the skeleton visitor walks to mid screen, stops, plays his recording while he tips his skull and waves, then walks off (12 s in all).",
+      "area": "Visitors (spooky mode)",
+      "requestedBy": "Carverhill",
+      "why": "\"Can you have him get to mid screen, pause, play audio, then move off screen\""
+    },
+    {
       "date": "Oct 26, 6:07 PM",
       "change": "Preview: the skeleton visitor plays Carverhill's recording (skeleton.mp3, 5.5 s, ElevenLabs) as he walks across the screen, instead of the cackle.",
       "area": "Visitors (spooky mode)",
