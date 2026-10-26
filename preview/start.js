@@ -45,7 +45,7 @@ function setSpooky(on) {
   if (on) { S.settings.spooky = true; delete S.settings.noSpooky; delete S.settings.xmas; } else delete S.settings.spooky;
   save(); applySpooky(); render(); act("step", "spooky mode " + (on ? "on" : "off")); spookyKick();
 }
-// The skeleton's line (skeleton.mp3, 5.5 s) is an ElevenLabs recording Carverhill sent (Oct 26); it plays as he walks on.
+// The skeleton's line (skeleton.mp3, 5.5 s) is an ElevenLabs recording Carverhill sent (Oct 26); it plays once he has stopped mid screen.
 // The owl's hoot is a recording from tunetank.com ("Owl hooting in the night"), sent by Carverhill (Oct 24). The rolling pumpkin plays
 // the opening of Bach's Toccata and Fugue in D minor, BWV 565 (the first 7 s of a recording Carverhill sent, Oct 24).
 // Christmas sounds that are files (in sounds/): Santa's voice from a Pixabay recording (freesound_community, Pixabay Content License), and a sleigh bell recording by Dragon Studio from Pixabay (Pixabay Content License), sent by Carverhill.
@@ -152,12 +152,12 @@ function spookyOnce(kind) {
     el.textContent = "🦉"; const fromLeft = Math.random() < 0.5, perchX = Math.round(w * (0.25 + Math.random() * 0.5)), y = Math.round(80 + Math.random() * h * 0.15);
     el.style.top = y + "px"; const a = fromLeft ? -70 : w + 20, b = fromLeft ? w + 20 : -70;
     el.animate([{ transform: `translate(${a}px, -60px)` }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.2 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.4 }, { transform: `translate(${perchX}px, 0) scaleY(0.85)`, offset: 0.43 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.46 }, { transform: `translate(${perchX}px, 0) scaleY(1)`, offset: 0.75 }, { transform: `translate(${b}px, -50px)` }], { duration: 7000, easing: "ease-in-out" }).onfinish = done;
-  } else if (kind === "skeleton") { // strolls in from the right along the bottom, stops, tips his skull and waves while his recording plays, then strolls off left (Oct 26)
-    el.innerHTML = SKELETON; const stopX = Math.round(w * 0.55);
+  } else if (kind === "skeleton") { // strolls in from the right along the bottom to mid screen, stops, tips his skull and waves while his recording plays (5.5 s), then strolls off left (Oct 26)
+    el.innerHTML = SKELETON; const stopX = Math.round(w / 2 - 36); /* centred: the figure is 72 px wide */
     const step = (x, i) => ({ transform: `translate(${x}px, ${i % 2 ? -5 : 0}px)` });
-    el.animate([step(w + 20, 0), step(w * 0.9, 1), step(w * 0.8, 2), step(w * 0.7, 3), { ...step(stopX, 4), offset: 0.3 }, { transform: `translate(${stopX}px, 0) rotate(-8deg)`, offset: 0.36 }, { transform: `translate(${stopX}px, 0) rotate(-8deg)`, offset: 0.66 }, { transform: `translate(${stopX}px, 0)`, offset: 0.72 },
-      { ...step(w * 0.4, 5), offset: 0.8 }, { ...step(w * 0.25, 6), offset: 0.87 }, { ...step(w * 0.1, 7), offset: 0.94 }, step(-90, 8)], { duration: 9000, easing: "linear" }).onfinish = done;
-    setTimeout(() => { if (el.isConnected) { el.classList.add("sk-waving"); } }, 2900);
+    el.animate([step(w + 20, 0), step(w * 0.9, 1), step(w * 0.8, 2), step(w * 0.7, 3), { ...step(stopX, 4), offset: 0.22 }, { transform: `translate(${stopX}px, 0) rotate(-8deg)`, offset: 0.26 }, { transform: `translate(${stopX}px, 0) rotate(-8deg)`, offset: 0.7 }, { transform: `translate(${stopX}px, 0)`, offset: 0.74 },
+      { ...step(w * 0.35, 5), offset: 0.82 }, { ...step(w * 0.2, 6), offset: 0.89 }, { ...step(w * 0.05, 7), offset: 0.95 }, step(-90, 8)], { duration: 12000, easing: "linear" }).onfinish = done;
+    setTimeout(() => { if (el.isConnected) { el.classList.add("sk-waving"); spookySound("skeleton"); } }, 2900); /* he has stopped: the recording plays while he waves */
   } else if (kind === "snow") { // a flurry of snowflakes drifting down
     el.style.cssText = "left:0;top:0;width:100%;height:100%"; const calm = calmMotion();
     for (let i = 0; i < 16; i++) { const f = document.createElement("i"), x = Math.round(Math.random() * (w - 24)), sz = 14 + Math.round(Math.random() * 14), dur = 6000 + Math.random() * 3000;
@@ -187,7 +187,7 @@ function spookyOnce(kind) {
   if (calmMotion()) { el.getAnimations({ subtree: true }).forEach(a => a.cancel()); el.classList.add("spk-calm");
     if (kind !== "snow") el.style.transform = `translate(${Math.round(w * (0.15 + Math.random() * 0.6))}px, ${kind === "spider" ? Math.round(h * 0.3) : 0}px)`;
     el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: 4500 }).onfinish = done; }
-  spookySound(XMAS_SOUND[kind] || kind); return el;
+  if (kind !== "skeleton") spookySound(XMAS_SOUND[kind] || kind); /* the skeleton plays his recording once he has stopped */ return el;
 }
 // a visitor every 40 to 90 seconds; in spooky mode every 15 to 20
 let spkLoopT = null;
