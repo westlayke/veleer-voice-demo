@@ -45,14 +45,14 @@ function setSpooky(on) {
   if (on) { S.settings.spooky = true; delete S.settings.noSpooky; delete S.settings.xmas; } else delete S.settings.spooky;
   save(); applySpooky(); render(); act("step", "spooky mode " + (on ? "on" : "off")); spookyKick();
 }
-// The skeleton's line (skeleton.mp3, 5.5 s) is an ElevenLabs recording Carverhill sent (Oct 26); it plays once he has stopped mid screen.
+// The skeleton's recordings are ElevenLabs files Carverhill sent (Oct 26): the laugh alone (skeleton-laugh.mp3) 4 times in 5, his full line (skeleton.mp3, 5.5 s) the fifth; one plays once he has stopped mid screen.
 // The owl's hoot is a recording from tunetank.com ("Owl hooting in the night"), sent by Carverhill (Oct 24). The rolling pumpkin plays
 // the opening of Bach's Toccata and Fugue in D minor, BWV 565 (the first 7 s of a recording Carverhill sent, Oct 24).
 // Christmas sounds that are files (in sounds/): Santa's voice from a Pixabay recording (freesound_community, Pixabay Content License), and a sleigh bell recording by Dragon Studio from Pixabay (Pixabay Content License), sent by Carverhill.
 // Fetched as soon as Christmas is on, decoded and played on the sound engine below (so the same first-tap and never-during-a-call rules apply)
-const XMAS_FILES = { hohoho: "santa-hoho.mp3", merry: "santa-merry.mp3", bells: "sleigh-bells.mp3", jingle: "jingle.mp3", owl: "owl-hoot.mp3", pumpkin: "pumpkin-toccata.mp3", skeleton: "skeleton.mp3" }, xmasRaw = {}, xmasDec = {};
+const XMAS_FILES = { hohoho: "santa-hoho.mp3", merry: "santa-merry.mp3", bells: "sleigh-bells.mp3", jingle: "jingle.mp3", owl: "owl-hoot.mp3", pumpkin: "pumpkin-toccata.mp3", skeleton: "skeleton.mp3", laugh: "skeleton-laugh.mp3" }, xmasRaw = {}, xmasDec = {};
 function xmasPrefetch() { Object.entries(XMAS_FILES).forEach(([k, f]) => { if (!xmasRaw[k]) xmasRaw[k] = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + f).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); }); }
-["owl", "pumpkin", "skeleton"].forEach(k => { xmasRaw[k] = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES[k]).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); }); // small (42, 55 and 132 KB): ready when the first one comes by
+["owl", "pumpkin", "skeleton", "laugh"].forEach(k => { xmasRaw[k] = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES[k]).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); }); // small (42 to 132 KB): ready when the first one comes by
 function xmasPlay(c, kind, delay = 0) {
   if (!xmasRaw[kind]) xmasPrefetch();
   xmasDec[kind] = xmasDec[kind] || xmasRaw[kind].then(b => b ? c.decodeAudioData(b.slice(0)) : null).catch(() => null);
@@ -60,7 +60,7 @@ function xmasPlay(c, kind, delay = 0) {
   spkPlayed++; return true;
 }
 // spooky sounds, made by the phone (no sound files): quiet, only after the first tap, never during a conversation with Ara
-let spkCtx = null, spkPlayed = 0;
+let spkCtx = null, spkPlayed = 0, spkLast = "", spkSkel = 0;
 // iPhones only allow sound after a tap: start the sound engine in the tap (touchend and click count on an iPhone, pointerdown doesn't) and play a silent blip.
 // The page never changes the phone's audio mode: doing that left Ara silent on iPhones (Oct 24)
 function spkUnlock() {
@@ -135,16 +135,20 @@ const XMAS_SOUND = { snow: "twinkle", gift: "jingle", elf: "giggle", reindeer: "
 function spookyOnce(kind) {
   const kinds = xmasOn() ? (xmasMode() ? ["snow", "gift", "elf", "reindeer", "sleigh", "tree"] : ["snow", "gift", "elf", "reindeer"])
     : spookyMode() ? ["spider", "pumpkin", "ghost", "bat", "owl", "skeleton"] : ["spider", "pumpkin", "ghost"];
-  kind = kind || kinds[Math.floor(Math.random() * kinds.length)];
+  if (!kind) { const pick = kinds.length > 1 ? kinds.filter(k => k !== spkLast) : kinds; kind = pick[Math.floor(Math.random() * pick.length)]; } /* never the same visitor twice running (Carverhill, Oct 26) */
+  spkLast = kind;
   const el = document.createElement("div"); el.className = "spk spk-" + kind; el.setAttribute("aria-hidden", "true");
   const w = window.innerWidth, h = window.innerHeight, done = () => el.remove();
   if (kind === "spider") { // drops from the top on its thread, looks around, climbs back up
     el.innerHTML = '<span class="spk-thread"></span>🕷️'; el.style.left = Math.round(40 + Math.random() * (w - 80)) + "px"; el.style.top = "0";
     const low = Math.round(h * (0.2 + Math.random() * 0.25));
     el.animate([{ transform: "translateY(-60px)" }, { transform: `translateY(${low}px)`, offset: 0.4 }, { transform: `translateY(${low - 12}px)`, offset: 0.55 }, { transform: `translateY(${low}px)`, offset: 0.7 }, { transform: "translateY(-60px)" }], { duration: 7000, easing: "ease-in-out" }).onfinish = done;
-  } else if (kind === "pumpkin") { // rolls along the bottom, right to left
+  } else if (kind === "pumpkin") { // rolls along the bottom, right to left; half the time it drops from the top instead, bounces, then rolls off left (Oct 26)
     el.textContent = "🎃";
-    el.animate([{ transform: `translateX(${w + 20}px) rotate(0deg)` }, { transform: "translateX(-70px) rotate(-720deg)" }], { duration: 6500, easing: "linear" }).onfinish = done;
+    if (Math.random() < 0.5) { const x = Math.round(w * (0.3 + Math.random() * 0.5)), top = -(h + 60);
+      el.animate([{ transform: `translate(${x}px, ${top}px) rotate(0deg)`, easing: "ease-in" }, { transform: `translate(${x}px, 0) rotate(180deg)`, offset: 0.4, easing: "ease-out" }, { transform: `translate(${x - 30}px, ${-Math.round(h * 0.12)}px) rotate(260deg)`, offset: 0.52, easing: "ease-in" },
+        { transform: `translate(${x - 60}px, 0) rotate(340deg)`, offset: 0.64, easing: "ease-out" }, { transform: `translate(${x - 75}px, -24px) rotate(380deg)`, offset: 0.7, easing: "ease-in" }, { transform: `translate(${x - 90}px, 0) rotate(420deg)`, offset: 0.76, easing: "linear" }, { transform: "translate(-70px, 0) rotate(60deg)" }], { duration: 7500 }).onfinish = done;
+    } else el.animate([{ transform: `translateX(${w + 20}px) rotate(0deg)` }, { transform: "translateX(-70px) rotate(-720deg)" }], { duration: 6500, easing: "linear" }).onfinish = done;
   } else if (kind === "bat") { // a few bats flap across the top of the screen, left to right
     el.innerHTML = '<i>🦇</i><i>🦇</i><i>🦇</i>'; el.style.top = Math.round(70 + Math.random() * h * 0.2) + "px";
     el.animate([{ transform: "translate(-140px, 0)" }, { transform: `translate(${w * 0.3}px, 30px)`, offset: 0.3 }, { transform: `translate(${w * 0.6}px, -10px)`, offset: 0.6 }, { transform: `translate(${w + 40}px, 20px)` }], { duration: 5000, easing: "linear" }).onfinish = done;
@@ -157,7 +161,7 @@ function spookyOnce(kind) {
     const step = (x, i) => ({ transform: `translate(${x}px, ${i % 2 ? -5 : 0}px)` });
     el.animate([step(w + 20, 0), step(w * 0.9, 1), step(w * 0.8, 2), step(w * 0.7, 3), { ...step(stopX, 4), offset: 0.22 }, { transform: `translate(${stopX}px, 0)`, offset: 0.74 },
       { ...step(w * 0.35, 5), offset: 0.82 }, { ...step(w * 0.2, 6), offset: 0.89 }, { ...step(w * 0.05, 7), offset: 0.95 }, step(-90, 8)], { duration: 12000, easing: "linear" }).onfinish = done;
-    setTimeout(() => { if (el.isConnected) { el.classList.add("sk-waving"); spookySound("skeleton"); } }, 2900); /* he has stopped: the skull nods (css sk-skull) and the recording plays while he waves */
+    setTimeout(() => { if (el.isConnected) { el.classList.add("sk-waving"); spookySound(++spkSkel % 5 ? "laugh" : "skeleton"); } }, 2900); /* he has stopped: the skull nods (css sk-skull) and a recording plays while he waves: the laugh 4 times in 5, the full line every fifth visit */
   } else if (kind === "snow") { // a flurry of snowflakes drifting down
     el.style.cssText = "left:0;top:0;width:100%;height:100%"; const calm = calmMotion();
     for (let i = 0; i < 16; i++) { const f = document.createElement("i"), x = Math.round(Math.random() * (w - 24)), sz = 14 + Math.round(Math.random() * 14), dur = 6000 + Math.random() * 3000;

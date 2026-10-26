@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
     {
+      "date": "Oct 26, 6:57 PM",
+      "change": "Live: the skeleton plays Carverhill's laugh-only recording (skeleton-laugh.mp3, 2.8 s) 4 visits in 5 and his full line every fifth visit, together with the 6:47 PM visitor changes (no visitor twice running, pumpkin sometimes drops from the top). Hey Ara start-up address stays preview-only.",
+      "area": "Visitors (spooky mode)",
+      "requestedBy": "Carverhill",
+      "why": "\"use this laugh only audio file 4 out of every 5 times he appears\" and \"if it passes the tests on preview just take it live\""
+    },
+    {
       "date": "Oct 26, 6:47 PM",
       "change": "Preview: visitors never come twice running (the picker skips the last one, in every theme). The pumpkin drops from the top half the time, bounces along the bottom and rolls off left; the other half it rolls along the bottom as before.",
       "area": "Visitors (themes)",
