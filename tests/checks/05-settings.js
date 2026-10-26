@@ -231,4 +231,26 @@ test("Settings: the location switch asks the phone first, and connection notes c
   const row2 = await p.evaluate(() => { netLog("Test", 5); return ACT.q[ACT.q.length - 1].text; });
   ok(!/40\.12345/.test(row2), "a connection row still carried the location after the switch was turned off: " + row2);
 });
+test("Hey Ara start-up address (#call): one big mic, one tap starts the conversation; Settings shows the address", async (p) => {
+  await signIn(p); const url = p.url().split("#")[0]; await p.goto(url + "?a=1#call"); await p.waitForTimeout(900); /* a hash alone would not reload the page */
+  ok(await p.isVisible("text=Talk to Ara"), "the #call start-up screen is missing");
+  ok(!/call/.test(await p.evaluate(() => location.hash)), "#call stayed in the address (a reload would ask again)");
+  await p.tap("text=Not now"); await p.waitForTimeout(200); ok(!(await p.isVisible("text=Talk to Ara")), "Not now did not close it");
+  await p.goto(url + "?b=2#call"); await p.waitForTimeout(900);
+  await p.tap(".wl-mic.big"); await p.waitForTimeout(600);
+  ok(await p.evaluate(() => __sent.some(s => s.includes("session.update"))), "the tap did not start Ara");
+  ok(!(await p.isVisible("text=Talk to Ara")), "the start-up screen stayed over the call");
+  await p.waitForTimeout(4600); const open = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.text)); /* log rows go out in batches */
+  ok(open.some(t => /Hey Ara start-up address/.test(t)), "the start-up open was not logged: " + open.slice(-5).join(" | "));
+  await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Home").catch(() => {}); await p.waitForTimeout(200);
+  await p.tap("[data-go=settings] >> nth=0"); await p.waitForTimeout(400);
+  ok(/#call$/.test(await p.inputValue("#callUrl")), "Settings does not show the start-up address");
+  ok(await p.isVisible("text=Vocal Shortcuts"), "the Shortcut steps are missing from Settings");
+});
+test("The #call address on a first visit leaves the welcome in place", async (p) => {
+  await p.goto(p.url().split("#")[0] + "?a=1#call"); await p.waitForTimeout(900);
+  ok(await p.isVisible("text=Meet your new voice assistant!"), "the welcome is missing");
+  ok(!(await p.isVisible("text=Talk to Ara")), "the start-up screen covered the welcome");
+});
+
 };

@@ -206,7 +206,7 @@ setTimeout(owlHint, 1500);
 // spooky mode's big moments: a creaking door as a form opens, thunder on Save, the organ sting and a cackle on Closed Won
 // Christmas mode's: sleigh bells as a form opens, a chime on Save, "Joy to the World" then "ho ho ho" on Closed Won
 function spookyCue(kind) { if (spookyMode()) spookySound(kind); else if (xmasMode()) spookySound({ creak: "jingle", thunder: "chime", won: "carol" }[kind] || kind); }
-render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
+render(); save(); welcomeModal(); callLink(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
 function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app (build " + BUILD + ")" + (calmMotion() ? " (Reduce Motion is on)" : "")); }
 logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });

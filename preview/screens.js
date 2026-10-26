@@ -180,6 +180,24 @@ function welcomeModal() {
     <div class="wl-links"><button type="button" class="linkbtn" data-act4="voice">${mic(14)} Say it instead</button><button type="button" class="linkbtn" data-act2="share">Share this proof of concept</button></div></div></div>`;
   setTimeout(() => { const el = document.getElementById("wlName"); if (el && el.value !== (S.settings.userName || "")) el.value = S.settings.userName || ""; }, 300); // browsers may autofill an old name
 }
+/* "Hey Ara" start-up address (Carverhill, Oct 25): the app's address ending in #call, for an iPhone Shortcut run by a Vocal Shortcut ("Hey Ara").
+   The phone only turns the mic and sound on after a tap, so the address opens straight onto one big mic: one tap and the conversation starts. */
+const CALL_URL = () => location.origin + location.pathname + "#call";
+function callLink() {
+  if (!/[#&]call\b/.test(location.hash || "")) return false;
+  history.replaceState(null, "", location.pathname + location.search); // a reload or Back doesn't ask again
+  if (G.live || !S.settings.userName) return false; // already talking, or the first visit (its welcome has the big mic already)
+  act("open", "Opened with the Hey Ara start-up address (#call)");
+  document.getElementById("modal").innerHTML = `<div class="scrim center"><div class="wmodal wl-start" role="dialog" aria-modal="true" aria-labelledby="wmTitle">
+      <img src="logo-v6.png" alt="Citizens Alliance" class="wl-logo">
+      <h2 id="wmTitle">Talk to ${esc(botName())}</h2>
+      <p>Tap the mic and ${esc(botName())} is listening.</p>
+      <button type="button" class="wl-mic big" data-act4="voice" aria-label="Tap to start talking">${mic(40)}</button>
+      <div class="wl-tap">Tap to start</div>
+      <button type="button" class="btn quiet" data-act5="notnow">Not now</button></div></div>`;
+  return true;
+}
+document.addEventListener("click", (e) => { if (e.target.closest("[data-act5=notnow]")) { document.getElementById("modal").innerHTML = ""; act("step", "Not now on the Hey Ara start"); } });
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act4]"); if (a && a.dataset.act4 === "voice") { const el = document.getElementById("wlName"), v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : "";
     if (v) S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.settings.seenFormLog = true; S.screen = "home"; save(); document.getElementById("modal").innerHTML = ""; render(); window.scrollTo(0, 0); ask(null); return; }
   if (a) { const el = document.getElementById("wlName"); const v = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : (S.settings.userName || "");

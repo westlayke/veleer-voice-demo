@@ -83,6 +83,10 @@ function settingsScreen() {
     ${`<label class="hint-tgl" for="xmasMode"><input type="checkbox" id="xmasMode" ${xmasMode() ? "checked" : ""}> Christmas mode: a white, evergreen and red look with a wreath and a nativity scene on Home, ${esc(botName())} as a warm Christmas host, sleigh bells and Santa's “ho ho ho” on big moments, and more visitors. You can also say “Christmas mode” or “normal mode”.</label>`}
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4">Changes on this screen save as soon as you make them.</div>
   </div></section>
+  <section class="panel"><div class="ph"><h2>Start by voice (“Hey ${esc(botName())}”)</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted);line-height:1.45">On an iPhone you can open ${esc(botName())} by saying “Hey ${esc(botName())}”, with nothing extra to install. The start-up address below opens the app onto one big mic; one tap and the conversation starts (the phone only turns the mic on after a tap).</div>
+    <div style="font-size:13.5px;line-height:1.45">1. Copy the start-up address.<br>2. Shortcuts app: + › Add Action › Open URLs, and paste it. Name the shortcut “${esc(botName())}”.<br>3. Settings › Accessibility › Vocal Shortcuts › Set Up: pick that shortcut, type “Hey ${esc(botName())}” and say it three times.<br>4. In the shortcut's details, turn on “Allow Running When Locked”.</div>
+    <textarea id="callUrl" readonly style="font:13px/1.35 ui-monospace,Menlo,monospace;height:44px;white-space:pre">${esc(CALL_URL())}</textarea>
+    <button class="btn out" data-act2="copycall">Copy the start-up address</button></div></section>
   <section class="panel"><div class="ph"><h2>Share this proof of concept</h2></div><div class="sb set"><div style="font-size:14px;color:var(--muted)">Send the proof of concept to someone, or show a QR code they can scan with their phone camera. Anyone with the link can use the voice assistant.</div>
     <button class="btn blue" data-act2="share">Share link</button><button class="btn out" data-act2="qr">Show QR code</button></div></section>
   <section class="panel"><div class="ph"><h2>Version</h2><span class="meta">${esc(buildLabel())}</span></div><div class="sb"><div style="font-size:14px;color:var(--muted)">The proof of concept updates itself to the newest version when you open it.</div></div></section>
@@ -144,6 +148,8 @@ document.addEventListener("click", (e) => {
   else if (act === "flowat") { S.flowBack = "opp"; highlightStage(Math.max(0, flowIndex(a.dataset.stage))); }
   else if (act === "copylog") { const txt = VLOG.join("\n"); const done = () => toast("Log copied. Paste it to Claude.");
     (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("vlogTxt"); el.value = txt; el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the text and copy it."); } }); }
+  else if (act === "copycall") { const txt = CALL_URL(); const done = () => toast("Start-up address copied. Paste it into the Shortcut.");
+    (navigator.clipboard ? navigator.clipboard.writeText(txt).then(done) : Promise.reject()).catch(() => { const el = document.getElementById("callUrl"); el.select(); try { document.execCommand("copy"); done(); } catch (x) { toast("Select the address and copy it."); } }); }
   else if (act === "clearlog") { VLOG = []; try { localStorage.removeItem(LOGKEY); } catch (e) {} render(); toast("Log cleared"); }
   else if (act === "help") helpModal();
   else if (act === "saymore") { S.sayMore = !S.sayMore; save(); render(); }
