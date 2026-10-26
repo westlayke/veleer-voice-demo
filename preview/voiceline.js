@@ -114,7 +114,6 @@ function openSocket(token, first, second) {
     send({ type: "session.update", session: sessionCfg() }); sendExtras(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep();
     if (ws.resumed) netLog("Picked up the same conversation");
-    if (!G.drops && !ws.resumed && typeof audioRefreshSoon === "function") audioRefreshSoon(); // once per call, a few seconds in (see voice.js)
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     netLog(`Voice line open in ${Date.now() - t0} ms${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops})` : ""}`);
@@ -321,6 +320,7 @@ function soundPaused(ctx) {
   vlog(why); netLog(why);
   const tick = setInterval(() => {
     if (!G.live || G.ctx !== ctx) { clearInterval(tick); G.soundPausedAt = 0; return; }
+    if (!G.soundPausedAt) { clearInterval(tick); return; }
     if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); return; }
     if (document.visibilityState === "visible") ctx.resume().catch(() => {});
     if (Date.now() - G.soundPausedAt > hiddenLimit(SOUND_BACK_MS)) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
@@ -331,6 +331,7 @@ function micMuted(tr) {
   if (G.micMutedAt) return; G.micMutedAt = Date.now(); vlog("mic muted by the phone"); netLog("Mic muted by the phone");
   const tick = setInterval(() => {
     if (!G.live || !G.stream || !G.stream.getAudioTracks().includes(tr)) { clearInterval(tick); G.micMutedAt = 0; return; }
+    if (!G.micMutedAt) { clearInterval(tick); return; }
     if (!tr.muted) { clearInterval(tick); const s = ((Date.now() - G.micMutedAt) / 1000).toFixed(1); G.micMutedAt = 0; act("step", "Mic muted by the phone for " + s + " s, then came back"); return; }
     if (Date.now() - G.micMutedAt > hiddenLimit(MIC_BACK_MS)) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back in " + Math.round(MIC_BACK_MS / 1000) + " s"); }
   }, 500);
