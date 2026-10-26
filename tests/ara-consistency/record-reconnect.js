@@ -15,7 +15,7 @@ const OFFICER_VOICE = process.env.OFFICER_VOICE || "rex";
 const TURN_WAIT_MS = 60000, MAX_TURNS = 16, MAX_CONV_MS = 5 * 60000, RATE = 24000;
 const ROOT = path.resolve(__dirname, "../.."), OUT = path.join(__dirname, "results", "reconnect");
 const SOUNDS = path.join(ROOT, "preview", "sounds");
-if (!KEY) { console.error("ARA_CONSISTENCY_KEY is not set"); process.exit(1); }
+if (!KEY && !process.env.SELF_TEST) { console.error("ARA_CONSISTENCY_KEY is not set"); process.exit(1); }
 
 // the officer's side: a real call from the activity log (Oct 25) with the names made up; the yes/no answers are given to whatever Ara asks
 const LINES = ["Let's go into hands-free mode.", "Log an interaction with James Okafor.",
@@ -179,7 +179,9 @@ async function record(browser, base, voices) {
 }
 
 // ---------- the timeline, mixed into one sound file ----------
-const FFMPEG = process.env.FFMPEG || (() => { try { const d = path.join(process.env.HOME || "", ".cache", "ms-playwright"); return fs.readdirSync(d).filter(x => x.startsWith("ffmpeg-")).map(x => path.join(d, x, "ffmpeg-linux")).find(fs.existsSync) || "ffmpeg"; } catch (e) { return "ffmpeg"; } })(); // the runner has no ffmpeg of its own; Playwright brings one
+const FFMPEG = process.env.FFMPEG || (() => { // the system ffmpeg (installed by the workflow) first; Playwright's own build can't read mp3
+  try { execFileSync("ffmpeg", ["-version"], { stdio: "ignore" }); return "ffmpeg"; } catch (e) {}
+  try { const d = path.join(process.env.HOME || "", ".cache", "ms-playwright"); return fs.readdirSync(d).filter(x => x.startsWith("ffmpeg-")).map(x => path.join(d, x, "ffmpeg-linux")).find(fs.existsSync) || "ffmpeg"; } catch (e) { return "ffmpeg"; } })();
 function decodeMp3(file) { return execFileSync(FFMPEG, ["-v", "error", "-i", file, "-f", "s16le", "-ac", "1", "-ar", String(RATE), "-"], { maxBuffer: 64 << 20 }); }
 function mix(rec) {
   const t0 = Math.min(...rec.officer.map(o => o.at), ...rec.ara.filter(a => a.at).map(a => a.at)) - 500;
@@ -197,7 +199,9 @@ function mix(rec) {
     put(pcm, a.at, 1, cut); pieces.push({ at: a.at, who: "Ara", text: a.text.trim() + (cut ? ` [cut off after ${((cut - a.at) / 1000).toFixed(1)} s]` : "") });
   });
   const files = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3" }, dec = {};
-  rec.phone.forEach(l => { const f = files[l.kind]; if (!f) return; dec[f] = dec[f] || decodeMp3(path.join(SOUNDS, f)); put(dec[f], l.at, 1); pieces.push({ at: l.at, who: "Phone (recording)", text: l.text }); });
+  rec.phone.forEach(l => { const f = files[l.kind]; if (!f) return;
+    try { dec[f] = dec[f] || decodeMp3(path.join(SOUNDS, f)); put(dec[f], l.at, 1); } catch (e) { console.error("couldn't decode " + f + ": " + String(e.message).split("\n")[0]); }
+    pieces.push({ at: l.at, who: "Phone (recording)", text: l.text }); });
   if (rec.dropAt) pieces.push({ at: rec.dropAt, who: "—", text: "the network is cut" });
   if (rec.backAt) pieces.push({ at: rec.backAt, who: "—", text: "the network is back" });
   let peak = 0; for (let i = 0; i < total; i++) peak = Math.max(peak, Math.abs(out[i]));
@@ -209,6 +213,15 @@ function mix(rec) {
   return { wav, pieces, t0, seconds: total / RATE };
 }
 
+if (process.env.SELF_TEST) { // no network: a made-up recording through the mix, to check the sound tools
+  fs.mkdirSync(OUT, { recursive: true });
+  const tone = (secs, hz) => { const b = Buffer.alloc(secs * RATE * 2); for (let i = 0; i < secs * RATE; i++) b.writeInt16LE(Math.round(Math.sin(i / RATE * hz * 2 * Math.PI) * 8000), i * 2); return b; };
+  const t = Date.now() - 40000, rec = { officer: [{ at: t + 1000, text: "Hello", pcm: tone(1.5, 220) }], ara: [{ at: t + 3000, text: "Hi there, reading back", chunks: [tone(6, 440)], status: "completed" }, { at: t + 22000, text: "Sorry, I lost you", chunks: [tone(3, 440)] }],
+    phone: [{ at: t + 11000, kind: "dropped", text: "The line dropped." }, { at: t + 18000, kind: "still", text: "Still trying." }, { at: t + 20000, kind: "back", text: "You're back." }], cuts: [], steps: [], dropAt: t + 6000, backAt: t + 19000, endAt: t + 26000, errors: [], acts: [] };
+  const m = mix(rec); fs.writeFileSync(path.join(OUT, "self-test.wav"), m.wav);
+  execFileSync(FFMPEG, ["-v", "error", "-y", "-i", path.join(OUT, "self-test.wav"), "-codec:a", "libmp3lame", "-q:a", "4", path.join(OUT, "self-test.mp3")]);
+  console.log(`self test: ${m.seconds.toFixed(1)} s, ${m.pieces.length} pieces, ffmpeg ${FFMPEG}`); m.pieces.forEach(x => console.log(" ", ((x.at - m.t0) / 1000).toFixed(1), x.who, x.text)); process.exit(0);
+}
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const wavSilent = path.join(OUT, "silence.wav"); silentWav(wavSilent);
