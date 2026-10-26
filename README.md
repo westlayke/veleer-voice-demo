@@ -40,6 +40,8 @@ The page itself is short. Its styles and code are in a folder beside it, split b
 - `preview/` is the preview's copy, used by `preview-flow.html`; `app/` is the live copy, used by `index.html`. Change only `preview/`.
 - `app.css` styles; `core.js` lists, settings, example data and saved data (with its numbered upgrade steps); `drafts.js` finding contacts, draft forms and saves; `voice.js` the conversation with Ara (instructions, tool definitions, audio, events); `voiceline.js` keeping the voice line alive (voice passes, reconnects, line tests, stall and quiet detection, asking Grok again; all timings at the top); `aratools.js` what the app does for each of Ara's tools; `voiceforms.js` optional fields one at a time, hands-free saves and the check of hands-free saves; `screens.js` screens, phone calls and task statuses; `guide.js` the process overview and Process FAQ; `start.js` updates and start-up.
 
+How the voice line survives a dead spot (the signals, the reconnect loop, the phone's spoken lines, picking the form up where it was) is written up in [docs/voice-line.md](docs/voice-line.md).
+
 To publish: `tools/publish.sh preview` stamps the preview with the time, and `tools/publish.sh live` copies the preview to `index.html` and `app/`. Run the test bot after either one, and commit only when every check passes.
 
 ## Test bot
