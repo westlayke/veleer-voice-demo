@@ -526,8 +526,21 @@ async function openAudio() {
     const mute = ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(ctx.destination);
     return true;
 }
+// Experiment (Oct 26): after the first lock's fresh start, the phone stopped locking the screen for the rest of the call (Carverhill's
+// 10:39 AM call: locked at 39 s, then 95 s on with no lock), while the wake lock asked for at the tap is released at the first lock.
+// So every call gets one fresh start a few seconds in, at a quiet moment, to see whether that keeps the screen on from the start.
+const AUDIO_REFRESH_MS = 6000;
+function audioRefreshSoon() {
+  if (G.audioRefreshed) return; G.audioRefreshed = true;
+  const t0 = Date.now(), tick = setInterval(() => {
+    if (!G.live) { clearInterval(tick); return; }
+    if (Date.now() - t0 < AUDIO_REFRESH_MS || G.responding || G.forced || G.pendingForce || G.hiddenAt || G.lockPaused || G.soundPausedAt || G.micMutedAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
+    if ((typeof playingLeft === "function" && playingLeft() > 0) || Date.now() - (G.loudAt || 0) < 1500) return; // Ara or the officer is talking
+    clearInterval(tick); restartAudio(`${((Date.now() - G.t0) / 1000).toFixed(0)} s into the call (experiment: does the phone then leave the screen on?)`).then(ok => { if (ok) keepAwake(); });
+  }, 500);
+}
 // After a lock: start the sound and mic afresh (see openAudio); if the phone refuses (no running sound in a moment), the old ones stay
-async function restartAudio() {
+async function restartAudio(why) {
   const oldCtx = G.ctx, oldStream = G.stream, oldOut = G.out, oldAn = G.outAn, oldNode = G.node;
   stopPlayback(); G.buf = []; G.soundPausedAt = 0; G.micMutedAt = 0;
   try {
@@ -536,12 +549,12 @@ async function restartAudio() {
     if (ctx.state !== "running") throw new Error("sound " + ctx.state);
     try { oldStream && oldStream.getTracks().forEach(t => t.stop()); } catch (e) {} try { oldCtx && oldCtx.close(); } catch (e) {}
     if (typeof linePrep === "function") linePrep();
-    act("step", "Sound and mic started afresh after the lock, so Ara comes back on the speaker the call started on, not the earpiece");
+    act("step", why ? `Sound and mic started afresh ${why}` : "Sound and mic started afresh after the lock, so Ara comes back on the speaker the call started on, not the earpiece");
     return true;
   } catch (e) {
     try { G.ctx && G.ctx !== oldCtx && G.ctx.close(); } catch (x) {} try { G.stream && G.stream !== oldStream && G.stream.getTracks().forEach(t => t.stop()); } catch (x) {}
     G.ctx = oldCtx; G.stream = oldStream; G.out = oldOut; G.outAn = oldAn; G.node = oldNode; if (oldCtx && oldCtx.state !== "running") oldCtx.resume().catch(() => {});
-    act("step", "Couldn't start the sound afresh after the lock (" + String(e && e.message || e).slice(0, 60) + "): keeping the old sound and mic");
+    act("step", "Couldn't start the sound afresh " + (why || "after the lock") + " (" + String(e && e.message || e).slice(0, 60) + "): keeping the old sound and mic");
     return false;
   }
 }
@@ -602,7 +615,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.audioRefreshed = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }

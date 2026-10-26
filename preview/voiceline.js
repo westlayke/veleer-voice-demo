@@ -114,6 +114,7 @@ function openSocket(token, first, second) {
     send({ type: "session.update", session: sessionCfg() }); sendExtras(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep();
     if (ws.resumed) netLog("Picked up the same conversation");
+    if (!G.drops && !ws.resumed && typeof audioRefreshSoon === "function") audioRefreshSoon(); // once per call, a few seconds in (see voice.js)
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
     netLog(`Voice line open in ${Date.now() - t0} ms${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops})` : ""}`);
@@ -309,6 +310,7 @@ async function lockResume() { // the app is back: reopen the line on the same co
   if (!G.live || G.ws) return;
   G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.stalled = false; paintCall();
   if (typeof restartAudio === "function") await restartAudio(); // iOS brings the sound back on the earpiece after a lock: a fresh start puts it on the speaker again (Carverhill, Oct 26)
+  if (G.live && typeof keepAwake === "function") keepAwake(); // the wake lock was released at the lock: ask for it again
   if (!G.live || G.ws || !G.lockResume) return;
   await openAgain(true);
 }

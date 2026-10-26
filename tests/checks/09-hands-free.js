@@ -206,7 +206,7 @@ test("Oct 24 call fixes: email spelling, substantive asked and read back, edits 
 test("Oct 24 call fixes: the phone pausing the sound doesn't end the call, and Carry on keeps hands-free on", async (p) => {
   await signIn(p);
   await said(p, "I'm driving"); await p.waitForTimeout(900);
-  await p.evaluate(() => G.ctx.suspend()); await p.waitForTimeout(1500);
+  await p.evaluate(() => { G.audioRefreshed = true; return G.ctx.suspend(); }); await p.waitForTimeout(1500); /* no fresh audio start during this check: it swaps the context under test */
   ok(await p.evaluate(() => G.live && G.ctx.state === "running" && !G.soundPausedAt), "the call ended or the sound didn't come back after a short pause");
   await p.evaluate(() => { G.ctx.resume = () => Promise.resolve(); return G.ctx.suspend(); });
   await p.waitForTimeout(7000);
@@ -338,6 +338,15 @@ test("The phone locking (page hidden) closes the line a few seconds later and re
   ok(await p.evaluate(() => /conversation_id=conv_locktest/.test(window.__wsUrls[window.__wsUrls.length - 1])), "the reopened line didn't pick up the same conversation: " + await p.evaluate(() => window.__wsUrls.slice(-1)[0]));
   const steps = await p.evaluate(() => __logs.flatMap(b => b.events.map(e => e.text)).concat(ACT.q.map(e => e.text))); /* sent rows plus the ones still queued (the 4 s flush restarts on every row) */
   ok(steps.some(t => /Phone locked: voice line closed after [\d.]+ s/.test(t)) && steps.some(t => /App hidden for [\d.]+ s: reopening the line/.test(t)) && steps.some(t => /Sound and mic started afresh after the lock/.test(t)), "the lock pause or the audio restart wasn't logged: " + steps.slice(-6).join(" | "));
+});
+
+test("A few seconds into every call the sound and mic start afresh at a quiet moment (experiment: keeps the iPhone screen on), once", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.evaluate(() => { window.__firstCtx = G.ctx; Object.defineProperty(G, "loudAt", { get: () => 0, set() {} }); }); /* the Chromium fake mic beeps, which would read as the officer talking */
+  await p.waitForFunction(() => G.ctx && G.ctx !== window.__firstCtx, null, { timeout: 12000 }).catch(() => {});
+  ok(await p.evaluate(() => G.live && G.ctx && G.ctx !== window.__firstCtx && G.ctx.state === "running" && G.audioRefreshed && G.ws && G.status === "Listening"), "the sound and mic weren't started afresh a few seconds into the call: " + await p.evaluate(() => G.status));
+  await p.waitForTimeout(1500);
+  const steps = await p.evaluate(() => __logs.flatMap(b => b.events.map(e => e.text)).concat(ACT.q.map(e => e.text)));
+  ok(steps.filter(t => /Sound and mic started afresh \d+ s into the call/.test(t)).length === 1, "the fresh start wasn't logged once: " + steps.filter(t => /afresh/.test(t)).join(" | "));
 });
 
 };

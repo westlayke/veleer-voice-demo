@@ -43,7 +43,10 @@ the pending question asked again as a scripted line. No drop tone, no "line drop
 line reopens, `restartAudio` (voice.js) starts the sound and mic afresh through `openAudio`, the call's audio set-up: iOS
 brings a web page's sound back on the earpiece after a lock, not the speaker the call started on (Oct 26), and a fresh start puts
 it back; if the phone refuses (no running sound within 1.5 s) the old sound and mic stay. The sound and mic waits start again
-at the unlock, since the phone brings both back in its own time. Hidden longer than `LOCK_MAX_MS`
+at the unlock, since the phone brings both back in its own time. Since the first fresh start, iOS stopped locking the
+screen for the rest of a call (Oct 26, 10:39 AM), so as an experiment `audioRefreshSoon` (voice.js, `AUDIO_REFRESH_MS` 6 s) gives
+every call one fresh start at a quiet moment (nobody talking, no scripted line pending, sound and mic not paused), and `lockResume`
+asks for the wake lock again. Hidden longer than `LOCK_MAX_MS`
 (`RESUME_MS`, 25 minutes, as long as xAI keeps the conversation) the call ends and the Carry on card shows. Tapping OK on the
 iOS dialog ends the mic track, which still ends the call (the phone's doing). Before October 26 the call ended the moment the
 phone locked.
