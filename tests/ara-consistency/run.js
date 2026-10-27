@@ -119,18 +119,19 @@ async function converse(browser, base, flow, n) {
       return false;
     };
     await settle();
-    const script = flow.lines.slice(); let saidNo = 0, doneAt = 0;
+    const script = flow.lines.slice(); let saidNo = 0, doneAt = 0, stepAnswers = 0;
     const savedDone = () => doneAt;
     const t0 = Date.now();
     for (let turn = 0; turn < MAX_TURNS && !stopAll && Date.now() - t0 < MAX_CONV_MS; turn++) {
       const whole = (conv.replies.filter(r => r.text).pop() || { text: "" }).text.trim();
-      const last = whole.split(/(?<=[.?!])\s+/).filter(Boolean).pop() || ""; // the officer answers the question Ara ended on
+      const sents = whole.split(/(?<=[.?!])\s+/).filter(Boolean);
+      const last = sents.pop() || "", tail = sents.slice(-1).concat(last).join(" "); // the officer answers the question Ara ended on (tail = its last two sentences)
       let say;
       if (savedDone()) break;
       if (/substantive/i.test(last) && /\?\s*$/.test(last.trim())) say = flow.subst || "Yes.";
       else if (/\b(save|saving)\b[^.?!]*\?|shall i (save|record)|say yes|is that (right|correct)\?|correct\?|confirm/i.test(last) && !/would you like to (add|fill)/i.test(last)) say = "Yes.";
       else if (/^rate \w+ [A-E]\b.*\?$/i.test(last)) say = "Yes."; // 1.0 confirms a named rating with its own question ("Rate James B, $100k to $250k?")
-      else if (/next step/i.test(whole) && /\?\s*$/.test(last) && !script.length) say = /when is it due|due date\?$/i.test(last) ? "Today." : /what('s| is| should) the (next )?step/i.test(last) ? "Collect the check from her." : "Yes, collect the check from her, due today."; // 1.0 asks before taking the next step
+      else if (/next step|due/i.test(tail) && /\?\s*$/.test(last) && !script.length && stepAnswers++ < 3) say = /when is it due|due date\?$/i.test(last) ? "Today." : /what('s| is| should) the (next )?step/i.test(last) ? "Collect the check from her." : "Yes, collect the check from her, due today."; // 1.0 asks before taking the next step; only when the question itself is about it, and not forever if Ara keeps asking
       else if (/say neither|neither to move on/i.test(whole) && /\?|neither/i.test(last)) say = "Neither.";
       else if (/fill it in,? or move on|or move on\?/i.test(last) && !/^(Let's go with capacity|Add a capacity)/.test(script[0] || "")) { say = "Move on."; saidNo++; }
       else if (/would you like to (add|fill|include)|anything else|want to add|any (other|more) details|optional/i.test(last) && (!script.length || saidNo < 2)) { say = "No."; saidNo++; }
