@@ -7,6 +7,8 @@
 //
 // Secrets (set in the Worker's Settings > Variables and Secrets, never in this file):
 //   XAI_API_KEY     your xAI API key
+//   OPENAI_API_KEY  an OpenAI API key, only for the voice-engine comparison (preview Settings "Voice engine": OpenAI); optional
+//   GEMINI_API_KEY  a Google Gemini API key, same purpose; optional
 //   DEMO_CODE       the access code built into the demo page
 //   ADMIN_PASSWORD  the password for the activity page (user name: admin)
 // Bindings (wrangler.toml):
@@ -28,6 +30,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
     if (url.pathname === "/activity") return activity(request, env, url);
     if (url.pathname === "/log" && request.method === "GET") return json({ logging: !!env.DB });
+    if (url.pathname === "/providers" && request.method === "GET") return json({ grok: !!env.XAI_API_KEY, openai: !!env.OPENAI_API_KEY, gemini: !!env.GEMINI_API_KEY }); // which voice engines this key holder can open (true/false only, never the keys)
     if (request.method !== "POST") return new Response("Not found", { status: 404, headers: cors });
     if (request.headers.get("Origin") !== ALLOWED_ORIGIN) return new Response("Forbidden", { status: 403, headers: cors });
     if (env.DEMO_CODE && request.headers.get("X-Demo-Code") !== env.DEMO_CODE) return json({ error: "bad_code" }, 401);
