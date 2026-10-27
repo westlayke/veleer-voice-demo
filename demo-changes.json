@@ -2,7 +2,7 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
     {
-      "date": "RESP-STAMP",
+      "date": "Oct 26, 11:12 PM",
       "change": "Preview: Ara responsiveness, items 1-4 of the Oct 27 review. The app logs how long Ara's first word takes after the officer stops (a log row when over 3 s, and a per-call summary on the Conversation ended row); a save or screen change no longer re-sends Ara's whole instructions, the Right now section rides with her next reply instead; the tool definitions were trimmed (32.4 KB to 28.6 KB per turn); Ara keeps to one short sentence per turn unless a read-back, briefing or list was asked for. Items 5-6 (silence window, earlier greeting) wait for the new timing numbers.",
       "area": "Voice",
       "requestedBy": "Carverhill",
