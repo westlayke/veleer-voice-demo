@@ -92,7 +92,7 @@ test("Planning an ask: the entity set on the opportunity is on the form, and Ara
   await said(p, "Plan an ask for Lee.");
   const r = await ara(p, "show_ask_plan_draft", { contact_name: "Lee Park" });
   ok((await p.inputValue("#f_fund")) === "C.A. North Dakota C4", "the planned ask form did not take the opportunity's entity");
-  ok(/Already on the form[^.]*Entity: C\.A\. North Dakota C4/.test(r.status) && /Never ask for these again/.test(r.status), "Ara was not told the entity is already set: " + JSON.stringify(r));
+  ok(/Already on the form[^.]*Entity: C\.A\. North Dakota C4/.test(r.next) && /Never ask for these again/.test(r.next), "Ara was not told the entity is already set: " + JSON.stringify(r));
   ok(!r.still_needed.includes("Entity") && /already set/.test(r.still_needed[0]), "Ara was asked for the entity again");
 });
 test("Opportunity: an unrated contact gets the rating asked (voice) or the checklist, not the form (touch)", async (p) => {

@@ -7,14 +7,14 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   let r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin" });
   ok(r.still_needed && r.still_needed.some(x => /Email or mobile/.test(x)), "Ara was not asked for an email or mobile");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
-  ok(/mobile number/.test(r.status), "Ara was not asked for the mobile too");
-  // the rating an opportunity will need is asked right away, by the app's own line (Carverhill, Oct 25); then the rest of the details are offered
+  ok(/^Do you have a mobile number for Maya too\? It's fine if not\.$/.test(r.ask_exactly || ""), "the app didn't ask for the mobile too: " + JSON.stringify(r));
+  // the required details are in: save, or the optional details (the rating an opportunity will need among them); an optional answer starts the questions from there (app-only forms, Oct 27)
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
-  ok(r.field === "capacity" && /Maya's capacity rating, which an opportunity needs/.test(r.ask_exactly || ""), "the rating wasn't asked for after the email: " + JSON.stringify(r));
+  ok(/^That's everything the form needs\. Check it and tap "Save contact", or shall I take you through the optional details first\? One of those is the capacity rating an opportunity will need\.$/.test(r.ask_exactly || "") && (await p.evaluate(() => V.choice === "saveOrOpt")), "the save-or-details question wasn't asked after the required details: " + JSON.stringify(r));
   ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
   await said(p, "C.");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C" });
-  ok(r.field === "howMet" && /Let's take the next step: a few optional details for Maya, one at a time\. Skip any you like, or tap "Save contact" any time\. Next, optional: how you met Maya\. Fill it in, skip it, or tap "Save contact"\?$/.test(r.ask_exactly || ""), "the optional details didn't start after the rating, led by the app: " + JSON.stringify(r));
+  ok(r.field === "howMet" && /^Rating C is on the form\. Next, optional: how you met Maya\. Fill it in, skip it, or tap "Save contact"\?$/.test(r.ask_exactly || ""), "the optional details didn't go on from the rating: " + JSON.stringify(r));
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
   ok(/^That's on the form\. Last, optional: should Maya be marked Ally - Do Not Solicit, or Do Not Contact\? Most people are neither: say neither, skip it, or tap "Save contact"\.$/.test(r.ask_exactly || ""), "the answer sent through the draft tool wasn't acknowledged and followed by the next optional question (Oct 27): " + JSON.stringify(r));
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
@@ -56,7 +56,7 @@ test("Ara: a rating the officer never gave is dropped and the reply says so; han
   let r = await ara(p, "show_contact_draft", { first: "Barry", last: "Good", email: "bg@example.org", ally: false, dnc: false, capacity: "E" });
   const cap = await p.evaluate(() => V && V.data && V.data.capacity);
   ok(!cap, "the rating nobody gave stayed on the form: " + JSON.stringify(cap));
-  ok(/Left out of the form because the officer never said it: capacity rating/.test(r.status || ""), "Ara wasn't told the rating was left out (Oct 25: she read back her own E): " + JSON.stringify(r));
+  ok(/Left out of the form because the officer never said it: capacity rating/.test(r.next || r.status || ""), "Ara wasn't told the rating was left out (Oct 25: she read back her own E): " + JSON.stringify(r));
   await p.evaluate(() => { V = null; renderOverlay(); });
   await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 });
   const n = await p.evaluate(() => __sent.length);
@@ -90,7 +90,7 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   await p.evaluate(() => { V = null; renderOverlay(); const c = S.contacts.find(x => x.first === "Ken"); c.capacity = "B"; S.opps = S.opps.filter(o => o.contactId !== c.id); save(); });
   await said(p, "Yes, create an opportunity for Ken.");
   r = await ara(p, "show_opportunity_draft", { contact_name: "Ken Ito" });
-  ok(/entity/.test(r.ask_exactly || ""), "the opportunity's optional questions didn't start with the entity: " + JSON.stringify(r));
+  ok(/Shall I save it, or add the optional details first\?$/.test(r.ask_exactly || ""), "the opportunity didn't ask whether to save or add the optional details: " + JSON.stringify(r));
   await said(p, "The Idaho entity."); r = await ara(p, "optional_fields", { step: "answer", value: "The Idaho entity" });
   await said(p, "The PAC."); r = await ara(p, "optional_fields", { step: "answer", value: "C.A. Idaho PAC" });
   ok(/Which campaign: National, or Idaho\?/.test(r.ask_exactly || ""), "the campaign wasn't asked after the entity: " + JSON.stringify(r));
@@ -168,19 +168,21 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   ok(await p.evaluate(() => ACT.q.every(e => /^[a-z0-9]{10,}$/.test(e.id || ""))), "log events have no ids");
   // a form left open from an earlier conversation is in Right now, so a fresh conversation knows about it (Oct 25: "Weren't we working on a form for Pauline?")
   await ara(p, "show_contact_draft", { first: "Pauline", last: "Smith" });
-  ok(/The "New contact" form is still open on screen, not saved yet\. Filled in so far: First name: Pauline; Last name: Smith[^\n]*If the officer asks about it, carry on with it/.test(await p.evaluate(() => ctxNow())), "the open form isn't in Right now: " + await p.evaluate(() => ctxNow().replace(/\n/g, " / ").slice(0, 400)));
+  ok(/The "New contact" form is still open on screen, not saved yet\. Filled in so far: First name: Pauline; Last name: Smith[^\n]*Form mode is on[^\n]*The app's pending question: "What's an email address or mobile number for Pauline/.test(await p.evaluate(() => ctxNow())), "the open form isn't in Right now: " + await p.evaluate(() => ctxNow().replace(/\n/g, " / ").slice(0, 400)));
 });
 test("Ara: after a reconnect the app says where the form stands and asks the pending question itself (an optional question, or the read-back waiting for a yes)", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await p.evaluate(() => { replayGap = () => { G.spokeInGap = false; return 0; }; }); // the pretend mic is never quiet: no replay of the gap in this check, and no missed words
   await ara(p, "show_contact_draft", { first: "Nora", last: "Quist", email: "nora@example.org", mobile: "(555) 010-0188" });
-  ok(await p.evaluate(() => V && V.opt && V.opt.cur === "capacity"), "the capacity question isn't pending after the required details");
+  ok(await p.evaluate(() => V && V.choice === "saveOrOpt"), "the save-or-details question isn't pending after the required details");
+  await ara(p, "optional_fields", { step: "start" });
+  ok(await p.evaluate(() => V && V.opt && V.opt.cur === "capacity"), "the capacity question isn't pending after the optional details started");
   const forced = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "force_message").map(x => x.item.content[0].text), n);
   const instr = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "session.update" && x.session.instructions).map(x => x.session.instructions).join(" "), n);
   let n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
   let f = await forced(n0), i = await instr(n0);
-  ok(f.some(t => /^Sorry, I lost you for a moment\. Next, Nora's capacity rating, which an opportunity needs\. A is \$250,000 and up/.test(t)), "the pending optional question wasn't asked again by the app after the reconnect: " + JSON.stringify(f));
+  ok(f.some(t => /^Sorry, I lost you for a moment\. First, Nora's capacity rating\. A is \$250,000 and up/.test(t)), "the pending optional question wasn't asked again by the app after the reconnect: " + JSON.stringify(f));
   ok(/Just now: The connection to the officer dropped[^]*The optional questions for the "New contact" form are at "Capacity rating" \(the earlier ones are done\); the app asks it again itself\./.test(i), "Ara's instructions don't say where the optional questions stand: " + i.slice(-500));
   ok(!(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /Sorry, I lost you/.test(x.response.instructions || ""); }), n0)), "Ara was also asked to say the sorry line herself (a doubled turn)");
   // the read-back waiting for a yes is read again by the app
@@ -198,7 +200,8 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
-  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /Sorry, I lost you[^]*The "Add planned ask" form still needs: /.test(x.response.instructions || ""); }), n0), "a form with required fields missing didn't guide Ara with what's still needed");
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.item && x.item.type === "force_message" && /^Sorry, I lost you for a moment\. (Which entity will you ask for|When do you plan to make the ask)\?$/.test(x.item.content[0].text); }), n0), "a form with a required field missing wasn't asked for it again by the app: " + JSON.stringify(await forced(n0)));
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "session.update" && /The "Add planned ask" form still needs: [^.]*\. The app asks for the first of those itself\./.test(x.session.instructions || ""); }), n0), "Ara's instructions don't say what the form still needs");
 });
 test("Ara: a task named in full is found even when another task shares a word with it; the hands-free filter lists the saves to check; Ara's own answer isn't taken for a scripted line", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -236,9 +239,11 @@ test("Ara: optional fields one at a time, filled in by the app (rating, how met,
   await signIn(p);
   await said(p, "I've parked, I'll tap myself."); await ara(p, "set_hands_free", { on: false }); // this check is the tap flow; hands-free is on by default since Oct 25
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });
-  ok(r.field === "capacity" && /which an opportunity needs/.test(r.ask_exactly || ""), "the rating wasn't asked first: " + JSON.stringify(r));
+  ok(/tap "Save contact", or shall I take you through the optional details first\? One of those is the capacity rating/.test(r.ask_exactly || ""), "the save-or-details question wasn't asked: " + JSON.stringify(r));
+  r = await ara(p, "optional_fields", { step: "start" });
+  ok(r.field === "capacity" && /^First, Jack's capacity rating\./.test(r.ask_exactly || ""), "the optional details didn't start with the rating: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "skip" });
-  ok(r.field === "howMet" && /^No problem\. Let's take the next step: a few optional details for Jack, one at a time\. .*Next, optional: how you met Jack\. Fill it in, skip it, or (save the form now|tap "Save contact")\?$/.test(r.ask_exactly || ""), "skipping the rating didn't lead on to the other details: " + JSON.stringify(r));
+  ok(r.field === "howMet" && /^No problem\. Next, optional: how you met Jack\. Fill it in, skip it, or (save the form now|tap "Save contact")\?$/.test(r.ask_exactly || ""), "skipping the rating didn't lead on to the other details: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "back", field: "the rating" });
   ok(r.field === "capacity" && /Sure, back to that\. First, Jack's capacity rating\./.test(r.ask_exactly) && /under \$5,000\. Which fits Jack\? It's optional: skip it, or (save the form now|tap "Save contact")\.$/.test(r.ask_exactly), "going back to the rating didn't ask it with its bands: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "answer", value: "D" });
@@ -250,9 +255,9 @@ test("Ara: optional fields one at a time, filled in by the app (rating, how met,
   r = await ara(p, "optional_fields", { step: "answer", value: "Move on." }); // said to a fill-in field, that means skip (Carverhill, Oct 25)
   ok(r.field === "flags" && /Most people are neither/.test(r.ask_exactly), "the flags question didn't come last");
   r = await ara(p, "optional_fields", { step: "answer", value: "maybe" });
-  ok(r.ok === false && /didn't catch/.test(r.say), "an unclear answer wasn't asked again");
+  ok(r.ok === false && /^Sorry, I didn't catch that\. /.test(r.ask_exactly || ""), "an unclear answer wasn't asked again by the app: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "answer", value: "Neither" });
-  ok(r.done && /tap "Save contact"/.test(r.status) && !(await p.isChecked("#f_ally")) && !(await p.isChecked("#f_dnc")), "the steps didn't finish by asking to tap Save contact");
+  ok(r.done && /tap "Save contact"/.test(r.ask_exactly || "") && !(await p.isChecked("#f_ally")) && !(await p.isChecked("#f_dnc")), "the steps didn't finish by asking to tap Save contact");
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   const c = (await state(p)).contacts.find(c => c.first === "Jack");
   ok(c && c.capacity === "D" && c.permText === true && /pumpkin/.test(c.howMet), "the answers weren't saved with the contact");
@@ -319,7 +324,7 @@ test("Ara: an interaction report keeps the spoken summary (new contact)", async 
   for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   let r = await ara(p, "show_interaction_draft", { contact_name: "Jenny Arena", date: "2026-10-20", meetingType: "In person" });
-  ok(/summary parameter/.test(r.status), "Ara was not told where the summary goes: " + JSON.stringify(r));
+  ok(/summary parameter/.test(r.next || "") && /^Interaction report for Jenny Arena\. What happened\? A sentence or two\.$/.test(r.ask_exactly || ""), "Ara was not told where the summary goes, or the app didn't ask for it: " + JSON.stringify(r));
   r = await ara(p, "show_interaction_draft", { contact_name: "Jenny Arena", date: "2026-10-20", meetingType: "In person", notes: "Met Jenny for coffee; she is keen on the Pennsylvania program.", substantive: true });
   const v = await p.inputValue("#f_summary");
   ok(/coffee/.test(v), "the spoken summary is not in the Summary field");
@@ -419,10 +424,12 @@ test("During a call, a tool call or a save carries the Right now section with th
   await p.evaluate(() => { G.hands = false; paintCall(); whenIdle("instr"); }); await p.waitForTimeout(200); // tap mode (a rules change, sent now): in hands-free the app reads a finished draft back as a scripted line instead
   const f0 = await full(), m0 = await msgs();
   await said(p, "Add a task for Ruth: send her the board deck, due November 30.");
-  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
+  const n1 = await p.evaluate(() => __sent.length);
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck" });
   ok(await full() === f0, "a tool call re-sent the whole instructions as a session update");
-  const c = await lastCreate();
-  ok(/Right now \(replaces the Right now section/.test(c) && /Send Ruth the board deck/.test(c), "the open draft did not go with the reply request's instructions: " + c.slice(0, 200));
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.item && x.item.type === "force_message" && /^New task for Ruth Abernathy\. When is it due\?$/.test(x.item.content[0].text); }), n1), "the app didn't ask for the due date itself");
+  await said(p, "November 30."); await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
+  ok(await full() === f0, "the second tool call re-sent the whole instructions as a session update");
   await p.tap("[data-act=save]"); await p.waitForTimeout(900);
   ok(await full() === f0 && /Saved so far in this conversation: Task added/.test(await lastCreate()), "the tap save (its guidance is a reply request) did not carry the Right now section with the reply");
   ok(await msgs() === m0, "the save was sent as a message in the conversation");
@@ -632,7 +639,7 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   await said(p, "Cancel."); await p.waitForTimeout(900);
   await said(p, "The North Dakota entity.");
   r = await ara(p, "show_opportunity_draft", { contact_name: "James Okafor" });
-  ok(/named North Dakota, which has exactly these entities: C\.A\. North Dakota C4, C\.A\. North Dakota State PAC, C\.A\. North Dakota Fed PAC\. Ask which one of those, and name no other/.test(r.status || ""), "the North Dakota entities weren't listed exactly: " + JSON.stringify(r));
+  ok(/^New opportunity for James Okafor\. Which entity: C\.A\. North Dakota C4, or C\.A\. North Dakota State PAC, or C\.A\. North Dakota Fed PAC\?$/.test(r.ask_exactly || ""), "the North Dakota entities weren't asked exactly: " + JSON.stringify(r));
   await said(p, "Cancel."); await p.waitForTimeout(900);
   // a rating the officer never said is asked for, not proposed
   await said(p, "Let's take the next step.");
@@ -683,7 +690,7 @@ test("Ara: a drop with no form open comes back to the person just worked on, and
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await p.evaluate(() => { replayGap = () => { G.spokeInGap = false; return 0; }; }); // the pretend mic is never quiet: no replay of the gap in this check, and no missed words
   let r = await ara(p, "show_contact_draft", { first: "Nora", last: "Quist", email: "nora@example.org", mobile: "(555) 010-0188" });
-  ok(r.field === "capacity", "the rating wasn't asked first: " + JSON.stringify(r));
+  ok(await p.evaluate(() => V.choice === "saveOrOpt"), "the save-or-details question wasn't asked: " + JSON.stringify(r));
   // the officer answers before the questions have started (Oct 25: "a capacity rating of C" got every option read out)
   await p.evaluate(() => { V.opt = null; });
   r = await ara(p, "optional_fields", { step: "answer", value: "C" });
@@ -747,7 +754,7 @@ test("Oct 27 13:21 call: a long answer is not a repeat of the one-letter rating,
   await p.evaluate(() => { replayGap = () => { G.spokeInGap = false; return 0; }; });
   const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
   await ara(p, "show_contact_draft", { first: "Veronica", last: "Quist", email: "veronica@example.org", mobile: "(555) 010-0188" });
-  ok(await p.evaluate(() => V && V.opt && V.opt.cur === "capacity"), "the capacity question isn't pending");
+  ok(await p.evaluate(() => V && V.choice === "saveOrOpt"), "the save-or-details question isn't pending");
   await said(p, "C."); let r = await ara(p, "optional_fields", { step: "answer", value: "C" });
   ok(await p.evaluate(() => readDraft().capacity === "C" && V.opt.cur === "howMet"), "the rating wasn't taken: " + JSON.stringify(r));
   // "He met her at the Citizens Alliance Halloween party." was thrown out as a repeat of "C" (the letter is in the sentence)
@@ -789,7 +796,7 @@ test("Oct 27 9:38 AM call: the Cultivation rule answers first, what's next with 
   ok(await p.evaluate(() => V && V.action === "interaction"), "no interaction report open: " + JSON.stringify(r));
   await said(p, "What is the next step in our process?");
   r = await ara(p, "get_next_step", { contact_name: "Ruth Abernathy" });
-  ok(/^To finish the Interaction report form it still needs .*then I read it back and you say yes to save it\./.test(r.ask_exactly || "") || /^The Interaction report form is waiting on one answer/.test(r.ask_exactly || ""), "what's next with a form open wasn't the form: " + JSON.stringify(r));
+  ok(/^To finish the Interaction report form it still needs one answer\. Was it a substantive interaction/.test(r.ask_exactly || ""), "what's next with a form open wasn't the form: " + JSON.stringify(r));
   r = await ara(p, "get_process_faq", { question: "What does our process suggest the next step is after a substantive interaction?" });
   ok(/Interaction report form/.test(r.ask_exactly || ""), "the FAQ next-step question with a form open wasn't the form: " + JSON.stringify(r));
   ok(/what's next with the "Interaction report" form open/.test(await logged()), "the in-form next step wasn't logged");
@@ -832,14 +839,14 @@ test("Oct 27 10:21 AM call: scripted lines are said by the app in its own stand-
   await p.evaluate(() => recent(botName(), "Do you have a mobile number for Nia too?")); await said(p, "No."); await p.waitForTimeout(600);
   await p.waitForFunction(() => !(G.lineEndAt > Date.now()) && !G.qInstr, null, { timeout: 8000 }).catch(() => {}); await p.waitForTimeout(200); /* the Right now update waits for the app's own line to finish playing */
   let out = await p.evaluate((n) => { const xs = __sent.slice(n).map(s => JSON.parse(s)); return { tts: __tts, force: xs.some(e => e.item && e.item.type === "force_message"), told: xs.filter(e => e.type === "session.update").map(e => e.session.instructions || "").join(" "), recent: (G.recent || []).slice(-1)[0] || "", last: G.lastForcedText }; }, n);
-  ok(out.tts.length === 1 && out.tts[0].voice === "leo" && /^Next, Nia's capacity rating/.test(out.tts[0].text) && !out.force, "the capacity question wasn't said by the app in the stand-in voice: " + JSON.stringify(out.tts) + " force " + out.force);
-  ok(/The phone said in its own voice \(fetched in \d+ ms\): "Next, Nia's capacity rating/.test(await logged()), "the app's own line wasn't logged as its own voice: " + (await logged()).slice(-300));
-  ok(/in its own stand-in voice: "Next, Nia's capacity rating/.test(out.told) && !/\(A to E, or move on\)/.test(out.told) && /^Ara: Next, Nia's capacity rating/.test(out.recent) && /^Next, Nia's capacity rating/.test(out.last || ""), "Grok wasn't told the app said the line (or the note still reads as a line to say): " + JSON.stringify({ told: out.told.slice(-400), recent: out.recent }));
-  ok(/It's optional: skip it, or save the form now\.$/.test(out.tts[0].text), "the capacity question doesn't say it's optional and how to save: " + out.tts[0].text);
+  ok(out.tts.some(t => t.voice === "leo" && /^That's everything the form needs\. Shall I save it, or add the optional details first\? One of those is the capacity rating/.test(t.text)) && !out.force, /* the lines are fetched ahead when the form opens, so the one said may come from the cache */ "the save-or-details question wasn't said by the app in the stand-in voice: " + JSON.stringify(out.tts) + " force " + out.force);
+  ok(/The phone said in its own voice \(fetched in \d+ ms\): "That's everything the form needs/.test(await logged()), "the app's own line wasn't logged as its own voice: " + (await logged()).slice(-300));
+  ok(/in its own stand-in voice: "That's everything the form needs/.test(out.told) && /^Ara: That's everything the form needs/.test(out.recent) && /^That's everything the form needs/.test(out.last || ""), "Grok wasn't told the app said the line (or the note still reads as a line to say): " + JSON.stringify({ told: out.told.slice(-400), recent: out.recent }));
+  ok(/Shall I save it, or add the optional details first\?/.test(out.last || ""), "the question doesn't offer the save: " + out.last);
   // 2. the rating comes in through the draft tool during the capacity question: acknowledged, then the optional details, each said to be optional with skip or save
   await said(p, "Make it B.");
   r = await ara(p, "show_contact_draft", { first: "Nia", last: "Vale", email: "nia@example.org", capacity: "B" });
-  ok(/^Rating B is on the form\. Let's take the next step: a few optional details for Nia, one at a time\. Skip any you like, or say save it to finish\. Next, optional: how you met Nia\. Fill it in, skip it, or save the form now\?$/.test(r.asked || ""), "the rating sent through the draft tool wasn't acknowledged before the next optional question: " + JSON.stringify(r));
+  ok(/^Rating B is on the form\. Next, optional: how you met Nia\. Fill it in, skip it, or save the form now\?$/.test(r.asked || ""), "the rating sent through the draft tool wasn't acknowledged before the next optional question: " + JSON.stringify(r));
   ok((await p.inputValue("#f_capacity")) === "B", "the rating isn't on the form");
   // 3. a question passed to the project team mid-form: the app comes straight back to the pending question
   await said(p, "Pass on that the rating list is too long to listen to."); r = await ara(p, "pass_question_to_team", { question: "The rating list is too long to listen to" }, 700);
@@ -860,5 +867,82 @@ test("Oct 27 10:21 AM call: scripted lines are said by the app in its own stand-
   // 6. a scripted line still waiting for its turn when its form is saved is dropped, not played after the save line (harness run 3b)
   const dropped = await p.evaluate(async () => { const n = ACT.q.length; G.responding = true; forceSay("An old question that no longer applies?"); await new Promise(r => setTimeout(r, 300)); G.pendingForce = null; G.responding = false; await new Promise(r => setTimeout(r, 900)); return { pending: G.pendingForce, log: ACT.q.slice(n).map(a => a.text).join(" | "), vlog: VLOG.slice(-6).join(" | ") }; });
   ok(!/An old question/.test(dropped.log) && /called off: An old question/.test(dropped.vlog), "a scripted line whose form was saved meanwhile still played: " + JSON.stringify(dropped));
+});
+
+test("App-only forms (Oct 27): the app asks required fields in order, then save-or-details; Ara's reply to an answer is cut and the question re-asked; a side question is answered and the question re-asked; lines are cached; the form voice switch", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
+  const forced = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "force_message").map(x => x.item.content[0].text), n);
+  const logged = () => p.evaluate(() => ACT.q.map(a => a.text).join(" | "));
+  // 1. required fields first, one at a time, in form order, with the form's name once
+  await said(p, "Log a meeting with Ruth Abernathy.");
+  let r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", meetingType: "In person" });
+  ok(/^Interaction report for Ruth Abernathy\. What happened\? A sentence or two\.$/.test(r.ask_exactly || ""), "the first required field wasn't asked with the form's name: " + JSON.stringify(r)); // the date defaults to today, so the summary is first
+  ok(/^## Form mode/m.test(await p.evaluate(() => grokInstructions())) && /only call tools/.test(await p.evaluate(() => ctxNow())), "the form-mode rules or the Right now note are missing");
+  // 2. the officer answers; Ara starts to talk instead of only calling the tool: cut, and the app asks again
+  let n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }]);
+  await said(p, "We talked about the gala.");
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "Got it, I've noted the gala. " }]);
+  ok(await p.evaluate(() => G.dropNext === true && G.bot === ""), "Ara's reply inside the form wasn't cut");
+  await fire([{ type: "response.output_audio_transcript.delta", delta: "What else?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(400);
+  let f = await forced(n);
+  ok(/Ara started to speak inside the form \("Got it, I've noted the gala/.test(await logged()) && f.length === 1 && /^What happened\? A sentence or two\.$/.test(f[0]), "the cut wasn't logged or the question wasn't asked again: " + JSON.stringify(f));
+  ok(!(await p.evaluate(() => ACT.q.some(a => a.role === "grok" && /Got it, I've noted/.test(a.text)))), "the cut reply was logged as said");
+  // 3. a tool call in the same response still counts: the next question comes from the tool, with no re-ask on top
+  n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }]);
+  await said(p, "We talked about the gala and her interest in New Hampshire.");
+  await fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Noted. " }]);
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", summary: "Talked about the gala and her interest in New Hampshire." });
+  ok(/substantive interaction/.test(r.ask_exactly || ""), "the tool call after the cut didn't go on to the next question: " + JSON.stringify(r));
+  f = await forced(n); ok(f.length === 1, "a re-ask was added on top of the tool's own question: " + JSON.stringify(f));
+  // 4. a side question: Ara answers it (not cut), then the app asks its question again
+  n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }]);
+  await said(p, "What does substantive mean?");
+  ok(await p.evaluate(() => !!G.sideQ && !G.muteResp), "the question wasn't recognised as a side question");
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "Substantive means it moved the relationship forward." }]);
+  ok(await p.evaluate(() => !G.dropNext && G.bot.length > 10), "the answer to a side question was cut");
+  await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(400);
+  f = await forced(n);
+  ok(f.length === 1 && f[0] === "Was it a substantive interaction, one that moved the relationship forward?" && /After Ara's answer, the app asks the form's question again/.test(await logged()), "the pending question wasn't asked again after the side answer: " + JSON.stringify(f));
+  // "can you make it a phone call" is a request, not a question
+  ok(await p.evaluate(() => isQuestion("What's her email?") && isQuestion("how do I spell that") && !isQuestion("Can you make it a phone call") && !isQuestion("Jordan Pike") && !isQuestion("Yes.")), "isQuestion got a case wrong");
+  // 5. what's next while the form waits on the substantive answer says so
+  await said(p, "What's next?"); r = await ara(p, "get_next_step", { contact_name: "Ruth Abernathy" });
+  ok(/^To finish the Interaction report form it still needs one answer\. Was it a substantive/.test(r.ask_exactly || ""), "what's next didn't name the pending answer: " + JSON.stringify(r));
+  await said(p, "Cancel."); await p.waitForTimeout(1000);
+  // 6. the save-or-details choice, acted on by the app from the officer's words: "save it" reads the contact back, "add the details" starts the questions
+  await said(p, "New contact Omar Reyes, omar at example dot org, mobile 555 010 0177.");
+  r = await ara(p, "show_contact_draft", { first: "Omar", last: "Reyes", email: "omar@example.org", mobile: "(555) 010-0177" });
+  ok(/^New contact\. That's everything the form needs\. Shall I save it, or add the optional details first\? One of those is the capacity rating an opportunity will need\.$/.test(r.ask_exactly || ""), "the save-or-details question wasn't asked: " + JSON.stringify(r));
+  n = await p.evaluate(() => __sent.length);
+  await said(p, "Add the details."); await p.waitForTimeout(500);
+  f = await forced(n);
+  ok(f.length === 1 && /^First, Omar's capacity rating\./.test(f[0]) && (await p.evaluate(() => V.opt && V.opt.cur === "capacity" && !V.choice)), "\"add the details\" didn't start the optional questions from the app itself: " + JSON.stringify(f));
+  r = await ara(p, "optional_fields", { step: "start" }); ok(r.ok === true && r.field === "capacity" && /already asked/.test(r.note || "") && !r.ask_exactly && (await forced(n)).length === 1, "Grok's late optional_fields start asked the question a second time: " + JSON.stringify(r));
+  await ara(p, "optional_fields", { step: "stop" }); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => !!G.saveCheck), "stopping the questions didn't lead to the read-back");
+  await said(p, "Cancel."); await p.waitForTimeout(1000);
+  await said(p, "New contact Omar Reyes, omar at example dot org, mobile 555 010 0177.");
+  r = await ara(p, "show_contact_draft", { first: "Omar", last: "Reyes", email: "omar@example.org", mobile: "(555) 010-0177" });
+  n = await p.evaluate(() => __sent.length);
+  await said(p, "Save it."); await p.waitForTimeout(500);
+  f = await forced(n);
+  ok(f.length === 1 && /^New contact\. First name: Omar; Last name: Reyes[^]*Shall I save it\?$/.test(f[0]) && (await p.evaluate(() => !!G.saveCheck && !V.choice)), "\"save it\" didn't read the contact back from the app itself: " + JSON.stringify(f));
+  await said(p, "Yes."); r = await ara(p, "save_form", { confirmed: true }, 1200);
+  ok(r.saved === true && (await state(p)).contacts.some(c => c.last === "Reyes"), "the yes after the app's read-back didn't save: " + JSON.stringify(r));
+  // 7. lines are fetched once and cached; the Settings switch picks the voice for them
+  const c = await p.evaluate(async () => { const f = window.fetch; let calls = 0; window.__ttsOn = true; window.fetch = (u, o) => { if (/\/tts$/.test(String(u))) { calls++; return f("preview/sounds/line-back.mp3"); } return f(u, o); };
+    TTS_CACHE.clear(); await ttsFetch("Shall I save it, or change something?"); await ttsFetch("Shall I save it, or change something?"); const a = calls;
+    ttsPrefetch(["One more line?"]); await TTS_CACHE.get(formVoice() + "|One more line?"); const b = calls; window.fetch = f; window.__ttsOn = false; return { a, b, size: TTS_CACHE.size, voice: formVoice() }; });
+  ok(c.a === 1 && c.b === 2 && c.size === 2 && c.voice === "leo", "the line cache or prefetch didn't work: " + JSON.stringify(c));
+  await p.evaluate(() => { endCall("check"); }); await p.waitForTimeout(300);
+  await p.evaluate(() => { S.history.forEach(x => { x.hfChecked = true; }); document.getElementById("modal").innerHTML = ""; go("settings"); }); await p.waitForTimeout(300); /* past the hands-free saves check */
+  await p.selectOption("#formVoiceSel", "same"); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => S.settings.formVoice === "same" && formVoice() === (S.settings.voice || "ara") && TTS_CACHE.size === 0), "the form voice switch didn't take");
+  await p.selectOption("#formVoiceSel", "leo"); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => S.settings.formVoice === "leo" && formVoice() === "leo"), "the form voice switch didn't go back to Leo");
 });
 };

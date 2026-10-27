@@ -72,6 +72,7 @@ function settingsScreen() {
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
     <button type="button" class="linkbtn" data-act2="help">How to talk to ${esc(botName())} ›</button>
     <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option value="${v}" ${v === S.settings.voice ? "selected" : ""}>${v[0].toUpperCase() + v.slice(1)}</option>`).join("")}</select></label>
+    <label for="formVoiceSel">Voice for the app's own lines (form questions, read-backs)<select id="formVoiceSel"><option value="leo" ${S.settings.formVoice === "same" ? "" : "selected"}>Leo, a different voice, so you can tell the app from ${esc(botName())}</option><option value="same" ${S.settings.formVoice === "same" ? "selected" : ""}>The same voice as ${esc(botName())}</option></select></label>
     <label for="speedSel">Speaking speed<select id="speedSel">${SPEEDS.map(v => `<option value="${v}" ${v === talkSpeed() ? "selected" : ""}>${SPEED_NAMES[v]}</option>`).join("")}</select></label>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4;margin-top:-4px">You can also just tell ${esc(botName())} to talk faster or slower.</div>
     <label for="botName">Assistant's name<input id="botName" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="${esc(botName())}" value="${esc(S.settings.botName || "")}"></label>
@@ -175,6 +176,7 @@ document.addEventListener("change", (e) => { const id = e.target.id;
   if (id === "f_fund" && V && ACTIONS[V.action].fields.some(f => f.k === "campaign")) { V.data = prefill(V.action, readDraft(), V.target); delete V.data.badCampaign; const y = (document.querySelector(".sheet .sb") || {}).scrollTop; renderOverlay(); const sb = document.querySelector(".sheet .sb"); if (sb && y) sb.scrollTop = y; return; }
   if (id === "userName") saveName();
   else if (id === "voiceSel" || id === "botName") saveVoice();
+  else if (id === "formVoiceSel") { S.settings.formVoice = e.target.value === "same" ? "same" : "leo"; save(); if (typeof TTS_CACHE !== "undefined") TTS_CACHE.clear(); toast(S.settings.formVoice === "same" ? `The app's own lines will use ${botName()}'s voice` : "The app's own lines will use Leo's voice"); }
   else if (id === "speedSel") { S.settings.speed = Number(e.target.value); save(); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(`Saved. ${botName()} will talk at ${speedName(talkSpeed())} speed.`); }
   else if (id === "spookyMode") { setSpooky(e.target.checked); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(e.target.checked ? "Spooky mode is on. Mwahaha! 🦇" : "Back to normal"); }
   else if (id === "xmasMode") { setXmas(e.target.checked); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(e.target.checked ? "Christmas mode is on. Ho ho ho! 🎄" : "Back to normal"); }

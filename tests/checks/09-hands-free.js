@@ -156,7 +156,7 @@ test("Oct 24 call fixes: email spelling, substantive asked and read back, edits 
   // optional questions: an entity answer while the amount is asked goes to the entity, back works, no read-back mid-way
   await said(p, "Create an opportunity for Pat.");
   let r = await ara(p, "show_opportunity_draft", { contact_name: "Pat Moss" });
-  ok(/one at a time/.test(r.ask_exactly || r.status || ""), "the opportunity draft didn't open: " + JSON.stringify(r) + JSON.stringify((await state(p)).contacts.filter(c => c.first === "Pat")));
+  ok(/Shall I save it, or add the optional details first\?$/.test(r.ask_exactly || ""), "the opportunity draft didn't open: " + JSON.stringify(r) + JSON.stringify((await state(p)).contacts.filter(c => c.first === "Pat")));
   r = await ara(p, "optional_fields", { step: "start" });
   ok(r.field === "fund" && /entity/.test(r.ask_exactly) && !/ask exactly/i.test(r.ask_exactly), "the question isn't on its own: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "skip" });
@@ -308,7 +308,7 @@ test("Hands-free: when Ara reads a form back herself, in full, and the officer s
   // but a read-back that left a field out still gets the app's own
   await said(p, "New contact: Rita Moss, rita at example dot org, mobile 555 010 0166.");
   r = await ara(p, "show_contact_draft", { first: "Rita", last: "Moss", email: "rita@example.org", mobile: "(555) 010-0166" });
-  await p.evaluate(() => { V.opt = null; recent("Ara", "New contact: Rita Moss, rita at example dot org. Shall I save it?"); }); // the mobile was left out (and Ara skipped the app's rating question)
+  await p.evaluate(() => { V.opt = null; V.choice = null; recent("Ara", "New contact: Rita Moss, rita at example dot org. Shall I save it?"); }); // the mobile was left out (and Ara skipped the app's rating question)
   await said(p, "Yes");
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved === false && /Shall I save it\?$/.test(r.read_back || "") && !(await state(p)).contacts.some(c => c.last === "Moss"), "an incomplete read-back by Ara was accepted: " + JSON.stringify(r));
@@ -348,16 +348,18 @@ test("Oct 27 call fixes: a spelled last name replaces Ara's spelling, 'No' to th
   await said(p, "New contact, George Bailey. B, B A I L E Y. Email george at example dot org.");
   let r = await ara(p, "show_contact_draft", { first: "George", last: "Bbailey", email: "george@example.org" });
   ok((await p.evaluate(() => readDraft().last)) === "Bailey", "the spelled name didn't replace Bbailey: " + JSON.stringify(await p.evaluate(() => readDraft())));
-  ok(/mobile number/.test(r.status || "") && (await p.evaluate(() => V.awaitOther && V.awaitOther.which)) === "mobile", "the mobile wasn't asked for: " + JSON.stringify(r));
+  ok(/^New contact\. Do you have a mobile number for George too\?/.test(r.ask_exactly || "") && (await p.evaluate(() => V.awaitOther && V.awaitOther.which)) === "mobile", "the mobile wasn't asked for: " + JSON.stringify(r));
   // "No." to the mobile: the app asks the rating itself instead of waiting for Ara to call the tool again (she never did on Oct 27)
   let n = await p.evaluate(() => __sent.length);
   await p.evaluate(() => recent("Ara", "Do you have a mobile number for George?"));
   await said(p, "No."); await p.waitForTimeout(500);
   const forced = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
-  ok(forced.some(t => /George's capacity rating/.test(t)), "the app didn't ask the rating after 'No.': " + JSON.stringify(forced));
-  ok(await p.evaluate(() => V.opt && V.opt.only === "capacity" && !V.awaitOther), "the optional step isn't on the rating");
+  ok(forced.some(t => /^That's everything the form needs\. Shall I save it, or add the optional details first\? One of those is the capacity rating an opportunity will need\.$/.test(t)), "the app didn't ask whether to save or add the details after 'No.': " + JSON.stringify(forced));
+  ok(await p.evaluate(() => V.choice === "saveOrOpt" && !V.awaitOther), "the save-or-details question isn't pending");
+  r = await ara(p, "optional_fields", { step: "start" });
+  ok(r.field === "capacity" && (await p.evaluate(() => V.opt && V.opt.cur === "capacity" && !V.choice)), "the optional details didn't start with the rating: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "skip" });
-  ok(!(await p.evaluate(() => V.opt && V.opt.only === "capacity")), "skip didn't move on from the rating: " + JSON.stringify(r));
+  ok(await p.evaluate(() => V.opt && V.opt.cur === "howMet"), "skip didn't move on from the rating: " + JSON.stringify(r));
   // the contact exists without a rating: what's next, and the opportunity, both run into it
   await p.evaluate(() => { V = null; renderOverlay(); S.contacts.push({ id: "c_gb", first: "George", last: "Bailey", email: "george@example.org", mobile: "", capacity: "", permEmail: true, permCall: true, createdOn: todayISO() }); save(); render(); });
   r = await ara(p, "get_next_step", { contact_name: "George Bailey" });

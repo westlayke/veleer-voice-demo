@@ -139,6 +139,24 @@ asked to say the line herself (fallback). If Ara answered on her own first with 
 is cut as a duplicate (`forcedEvent`, `wordOverlap`, `lateForced`); if her answer was something else, the wait starts
 again. The doubled-reply guard for an ask made twice lives in `onEvent` in `voice.js`.
 
+## App-only forms
+
+Since Oct 27 the app runs every form itself (Carverhill's decision after the 1:14 PM call, where the app's voice and Ara's
+overlapped). While a form is open (`formMode()` in `voice.js`), the app asks each question in its own voice (`ttsSay`, voice
+Leo or Ara's, a Settings switch): the required fields first, one at a time and in form order (`FIELD_Q` in `voiceforms.js`),
+then "save it, or add the optional details?" (`formChoiceLine`), then the optional questions one at a time, then the read-back.
+Grok's job inside a form is tool calls only (`FORM_RULES`): the officer's answer goes to the draft tool, and the tool result's
+`asked` field is what the app said next. If Grok starts to speak to something that was not a question (`isQuestion`), the
+reply's audio is dropped (`G.dropNext`, no `response.cancel`, so a tool call in the same reply still arrives) and the app asks
+its pending question again (`formReask`, `formReaskLine`). A side question ("what does substantive mean?") is left to Ara,
+and the app asks its question again when her answer ends. The app acts on the save-or-details answer itself
+(`formChoiceHeard`), ignoring Grok's late tool call for it (`G.appActed`).
+
+The app's lines are fetched through `ttsFetch` into a cache (`TTS_CACHE`, text and voice as the key), and a form's likely
+lines are fetched ahead when it opens (`formLines`, `ttsPrefetch`), so a re-ask or a reconnect plays at once. Inside a form
+the wait for a line is `TTS_WAIT_FORM_MS` (10 s) rather than `TTS_WAIT_MS`, since no other voice is competing; Grok's
+`force_message` remains the fallback when the fetch fails.
+
 ## The heard check
 
 `heard.js` records three readings for every line Ara says: voice audio received, sound actually produced on the speaker

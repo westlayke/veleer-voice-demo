@@ -194,6 +194,16 @@ function crmSnapshot() {
 }
 const SPOOKY_RULES = `SPOOKY MODE IS ON. The officer asked for some Halloween fun, so play a warm, theatrical haunted-house host: speak a little slower, with relish, and now and then (not every turn, at most one per turn) add a short spooky aside about the house itself, such as "Mind the cobwebs.", "The candles flicker in approval.", "Ooh, I heard the floorboards creak." or "Welcome back to the haunted CRM.". Vary them. Everything else is unchanged: every fact, name, number, date and question is exactly as normal, any words you're told to say exactly are said exactly, and all the saving rules apply. The asides are never about investors, money, giving, flags or the officer's mistakes. If they say "normal mode", call set_spooky_mode with on false.`;
 const XMAS_RULES = `CHRISTMAS MODE IS ON. The officer asked for some Christmas cheer, so be a warm, jolly, traditional Christmas host: cheerful and kind, and now and then (not every turn, at most one per turn) add a short festive aside about the season, such as "The tree lights are twinkling.", "I can hear sleigh bells.", "Fresh snow on the rooftops tonight." or "The elves are busy in the workshop.". Vary them. Everything else is unchanged: every fact, name, number, date and question is exactly as normal, any words you're told to say exactly are said exactly, and all the saving rules apply. The asides are never about investors, money, giving, flags or the officer's mistakes, and never joke about the nativity, Jesus or anyone's faith. If they say "normal mode", call set_christmas_mode with on false; if they say "spooky mode", call set_spooky_mode with on true.`;
+// App-only forms (Carverhill, Oct 27): while a form is open the app asks every question itself; Grok's job is tool calls, and it speaks only to answer a question the officer asked
+const formMode = () => !!(V && G.live && ACTIONS[V.action] && document.getElementById("draftForm"));
+const Q_START = /^(what|what's|whats|how|why|which|who|who's|when|where|can i|could i|is|are|do|does|did|should|would|will|tell me|explain|remind me|any idea|was|were|has|have|am i)\b/;
+const Q_NOT = /^(can|could|would|will) (you|we|ya) (make|set|put|change|add|save|skip|use|mark|move|record|log|open|close|cancel|go|take|do|fill|note|call it|make it)\b/;
+const isQuestion = (t) => { const x = String(t || "").toLowerCase().replace(/[’‘]/g, "'").replace(/^((please|okay|ok|um|uh|hey|ara|so|sorry|wait|hang on|hold on)[,.]? )+/, "").trim(); return /\?\s*$/.test(x) || (Q_START.test(x) && !Q_NOT.test(x)); };
+const FORM_RULES = `## Form mode (whenever Right now says a form is open)
+- The app runs the form: it asks every question itself, in its own voice, says what it heard, reads the form back and asks whether to save. Inside a form you say nothing: never ask for a field, never say what's noted or on the form, never read anything back, never ask them to tap, never say what's next or ask what they'd like to do.
+- Your whole job is tool calls, with no words: when the officer answers the app's question, call the form's draft tool with their words (or optional_fields, save_form, set_capacity_rating when the tool result names it). The tool result says what the app asks next, and the app says it. "skip" or "move on" -> optional_fields step skip; "that's enough" -> step stop; "add the details" -> optional_fields step start; "save it" or a yes after the app's read-back -> save_form (confirmed true only after the read-back).
+- The one time you speak: the officer asks you a question (what a word means, a rule, a spelling, their data, what's next). Answer in one or two sentences, through the right tool when it is about records or rules, and stop; the app then asks its question again.
+`;
 const HF_RULES = `HANDS-FREE MODE IS ON (it is on from the start of every conversation). The officer may be driving and can't look at or tap the screen, so this overrides "You never save anything" and every "tap the button". Keep each turn short and never describe what's on screen. When a draft has everything it needs, the app reads it back itself and asks "Shall I save it?": never read it back yourself or ask whether it's correct, and never ask them to tap. Call save_form with confirmed true only right after the officer says yes to the app's read-back; the app checks their words too. If they change something, update the draft and the app reads it back again. Scheduling a meeting needs Google Calendar on screen, so keep it as a draft for when they've parked. If they say they've parked or want to tap themselves, call set_hands_free with on false.`;
 function grokInstructions() {
   const first = OFFICER.split(" ")[0];
@@ -209,22 +219,18 @@ function grokInstructions() {
 
 ## Conversation Flow
 ### Drafts
-- As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen before you ask anything. This goes for every show_*_draft tool.
-- Then ask for what is still needed, one question at a time; after each answer call the tool again with everything known so far, so the form fills in as they talk. If they correct something, call the tool again.
-- If they ask a side question while a question of yours is open (a spelling, what a word means), answer it, then ask your question again in full words ("What's an email address or mobile number for Igor?"), never "one of those".
-- If they ask how to do a task ("how do I add a contact"), start doing it with them straight away, saying in one short sentence that you'll fill in the form together as they talk ("We'll fill in the form together as you talk").
-- When the tool reply says nothing more is needed, ask them to check the draft and tap the button named in the reply's "button", using that exact label (say "tap Record pledge", never "tap Save" when the button says something else).
-- Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix or the step it suggests.
+- As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen before anything else. This goes for every show_*_draft tool. From then on the form is in Form mode (below): the app asks for what is still needed, one question at a time, and you only call the tool again with each answer, everything known so far, so the form fills in as they talk. If they correct something, call the tool again.
+- If they ask how to do a task ("how do I add a contact"), start doing it with them straight away: open its form.
+- Only say something is saved after the app tells you so. If a tool returns an error with nothing the app asked, explain it in one sentence and offer the fix or the step it suggests.
 - The officer can say "cancel", "undo", "go back", "start over" or "say that again" at any time: the app carries these out itself and tells you what it did, so don't act on those words yourself. If they ask in other words to close, cancel or clear the open form and the app said nothing, call close_form. Never say a form was closed, cancelled, cleared or reset unless the app says so.
 - After a save, briefly confirm and ask one short question about what's next, using the next step the app suggests; the officer can stop any time, so never ask if they want to stop or are done. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 - You can see saves: the app tells you each one and lists them under Right now. If the officer asks whether something saved, answer from that; never say you can't see saves.
 ### Task by task
-- New contact: always ask for their email and their mobile number (one question at a time, skipping any the officer already gave), explaining briefly that a contact needs at least one; without either it can't be saved. Then the app has you ask once whether they'd like to add more details; if yes, call optional_fields with step start and let the app lead: it asks one question at a time and fills in each answer itself. Pass every answer to optional_fields (step answer, their words as value); "skip" and "that's enough" are steps skip and stop. Never list all the optional fields at once, and never jump ahead of the app's questions. The same goes for a new opportunity's optional details.
+- New contact: show_contact_draft; the app asks for the email and mobile, the optional details (optional_fields, one at a time, the app fills in each answer) and whether to save. Pass every optional answer to optional_fields (step answer, their words as value); "skip" and "that's enough" are steps skip and stop. Never jump ahead of the app's questions. The same goes for a new opportunity's optional details.
 - Existing contact: to change their details call show_contact_edit_draft with only what changes; never use show_contact_draft for someone who is already a contact.
-- Logging a meeting (show_interaction_draft) or recording an ask (show_ask_result_draft): if the officer hasn't said how it happened, ask "Was it in person, a phone call, or a video call?" Always pass date (resolved from what they said, for example yesterday) and meetingType; leaving them out puts today and In person on the draft.
-- A substantive meeting whose outcome isn't Not interested or Referred elsewhere needs a next step and its due date, and so does an ask unless the investor declined: if not said, explain in one sentence that it becomes a Task for them, then ask whether they want to set it now and what it is and when it's due, before asking them to save. Never suggest the step, the date or the way of contacting anyone.
-- Booking a future meeting is show_meeting_draft (ask for the day and start time if not said). After they tap Add to Google Calendar, Google Calendar opens and the conversation ends.
-- Adding a task: always ask for the due date if none was said ("When is it due?"). If the contact has an open opportunity and the officer hasn't said, ask whether the task is for the contact or for their opportunity.
+- Logging a meeting (show_interaction_draft) or recording an ask (show_ask_result_draft): always pass date (resolved from what they said, for example yesterday) and meetingType when the officer said them; leaving them out puts today and In person on the draft. The app asks whether it was substantive and for the next step (it becomes a Task); pass those answers on with the tool.
+- Booking a future meeting is show_meeting_draft. After they tap Add to Google Calendar, Google Calendar opens and the conversation ends.
+- Adding a task: show_task_draft with the task and due date they said. If the contact has an open opportunity and the officer hasn't said, the app asks whether it is for the contact or the opportunity.
 - Task status: when the officer says a task is done, started, or that they're waiting on someone, call set_task_status (confirmed false), read back the change, and only after they say yes call it again with confirmed true.
 - After reading one task aloud, don't ask "Shall I open it?": offer the choices in one short line, such as "Change the date, mark it done, or hear their giving?". While the officer is working through their task list, keep any next-step offer after a save to one short clause ("Saved. Next overdue is ...") and go on to the next task rather than offering a new form.
 - Phoning: call call_contact. Only offer calls the app allows (the contact needs a phone number and Calls permitted on).
@@ -256,8 +262,9 @@ function grokInstructions() {
 - The stages:
 ${flowScript()}
 ${G.hands ? "### Hands-free mode\n- " + HF_RULES + "\n" : ""}
+${FORM_RULES}
 ## Guardrails
-- Ask at most one question at a time, and only for a required field the officer hasn't said. Never ask about optional fields, except the ones named above (email and mobile and the optional-fields questions the app gives you for a new contact or opportunity, and the next step for a substantive meeting).
+- Outside a form, ask at most one question at a time. Never ask about optional fields: the app does, one at a time.
 - Never make up details: leave out anything the officer didn't say, such as a capacity rating, whether a meeting was substantive, its outcome or a next step. Never suggest a next step, a date or a way of contacting someone: ask, and let the officer decide (Carverhill, Oct 25). A field you could guess from context is still a field to leave empty: the app asks the officer for what it needs, and a guessed value that the officer confirms by habit is worse than a question.
 - Call the money's recipient the "entity" (C3, C4 or PAC), never "fund". The only entities, by state: ${ENTITIES_BY_STATE()}. Never name any other; when asked about a state, list exactly those.
 - Say "gift", never "payment". Write spoken email addresses as real addresses. Resolve relative dates against today.
@@ -284,7 +291,7 @@ ${ctxNow()}`;
 function ctxNow() {
   const f = focusContact();
   return `${(G.saves || []).length ? `Saved so far in this conversation: ${G.saves.join("; ")}.` : "Nothing has been saved yet in this conversation."}
-${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.\n` : ""}${V && document.getElementById("draftForm") ? draftSummary() + " If the officer asks about it, carry on with it; don't open a new form for the same person.\n" : ""}${G.justNow && Date.now() - G.justNow.at < 180000 ? "Just now: " + G.justNow.text + "\n" : ""}Contacts and opportunities: ${crmSnapshot()}.`;
+${f ? `On screen now: ${nameOf(f)}. If the officer doesn't name a contact, they mean ${nameOf(f)}.\n` : ""}${V && document.getElementById("draftForm") ? draftSummary() + " Form mode is on: the app asks the questions; you only call tools." + (typeof formPosition === "function" && (formPosition() || {}).ask ? ` The app's pending question: "${formPosition().ask}"` : "") + "\n" : ""}${G.justNow && Date.now() - G.justNow.at < 180000 ? "Just now: " + G.justNow.text + "\n" : ""}Contacts and opportunities: ${crmSnapshot()}.`;
 }
 // what changes Ara's rules, so the full instructions go again only when one of these does
 const rulesKey = () => JSON.stringify([!!G.hands, S.settings.userName || "", botName(), spookyMode(), xmasMode()]);
@@ -739,7 +746,7 @@ function ask(request) {
 }
 function onEvent(e) {
   const t = e.type || "";
-  if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
+  if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; G.responding = false; formReask(); flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
   if (t === "input_audio_buffer.speech_started") { G.speechSince = 0; clearTimeout(G.turnWatch); G.turnWatch = null;
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
@@ -752,23 +759,27 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardSinceRetry = true; G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN, at: Date.now() }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardSinceRetry = true; G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN, at: Date.now() }; act("user", e.transcript); recent("Officer", e.transcript); const cmd = voiceCommand(e.transcript);
+    G.appActed = null; /* a new turn: Grok's tool calls count again */ if (formMode() && !cmd) { G.sideQ = isQuestion(e.transcript) ? { at: Date.now() } : null; if (!G.sideQ && G.muteResp === undefined) G.muteResp = true; /* an answer, not a question: a reply of Ara's to it is cut (the tool call still runs) */ formChoiceHeard(e.transcript); }
+    else if (!formMode()) G.sideQ = null;
     if (V && V.awaitOther && Date.now() - V.awaitOther.at < 90000 && /\b(mobile|email|number|phone)\b/i.test(askedBefore()) && typeof contactNoOther === "function" && /^(no|nope|none|nothing|not that i know( of)?|no,? (i|we) don't|(i|we|he|she|they) (don't|doesn't|do not|does not) have( one| it| a mobile| a cell| a number| an email)?|skip( it| that)?|move on)[.!,]?( thanks| thank you)?$/i.test(e.transcript.trim())) contactNoOther();
     if (typeof heardAsk === "function" && heardAsk(e.transcript)) { const txt = "The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."; G.heardAsk = { seq: G.seqAtStop || 0, text: txt }; guide(txt); } } // seq: replies before they spoke; a reply since is Grok's own answer
   if (G.forced) forcedEvent(t, e);
-  if (t === "response.done" && G.bot) { act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
+  if (t === "response.done" && G.bot) { act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); if (G.respSeq !== G.forcedResp) G.respSpoke = true; /* Ara's own words, not the app's line played through Grok */ }
   if (t === "response.done") { replyCheck(e.response || {}); if (G.bot && !G.dropNext) G.lastBot = { text: G.bot, at: Date.now() }; G.bot = ""; }
-  if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
+  if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; G.muteResp = undefined; G.sideQ = null; G.lastBot = null; /* the officer spoke: a reply that starts with the last reply's words is no longer a double (harness run 4) */ paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; G.stoppedAt = Date.now(); G.seqAtStop = G.respSeq || 0; paintCall(); turnWatch(); }
   else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)
     G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
-  else if (t === "response.created") { G.respSeq = (G.respSeq || 0) + 1; clearTimeout(G.turnWatch); G.turnWatch = null; G.slowSaid = false; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
+  else if (t === "response.created") { G.respSeq = (G.respSeq || 0) + 1; clearTimeout(G.turnWatch); G.turnWatch = null; G.slowSaid = false; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.askedInResp = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
   else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
   else if (/audio_transcript\.delta$/.test(t) && e.delta && sameAsLast(G.bot + e.delta)) { // Oct 27 9:45 AM call: the same line twice, 3 s apart, after a re-ask
     act("step", `Grok began the line it just said ("${(G.bot + e.delta).slice(0, 60)}"): cut it off`); send({ type: "response.cancel" }); stopPlayback(); G.dropNext = true; G.bot = ""; }
+  else if (/audio_transcript\.delta$/.test(t) && e.delta && formMode() && !G.forced && !G.lateForced && !G.sideQ && G.muteResp && !G.respTool) { // inside a form Ara speaks only to answer a question; anything else is cut and the app asks its question again (Oct 27 1:14 PM call: two voices)
+    act("step", `Ara started to speak inside the form ("${(G.bot + e.delta).slice(0, 60)}"): cut, the app asks its question`); vlog("form mode: Ara's reply cut"); stopPlayback(); G.dropNext = true; G.bot = ""; G.reaskAfter = true; } /* not response.cancel: a tool call in the same response still arrives */
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); lateForcedCheck(); }
-  else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
+  else if (t === "response.done") { G.responding = false; formReask(); flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
   else if (t === "conversation.created" && e.conversation && e.conversation.id) { if (G.convId !== e.conversation.id) vlog("conversation " + e.conversation.id); G.convId = e.conversation.id; }
@@ -820,12 +831,23 @@ function whenIdle(kind) {
 }
 // The app's answer to a tool call. Only data goes back in the tool result; anything about what to say next rides with the reply request
 // (per-response instructions), and a line to be said word for word (a question, a read-back) is spoken by the app's scripted line instead.
+// Ara spoke inside a form (an answer to a side question, or a reply that was cut) and no new question followed: the app asks its pending question again
+function formReask() {
+  const spoke = G.reaskAfter || (G.respSpoke && !G.respTool); const had = G.reaskAfter; G.reaskAfter = false; G.respSpoke = false;
+  if (!spoke || !formMode() || G.askedInResp || G.forced || G.pendingForce) return;
+  const q = formReaskLine(); if (!q) return;
+  act("step", `${had ? "After the cut" : "After Ara's answer"}, the app asks the form's question again`); G.sideQ = null;
+  forceSay(q);
+}
 function toolReply(callId, out, speak = true) {
   const { say, status, instructions, ask_exactly, read_back, ...data } = out || {};
   if (ask_exactly) data.asked = ask_exactly; if (read_back) data.read_back = read_back;
-  send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(data) } });
+  if (callId) send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(data) } }); // no callId: the app acted on the officer's words itself; Right now carries what it asked
+  else whenIdle("instr");
   const line = ask_exactly || read_back;
-  if (line) { forceSay(line); return; } // the scripted line is the turn: no reply request after it
+  if (line) { G.askedInResp = true; forceSay(line); return; } // the scripted line is the turn: no reply request after it
   const g = [instructions, status, say].filter(Boolean).join(" ");
-  if (speak) guide(g || "Reply to the officer from the tool result.");
+  if (!speak) return;
+  if (formMode() && !g && !G.sideQ) { vlog("form mode: tool result with nothing to say, no reply requested"); return; } // inside a form a bare tool result gets no spoken reply; the app's next line is the turn
+  guide(g || "Reply to the officer from the tool result.");
 }

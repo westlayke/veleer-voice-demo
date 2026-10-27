@@ -285,6 +285,8 @@ function onTool(callId, name, args) {
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
   if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command." }); return; }
+  if (G.appActed && Date.now() - G.appActed.at < 8000 && G.appActed.tools.includes(name)) { vlog(`${name}: ignored, the app already acted on the officer's answer`); toolReply(callId, { ok: false, error: "Ignored: the app already acted on the officer's answer and asked its next question. Say nothing." }); return; }
+  if (V && V.choice && (name === "optional_fields" || name === "save_form")) V.choice = null; // the officer answered "save it, or the optional details?" and Grok carried it to the tool
   if (V && V.awaitOther && name !== "show_contact_draft") V.awaitOther = null; // the mobile question is over once anything else happens (Oct 27: "Move on." to a later question was taken as "no mobile")
   if (Object.hasOwn(TOOL_HANDLERS, name)) { TOOL_HANDLERS[name](callId, data, name); return; }
   draftTool(callId, name, data);
@@ -372,6 +374,7 @@ function draftTool(callId, name, data) {
   const missing = A.fields.filter(f => f.req && !f.fixed && fieldBlank(f, d[f.k])).map(f => f.k === "campaign" && d.fund ? `Campaign (${d.badCampaign ? d.badCampaign + " isn't a campaign for " + d.fund + "; " : ""}the entity, ${d.fund}, is already set; its campaign is ${campaignsFor(d.fund).join(" or ")})` : f.label);
   // what is already on the form (filled in by the app from earlier records, or said before), so Ara never asks for it again
   const onForm = A.fields.filter(f => !f.fixed && f.type !== "bool" && !empty(d[f.k])).map(f => `${f.label}: ${f.type === "money" ? money(d[f.k]) : f.type === "date" ? dateSaid(d[f.k]) : d[f.k]}`);
+  if (d.badCampaign && d.fund && campaignsFor(d.fund).length === 1) { const cur = readDraft(); cur.campaign = campaignsFor(d.fund)[0]; delete d.badCampaign; V.data = prefill(tool.action, cur, target); renderOverlay(); vlog(`${name}: campaign set to ${cur.campaign}, the only one for ${d.fund}`); } // the wrong campaign for an entity with just one: the app sets the one there is
   delete d.badCampaign;
   if ((tool.action === "contact" || tool.action === "editContact") && empty(d.email) && empty(d.mobile)) missing.push("Email or mobile");
   if (stateNote) { missing.unshift(`Entity of interest (${stateNote.trim()})`); stateNote = ""; } // the entity isn't a required field, but the officer asked for one in that state
@@ -383,29 +386,34 @@ function draftTool(callId, name, data) {
   if (tool.action === "interaction" && !missing.length && !V.askedSubst && !V.fromVoice.has("substantive")) { V.askedSubst = true; toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: SUBST_Q, next: "After the officer answers, call this tool again with substantive true or false." + droppedNote }); return; } // the app asks it itself (Oct 25: Ara skipped the question when it was only guidance)
   // the answer to the optional question being asked came in through this tool instead (Oct 27 10:21 AM call: the rating went on the form unacknowledged and the questions carried on as if nothing was said)
   if (V.opt && V.opt.cur && said.includes(V.opt.cur) && !empty(d[V.opt.cur]) && !V.opt.done.includes(V.opt.cur)) { const k = V.opt.cur, heard = optHeard(k, d[k]); V.opt.done.push(k); V.opt.lastK = k; V.opt.lastVal = String(d[k]).toLowerCase(); V.opt.lastAt = Date.now(); act("step", `optional field ${k} came in through the draft tool: ${heard}`);
-    if (!V.opt.only) { optAsk(callId, heard); return; } V.opt = null; if (tool.action === "contact" && !V.askedOptional) { offerMore(callId, heard); return; } }
-  if (V.opt && V.opt.only && !empty(d[V.opt.only])) V.opt = null; // the one field asked for came in through this tool instead
-  if (tool.action === "contact" && !missing.length) {
-    if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true; V.awaitOther = { which: empty(d.email) ? "email" : "mobile", at: Date.now() }; toolReply(callId, { ok: true, button: A.saveLabel, status: `The draft is open on screen. Now ask in one short question for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.${droppedNote}` }); return; }
-    // the rating an opportunity will need is asked for right away (Carverhill, Oct 25), then the rest of the optional fields are offered
-    if (empty(d.capacity) && !V.askedCap && !V.opt) { V.askedCap = true; V.opt = { done: [], only: "capacity" }; optAsk(callId); return; }
-    if (!V.askedOptional && !V.opt) { offerMore(callId); return; }
-  }
-  if (tool.action === "opportunity" && !missing.length && !V.askedOptional && !V.opt) { offerMore(callId); return; }
+    V.opt.only = null; optAsk(callId, heard); return; }
+  // an optional detail given in answer to "save it, or the optional details?" (a rating, how they met): the optional questions start from there
+  if (V.choice && OPT_STEPS[tool.action]) { const k = OPT_STEPS[tool.action].map(st => st.k).find(k => said.includes(k) && !empty(d[k]));
+    if (k) { V.choice = null; V.askedOptional = true; V.opt = { done: [k], lastK: k, lastVal: String(d[k]).toLowerCase(), lastAt: Date.now() }; act("step", `optional field ${k} answered the save-or-details question`); optAsk(callId, optHeard(k, d[k])); return; } }
+  const miss = formMissing(), first = miss[0], opened = !same;
+  if (opened && typeof ttsPrefetch === "function" && G.live) ttsPrefetch(formLines(tool.action, d)); // this form's lines, fetched ahead
+  const intro = opened ? `${A.title}${V.target && V.target.contact && tool.action !== "contact" ? " for " + nameOf(V.target.contact) : ""}. ` : ""; // the form's name once, when it opens, so the officer knows what is on screen
+  const note = { still_needed: missing, next: "The app asked the officer for it. After their answer, call this tool again with everything known so far; say nothing yourself." + droppedNote + (onForm.length ? ` Already on the form, some filled in from earlier steps: ${onForm.join("; ")}. Never ask for these again; if the officer asks, confirm what's there.` : "") + (badDates.length ? ` The app couldn't read ${badDates.join(", ")} as a date: send dates as YYYY-MM-DD (today is ${todayISO()}).` : "") + (missing.includes("Summary") ? " When the officer describes what happened, put it in the summary parameter (1 to 3 sentences, past tense, in their words) and call this tool again with it." : "") };
+  // a required field is missing: the app asks for the first one itself, in its own voice (Carverhill, Oct 27: required first, one at a time)
+  const stateQ = missing.find(m => /^Entity of interest \(/.test(m)); // the officer named a state with more than one entity: which one, before anything else
+  if (stateQ) { const st = stateQ.match(/exactly these entities: (.+?)\. Ask which/); toolReply(callId, Object.assign({ ok: true, button: A.saveLabel, ask_exactly: `${intro}Which entity: ${st ? st[1].split(", ").join(", or ") : "which one"}?` }, note)); return; }
+  if (first) { if (first === "Email or mobile") { V.askedOther = true; V.awaitOther = { which: "either", at: Date.now() }; } toolReply(callId, Object.assign({ ok: true, button: A.saveLabel, ask_exactly: intro + fieldQ(tool.action, first, d) }, note)); return; }
+  // a new contact: the other of email and mobile is asked once (it's fine if they don't have it)
+  if (tool.action === "contact" && (empty(d.email) || empty(d.mobile)) && !V.askedOtherDone) {
+    { V.askedOther = true; V.askedOtherDone = true; V.awaitOther = { which: empty(d.email) ? "email" : "mobile", at: Date.now() }; toolReply(callId, Object.assign({ ok: true, button: A.saveLabel, ask_exactly: `${intro}Do you have ${empty(d.email) ? "an email address" : "a mobile number"} for ${d.first || "them"} too? It's fine if not.` }, note)); return; } }
+  // every required field is in: save now, or the optional details (contact and opportunity have some); other forms go to the read-back or the button
+  if (OPT_STEPS[tool.action] && !V.askedOptional && !V.opt) { V.choice = "saveOrOpt"; toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: intro + formChoiceLine(), next: `The app asked whether to save or add the optional details, and acts on the officer's answer itself. If they name an optional detail instead (a rating, how they met), call this tool with it.` + droppedNote }); return; }
   // hands-free: a finished draft is read back by the app straight away, instead of waiting for Ara to call save_form (Oct 25: she said "Tap Confirm" instead)
-  if (!missing.length && G.hands && tool.action !== "meeting") { hfSave(callId, { confirmed: false }); return; }
-  toolReply(callId, missing.length
-    ? { ok: true, button: A.saveLabel, still_needed: missing, status: `The draft is open on the officer's screen and fills in as you go. Still needed: ${missing.join(", ")}.${stateNote}${droppedNote}${onForm.length ? ` Already on the form, some filled in from earlier steps: ${onForm.join("; ")}. Never ask for these again; if the officer asks, confirm what's there.` : ""}${badDates.length ? ` The app couldn't read ${badDates.join(", ")} as a date: send dates as YYYY-MM-DD (today is ${todayISO()}).` : ""}${missing.includes("Summary") ? " When the officer describes what happened, put it in the summary parameter (1 to 3 sentences, past tense, in their words) and call this tool again with it." : ""} Ask for the first one in one short question; after each answer call this tool again. Don't ask them to tap ${A.saveLabel} yet.` }
-    : { ok: true, button: A.saveLabel, status: `${tool.action === "cultivate" && d.decision !== "Defer" ? `First say in one sentence that moving to Cultivation means they, as the gift officer, believe ${V.target.contact ? V.target.contact.first : "the prospect"} is ready to be pursued for a gift. ` : ""}The draft is on the officer's screen. It is NOT saved. Ask them to check it and tap the "${A.saveLabel}" button (say that exact label).${droppedNote}` });
+  if (G.hands && tool.action !== "meeting") { hfSave(callId, { confirmed: false }); return; } /* the read-back names the form itself */
+  toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: `${intro}${tool.action === "cultivate" && d.decision !== "Defer" ? `Moving ${V.target.contact ? V.target.contact.first : "the prospect"} to Cultivation means you, as the gift officer, believe they're ready to be pursued for a gift. ` : ""}${formTapLine()}`, next: `The draft is on the officer's screen; it is NOT saved until they tap "${A.saveLabel}".${droppedNote}` });
 }
 
 // The officer said they have no mobile (or email) for a new contact: the app moves the form on itself instead of waiting for Ara to call the tool again (Oct 27 11:23 AM call: "No." then silence)
 function contactNoOther() {
-  const which = V.awaitOther.which; V.awaitOther = null; const d = readDraft();
+  const which = V.awaitOther.which; V.awaitOther = null; V.askedOtherDone = true; const d = readDraft();
   act("step", `The officer has no ${which} for ${optWho()}: the form moves on`);
-  if ((d.capacity === undefined || d.capacity === null || String(d.capacity).trim() === "") && !V.askedCap) {
-    V.askedCap = true; V.opt = { done: [], only: "capacity", cur: "capacity" };
-    G.justNow = { text: `The officer has no ${which} for ${optWho()}. The app is asking for ${optWho()}'s capacity rating itself, in its own voice: don't ask for it and don't repeat the question. When the officer answers with a letter from A to E, call optional_fields with step answer and their words as value; if they skip it, call optional_fields with step skip.`, at: Date.now() };
-    whenIdle("instr"); forceSay(OPT_STEPS.contact[0].q(optWho(), true)); return; }
-  guide(`The officer has no ${which} for ${optWho()}. Call show_contact_draft again now with the fields so far (no ${which}) so the app can go on; say nothing else.`);
+  if (which === "either") { forceSay(`${optWho()} can't be saved without an email or a mobile number. ${fieldQ("contact", "Email or mobile", d)}`); V.awaitOther = { which: "either", at: Date.now() }; return; }
+  G.appActed = { at: Date.now(), tools: ["show_contact_draft"] };
+  if (!V.askedOptional && !V.opt) { V.choice = "saveOrOpt"; G.justNow = { text: `The officer has no ${which} for ${optWho()}. The app asked, in its own voice, whether to save the contact or add the optional details, and acts on the answer itself: say nothing.`, at: Date.now() }; whenIdle("instr"); forceSay(formChoiceLine()); return; }
+  forceSay(formReaskLine());
 }
