@@ -212,7 +212,7 @@ document.addEventListener("click", (e) => { if (e.target.closest("[data-act5=typ
 const botName = () => (S.settings.botName || "").trim() || ((S.settings.voice || "ara")[0].toUpperCase() + (S.settings.voice || "ara").slice(1)); // the assistant's name: set in Settings, else its voice's name
 const CMD_LIST = "Ask me for any task in your own words. While a form is open you can also say: cancel, to close it without saving; start over, to clear it; undo, to take back my last change; go back, for the previous screen; or say that again, to hear me repeat.";
 const CAN_DO = "I can do things related to managing your contacts and opportunities, like reviewing your open tasks, creating a contact, hearing a contact's giving history, reviewing your open opportunities, or review our fundraising process, and much more. What would you like to do today?";
-const greetLine = (name) => `The officer just entered their first name and tapped Start. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I'm ${botName()}, what would you like to do?" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process".`;
+const greetLine = (name) => `The officer just entered their first name and tapped Start. Say exactly this and nothing more, then wait for their answer: "${helloLine(name)}" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process".`;
 
 const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
 const AWAIT_WARN_DAYS = 14; // tenant setting in the guide; demo default

@@ -341,4 +341,20 @@ test("The phone locking (page hidden) closes the line a few seconds later and re
   ok(steps.some(t => /Phone locked: voice line closed after [\d.]+ s/.test(t)) && steps.some(t => /App hidden for [\d.]+ s: reopening the line/.test(t)) && steps.some(t => /Sound and mic started afresh after the lock/.test(t)), "the lock pause or the audio restart wasn't logged: " + steps.slice(-6).join(" | "));
 });
 
+
+test("Hands-free greeting (Oct 27): the first calls say hands-free is on and how it works, later calls say it in a word, the button names the switch", async (p) => {
+  await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  // a typed name starts the call with the greeting as Ara's opening instruction (an exact line); a plain mic tap says it as a scripted line
+  await p.waitForFunction(() => __sent.some(x => /Hands-free is on, so you don't need to look at your phone/.test(x)), null, { timeout: 8000 }).catch(() => {});
+  const hello = await p.evaluate(() => (__sent.find(x => /Hi Sam, I'm/.test(x)) || "").match(/Hi Sam, I'm [^"]*\?/) ? __sent.find(x => /Hi Sam, I'm/.test(x)).match(/Hi Sam, I'm [^"]*\?/)[0] : "");
+  ok(/^Hi Sam, I'm \w+\. Hands-free is on, so you don't need to look at your phone: I'll read each form back and save it when you say yes\. What would you like to do\?$/.test(hello), "the first greeting doesn't explain hands-free: " + hello);
+  ok((await p.evaluate(() => S.settings.hfGreeted)) === 1, "the greeting count didn't move");
+  ok(/Turn hands-free off/.test(await p.textContent(".cb-hf")), "the button doesn't read Turn hands-free off");
+  await p.evaluate(() => { G.hands = false; paintCall(); });
+  ok(/Turn hands-free on/.test(await p.textContent(".cb-hf")), "the button doesn't read Turn hands-free on when it's off");
+  // a phone past its first three calls hears the short line; the call-bar tap flips the label back
+  ok(await p.evaluate(() => { S.settings.hfGreeted = 3; G.hands = true; return /^Hi \w+, I'm \w+, hands-free is on\. What would you like to do\?$/.test(helloLine(S.settings.userName)); }), "the later greeting isn't the short line");
+  ok(await p.evaluate(() => { G.hands = false; return /^Hi \w+, I'm \w+, what would you like to do\?$/.test(helloLine(S.settings.userName)); }), "the tap-mode greeting mentions hands-free");
+});
 };

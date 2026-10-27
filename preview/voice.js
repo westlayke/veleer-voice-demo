@@ -326,7 +326,7 @@ function paintCall() {
   document.body.classList.toggle("incall", G.live);
   el.hidden = !G.live;
   if (!G.live) return;
-  el.innerHTML = `<div class="cb-in"><span class="dot ${/^(Connecting|Reconnecting)/.test(G.status) ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div>${G.saveCheck ? `<div class="cb-yes">Say “yes” to save</div>` : ""}</div><button class="btn quiet cb-hf${G.hands ? " on" : ""}" data-act3="hands" aria-pressed="${!!G.hands}" title="Hands-free: Ara saves when you say yes">${CAR} ${G.hands ? "Hands-free on" : "Hands-free"}</button><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
+  el.innerHTML = `<div class="cb-in"><span class="dot ${/^(Connecting|Reconnecting)/.test(G.status) ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div>${G.saveCheck ? `<div class="cb-yes">Say “yes” to save</div>` : ""}</div><button class="btn quiet cb-hf${G.hands ? " on" : ""}" data-act3="hands" aria-pressed="${!!G.hands}" title="${G.hands ? "Hands-free is on: Ara saves when you say yes. Tap to turn it off" : "Hands-free is off: tap to let Ara save when you say yes"}">${CAR} ${G.hands ? "Turn hands-free off" : "Turn hands-free on"}</button><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
   capTick();
 }
 const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
@@ -563,11 +563,21 @@ async function startCall(opening) {
     if (!audio) throw new Error("no sound");
     // spooky or Christmas mode: Ara is the host from her very first words
     const boo = spookyMode() ? "Mwahaha... welcome to the haunted CRM. " : xmasMode() ? "Ho ho ho... Merry Christmas, and welcome to the Christmas CRM. " : "";
-    const hello = S.settings.userName ? `${boo}Hi ${OFFICER.split(" ")[0]}, I'm ${botName()}, what would you like to do?` : `${boo}Hi, I'm ${botName()}, what's your first name?`;
+    const hello = S.settings.userName ? boo + helloLine(OFFICER) : `${boo}Hi, I'm ${botName()}, what's your first name?`;
+    if (S.settings.userName && G.hands) { S.settings.hfGreeted = (S.settings.hfGreeted || 0) + 1; save(); } // one more call greeted with hands-free on (after the line is built, so this call still gets the full one)
     // the greeting is scripted (said word for word by the app's line); a tapped request is the officer's input, with the greeting folded in
     const first = opening ? () => notice(S.settings.userName ? opening : opening + ` You don't know their name yet: first say "${hello}", then call set_user_name, then help with that.`) : () => forceSay(hello);
     G.drops = 0; openSocket(token, first);
   } catch (e) { endCall("couldn't start: " + String(e && e.message || e)); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); } /* the reason goes to the activity log (four silent ends on Oct 26) */
+}
+// the greeting says that hands-free is on (Jacqueline, Oct 27: nobody told her, so she tapped Save and then tapped hands-free off by
+// accident). The full line plays on a phone's first HF_GREET_FULL calls, a shorter one after that.
+const HF_GREET_FULL = 3;
+function helloLine(name) {
+  const first = String(name || "").split(" ")[0], me = botName();
+  if (G.live ? !G.hands : false) return `Hi ${first}, I'm ${me}, what would you like to do?`; // before a call starts, hands-free will be on (the default)
+  return (S.settings.hfGreeted || 0) < HF_GREET_FULL ? `Hi ${first}, I'm ${me}. Hands-free is on, so you don't need to look at your phone: I'll read each form back and save it when you say yes. What would you like to do?`
+    : `Hi ${first}, I'm ${me}, hands-free is on. What would you like to do?`;
 }
 /* ---------- interrupted conversations: a phone call, timer, Siri or locking the phone cuts the mic and speaker ---------- */
 // keep the last few lines said, so a new conversation can pick up where the old one stopped
