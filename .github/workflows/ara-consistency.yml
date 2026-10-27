@@ -20,6 +20,9 @@ on:
       providers:
         description: "Voice engines, comma separated: grok, openai, gemini"
         default: "grok"
+      diag:
+        description: "1 = print each conversation's voice log (diagnostic run)"
+        default: "0"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -53,6 +56,7 @@ jobs:
           MAX_CONVS: ${{ inputs.max_conversations }}
           JOBS: ${{ inputs.jobs }}
           FLOWS: ${{ inputs.flows }}
+          DIAG: ${{ inputs.diag }}
         run: node tests/ara-consistency/run.js
       - uses: actions/upload-artifact@v4
         if: always()
