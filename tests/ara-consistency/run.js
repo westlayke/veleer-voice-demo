@@ -103,7 +103,10 @@ async function converse(browser, base, flow, n) {
       const last = whole.split(/(?<=[.?!])\s+/).filter(Boolean).pop() || ""; // the officer answers the question Ara ended on
       let say;
       if (savedDone()) break;
-      if (/substantive/i.test(last) && /\?\s*$/.test(last.trim())) say = flow.subst || "Yes.";
+      if (script.length && script[0].startsWith("!")) say = script.shift().slice(1); // a line said at this point whatever Ara asked ("Are you there?", "where were we?", a side question)
+      else if (/mobile number for .* too\?/i.test(whole) || /email address for .* too\?/i.test(whole)) say = "No."; // the app's "the other of email and mobile" question ends with "It's fine if not."
+      else if (/add the optional details first\?/i.test(whole)) say = script.length && /capacity/i.test(script[0]) ? script.shift() : "Save it."; // the save-or-details question: give the rating when the flow has one, else save
+      else if (/substantive/i.test(last) && /\?\s*$/.test(last.trim())) say = flow.subst || "Yes.";
       else if (/\b(save|saving)\b[^.?!]*\?|shall i (save|record)|say yes|is that (right|correct)\?|correct\?|confirm/i.test(last) && !/would you like to (add|fill)/i.test(last)) say = "Yes.";
       else if (/say neither|neither to move on/i.test(whole) && /\?|neither/i.test(last)) say = "Neither.";
       else if (/fill it in,? or move on|or move on\?/i.test(last) && !/^(Let's go with capacity|Add a capacity)/.test(script[0] || "")) { say = "Move on."; saidNo++; }
@@ -153,7 +156,13 @@ const RULES = [
   { id: "no_false_saved", text: "Never says saved before the app saved" },
   { id: "replies_every_turn", text: "Answers every officer turn" },
   { id: "no_double_reply", text: "Doesn't say the same thing twice in a row" },
+  { id: "no_double_question", text: "Inside a form the pending question is asked once per turn, not by Ara and then the app" },
+  { id: "app_answers_there", text: "\"Are you there?\" inside a form is answered by the app alone" },
+  { id: "where_not_save", text: "\"Where were we?\" at the save-or-details question is not taken as a save, and the app names the form" },
+  { id: "yes_not_summary", text: "A yes to the substantive question never replaces the summary" },
+  { id: "due_asked_alone", text: "A next step without a date gets \"When is it due?\" alone" },
 ];
+const wordOverlap = (a, b) => { const A = new Set(a.split(" ").filter(Boolean)), B = new Set(b.split(" ").filter(Boolean)); if (!A.size || !B.size) return 0; let n = 0; A.forEach(w => { if (B.has(w)) n++; }); return n / Math.min(A.size, B.size); };
 function score(conv, flow) {
   const res = {}; const hit = (id, ok, note) => { const r = res[id] = res[id] || { n: 0, broke: 0, notes: [] }; r.n++; if (!ok) { r.broke++; if (note && r.notes.length < 3) r.notes.push(String(note).slice(0, 240)); } };
   const own = conv.replies.filter(r => r.text && !scripted(r, conv.forced));
@@ -174,6 +183,9 @@ function score(conv, flow) {
   conv.turns.forEach(t => hit("replies_every_turn", t.heard, `no reply to "${t.say}"`));
   const heard = conv.acts.filter(a => a.role === "grok"); // what the app played and logged, as the officer heard it
   for (let i = 1; i < heard.length; i++) hit("no_double_reply", sameWords(heard[i - 1].text) !== sameWords(heard[i].text), heard[i].text);
+  // Jim's Oct 27 2:26 PM call: Ara's side answer ended with the form's question and the app asked it again (five times in one call)
+  conv.replies.filter(r => r.text && scripted(r, conv.forced) && /\?\s*$/.test(r.text.trim())).forEach(s => { const q = sameWords(s.text).split(" ").slice(-12).join(" "); const twin = own.find(r => r.turn === s.turn && r !== s && wordOverlap(sameWords(r.text).split(" ").slice(-12).join(" "), q) >= 0.6); hit("no_double_question", !twin, twin ? `Ara: "${twin.text.slice(0, 120)}" then the app: "${s.text.slice(0, 120)}"` : ""); });
+  (flow.rules || []).forEach(r => { const [ok, note] = r.ok(conv); hit(r.id, ok, note); });
   return res;
 }
 
