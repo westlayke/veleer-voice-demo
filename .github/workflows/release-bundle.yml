@@ -1,0 +1,35 @@
+name: Bundle a release
+# Builds one zip with everything needed to recreate a release (the repository at its tag plus the release note) and attaches
+# it to the GitHub Release. Run by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v1.0"
+        required: true
+permissions:
+  contents: write
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Build and attach the zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          name="citizens-vcrm-release-${TAG#v}"; mkdir -p /tmp/b/"$name"
+          git archive "$TAG" | tar -x -C /tmp/b/"$name"
+          cp "docs/release-${TAG#v}.md" /tmp/b/"$name"/RELEASE-NOTE.md
+          cat > /tmp/b/"$name"/READ-ME-FIRST.txt <<TXT
+          Citizens VCRM voice proof of concept, release ${TAG#v}
+          This folder is the repository westlayke/veleer-voice-demo at tag $TAG (commit $(git rev-parse "$TAG")).
+          The live page is index.html + version.json + app/ (serve the folder as a static site, as GitHub Pages does).
+          The key holder is worker/token-worker.js (Cloudflare Worker; secrets XAI_API_KEY and DEMO_CODE are not included).
+          Tests: tests/bot.js (PAGE=index.html node tests/bot.js). Everything else is in RELEASE-NOTE.md.
+          TXT
+          (cd /tmp/b && zip -qr "$name.zip" "$name")
+          ls -l /tmp/b/"$name.zip"
+          gh release upload "$TAG" /tmp/b/"$name.zip" --clobber
