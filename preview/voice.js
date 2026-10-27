@@ -1,7 +1,7 @@
 "use strict";
 // Citizens VCRM demo: the conversation with Ara (xAI Grok voice). Loaded in order by the page; all files share one scope.
 /* ---------- Grok conversation ---------- */
-const S_DATE = { type: "string", description: "YYYY-MM-DD, e.g. 2026-12-01. Work it out from what the officer says, using today's date" };
+const S_DATE = { type: "string", description: "YYYY-MM-DD" }; // relative dates are resolved per the Guardrails
 // spoken dates can arrive as "December 1", "12/1/2026" or "2026-12-1"; turn them into YYYY-MM-DD (a date with no year is the next one to come)
 // did the officer just give a capacity rating? (their last few lines, as transcribed)
 const NATO = "alpha alfa bravo charlie delta echo foxtrot golf hotel india juliet juliett kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey whisky xray x-ray yankee zulu".split(" ");
@@ -108,7 +108,7 @@ function normDate(v) {
 }
 // Ara named no rating, or one the app doesn't know: she asks which
 function askRating(callId) { toolReply(callId, { ok: false, error: "Ask which rating: " + CAPACITY_LIST }); }
-const FOR = { contact_name: { type: "string", description: "Full name of the contact this is for, as the officer said it" } };
+const FOR = { contact_name: { type: "string", description: "The contact's full name" } };
 const TOOLS = [
   { action: "contact", name: "show_contact_draft", description: "Show a new Contact draft. A contact needs at least an email or a mobile number.", req: ["first", "last"], props: {
     first: { type: "string" }, last: { type: "string" }, email: { type: "string", description: "Written as a real address" }, mobile: { type: "string", description: "Formatted like (555) 010-0142" },
@@ -156,7 +156,7 @@ const TOOLS = [
   { action: "payment", hidden: true, name: "show_payment_draft", description: "Show a Record payment draft for a payment on the pledge of an opportunity in Commitment. The first payment closes it as Closed Won.", req: ["contact_name", "method"], props: Object.assign({}, FOR, {
     amount: { type: "number", description: "Leave out to use the scheduled first payment" }, date: { type: "string", description: "YYYY-MM-DD the payment arrived; use today if not said" }, method: { type: "string", enum: PAY_METHODS } }) }
 ];
-const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function", name: t.name, description: t.description + " Call it as soon as you know what the officer wants to do, with whatever you know so far, then again after each answer with everything known so far.", parameters: { type: "object", properties: t.props, required: t.req.filter(k => k === "contact_name") } }))
+const toolDefs = () => TOOLS.filter(t => !t.hidden).map(t => ({ type: "function", name: t.name, description: t.description, parameters: { type: "object", properties: t.props, required: t.req.filter(k => k === "contact_name") } }))
   .concat([{ type: "function", name: "show_screen", description: "Open a screen when the officer asks to see something. For a contact's record or opportunity, pass contact_name.", parameters: { type: "object", properties: Object.assign({ screen: { type: "string", enum: ["home", "contacts", "opportunities", "tasks", "contact_record", "opportunity_record", "how_it_works"] } }, FOR), required: ["screen"] } },
     { type: "function", name: "show_needs_attention", description: "Show the officer's Needs attention list on Home, filtered when they ask (\"What's overdue?\", \"Show only my tasks\"). Returns the items, most urgent first, to read out briefly. filter hands_free lists the saves made by voice that the officer hasn't checked yet (\"What hands-free saves do I need to approve?\").", parameters: { type: "object", properties: { filter: { type: "string", enum: ["all", "overdue", "opportunities", "tasks", "contacts", "hands_free"] } }, required: ["filter"] } },
     { type: "function", name: "call_contact", description: "Put a Call button for a contact on screen when the officer wants to phone them. The officer taps it; the phone places the call.", parameters: { type: "object", properties: FOR, required: ["contact_name"] } },
@@ -207,8 +207,8 @@ function grokInstructions() {
 
 ## Conversation Flow
 ### Drafts
-- As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen before you ask anything.
-- Then ask for what is still needed, one question at a time; after each answer call the tool again so the form fills in as they talk. If they correct something, call the tool again.
+- As soon as the officer says what they want to do (and for whom), call the matching draft tool straight away with whatever they have said, so the form is on screen before you ask anything. This goes for every show_*_draft tool.
+- Then ask for what is still needed, one question at a time; after each answer call the tool again with everything known so far, so the form fills in as they talk. If they correct something, call the tool again.
 - If they ask a side question while a question of yours is open (a spelling, what a word means), answer it, then ask your question again in full words ("What's an email address or mobile number for Igor?"), never "one of those".
 - If they ask how to do a task ("how do I add a contact"), start doing it with them straight away, saying in one short sentence that you'll fill in the form together as they talk ("We'll fill in the form together as you talk").
 - When the tool reply says nothing more is needed, ask them to check the draft and tap the button named in the reply's "button", using that exact label (say "tap Record pledge", never "tap Save" when the button says something else).
@@ -263,7 +263,7 @@ ${G.hands ? "### Hands-free mode\n- " + HF_RULES + "\n" : ""}
 - Never joke about investors, money, Do Not Contact or Ally flags, or the officer's mistakes.
 
 ## Voice & Communication Style
-- Speak warmly and briefly: one or two short sentences per turn.
+- Speak warmly and briefly: one short sentence per turn, two at most; only a read-back, a briefing or a list the officer asked for may run longer. The sooner you start speaking, the better.
 - Friendly, upbeat and a little playful, like a favourite colleague: everyday contractions and, now and then, a light touch of a few words ("Nice!", "Love it.", "Ooh, good one.", "Got it!"); vary your wording so you never sound scripted.
 - Share in the officer's wins and show a little sympathy when something goes badly. Never let personality add a sentence or slow down a task.
 - Never read the app's guidance, tool fields or anything in brackets aloud; speak only what the officer should hear.
@@ -598,13 +598,24 @@ function resumeModal() {
   document.getElementById("rsmGo").onclick = () => { h.innerHTML = ""; const r2 = G.resume; G.resume = null; G.recent = r2.lines.slice(); G.keepRecent = true; G.keepHands = r2.hands; startCall(resumeLine(r2)); };
 }
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " + (r.where ? r.where + " " : "") : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
+// How long the officer waits: from xAI's end-of-speech to Ara's first sound (what the officer feels), kept per conversation and summed up in the end row (Oct 26)
+function firstWord() {
+  if (!G.stoppedAt) return; const ms = Date.now() - G.stoppedAt; G.stoppedAt = 0; if (ms >= 30000) return;
+  (G.replyMs = G.replyMs || []).push(ms); vlog(`first word ${ms} ms after the officer stopped`);
+  if (ms > 3000) act("step", `Ara's first word came ${(ms / 1000).toFixed(1)} s after the officer stopped`);
+}
+function replyStats() {
+  const a = (G.replyMs || []).slice().sort((x, y) => x - y); G.replyMs = []; G.stoppedAt = 0; if (!a.length) return "";
+  const med = a[Math.floor(a.length / 2)], s = (ms) => (ms / 1000).toFixed(1) + " s";
+  return `. Replies: ${a.length}, first word median ${s(med)} after the officer stopped, slowest ${s(a[a.length - 1])}`;
+}
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
   G.live = false; G.hands = false; G.saveCheck = null; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + replyStats() + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -715,7 +726,7 @@ function onEvent(e) {
   if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0;
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0; clearTimeout(G.idleTimer); if (G.responding) send({ type: "response.cancel" }); stopPlayback(); if (G.forced) { G.forced = null; clearTimeout(G.forceTimer); } /* a goodbye still waiting to be said is dropped */ vlog("hang-up called off: the officer spoke"); act("step", "Quiet hang-up called off: the officer spoke"); } }
-  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
+  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); firstWord(); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
   else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
     if (t === "response.done" && G.idleEnding) { clearTimeout(G.idleTimer); const left = G.ctx ? Math.max(0, G.playHead - G.ctx.currentTime) : 0; G.idleTimer = setTimeout(idleHangUp, left * 1000 + 500); }
     if (t === "response.done" && G.lateForced && G.lateForced.resp === G.respSeq) G.lateForced.firstAudio = G.audioSamples || 0;
@@ -729,7 +740,7 @@ function onEvent(e) {
   if (t === "response.done" && G.bot) { act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
-  else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
+  else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; G.stoppedAt = Date.now(); paintCall(); }
   else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)
     G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
@@ -769,8 +780,10 @@ function flushQueued() {
   if (left > 0 && G.live) { G.qTimer = setTimeout(flushQueued, Math.min(left * 1000 + 60, 1000)); return; }
   if (G.qInstr) { G.qInstr = false;
     // the rules changed (hands-free, name, a theme) or the Right now section did (a save, a screen): the instructions go again, updated
-    if (G.sentRules !== rulesKey() || ctxNow() !== G.sentCtx) { vlog(G.sentRules !== rulesKey() ? "rules update" : "Right now update"); send({ type: "session.update", session: { instructions: sentInstructions() } }); } }
-  if (G.qCreate) { G.qCreate = false; const g = G.qGuide; G.qGuide = ""; askReply(g); }
+    // Only a rules change re-sends the whole instructions. A Right now change (a save, a screen, a form) rides with the next reply request instead:
+    // re-sending 18 KB of instructions after every save made xAI re-read the whole conversation each time (Oct 26 responsiveness review)
+    if (G.sentRules !== rulesKey()) { vlog("rules update"); send({ type: "session.update", session: { instructions: sentInstructions() } }); } else if (ctxNow() !== G.sentCtx) vlog("Right now changed: goes with the next reply"); }
+  if (G.qCreate) { G.qCreate = false; let g = G.qGuide; G.qGuide = ""; const ctx = ctxNow(); if (ctx !== G.sentCtx) { G.sentCtx = ctx; g = (g ? g + "\n" : "") + "Right now (replaces the Right now section of your instructions): " + ctx; } askReply(g); }
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;

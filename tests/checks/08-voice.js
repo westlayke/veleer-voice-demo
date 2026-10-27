@@ -404,18 +404,23 @@ test("Ara's instructions stay short and the Process FAQ is looked up with get_pr
   r = await ara(p, "get_process_faq", { question: "zebra xylophone" });
   ok(r.ok && !r.answers.length && /isn't covered/.test(r.say), "an unmatched question returned answers");
 });
-test("During a call, a save or a rule change refreshes Ara's instructions (a session update), never a message in the conversation", async (p) => {
+test("During a call, a save goes with Ara's next reply (no session update); a rule change refreshes the instructions; never a message in the conversation", async (p) => {
   await signIn(p);
   const full = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).length);
   const msgs = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "message").length);
+  const lastCreate = () => p.evaluate(() => (__sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && e.response.instructions).at(-1) || { response: {} }).response.instructions || "");
   const f0 = await full(), m0 = await msgs();
   await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
-  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
-  const upd = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).at(-1).session.instructions);
-  ok(await full() === f0 + 1 && /Saved so far in this conversation: Task added/.test(upd), "the save did not refresh the Right now section");
+  await p.tap("[data-act=save]"); await p.waitForTimeout(900);
+  ok(await full() === f0, "the save re-sent the whole instructions as a session update");
+  const c = await lastCreate();
+  ok(/Right now \(replaces the Right now section/.test(c) && /Saved so far in this conversation: Task added/.test(c), "the save did not go with the next reply's instructions: " + c.slice(0, 200));
   ok(await msgs() === m0, "the save was sent as a message in the conversation");
+  const lastRules = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).at(-1).session.instructions);
+  await said(p, "I've parked"); await p.waitForTimeout(900);
+  ok(await full() === f0 + 1 && !/HANDS-FREE MODE IS ON/.test(await lastRules()), "turning off hands-free did not send the new rules");
   await said(p, "I'm driving"); await p.waitForTimeout(900);
-  ok(/HANDS-FREE MODE IS ON/.test(await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).at(-1).session.instructions)), "turning on hands-free did not send the new rules");
+  ok(await full() === f0 + 2 && /HANDS-FREE MODE IS ON/.test(await lastRules()), "turning on hands-free did not send the new rules");
 });
 test("Voice commands: undo, start over, cancel and go back are carried out by the app", async (p) => {
   await signIn(p);
