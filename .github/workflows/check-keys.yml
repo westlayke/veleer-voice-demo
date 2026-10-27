@@ -1,0 +1,19 @@
+name: Which keys are set
+# Says, for each secret name the voice tests use, whether it exists (true/false only; the values are never printed). Run by hand.
+on:
+  workflow_dispatch:
+jobs:
+  keys:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report
+        env:
+          XAI: ${{ secrets.ARA_CONSISTENCY_KEY != '' }}
+          OPENAI: ${{ secrets.OPENAI_CONSISTENCY_KEY != '' }}
+          GEMINI: ${{ secrets.GEMINI_CONSISTENCY_KEY != '' }}
+          CF: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        run: |
+          echo "ARA_CONSISTENCY_KEY (xAI): $XAI"
+          echo "OPENAI_CONSISTENCY_KEY: $OPENAI"
+          echo "GEMINI_CONSISTENCY_KEY: $GEMINI"
+          echo "CLOUDFLARE_API_TOKEN: $CF"
