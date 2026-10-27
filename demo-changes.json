@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
     {
+      "date": "Oct 26, 8:48 PM",
+      "change": "Preview: visitors were silent after the app had been in the background (iOS leaves their sound engine interrupted for good). On coming back, and on the next tap, an engine that won't resume within a second is thrown away and the next tap starts a fresh one.",
+      "area": "Visitors (themes)",
+      "requestedBy": "Carverhill",
+      "why": "\"After app goes into background, when you come back, visitors make no sounds\""
+    },
+    {
       "date": "Oct 26, 8:14 PM",
       "change": "Live: the call-review changes of 8:14 PM (status read-back with person and due date, entity and campaign from the planned ask, task status FAQ, task counts first and one person's tasks, task choices and shorter next-step offers, show_visitor tool, wording). Hey Ara start-up address stays preview-only.",
       "area": "Voice, Tasks, Opportunities, FAQ",
