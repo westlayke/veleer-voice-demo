@@ -14,9 +14,9 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
   await said(p, "C.");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C" });
-  ok(r.field === "howMet" && /Let's take the next step: a few optional details for Maya, one at a time\. Say move on to skip any, or tap "Save contact" any time\. Next field: how you met Maya\. Fill it in, or move on\?$/.test(r.ask_exactly || ""), "the optional details didn't start after the rating, led by the app: " + JSON.stringify(r));
+  ok(r.field === "howMet" && /Let's take the next step: a few optional details for Maya, one at a time\. Skip any you like, or tap "Save contact" any time\. Next, optional: how you met Maya\. Fill it in, skip it, or tap "Save contact"\?$/.test(r.ask_exactly || ""), "the optional details didn't start after the rating, led by the app: " + JSON.stringify(r));
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
-  ok(/tap/.test(r.status) && !/more details/.test(r.status) && !r.ask_exactly, "a question repeated: " + JSON.stringify(r));
+  ok(/^That's on the form\. Last, optional: should Maya be marked Ally - Do Not Solicit, or Do Not Contact\? Most people are neither: say neither, skip it, or tap "Save contact"\.$/.test(r.ask_exactly || ""), "the answer sent through the draft tool wasn't acknowledged and followed by the next optional question (Oct 27): " + JSON.stringify(r));
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Maya").capacity === "C", "the rating was not saved with the contact");
 });
@@ -105,7 +105,7 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   ok(st === "Listening", "the screen kept saying Speaking with nothing playing: " + st);
   // 4. a status recording still playing when the line returns is cut, and "You're back" isn't said over it
   const back = await p.evaluate(() => { const n = ACT.q.length; G.downAt = Date.now() - 6000; G.lineEndAt = Date.now() + 2000; G.lineSrc = { stop() { window.__lineStopped = true; } }; downEnd(true); return { stopped: window.__lineStopped, log: ACT.q.slice(n).map(a => a.text).join(" | ") }; });
-  ok(back.stopped && /status line was cut short/.test(back.log) && !/said \(recording\): "I'm back\."/.test(back.log), "the status recording wasn't cut when the line returned: " + JSON.stringify(back));
+  ok(back.stopped && /status line was cut short/.test(back.log) && !/said \(recording\): "You're back with Ara\."/.test(back.log), "the status recording wasn't cut when the line returned: " + JSON.stringify(back));
 });
 
 test("A $0 amount from the voice model counts as missing: the form shows it blank, Ara is told, and Save asks for it", async (p) => {
@@ -234,11 +234,11 @@ test("Ara: optional fields one at a time, filled in by the app (rating, how met,
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });
   ok(r.field === "capacity" && /which an opportunity needs/.test(r.ask_exactly || ""), "the rating wasn't asked first: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "skip" });
-  ok(r.field === "howMet" && /^No problem\. Let's take the next step: a few optional details for Jack, one at a time\. .*Next field: how you met Jack\. Fill it in, or move on\?$/.test(r.ask_exactly || ""), "skipping the rating didn't lead on to the other details: " + JSON.stringify(r));
+  ok(r.field === "howMet" && /^No problem\. Let's take the next step: a few optional details for Jack, one at a time\. .*Next, optional: how you met Jack\. Fill it in, skip it, or (save the form now|tap "Save contact")\?$/.test(r.ask_exactly || ""), "skipping the rating didn't lead on to the other details: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "back", field: "the rating" });
-  ok(r.field === "capacity" && /Sure, back to that\. First, Jack's capacity rating\./.test(r.ask_exactly) && /under \$5,000\. Which fits Jack, or move on\?$/.test(r.ask_exactly), "going back to the rating didn't ask it with its bands: " + JSON.stringify(r));
+  ok(r.field === "capacity" && /Sure, back to that\. First, Jack's capacity rating\./.test(r.ask_exactly) && /under \$5,000\. Which fits Jack\? It's optional: skip it, or (save the form now|tap "Save contact")\.$/.test(r.ask_exactly), "going back to the rating didn't ask it with its bands: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "answer", value: "D" });
-  ok((await p.inputValue("#f_capacity")) === "D" && r.field === "howMet" && /how you met Jack\. Fill it in, or move on\?/.test(r.ask_exactly), "the rating wasn't filled in, or How we met didn't come next");
+  ok((await p.inputValue("#f_capacity")) === "D" && r.field === "howMet" && /how you met Jack\. Fill it in, skip it, or /.test(r.ask_exactly), "the rating wasn't filled in, or How we met didn't come next");
   r = await ara(p, "optional_fields", { step: "answer", value: "In the pumpkin patch" });
   ok(/pumpkin patch/.test(await p.inputValue("#f_howMet")) && r.field === "permText", "How we met wasn't filled in, or texting didn't come next");
   r = await ara(p, "optional_fields", { step: "answer", value: "Yes, that's fine" });
@@ -662,14 +662,14 @@ test("Ara: a dead spot while reconnecting: the voice pass is tried again every f
   const mid = await p.evaluate(() => ({ spoken: __spoken.slice(), status: G.status, live: G.live })); mid.log = await logged();
   ok(mid.live && /^Reconnecting/.test(mid.status) && /No voice pass yet \(no answer in 6 s\): trying again in 2 s/.test(mid.log), "a hanging voice pass fetch wasn't given up on and tried again: " + mid.status + " " + mid.log.slice(-300));
   const saidLines = (log) => (log.match(/The phone said \((recording|phone's speech)\): "[^"]*"/g) || []).map(x => x.replace(/^[^"]*"/, "").replace(/"$/, ""));
-  ok(saidLines(mid.log).join("|") === "Sorry, the line dropped. I'm reconnecting.", "the phone didn't say the line dropped at 5 s: " + JSON.stringify(saidLines(mid.log)));
+  ok(saidLines(mid.log).join("|") === "The line dropped. Reconnecting you to Ara.", "the phone didn't say the line dropped at 5 s: " + JSON.stringify(saidLines(mid.log)));
   await p.waitForTimeout(5000);
   const s2 = saidLines(await logged());
   ok(s2.length === 2 && s2[1] === "Still trying to reconnect.", "the phone didn't say it's still trying at 12 s: " + JSON.stringify(s2));
   await p.evaluate(() => { window.__hang = false; }); await p.waitForTimeout(4500);
   const end = await p.evaluate(() => ({ live: G.live, status: G.status, downAt: G.downAt, timer: G.downTimer, spoken: __spoken.length })); end.log = await logged();
   ok(end.live && end.status === "Listening" && /Voice pass fetched in \d+ ms/.test(end.log) && /Voice line open in/.test(end.log), "the line didn't come back once a voice pass could be fetched: " + end.status + " " + end.log.slice(-300));
-  ok(!end.downAt && !end.timer && saidLines(end.log).join("|") === "Sorry, the line dropped. I'm reconnecting.|Still trying to reconnect.|I'm back.", "the spoken reconnect lines didn't stop when the line came back, or the back line wasn't said: " + JSON.stringify(saidLines(end.log)));
+  ok(!end.downAt && !end.timer && saidLines(end.log).join("|") === "The line dropped. Reconnecting you to Ara.|Still trying to reconnect.|You're back with Ara.", "the spoken reconnect lines didn't stop when the line came back, or the back line wasn't said: " + JSON.stringify(saidLines(end.log)));
   ok(/\(recording\)/.test(end.log), "the lines were not played as recordings through the call's own sound: " + end.log.slice(-400));
   // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (Oct 25 4:38 PM: a 3-minute dead spot got the line 13 times)
   const gaps = await p.evaluate(() => { G.downAt = Date.now() - 20000; const a = downRepeatMs(); G.downAt = Date.now() - 70000; const b = downRepeatMs(); G.downAt = 0; return [a, b]; });
@@ -683,7 +683,7 @@ test("Ara: a drop with no form open comes back to the person just worked on, and
   // the officer answers before the questions have started (Oct 25: "a capacity rating of C" got every option read out)
   await p.evaluate(() => { V.opt = null; });
   r = await ara(p, "optional_fields", { step: "answer", value: "C" });
-  ok((await p.inputValue("#f_capacity")) === "C" && r.field === "howMet" && /^Rating C is on the form\. Next field: how you met Nora/.test(r.ask_exactly || ""), "the rating said before the questions wasn't taken: " + JSON.stringify(r));
+  ok((await p.inputValue("#f_capacity")) === "C" && r.field === "howMet" && /^Rating C is on the form\. Next, optional: how you met Nora/.test(r.ask_exactly || ""), "the rating said before the questions wasn't taken: " + JSON.stringify(r));
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Nora").capacity === "C", "the contact didn't save with the rating");
   // the line drops with no form open: Ara carries on with Nora, never "anyone else" (Carverhill, Oct 25)
@@ -814,5 +814,44 @@ test("Oct 27 9:38 AM call: the Cultivation rule answers first, what's next with 
   await p.evaluate(() => { G.audioSamples = 0; G.lineEndAt = Date.now() + 2500; lineHeard("Decision recorded for Valerie. Next is to add a planned ask. Want to do that now?", true); });
   await p.waitForTimeout(1200);
   ok(!/may not have been heard: no voice audio[^|]*Decision recorded/.test(await logged()), "the app's own Ara-voice line was reported as not heard: " + (await logged()).slice(-300));
+});
+test("Oct 27 10:21 AM call: scripted lines are said by the app in its own stand-in voice (Grok's force line only as the fallback), optional questions say they're optional and how to save, a rating sent through the draft tool is acknowledged, a question passed on returns to the form, and what's next on a complete form reads it back", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  const logged = () => p.evaluate(() => ACT.q.map(a => a.text).join(" | "));
+  // the Worker's /tts answers with a real recording here (the test server's own file); the voice asked for is the stand-in, not Ara's
+  await p.evaluate(() => { const f = window.fetch; window.__tts = []; window.__ttsOn = true; window.fetch = (u, o) => { if (/\/tts$/.test(String(u))) { __tts.push(JSON.parse(o.body)); return window.__ttsFail ? Promise.resolve(new Response("no", { status: 502 })) : f("preview/sounds/line-back.mp3"); } return f(u, o); }; });
+  // 1. the capacity question after "no mobile": the app's own voice, no force line, Grok told through Right now, the no-reply watchdog armed again if the officer spoke meanwhile
+  await said(p, "New contact: Nia Vale, nia at example dot org.");
+  let r = await ara(p, "show_contact_draft", { first: "Nia", last: "Vale", email: "nia@example.org" });
+  let n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => recent(botName(), "Do you have a mobile number for Nia too?")); await said(p, "No."); await p.waitForTimeout(600);
+  await p.waitForFunction(() => !(G.lineEndAt > Date.now()) && !G.qInstr, null, { timeout: 8000 }).catch(() => {}); await p.waitForTimeout(200); /* the Right now update waits for the app's own line to finish playing */
+  let out = await p.evaluate((n) => { const xs = __sent.slice(n).map(s => JSON.parse(s)); return { tts: __tts, force: xs.some(e => e.item && e.item.type === "force_message"), told: xs.filter(e => e.type === "session.update").map(e => e.session.instructions || "").join(" "), recent: (G.recent || []).slice(-1)[0] || "", last: G.lastForcedText }; }, n);
+  ok(out.tts.length === 1 && out.tts[0].voice === "leo" && /^Next, Nia's capacity rating/.test(out.tts[0].text) && !out.force, "the capacity question wasn't said by the app in the stand-in voice: " + JSON.stringify(out.tts) + " force " + out.force);
+  ok(/The phone said in its own voice \(fetched in \d+ ms\): "Next, Nia's capacity rating/.test(await logged()), "the app's own line wasn't logged as its own voice: " + (await logged()).slice(-300));
+  ok(/in its own stand-in voice: "Next, Nia's capacity rating/.test(out.told) && !/\(A to E, or move on\)/.test(out.told) && /^Ara: Next, Nia's capacity rating/.test(out.recent) && /^Next, Nia's capacity rating/.test(out.last || ""), "Grok wasn't told the app said the line (or the note still reads as a line to say): " + JSON.stringify({ told: out.told.slice(-400), recent: out.recent }));
+  ok(/It's optional: skip it, or save the form now\.$/.test(out.tts[0].text), "the capacity question doesn't say it's optional and how to save: " + out.tts[0].text);
+  // 2. the rating comes in through the draft tool during the capacity question: acknowledged, then the optional details, each said to be optional with skip or save
+  await said(p, "Make it B.");
+  r = await ara(p, "show_contact_draft", { first: "Nia", last: "Vale", email: "nia@example.org", capacity: "B" });
+  ok(/^Rating B is on the form\. Let's take the next step: a few optional details for Nia, one at a time\. Skip any you like, or say save it to finish\. Next, optional: how you met Nia\. Fill it in, skip it, or save the form now\?$/.test(r.asked || ""), "the rating sent through the draft tool wasn't acknowledged before the next optional question: " + JSON.stringify(r));
+  ok((await p.inputValue("#f_capacity")) === "B", "the rating isn't on the form");
+  // 3. a question passed to the project team mid-form: the app comes straight back to the pending question
+  await said(p, "Pass on that the rating list is too long to listen to."); r = await ara(p, "pass_question_to_team", { question: "The rating list is too long to listen to" }, 700);
+  ok(/^Passed to the project team\. .*how you met Nia\. Fill it in, skip it, or save the form now\?$/.test(r.asked || ""), "passing a question on didn't return to the form's pending question: " + JSON.stringify(r));
+  // 4. the app's voice fails: Grok's force line is the fallback, with the same words
+  await p.evaluate(() => { window.__ttsFail = true; }); n = await p.evaluate(() => __sent.length);
+  await said(p, "Skip it."); r = await ara(p, "optional_fields", { step: "skip" }, 700);
+  out = await p.evaluate((n) => { const xs = __sent.slice(n).map(s => JSON.parse(s)); return { force: xs.filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text) }; }, n);
+  ok(out.force.length === 1 && /^No problem\. Last, optional: should Nia be marked Ally - Do Not Solicit, or Do Not Contact\? Most people are neither: say neither, skip it, or save the form now\.$/.test(out.force[0]) && /The app's own line didn't arrive in time/.test(await logged()), "the force line didn't take over when the app's voice failed: " + JSON.stringify(out) + " " + (await logged()).slice(-200));
+  await p.evaluate(() => { window.__ttsFail = false; });
+  // 5. the form is complete and read back; "what's next" reads it back again instead of describing it
+  await said(p, "Neither."); r = await ara(p, "optional_fields", { step: "answer", value: "neither" }, 700);
+  ok(/^Neither flag is set\. New contact\. .*Shall I save it\?$/.test(r.read_back || ""), "the finished form wasn't read back: " + JSON.stringify(r));
+  await said(p, "What's next?"); r = await ara(p, "get_next_step", {}, 700);
+  ok(/^The form is complete; here it is\. New contact\. First name: Nia; .*Shall I save it\?$/.test(r.read_back || ""), "what's next on a complete form didn't read it back: " + JSON.stringify(r));
+  await said(p, "Yes."); r = await ara(p, "save_form", { confirmed: true }, 1500);
+  ok(r.saved === true, "the yes after the read-back didn't save: " + JSON.stringify(r));
 });
 };

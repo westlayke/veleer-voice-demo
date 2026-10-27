@@ -96,8 +96,9 @@ const TOOL_HANDLERS = {
     const hits = faqLookup(data.question || "");
     // Oct 27 9:40 AM call: "do I need an interaction before moving her to Cultivation?" got "No" from a nearby entry; the app's own rule comes first
     if (/cultivation/i.test(data.question || "") && /\b(move|moving|before|need|needs|require|required|have to|must|criteria|ready)\b/i.test(data.question || "")) hits.unshift({ section: "App rule", q: "What does the app require before Move to Cultivation?", a: "A capacity rating on the Contact and a substantive interaction recorded in an Interaction report. The app refuses the move until both are there; a substantive interaction is required, not optional." });
-    toolReply(callId, hits.length ? { ok: true, answers: hits.map(h => ({ topic: h.section, q: h.q, a: h.a })), say: "Answer in one to three spoken sentences from these only, using their exact names. If none of them answers the question, say it isn't covered in this proof of concept and offer to pass it to the project team." }
-      : { ok: true, answers: [], say: "Nothing in the Process FAQ matches. Say it isn't covered in this proof of concept and offer to pass the question to the project team." }); return;
+    const fp = V && ACTIONS[V.action] ? (formPosition() || {}) : null, back = fp ? ` A form is open (${ACTIONS[V.action].title}): right after the answer, go back to its pending question${fp.ask ? `, which is "${fp.ask}"` : " (call get_next_step for it)"}. Never ask what they'd like to do next.` : "";
+    toolReply(callId, hits.length ? { ok: true, answers: hits.map(h => ({ topic: h.section, q: h.q, a: h.a })), say: "Answer in one to three spoken sentences from these only, using their exact names. If none of them answers the question, say it isn't covered in this proof of concept and offer to pass it to the project team." + back }
+      : { ok: true, answers: [], say: "Nothing in the Process FAQ matches. Say it isn't covered in this proof of concept and offer to pass the question to the project team." + back }); return;
   },
   get_demo_changes(callId, data, name) {
     demoChanges().then(all => {
@@ -123,7 +124,8 @@ const TOOL_HANDLERS = {
   pass_question_to_team(callId, data, name) {
     const q = String(data.question || "").trim();
     if (!q) { toolReply(callId, { ok: false, error: "No question given. Ask the officer what they'd like to pass on." }); return; }
-    act("question", q); logReady().then(on => toolReply(callId, on ? { ok: true, status: "Passed to the project team. Say so in one short sentence and ask what they'd like to do next." }
+    // with a form open the app goes straight back to its pending question (Oct 27 10:21 AM call: "what would you like to do next" mid-form)
+    act("question", q); logReady().then(on => on && V && ACTIONS[V.action] ? formNextStep(callId, "Passed to the project team.") : toolReply(callId, on ? { ok: true, status: "Passed to the project team. Say so in one short sentence and ask what they'd like to do next." }
       : { ok: false, error: "The question couldn't be sent from this phone. Say so and suggest they tell the person who shared the proof of concept." })); return;
   },
   close_form(callId, data, name) {
@@ -301,7 +303,7 @@ function draftTool(callId, name, data) {
   if (target.error && target.gate && tool.action === "opportunity" && !target.gate.capacity && !target.gate.dnc && !target.gate.ally && !openOpp(target.gate.id)) {
     // only the rating is missing: the app asks it itself and reopens the opportunity once it is saved (Oct 27, Carverhill: "take us down that path")
     const c = target.gate; G.afterRate = c.id; act("step", `${name}: ${nameOf(c)} needs a capacity rating first; the app asks it`);
-    toolReply(callId, { ok: false, opened: false, error: `${nameOf(c)} needs a capacity rating before an opportunity; the app is asking for it.`, ask_exactly: `${c.first} needs a capacity rating before an opportunity. ${OPT_STEPS.contact[0].q(c.first, false).replace(/^First, .*? capacity rating\. /, "").replace(/, or move on\?$/, "?")}`, next: "After the officer answers, call set_capacity_rating with their rating; once it is saved the app has you reopen the opportunity." }); return; }
+    toolReply(callId, { ok: false, opened: false, error: `${nameOf(c)} needs a capacity rating before an opportunity; the app is asking for it.`, ask_exactly: `${c.first} needs a capacity rating before an opportunity. ${OPT_STEPS.contact[0].q(c.first, false).replace(/^First, .*? capacity rating\. /, "").replace(/\? It's optional: .*$/, "?")}`, next: "After the officer answers, call set_capacity_rating with their rating; once it is saved the app has you reopen the opportunity." }); return; }
   if (target.error) { toolReply(callId, { ok: false, error: target.error }); return; }
   if (target.route) { tool = TOOLS.find(t => t.action === target.route); delete data.fund; } // Record gift in Commitment: applied to the pledge
   // a new form opens only when the officer asked for it, or said yes to Ara offering it (Carverhill, Oct 25: "always prompt me to go to the next step")
@@ -379,6 +381,9 @@ function draftTool(callId, name, data) {
   if (missedSpelling.length) { toolReply(callId, { ok: true, button: A.saveLabel, status: `The officer just spelled out ${missedSpelling.map(w => `"${spellOut(w)}" (${w.charAt(0) + w.slice(1).toLowerCase()})`).join(" and ")}, but this update didn't use it. Call this tool again now with that exact spelling in the field they named (for a name, first or last as they said; for an email, the part before the @). If they changed how a name is spelled and the email uses that name, ask once whether the email should change to match. Don't ask them to repeat it.` }); return; }
   // every interaction report: ask whether it was substantive (Oct 24: saved as not substantive without asking, which kept the opportunity in Qualification)
   if (tool.action === "interaction" && !missing.length && !V.askedSubst && !V.fromVoice.has("substantive")) { V.askedSubst = true; toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: SUBST_Q, next: "After the officer answers, call this tool again with substantive true or false." + droppedNote }); return; } // the app asks it itself (Oct 25: Ara skipped the question when it was only guidance)
+  // the answer to the optional question being asked came in through this tool instead (Oct 27 10:21 AM call: the rating went on the form unacknowledged and the questions carried on as if nothing was said)
+  if (V.opt && V.opt.cur && said.includes(V.opt.cur) && !empty(d[V.opt.cur]) && !V.opt.done.includes(V.opt.cur)) { const k = V.opt.cur, heard = optHeard(k, d[k]); V.opt.done.push(k); V.opt.lastK = k; V.opt.lastVal = String(d[k]).toLowerCase(); V.opt.lastAt = Date.now(); act("step", `optional field ${k} came in through the draft tool: ${heard}`);
+    if (!V.opt.only) { optAsk(callId, heard); return; } V.opt = null; if (tool.action === "contact" && !V.askedOptional) { offerMore(callId, heard); return; } }
   if (V.opt && V.opt.only && !empty(d[V.opt.only])) V.opt = null; // the one field asked for came in through this tool instead
   if (tool.action === "contact" && !missing.length) {
     if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true; V.awaitOther = { which: empty(d.email) ? "email" : "mobile", at: Date.now() }; toolReply(callId, { ok: true, button: A.saveLabel, status: `The draft is open on screen. Now ask in one short question for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.${droppedNote}` }); return; }
@@ -400,7 +405,7 @@ function contactNoOther() {
   act("step", `The officer has no ${which} for ${optWho()}: the form moves on`);
   if ((d.capacity === undefined || d.capacity === null || String(d.capacity).trim() === "") && !V.askedCap) {
     V.askedCap = true; V.opt = { done: [], only: "capacity", cur: "capacity" };
-    G.justNow = { text: `The officer has no ${which} for ${optWho()}, so the app asked for ${optWho()}'s capacity rating itself (A to E, or move on). When the officer answers, call optional_fields with step answer and their words as value (or step skip).`, at: Date.now() };
+    G.justNow = { text: `The officer has no ${which} for ${optWho()}. The app is asking for ${optWho()}'s capacity rating itself, in its own voice: don't ask for it and don't repeat the question. When the officer answers with a letter from A to E, call optional_fields with step answer and their words as value; if they skip it, call optional_fields with step skip.`, at: Date.now() };
     whenIdle("instr"); forceSay(OPT_STEPS.contact[0].q(optWho(), true)); return; }
   guide(`The officer has no ${which} for ${optWho()}. Call show_contact_draft again now with the fields so far (no ${which}) so the app can go on; say nothing else.`);
 }

@@ -1,10 +1,10 @@
 {
-  "note": "The phone's own spoken lines, recorded once in Ara's voice with xAI text-to-speech (voice ara) by the Record Ara's lines workflow, into preview/sounds/. First person: it is Ara's voice the officer hears.",
-  "voice": "ara",
+  "note": "The phone's own recorded lines in preview/sounds/. Since Oct 27 these are the release 1.0 recordings in the phone's stand-in voice (Kokoro af_heart, third person: it is the app speaking about Ara), restored so the officer can tell the app from Ara (Carverhill). The Record Ara's lines workflow would re-record them in Ara's voice (xAI text-to-speech, voice ara): don't run it unless that is wanted again.",
+  "voice": "kokoro af_heart (release 1.0)",
   "lines": [
-    { "file": "line-dropped.mp3", "text": "Sorry, the line dropped. I'm reconnecting." },
+    { "file": "line-dropped.mp3", "text": "The line dropped. Reconnecting you to Ara." },
     { "file": "still-trying.mp3", "text": "Still trying to reconnect." },
-    { "file": "line-back.mp3", "text": "I'm back." },
-    { "file": "ara-slow.mp3", "text": "Give me a moment." }
+    { "file": "line-back.mp3", "text": "You're back with Ara." },
+    { "file": "ara-slow.mp3", "text": "Ara's taking a moment." }
   ]
 }

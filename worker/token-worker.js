@@ -42,15 +42,17 @@ export default {
   },
 };
 
-// a line in Ara's voice: at most 400 characters (about $0.006), mp3 at 24 kHz; the audio is cached by the browser per text
+// a spoken line: at most 400 characters (about $0.006), mp3 at 24 kHz; the audio is cached by the browser per text and voice.
+// voice: one of xAI's multilingual voices; the app asks for its stand-in voice (leo) so the officer can tell the app from Ara (Oct 27)
+const VOICES = ["ara", "eve", "leo", "rex", "sal"];
 async function speak(request, env, cors, json) {
   let b; try { b = await request.json(); } catch (e) { return json({ error: "bad_json" }, 400); }
-  const text = String(b.text || "").trim().slice(0, 400);
+  const text = String(b.text || "").trim().slice(0, 400), voice = VOICES.includes(b.voice) ? b.voice : "ara";
   if (!text) return json({ error: "no_text" }, 400);
   const r = await fetch("https://api.x.ai/v1/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.XAI_API_KEY },
-    body: JSON.stringify({ text, voice_id: "ara", language: "en", output_format: { codec: "mp3", sample_rate: 24000, bit_rate: 64000 } }),
+    body: JSON.stringify({ text, voice_id: voice, language: "en", output_format: { codec: "mp3", sample_rate: 24000, bit_rate: 64000 } }),
   });
   if (!r.ok) return json({ error: "tts_" + r.status }, 502);
   return new Response(await r.arrayBuffer(), { status: 200, headers: { ...cors, "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=3600" } });

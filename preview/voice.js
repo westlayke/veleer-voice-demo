@@ -248,7 +248,7 @@ function grokInstructions() {
 - If the answer isn't there, say plainly that it isn't covered in this proof of concept and offer to pass the question to the project team; if the FAQ says something is still open with the customer, say that.
 - If the officer says "Review FAQ" or asks what they can ask about, name four or five of these topics in one or two sentences, give one example question, and ask what they'd like to know: ${faqTopics().join(", ")}.
 - Questions about the proof of concept itself (what's new, what changed, when or why): call get_demo_changes with a few keywords and answer in one to three sentences with the date. Don't read the whole list out.
-- When you can't answer from the FAQ, the list of changes or their data, or the officer reports a problem or makes a suggestion about the proof of concept, say so briefly and ask "Shall I pass that to the project team?" Only after they say yes, call pass_question_to_team with it in their words, then say the team will see it. A yes in any words ("sure", "do that", "go ahead") counts, even when they ask for something else in the same breath: call pass_question_to_team first, then help with the new request. Never promise when or how the team will reply.
+- When you can't answer from the FAQ, the list of changes or their data, or the officer reports a problem or makes a suggestion about the proof of concept, say so briefly and ask "Shall I pass that to the project team?" Only after they say yes, call pass_question_to_team with it in their words, then say the team will see it. While a form is open, after passing something on or answering a question, go straight back to the form's pending question (the app says it): never ask what they'd like to do next. A yes in any words ("sure", "do that", "go ahead") counts, even when they ask for something else in the same breath: call pass_question_to_team first, then help with the new request. Never promise when or how the team will reply.
 ### The process overview
 - If the officer asks how the process works, for an overview, or to be walked through it (not how to do one task): call show_screen with how_it_works and then highlight_stage for Contact straight away, without saying anything first, then open with the short introduction the tool reply gives you and give a spoken tour, one stage at a time in order.
 - For each stage: call highlight_stage, say one or two plain sentences (what the stage means and what has to happen to move on), then ask "Shall I go on to <next stage>?" and wait. On yes, call highlight_stage for the next stage straight away, before saying anything, and never repeat or finish what you already said; on no, stop and ask what they'd like to do. If they ask you to go straight through, do the remaining stages without asking between them.
@@ -690,7 +690,7 @@ function voiceCommand(text) {
 // conversation where she could read it aloud (Oct 24: "Skip it and move on. Then ask exactly" was spoken). Nothing to remember goes here.
 function guide(text) {
   // a scripted line is on its way: Ara must not say the same words herself (Oct 25: the hands-free line was heard twice)
-  const pf = G.forced ? G.forced.text : G.pendingForce; if (pf) text = `The app is saying this itself, in your voice, so don't say it or anything like it: "${pf}". ` + text;
+  const pf = G.forced ? G.forced.text : G.pendingForce; if (pf) text = `The app is saying this itself, in its own stand-in voice, so don't say it or anything like it: "${pf}". ` + text;
   G.qGuide = G.qGuide ? G.qGuide + "\n" + text : text; whenIdle("create"); }
 // Something the officer did on screen that stands for their words (a tapped request): a conversation item, since it is their input
 function notice(text) {
@@ -752,7 +752,7 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardSinceRetry = true; G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardSinceRetry = true; G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN, at: Date.now() }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
     if (V && V.awaitOther && Date.now() - V.awaitOther.at < 90000 && /\b(mobile|email|number|phone)\b/i.test(askedBefore()) && typeof contactNoOther === "function" && /^(no|nope|none|nothing|not that i know( of)?|no,? (i|we) don't|(i|we|he|she|they) (don't|doesn't|do not|does not) have( one| it| a mobile| a cell| a number| an email)?|skip( it| that)?|move on)[.!,]?( thanks| thank you)?$/i.test(e.transcript.trim())) contactNoOther();
     if (typeof heardAsk === "function" && heardAsk(e.transcript)) { const txt = "The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."; G.heardAsk = { seq: G.seqAtStop || 0, text: txt }; guide(txt); } } // seq: replies before they spoke; a reply since is Grok's own answer
   if (G.forced) forcedEvent(t, e);
@@ -795,7 +795,7 @@ function lateForcedCheck() {
 function sentInstructions() { G.sentRules = rulesKey(); G.sentCtx = ctxNow(); return grokInstructions(); }
 // the first words of a reply match the reply Grok finished within the last 20 s: a doubled answer to a re-ask (Oct 27 9:45 AM call)
 const sameAsLast = (text) => { const l = G.lastBot; if (!l || !l.text || Date.now() - l.at > 20000) return false; const a = text.replace(/\s+/g, " ").trim(), b = l.text.replace(/\s+/g, " ").trim(); return a.length >= 24 && b.startsWith(a); };
-const playingLeft = () => G.ctx && G.playHead > G.ctx.currentTime + 0.05 ? G.playHead - G.ctx.currentTime : 0;
+const playingLeft = () => { const ara = G.ctx && G.playHead > G.ctx.currentTime + 0.05 ? G.playHead - G.ctx.currentTime : 0, own = G.lineEndAt && G.lineEndAt > Date.now() + 50 ? (G.lineEndAt - Date.now()) / 1000 : 0; return Math.max(ara, own); }; // Ara's sound still to play, or the phone's own line (Oct 27: nothing starts over it)
 function flushQueued() {
   clearTimeout(G.qTimer); G.qTimer = null;
   if (!G.qInstr && !G.qCreate) return;

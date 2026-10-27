@@ -396,7 +396,7 @@ test("Oct 27: a hands-free save is acknowledged by the app itself in Ara's voice
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await p.waitForFunction(() => G.live, null, { timeout: 8000 });
   // the Worker's /tts answers with a real recording here (the test server's own file)
-  await p.evaluate(() => { const f = window.fetch; window.__tts = []; window.fetch = (u, o) => { if (/\/tts$/.test(String(u))) { __tts.push(JSON.parse(o.body).text); return window.__ttsFail ? Promise.resolve(new Response("no", { status: 502 })) : f("preview/sounds/line-back.mp3"); } return f(u, o); }; });
+  await p.evaluate(() => { const f = window.fetch; window.__tts = []; window.__ttsOn = true; window.fetch = (u, o) => { if (/\/tts$/.test(String(u))) { __tts.push(JSON.parse(o.body).text); return window.__ttsFail ? Promise.resolve(new Response("no", { status: 502 })) : f("preview/sounds/line-back.mp3"); } return f(u, o); }; });
   await said(p, "New contact: Pat Moss, pat at example dot org, mobile 555 010 0150.");
   let r = await ara(p, "show_contact_draft", { first: "Pat", last: "Moss", email: "pat@example.org", mobile: "(555) 010-0150" });
   await said(p, "Rate them C."); r = await ara(p, "optional_fields", { step: "answer", value: "C" }); await ara(p, "optional_fields", { step: "stop" });
@@ -405,7 +405,7 @@ test("Oct 27: a hands-free save is acknowledged by the app itself in Ara's voice
   r = await ara(p, "save_form", { confirmed: true }, 1200);
   const out = await p.evaluate((n) => { const xs = __sent.slice(n).map(s => JSON.parse(s)); return { tts: __tts, create: xs.some(e => e.type === "response.create"), told: xs.filter(e => e.type === "session.update").map(e => e.session.instructions || "").join(" "), log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), recent: (G.recent || []).slice(-2).join(" | "), last: G.lastForcedText }; }, n);
   ok(r.saved === true && r.app_said === "Contact saved for Pat. Say undo if that's wrong. Next is to create an opportunity for Pat. Want to do that now?", "the save wasn't acknowledged by the app's own line: " + JSON.stringify(r));
-  ok(out.tts.length === 1 && !out.create && /said in Ara's voice/.test(out.log) && /in your voice: "Contact saved for Pat\./.test(out.told) && /Contact saved for Pat/.test(out.recent) && out.last === r.app_said, "the line wasn't played, recorded or told to Grok as expected: " + JSON.stringify({ tts: out.tts, create: out.create, told: /in your voice/.test(out.told), recent: out.recent }));
+  ok(out.tts.at(-1) === r.app_said && !out.create && /said in its own voice/.test(out.log) && /stand-in voice: "Contact saved for Pat\./.test(out.told) && /Contact saved for Pat/.test(out.recent) && out.last === r.app_said, "the line wasn't played, recorded or told to Grok as expected: " + JSON.stringify({ tts: out.tts, create: out.create, told: /stand-in voice/.test(out.told), recent: out.recent }));
   // the officer answers the app's question: the opportunity opens on that yes (the app's line counts as Ara's offer)
   await p.evaluate(() => { G.lastSaved.at = Date.now(); });
   await said(p, "Yes."); r = await ara(p, "show_opportunity_draft", { contact_name: "Pat Moss" });

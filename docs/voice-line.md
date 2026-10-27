@@ -70,7 +70,7 @@ phone locked.
    On failure, try again every `TOKEN_RETRY_MS` (2 s) until `DOWN_GIVE_UP_MS` (5 minutes) or a definite refusal
    (bad code, service error), which ends the call as in step 1.
 6. **Open the socket**, with the saved `conversation_id` so the conversation resumes. On open: session configuration
-   is sent again, `downEnd(true)` stops the phone's lines and plays "I'm back." if the line was down 5 s or
+   is sent again, `downEnd(true)` stops the phone's lines and plays "You're back with Ara." if the line was down 5 s or
    more, the reading is logged ("Picked up the same conversation", "Voice line open in N ms (reconnect n)"), and a
    new pass is prefetched for the next drop. A line that stays up `STABLE_MS` (20 s) before dropping resets the try
    count, so separate drops on a drive are not one failure.
@@ -82,10 +82,10 @@ Grok cannot speak while the line is down, so the phone does, from three recordin
 call's own audio output (`playLine`, `sayLocal`). The phone's built-in speech is never used: on iOS it produced an
 "Audio Recording / Stop audio recording?" dialog that muted the mic (October 25).
 
-- `SAY_DOWN_MS` 5 s after the drop: "Sorry, the line dropped. I'm reconnecting." (all four status lines are recorded in Ara's own voice with xAI text-to-speech, `tools/ara-lines.json`, so the officer never hears a second voice)
+- `SAY_DOWN_MS` 5 s after the drop: "The line dropped. Reconnecting you to Ara." (all four status lines are the release 1.0 recordings in the phone's own stand-in voice, `tools/ara-lines.json`: Carverhill, Oct 27, wants to hear when the app, not Ara, is speaking)
 - `SAY_STILL_MS` 12 s: "Still trying to reconnect.", then every `SAY_REPEAT_MS` (10 s); after the first minute down,
   every `SAY_REPEAT_LATER_MS` (30 s) so a long dead spot does not nag.
-- When the line is back: "I'm back.", unless a status line is still playing (it is cut instead) or the
+- When the line is back: "You're back with Ara.", unless a status line is still playing (it is cut instead) or the
   drop lasted under 5 s.
 - Short tones: a drop tone on the first drop, a soft tick every `TICK_MS` while waiting for a slow reply or reconnecting
   (until the spoken line takes over), a down tone when the call gives up.
@@ -104,8 +104,11 @@ sentence for Ara's instructions, and `ask`, the exact pending question, in this 
 4. Otherwise which required fields are still missing, or that the form is complete.
 
 On reconnect, when there is a pending question, the app puts "Just now: …" in Ara's live context, logs the step
-("Reconnected: the app asks the pending question itself") and has Ara speak a **scripted line**: "Sorry, I lost you for
-a moment. " followed by the pending question, word for word. When the same question is forced again within three minutes
+("Reconnected: the app asks the pending question itself") and speaks a **scripted line**: "Sorry, I lost you for
+a moment. " followed by the pending question, word for word. Since Oct 27 every scripted line (a question, a read-back,
+the reconnect line) is said by the app itself in its stand-in voice (`ttsSay`, xAI text-to-speech voice `APP_VOICE` = leo through
+the Worker's `/tts`, started no earlier than Ara's sound ends); Grok's `force_message` in Ara's voice is the fallback when the
+audio does not arrive within `TTS_WAIT_MS` (4 s), and after that `FORCE_WAIT_MS` (8 s) Ara says the line from guidance instead. When the same question is forced again within three minutes
 (a second drop in a row, Oct 27 13:25 call) the line is "Sorry, the line dropped again. I'm still waiting on this: " and the
 question, so it doesn't sound as if Ara forgot the answer (`G.reAsk`). With no pending question, Ara gets `reconnectLine()` as
 guidance instead: the last lines said, what has been saved (never to be saved again), the open form, whether
