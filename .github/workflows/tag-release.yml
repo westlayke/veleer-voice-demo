@@ -1,0 +1,32 @@
+name: Tag a release
+# Creates an annotated tag and a GitHub Release (with the source archive) at a given commit. Run by hand; used because
+# tags can't be pushed from the cloud session (only branches). The notes come from docs/release-<tag without v>.md.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag, for example v1.0"
+        required: true
+      sha:
+        description: "Commit to tag (full or short)"
+        required: true
+      title:
+        description: "Release title"
+        required: true
+permissions:
+  contents: write
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.sha }}
+          TITLE: ${{ inputs.title }}
+        run: |
+          notes="docs/release-${TAG#v}.md"; [ -f "$notes" ] || { echo "No notes file $notes" > /tmp/notes.md; notes=/tmp/notes.md; }
+          gh release create "$TAG" --target "$(git rev-parse "$SHA")" --title "$TITLE" --notes-file "$notes"
