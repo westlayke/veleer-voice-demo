@@ -700,7 +700,7 @@ test("A voice pass refused by the key holder ends the call with the reason in th
   ok(ends.some(t => /couldn't start: service_429/.test(t)), "the end row doesn't carry the reason: " + ends.join(" | "));
 });
 
-test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, a scripted line by reply, the replay after a drop", async (p) => {
+test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, scripted lines by reply (one request at a time, no second copy), the replay after a drop", async (p) => {
   // the engine is chosen before the call: the pass is minted for it and the socket address, subprotocols and session body follow the provider table (preview/provider.js)
   await p.evaluate(() => { S.settings.provider = "openai"; save(); });
   await signIn(p);
@@ -714,7 +714,7 @@ test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, a s
   ok(!sess.some(x => x.instructions && !x.type), "a session update went out without the session type: " + JSON.stringify(sess.map(x => Object.keys(x))));
   // a scripted line: no force_message on this engine, so the assistant is asked in a reply of its own to say it word for word
   let n0 = await p.evaluate(() => __sent.length);
-  await p.evaluate(() => forceSay("Contact saved for Nora."));
+  await p.evaluate(() => { G.responding = false; G.createAt = 0; forceSay("Contact saved for Nora."); }); // a free line: nothing asked for and not yet started
   await p.waitForTimeout(300);
   const sent = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)), n);
   let out = await sent(n0);
@@ -755,6 +755,29 @@ test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, a s
   await emptyReply(); await p.waitForTimeout(1500);
   ok((await p.evaluate(() => __wsUrls.length)) === urlsBefore && (await p.evaluate(() => G.drops)) === dropsBefore && (await p.evaluate(() => G.live)) === true, "a second empty reply opened a fresh line");
   ok((await p.evaluate(() => VLOG.join("\n"))).includes("had no words twice"), "the second empty reply wasn't logged as waiting for the officer");
+  // a scripted line is a reply request too: it waits while another request is pending (run 2, Oct 27: the line's request raced the tool-result request and was refused)
+  n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.responding = false; G.createAt = 0; G.lastBot = ""; askReply("tool guidance"); forceSay("What's the first name?"); });
+  await p.waitForTimeout(300);
+  cr = await creates(n0);
+  ok(cr.length === 1 && /tool guidance/.test(cr[0].response.instructions || ""), "the scripted line's request went out while the tool-result request was pending: " + JSON.stringify(cr).slice(0, 300));
+  // the engine answers the tool result with the question itself: the scripted copy is dropped, not said a second time
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "What's the first name?" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await p.waitForTimeout(600);
+  cr = await creates(n0);
+  ok(cr.length === 1 && !(await p.evaluate(() => G.forced || G.pendingForce)), "the question the engine had just asked was sent again as a scripted line: " + JSON.stringify(cr).slice(0, 300));
+  ok((await p.evaluate(() => VLOG.join("\n"))).includes("scripted line already said"), "the dropped copy wasn't logged");
+  // a scripted line refused because a reply was running goes again as a scripted line after it, not as a plain reply
+  n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.responding = false; G.createAt = 0; G.lastBot = ""; forceSay("Shall I save it?"); });
+  await p.waitForTimeout(100);
+  ok((await creates(n0)).length === 1, "the scripted line didn't go out on a free line");
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "error", error: { type: "invalid_request_error", code: "conversation_already_has_active_response", message: "Conversation already has an active response in progress" } }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "Got it, capacity C." }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await p.waitForTimeout(600);
+  cr = await creates(n0);
+  ok(cr.length === 2 && /word for word[^]*"Shall I save it\?"/.test(cr[1].response.instructions || ""), "the refused scripted line didn't go again as a scripted line: " + JSON.stringify(cr).slice(0, 400));
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "Shall I save it?" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await p.waitForTimeout(200);
   // the engine's own rule: tool first, no preamble (Grok's rules don't carry it)
   ok(/Call the tool first, with no words before it/.test(sess[0].instructions), "OpenAI's rules lack the no-preamble line");
   // a drop: no resumption on this engine, so the new line carries the last lines as text

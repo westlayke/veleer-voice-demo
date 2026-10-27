@@ -615,7 +615,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; G.lastBot = ""; G.lastBotAt = 0; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -737,7 +737,7 @@ function onEvent(e) {
   if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
     if (typeof heardAsk === "function" && heardAsk(e.transcript)) guide("The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."); }
   if (G.forced) forcedEvent(t, e);
-  if (t === "response.done" && G.bot) { act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
+  if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
@@ -751,8 +751,11 @@ function onEvent(e) {
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
   else if (t === "conversation.created" && e.conversation && e.conversation.id) { if (G.convId !== e.conversation.id) vlog("conversation " + e.conversation.id); G.convId = e.conversation.id; }
+  else if (t === "error" && e.error && e.error.code === "conversation_already_has_active_response" && G.forced && G.forced.viaReply && !G.forced.started) { // OpenAI refused the scripted line's reply request: the line goes again after the running reply, not a plain reply in its place
+    const f = G.forced; G.forced = null; clearTimeout(G.forceTimer); G.createAt = 0; G.responding = true; clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { G.responding = false; flushQueued(); }, 6000);
+    vlog("scripted line refused (a reply already running): sent again after it"); act("step", "Scripted line refused by the engine (a reply already running): sent again after it"); forceSay(f.text, f.then, f.fallback); }
   else if (t === "error" && e.error && e.error.code === "conversation_already_has_active_response") { // OpenAI: the request goes again once the running reply is done
-    G.asked = false; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; G.responding = true; clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { G.responding = false; flushQueued(); }, 6000);
+    G.asked = false; G.createAt = 0; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; G.responding = true; clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { G.responding = false; flushQueued(); }, 6000);
     vlog("reply request refused (one already running): queued"); act("step", "Reply request refused by the engine (one already running): sent again after it"); }
   else if (t === "error" && G.forced && !G.forced.started) { const f = G.forced; G.forced = null; clearTimeout(G.forceTimer); act("step", "Scripted line refused: Ara says it instead"); guide(f.fallback); }
   else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) act("step", "Grok error: " + e.error.message.slice(0, 300)); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) toast("Voice: " + e.error.message); }

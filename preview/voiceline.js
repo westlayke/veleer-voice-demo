@@ -248,9 +248,11 @@ function cue(kind) {
 // Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
 const CREATE_WAIT_MS = 2500; // serial engines: a second reply request waits for the first to report started (or this long)
+// a reply is running, or was asked for and hasn't reported started yet: on a serial engine nothing else may ask for one (OpenAI refuses it)
+const replyBusy = () => G.responding || (PROV().serial && !!G.createAt && Date.now() - G.createAt < CREATE_WAIT_MS);
 function askReply(guidance) {
   if (guidance !== undefined) G.askGuide = guidance; // the same guidance goes again if the app has to ask twice
-  if (PROV().serial && (G.responding || (G.createAt && Date.now() - G.createAt < CREATE_WAIT_MS))) { // one at a time: held until the running reply is done
+  if (PROV().serial && replyBusy()) { // one at a time: held until the running reply is done
     G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { if (!G.responding) G.createAt = 0; flushQueued(); }, 500); vlog("reply request held: one at a time on " + PROV().name); return; }
   G.createAt = Date.now();
   send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now();
@@ -351,10 +353,12 @@ function micMuted(tr) {
 function forceSay(text, then, fallback, waited = 0) {
   if (!G.live) { G.pendingForce = null; return; }
   if (!waited) G.pendingForce = text;
-  if ((G.responding || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
+  if ((replyBusy() || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
+  // the reply just finished already said it (the engine answered the tool result with the question itself): no second copy (OpenAI, Oct 27: "What's the first name?" three times)
+  if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && wordOverlap(sameWords(G.lastBot), sameWords(text)) >= 0.6) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
   G.forced = { text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;
   if (PROV().forceItem) send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
-  else { G.forced.viaReply = true; forceByReply(text); } /* an engine without force_message is asked to say it in a reply of its own */
+  else { G.forced.viaReply = true; G.createAt = Date.now(); forceByReply(text); } /* an engine without force_message is asked to say it in a reply of its own: a reply request like any other, so the next one waits for it */
   vlog("scripted line: " + text);
   clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(f.fallback); } }, FORCE_WAIT_MS);
 }

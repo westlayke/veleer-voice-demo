@@ -84,8 +84,8 @@ async function converse(browser, base, flow, n) {
       if (/audio\.delta$/.test(e.type)) { if (conv.askedAt) { (conv.firstMs = conv.firstMs || []).push(Date.now() - conv.askedAt); conv.askedAt = 0; } return; } /* first sound of the reply, from the officer's words going out: the engine's own latency */
       if (e.type === "response.created") cur = { text: "", at: Date.now(), turn: conv.turns.length, forced: sentForced.length ? sentForced[sentForced.length - 1] : null, forcedN: sentForced.length };
       else if (/transcript\.delta$/.test(e.type) && !/input_audio/.test(e.type) && cur) { (conv.kinds = conv.kinds || {})[e.type] = 1; if (!cur.kind) cur.kind = e.type; if (cur.kind === e.type) cur.text += e.delta || ""; }
-      else if (e.type === "response.function_call_arguments.done") { let a = {}; try { a = JSON.parse(e.arguments || "{}"); } catch (x) {} conv.tools.push({ name: e.name, args: a, turn: conv.turns.length, at: Date.now() }); }
-      else if (e.type === "response.done") { if (cur) { cur.status = e.response && e.response.status; if (e.response && e.response.usage) cur.usage = e.response.usage; if (cur.text || cur.status !== "cancelled") conv.replies.push(cur); } cur = null; }
+      else if (e.type === "response.function_call_arguments.done") { let a = {}; try { a = JSON.parse(e.arguments || "{}"); } catch (x) {} conv.tools.push({ name: e.name, args: a, turn: conv.turns.length, at: Date.now() }); if (cur) cur.tool = true; }
+      else if (e.type === "response.done") { if (cur) { cur.status = e.response && e.response.status; if (e.response && e.response.usage) cur.usage = e.response.usage; if (cur.text || (cur.status !== "cancelled" && !cur.tool)) conv.replies.push(cur); } cur = null; } /* a reply that only called a tool is not a wordless reply (OpenAI calls the tool first, then speaks in the next one) */
       else if (e.type === "error") conv.errors.push("grok: " + JSON.stringify(e.error || e).slice(0, 300));
   };
   await p.exposeFunction("__tap", (dir, s) => { let e; try { e = JSON.parse(s); } catch (x) { return; } if (e && e.type) (dir === "sent" ? onSent : onGot)(e); });

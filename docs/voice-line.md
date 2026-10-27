@@ -217,6 +217,12 @@ consistency run takes a `provider` input (secret `OPENAI_CONSISTENCY_KEY`). Diff
 pronunciation table, key terms), no force_message (a scripted line is asked for in a reply of its own, "Say this now, word for
 word", and accepted when the engine's words overlap the line), no conversation resumption (after a drop the last eight lines
 are replayed into the new session as text). `GET /providers` on the Worker says which engine keys exist (true/false).
+OpenAI also allows one reply at a time, so on it every reply request (app guidance, a scripted line by reply, the officer's
+turn) goes through one gate: `replyBusy()` in voiceline.js holds a request while a reply is running or one was asked for and
+has not reported started within `CREATE_WAIT_MS`; a request OpenAI still refuses goes again after the running reply (a
+refused scripted line goes again as a scripted line); a scripted line the engine has just said in its own words (the question
+it asked in answer to the tool result) is not sent a second time; and a finished reply with no words is silence to ask about
+once, never a dead line.
 
 Google Gemini Live (gemini-3.8-live) is the third engine, added the same day. Its wire format is its own (setup, realtimeInput,
 clientContent, toolResponse in; setupComplete, serverContent, toolCall, goAway out), so `GeminiSocket` in provider.js wraps the
