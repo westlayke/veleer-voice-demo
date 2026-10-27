@@ -41,11 +41,28 @@ const TTS_CACHE = new Map();                 // voice|text -> Promise<AudioBuffe
 const TTS_CACHE_MAX = 80;
 // which voice says the app's own lines: Leo (a stand-in, so the officer can tell the app from Ara) or the same voice as Ara (Settings, Carverhill Oct 27)
 const formVoice = () => S.settings.formVoice === "same" ? (S.settings.voice || "ara") : APP_VOICE;
+// every text-to-speech fetch is its own log row ("tts"), and the call's end line sums them up, so the xAI voice's latency can be compared with Grok's own (Carverhill, Oct 27 2:51 PM)
+function ttsLog(text, ms, how, hedged) { (G.ttsMs = G.ttsMs || []).push({ ms, how }); act("tts", `${ms} ms, ${how}${hedged ? ", the second request answered first" : ""}: "${text.slice(0, 60)}${text.length > 60 ? "…" : ""}"`); }
+function ttsStats() {
+  const all = (G.ttsMs || []), a = all.filter(x => x.how === "xAI").map(x => x.ms).sort((x, y) => x - y); G.ttsMs = []; if (!all.length) return "";
+  const s = (ms) => (ms / 1000).toFixed(1) + " s", med = a.length ? a[Math.floor(a.length / 2)] : 0;
+  return `. App lines: ${all.length} (${all.filter(x => x.how === "cached").length} cached, ${all.filter(x => /^failed/.test(x.how)).length} failed)${a.length ? `, xAI text-to-speech median ${s(med)}, slowest ${s(a[a.length - 1])}, over 4 s: ${a.filter(x => x > 4000).length}` : ""}`;
+}
+const TTS_HEDGE_MS = 2500;                   // a line not back in this time gets a second request alongside, and the first to answer plays (Jim's Oct 27 2:26 PM call: five fetches of 8 to 10 s among fetches of 1 s; the slow ones are one-offs on xAI's side)
 function ttsFetch(text) {
   const key = formVoice() + "|" + text; if (TTS_CACHE.has(key)) return TTS_CACHE.get(key);
-  const ac = new AbortController(), timer = setTimeout(() => ac.abort(), TTS_FETCH_MS);
-  const p = (async () => { try { const r = await fetch(tokenUrl().replace(/\/$/, "") + "/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE }, body: JSON.stringify({ text, voice: formVoice() }), signal: ac.signal });
-    if (!r.ok) throw new Error("tts " + r.status); return await G.ctx.decodeAudioData(await r.arrayBuffer()); } finally { clearTimeout(timer); } })();
+  const one = async (signal) => { const r = await fetch(tokenUrl().replace(/\/$/, "") + "/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE }, body: JSON.stringify({ text, voice: formVoice() }), signal });
+    if (!r.ok) throw new Error("tts " + r.status); const buf = await r.arrayBuffer(); return { buf: await G.ctx.decodeAudioData(buf), hit: r.headers.get("X-Line-Cache") === "hit" }; };
+  const ac = new AbortController(), timer = setTimeout(() => ac.abort(), TTS_FETCH_MS), t0 = Date.now();
+  const p = (async () => { let hedged = false; try {
+      // the first request, and a second one alongside when the first is slow: whichever answers first plays, the other is dropped
+      let start2 = null; const second = new Promise((res, rej) => { start2 = (why) => { if (hedged || ac.signal.aborted) return; hedged = true; vlog(`${why}: second request sent (${text.slice(0, 40)})`); one(ac.signal).then(x => res({ ...x, second: true }), rej); }; });
+      const first = one(ac.signal).then(x => ({ ...x, second: false })); first.catch(() => start2("first request failed")); /* a failed first request gets its second at once, not at the timer */
+      setTimeout(() => start2(`line not back in ${TTS_HEDGE_MS} ms`), TTS_HEDGE_MS);
+      const x = await Promise.any([first, second]);
+      ttsLog(text, Date.now() - t0, x.hit ? "cached" : "xAI", hedged && x.second); return x.buf; }
+    catch (e) { const err = e && e.errors ? e.errors[0] : e; ttsLog(text, Date.now() - t0, "failed: " + String(err && err.message || err).slice(0, 40)); throw err; }
+    finally { clearTimeout(timer); setTimeout(() => ac.abort(), 0); } })();
   if (TTS_CACHE.size >= TTS_CACHE_MAX) TTS_CACHE.delete(TTS_CACHE.keys().next().value);
   TTS_CACHE.set(key, p); p.catch(() => TTS_CACHE.delete(key)); return p;
 }
@@ -218,7 +235,7 @@ async function openAgain(lock) {
     if (fp && fp.ask) { G.justNow = { text: reconnectLine(lock) + " " + fp.where, at: Date.now() }; act("step", `${lock ? "Line reopened" : "Reconnected"}: the app asks the pending question itself (${fp.where})`); whenIdle("instr");
       // Oct 27 13:25 call: the same question forced twice in a row after drops says so, instead of sounding like Ara forgot the answer
       const same = G.reAsk && G.reAsk.ask === fp.ask && Date.now() - G.reAsk.at < 180000; G.reAsk = { ask: fp.ask, at: Date.now() };
-      forceSay(same ? `Sorry, the line dropped again. I'm still waiting on this: ${fp.ask}` : `Sorry, I lost you for a moment. ${fp.ask}`); }
+      forceSay(same ? `Sorry, the line dropped again. I'm still waiting on this: ${fp.ask}` : `Sorry, I lost you for a moment. ${fp.intro ? fp.intro + " " : ""}${fp.ask}`); } /* the form by name, so "that's everything the form needs" after a lock makes sense (Jim's Oct 27 2:26 PM call) */
     else if (G.spokeInGap) { G.justNow = { text: reconnectLine(lock), at: Date.now() }; whenIdle("instr"); forceSay("Sorry, I lost you for a moment. Could you say that again?"); }
     else guide(reconnectLine(lock) + (fp ? " " + fp.where : "")); });
 }
@@ -242,7 +259,7 @@ function replayWatch(fp) {
   clearTimeout(G.replayWatchT); const seq = G.respSeq || 0, ws = G.ws, at = G.replayAt;
   G.replayWatchT = setTimeout(() => { if (!G.live || G.ws !== ws || (G.respSeq || 0) !== seq || G.responding || G.turnWatch || (G.stoppedAt || 0) > at) return;
     act("step", "The replayed words brought no reply: Ara asks the officer to say it again");
-    forceSay(`Sorry, I lost you for a moment. ${fp && fp.ask ? fp.ask : "Could you say that again?"}`); }, REPLAY_WAIT_MS);
+    forceSay(`Sorry, I lost you for a moment. ${fp && fp.ask ? (fp.intro ? fp.intro + " " : "") + fp.ask : "Could you say that again?"}`); }, REPLAY_WAIT_MS);
 }
 const reconnectLine = (lock) => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "",
@@ -266,9 +283,9 @@ function playLine(kind) { // through the call's own sound, which the phone keeps
 // decoded, or the line changed while waiting. It never plays over Ara: playback waits for her reply and sound to end, as a
 // scripted line does. The line goes into the conversation record as Ara's, and Grok is told through Right now by the caller.
 // until: while it returns false the line is called off (resolves null, nothing plays, no fallback): a question or read-back whose form was saved meanwhile (harness run 3b: a read-back played after the save)
-async function ttsSay(text, until) {
+async function ttsSay(text, until, waitMs) {
   if (!G.live || !G.ctx || G.ctx.state !== "running") return false;
-  const t0 = Date.now(), ws = G.ws, limit = typeof formMode === "function" && formMode() ? TTS_WAIT_FORM_MS : TTS_WAIT_MS; let buf;
+  const t0 = Date.now(), ws = G.ws, limit = waitMs || (typeof formMode === "function" && formMode() ? TTS_WAIT_FORM_MS : TTS_WAIT_MS); let buf;
   // the line comes from the cache when it was said or fetched ahead; otherwise it is fetched now, within the wait limit
   try { buf = await Promise.race([ttsFetch(text), new Promise((_, rej) => setTimeout(() => rej(new Error("tts wait " + limit + " ms")), limit))]); }
   catch (e) { vlog(`the app's own line not fetched (${String(e && e.message || e).slice(0, 60)}): Grok says it instead`); act("step", `The app's own line didn't arrive in time (${Date.now() - t0} ms): Ara says it herself`); return false; }

@@ -150,18 +150,39 @@ Grok's job inside a form is tool calls only (`FORM_RULES`): the officer's answer
 reply's audio is dropped (`G.dropNext`, no `response.cancel`, so a tool call in the same reply still arrives) and the app asks
 its pending question again (`formReask`, `formReaskLine`). A side question ("what does substantive mean?") is left to Ara,
 and the app asks its question again when her answer ends. The app acts on the save-or-details answer itself
-(`formChoiceHeard`), ignoring Grok's late tool call for it (`G.appActed`).
+(`formChoiceHeard`), ignoring Grok's late tool call for it (`G.appActed`). A save needs a clear word ("save", "go ahead",
+a short plain yes); a question is never a save.
+
+Three things the officer says inside a form are answered by the app alone, with Grok told to stay silent (Jim's Oct 27
+2:26 PM call, where Ara's answer and the app's question came one after the other five times): "are you there?" gets
+"I'm here." followed by the pending question; "where were we?" and "what are we filling out?" get the form's name, what it
+still needs and the pending question (`WHERE_Q`, `formWhere`); and after any side answer of Ara's that already ends with
+the form's question (`wordOverlap` of 0.6 with the pending question), the app does not ask it again. A yes or no that Grok
+puts into a free-text field (summary, next step) is thrown out and the field keeps what it had. The next-step question
+splits once one half is in: "When is it due?" or "What's the step?". A reconnect or unlock with a form open names the form
+("The new opportunity form for Leo Johnson is open.") before the pending question.
 
 The app's lines are fetched through `ttsFetch` into a cache (`TTS_CACHE`, text and voice as the key), and a form's likely
 lines are fetched ahead when it opens (`formLines`, `ttsPrefetch`), so a re-ask or a reconnect plays at once. Inside a form
-the wait for a line is `TTS_WAIT_FORM_MS` (10 s) rather than `TTS_WAIT_MS`, since no other voice is competing; Grok's
-`force_message` remains the fallback when the fetch fails.
+the wait for a line is `TTS_WAIT_FORM_MS` (10 s) rather than `TTS_WAIT_MS`, since no other voice is competing; the after-save
+line gets the same 10 s. Grok's `force_message` remains the fallback when the fetch fails.
+
+xAI's text-to-speech answers most lines in 1 to 3 s but now and then takes 8 to 10 s (five times in Jim's Oct 27 2:26 PM
+call), so two things cut the wait. The Worker keeps every line's audio in a KV namespace (`LINES`, key voice + text hash,
+30 days): the first phone to need a line pays the xAI wait, and every later fetch of the same words in the same voice is
+served from the edge (`X-Line-Cache: hit`). And `ttsFetch` sends a second request for any line not back in `TTS_HEDGE_MS`
+(2.5 s), or at once when the first request fails, and plays whichever answers first. Lines that carry names are fetched
+ahead where the words are known early: the campaign question for every entity goes out when the entity is asked. Every
+fetch is a `tts` row in the activity log (time, cached or xAI, whether the second request won) and the conversation's end
+row sums them up (count, cached, failed, xAI median and slowest, how many over 4 s), so the voice's latency can be
+compared with Grok's own reply times.
 
 ## The heard check
 
 `heard.js` records three readings for every line Ara says: voice audio received, sound actually produced on the speaker
 path, and the mic hearing the speaker. A line that fails a reading is logged as possibly unheard. "Are you there?" from
-the officer logs the readings of the last line and has Ara say she is here and repeat it.
+the officer logs the readings of the last line and has Ara say she is here and repeat it; inside a form the app answers it
+itself (see App-only forms).
 
 ## What gets logged
 

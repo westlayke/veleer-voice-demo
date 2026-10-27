@@ -200,7 +200,7 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
-  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.item && x.item.type === "force_message" && /^Sorry, I lost you for a moment\. (Which entity will you ask for|When do you plan to make the ask)\?$/.test(x.item.content[0].text); }), n0), "a form with a required field missing wasn't asked for it again by the app: " + JSON.stringify(await forced(n0)));
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.item && x.item.type === "force_message" && /^Sorry, I lost you for a moment\. (The add planned ask form for Ruth Abernathy is open\. )?(Which entity will you ask for|When do you plan to make the ask)\?$/.test(x.item.content[0].text); }), n0), "a form with a required field missing wasn't asked for it again by the app: " + JSON.stringify(await forced(n0)));
   ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "session.update" && /The "Add planned ask" form still needs: [^.]*\. The app asks for the first of those itself\./.test(x.session.instructions || ""); }), n0), "Ara's instructions don't say what the form still needs");
 });
 test("Ara: a task named in full is found even when another task shares a word with it; the hands-free filter lists the saves to check; Ara's own answer isn't taken for a scripted line", async (p) => {
@@ -865,8 +865,9 @@ test("Oct 27 10:21 AM call: scripted lines are said by the app in its own stand-
   await said(p, "Yes."); r = await ara(p, "save_form", { confirmed: true }, 1500);
   ok(r.saved === true, "the yes after the read-back didn't save: " + JSON.stringify(r));
   // 6. a scripted line still waiting for its turn when its form is saved is dropped, not played after the save line (harness run 3b)
+  const ACT_SAID_RE = /The phone said in its own voice[^|]*An old question/; /* the fetch's own "tts" row is fine; the line must not have played */
   const dropped = await p.evaluate(async () => { const n = ACT.q.length; G.responding = true; forceSay("An old question that no longer applies?"); await new Promise(r => setTimeout(r, 300)); G.pendingForce = null; G.responding = false; await new Promise(r => setTimeout(r, 900)); return { pending: G.pendingForce, log: ACT.q.slice(n).map(a => a.text).join(" | "), vlog: VLOG.slice(-6).join(" | ") }; });
-  ok(!/An old question/.test(dropped.log) && /called off: An old question/.test(dropped.vlog), "a scripted line whose form was saved meanwhile still played: " + JSON.stringify(dropped));
+  ok(!/phone said.*An old question/.test(dropped.log) && !ACT_SAID_RE.test(dropped.log) && /called off: An old question/.test(dropped.vlog), "a scripted line whose form was saved meanwhile still played: " + JSON.stringify(dropped));
 });
 
 test("App-only forms (Oct 27): the app asks required fields in order, then save-or-details; Ara's reply to an answer is cut and the question re-asked; a side question is answered and the question re-asked; lines are cached; the form voice switch", async (p) => {
@@ -944,5 +945,73 @@ test("App-only forms (Oct 27): the app asks required fields in order, then save-
   ok(await p.evaluate(() => S.settings.formVoice === "same" && formVoice() === (S.settings.voice || "ara") && TTS_CACHE.size === 0), "the form voice switch didn't take");
   await p.selectOption("#formVoiceSel", "leo"); await p.waitForTimeout(200);
   ok(await p.evaluate(() => S.settings.formVoice === "leo" && formVoice() === "leo"), "the form voice switch didn't go back to Leo");
+});
+
+test("Oct 27 2:26 PM call: no double question after a side answer or 'are you there'; 'where were we?' answered by the app; a yes isn't the summary; 'When is it due?' alone; the reconnect names the form; a slow line gets a second request", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
+  const forced = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "force_message").map(x => x.item.content[0].text), n);
+  const logged = () => p.evaluate(() => ACT.q.map(a => a.text).join(" | "));
+  const asked = (r) => r.ask_exactly || r.asked || "";
+  const waitForced = (n, k) => p.waitForFunction(([n, k]) => __sent.slice(n).filter(s => /force_message/.test(s)).length >= k, [n, k], { timeout: 12000 }).then(() => p.waitForTimeout(150)).catch(() => {});
+  const settle = () => p.waitForFunction(() => !G.pendingForce && !G.forced && !G.responding, null, { timeout: 10000 }).then(() => p.waitForTimeout(200)); /* the app's question has gone out before the officer speaks again */
+  const turn = () => fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }]);
+  // 1. a planned ask: Ara lists the entities and ends with the form's question; the app doesn't ask it a second time
+  await p.evaluate(() => { const c = S.contacts.find(c => c.last === "Abernathy"), o = openOpp(c.id); o.fund = ""; o.campaign = ""; save(); }); /* her opportunity has no entity yet, so the form asks for it */
+  await p.evaluate(() => { window.__pre = []; const o = ttsPrefetch; window.ttsPrefetch = (t) => { __pre.push(...[].concat(t)); return o(t); }; }); /* the stub's 502 empties the cache, so the lines asked for are counted here */
+  await said(p, "Add a planned ask for Ruth Abernathy.");
+  let r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
+  ok(/Which entity will you ask for\?$/.test(asked(r)), "the entity question wasn't asked: " + JSON.stringify(r));
+  await settle(); let n = await p.evaluate(() => __sent.length);
+  await turn(); await said(p, "Can you list them for me?");
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "National has Citizens Alliance C3 and C.A. Fed PAC; North Dakota has three. Which entity will you ask for?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(500);
+  let f = await forced(n);
+  ok(f.length === 0 && /Ara's answer already asked the form's question: the app doesn't ask it again/.test(await logged()), "the entity question was asked twice: " + JSON.stringify(f));
+  // 2. the campaign questions were fetched ahead when the entity was asked
+  ok(await p.evaluate(() => __pre.some(k => /^Which campaign for C\.A\. North Dakota State PAC: National, or North Dakota\?$/.test(k)) && __pre.some(k => /^Which campaign for C\.A\. Idaho PAC: National, or Idaho\?$/.test(k))), "the campaign questions weren't fetched ahead");
+  // 3. "are you there?" inside the form: the app says "I'm here" and the question itself, Grok is told nothing
+  await turn(); await said(p, "Let's do North Dakota State PAC.");
+  r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "C.A. North Dakota State PAC" });
+  ok(/^Which campaign for C\.A\. North Dakota State PAC: National, or North Dakota\?$/.test(asked(r)), "the campaign question wasn't asked: " + JSON.stringify(r));
+  await settle(); n = await p.evaluate(() => __sent.length);
+  await turn(); await said(p, "Are you there?"); await waitForced(n, 1);
+  f = await forced(n);
+  ok(f.length === 1 && f[0] === "I'm here. Which campaign for C.A. North Dakota State PAC: National, or North Dakota?" && (await p.evaluate(() => G.muteResp === true && !G.sideQ && !G.heardAsk)), "\"are you there\" inside the form wasn't answered by the app alone: " + JSON.stringify(f));
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "I'm here, Ruth. National or North Dakota?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(400);
+  ok(/Ara started to speak inside the form \("I'm here, Ruth/.test(await logged()) && (await forced(n)).length === 1, "Ara's own \"I'm here\" wasn't cut, or the question was asked again on top");
+  // 4. "where were we?" at the save-or-details choice is not a save: the app says where the form stands
+  await said(p, "Cancel."); await p.waitForTimeout(1000);
+  await said(p, "New contact Omar Reyes, omar at example dot org, mobile 555 010 0177.");
+  r = await ara(p, "show_contact_draft", { first: "Omar", last: "Reyes", email: "omar@example.org", mobile: "(555) 010-0177" });
+  ok(/Shall I save it, or add the optional details first\?/.test(asked(r)), "the save-or-details question wasn't asked: " + JSON.stringify(r));
+  await settle(); n = await p.evaluate(() => __sent.length);
+  await turn(); await said(p, "Oh, right. Okay, where were we?"); await waitForced(n, 1);
+  f = await forced(n);
+  ok(await p.evaluate(() => V.choice === "saveOrOpt" && !G.saveCheck), "\"okay, where were we?\" was taken for a save");
+  ok(f.length === 1 && /^The new contact form for Omar is open\. That's everything the form needs\. Shall I save it, or add the optional details first\?/.test(f[0]), "the app didn't say where the form stands: " + JSON.stringify(f));
+  ok(await p.evaluate(() => formChoiceHeard("No, let's just go ahead and save it for now.") === true), "a plain save wasn't taken as one");
+  await p.evaluate(() => { G.saveCheck = null; }); await said(p, "Cancel."); await p.waitForTimeout(1000);
+  // 5. the officer's "Yes." to the substantive question doesn't replace the summary; the step without a date gets "When is it due?"
+  await said(p, "Log a meeting with Ruth Abernathy, a video call. We talked about the gala.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", meetingType: "Video call", summary: "Talked about the gala." });
+  ok(/substantive interaction/.test(asked(r)), "the substantive question wasn't asked: " + JSON.stringify(r));
+  await settle(); await turn(); await said(p, "Yes.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", summary: "Yes." });
+  ok(await p.evaluate(() => readDraft().summary === "Talked about the gala." && readDraft().substantive === true) && /Kept the summary as it was/.test(await logged()), "the yes replaced the summary: " + JSON.stringify(await p.evaluate(() => readDraft())));
+  ok(/What's the step, and when is it due\?$/.test(asked(r)), "the next step wasn't asked: " + JSON.stringify(r));
+  await settle(); await turn(); await said(p, "Have a meeting to make the ask.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", nextStep: "Have a meeting to make the ask." });
+  ok(asked(r) === "When is it due?", "the step without a date didn't get \"When is it due?\": " + JSON.stringify(r));
+  // 6. a reconnect with the form open names the form
+  await settle(); n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.convId = "conv_test"; G.convAt = Date.now(); G.loudAt = 0; G.lastMsg = Date.now() - 20000; __ws.onclose({ code: 1006 }); }); await waitForced(n, 1);
+  f = await forced(n);
+  ok(f.some(x => /^Sorry, I lost you for a moment\. The interaction report form for Ruth Abernathy is open\. When is it due\?$/.test(x)), "the reconnect line didn't name the form: " + JSON.stringify(f));
+  await said(p, "Cancel."); await p.waitForTimeout(1000);
+  // 7. a slow line gets a second request after 2.5 s, and each fetch is logged with its time
+  const c = await p.evaluate(async () => { const f = window.fetch; let calls = 0; window.__ttsOn = true; window.fetch = async (u, o) => { if (/\/tts$/.test(String(u))) { calls++; if (calls === 1) await new Promise(r => setTimeout(r, 4000)); const r = await f("preview/sounds/line-back.mp3"); return new Response(await r.arrayBuffer(), { status: 200, headers: { "X-Line-Cache": calls === 2 ? "hit" : "miss" } }); } return f(u, o); };
+    TTS_CACHE.clear(); const t0 = Date.now(); await ttsFetch("A line that is slow the first time."); const ms = Date.now() - t0; window.fetch = f; window.__ttsOn = false;
+    const rows = ACT.q.filter(a => a.role === "tts").map(a => a.text); return { calls, ms, rows, stats: ttsStats() }; });
+  ok(c.calls === 2 && c.ms < 3800 && c.rows.some(x => /^\d+ ms, cached, the second request answered first: "A line that is slow/.test(x)) && /App lines: /.test(c.stats), "the second request or the fetch log didn't work: " + JSON.stringify(c));
 });
 };

@@ -9,8 +9,9 @@
 //   XAI_API_KEY     your xAI API key
 //   DEMO_CODE       the access code built into the demo page
 //   ADMIN_PASSWORD  the password for the activity page (user name: admin)
-// Binding (Settings > Bindings > D1 database):
+// Bindings (wrangler.toml):
 //   DB              the D1 database that holds the activity log
+//   LINES           a KV namespace that keeps the audio of each spoken line for 30 days (one xAI text-to-speech call per line and voice, ever)
 const ALLOWED_ORIGIN = "https://westlayke.github.io";
 const KEEP_DAYS = 90; // conversations older than this are deleted
 
@@ -49,14 +50,20 @@ async function speak(request, env, cors, json) {
   let b; try { b = await request.json(); } catch (e) { return json({ error: "bad_json" }, 400); }
   const text = String(b.text || "").trim().slice(0, 400), voice = VOICES.includes(b.voice) ? b.voice : "ara";
   if (!text) return json({ error: "no_text" }, 400);
+  // the audio of a line is kept in KV (LINES) for 30 days: the first phone to need a line waits on xAI (0.6 to 10 s, Jim's Oct 27 2:26 PM call), every later fetch of the same words in the same voice is instant for everyone
+  const key = voice + ":" + await sha(text), hit = env.LINES ? await env.LINES.get(key, "arrayBuffer").catch(() => null) : null;
+  if (hit) return new Response(hit, { status: 200, headers: { ...cors, "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=3600", "X-Line-Cache": "hit", "Access-Control-Expose-Headers": "X-Line-Cache" } });
   const r = await fetch("https://api.x.ai/v1/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.XAI_API_KEY },
     body: JSON.stringify({ text, voice_id: voice, language: "en", output_format: { codec: "mp3", sample_rate: 24000, bit_rate: 64000 } }),
   });
   if (!r.ok) return json({ error: "tts_" + r.status }, 502);
-  return new Response(await r.arrayBuffer(), { status: 200, headers: { ...cors, "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=3600" } });
+  const buf = await r.arrayBuffer();
+  if (env.LINES && buf.byteLength > 0) await env.LINES.put(key, buf, { expirationTtl: 30 * 86400 }).catch(() => {});
+  return new Response(buf, { status: 200, headers: { ...cors, "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=3600", "X-Line-Cache": "miss", "Access-Control-Expose-Headers": "X-Line-Cache" } });
 }
+async function sha(text) { const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, "0")).join(""); }
 
 async function ensureTable(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, device TEXT, name TEXT,
@@ -111,7 +118,7 @@ a{color:#1f5fbf}</style></head><body>${body}</body></html>`, { headers: { "Conte
   const ids = sessions.map(s => s.session);
   const rows = ids.length ? (await env.DB.prepare(`SELECT session, at, role, text FROM events WHERE session IN (${ids.map(() => "?").join(",")}) ORDER BY id`).bind(...ids).all()).results : [];
   const mapLinks = t => t.replace(/at (-?\d+\.\d+),(-?\d+\.\d+) \(/g, (m, a, b) => `at <a href="https://maps.google.com/?q=${a},${b}" target="_blank" rel="noopener">${a},${b}</a> (`); // "at 40.12345,-74.56789 (±12 m)" from the app's location switch
-  const label = { user: "They said", grok: "Grok", step: "Step", saved: "Saved", start: "Started", end: "Ended", tap: "Tapped", open: "Opened", form: "Form saved", question: "Question for the team" };
+  const label = { user: "They said", grok: "Grok", step: "Step", saved: "Saved", start: "Started", end: "Ended", tap: "Tapped", open: "Opened", form: "Form saved", question: "Question for the team", tts: "App voice fetch" };
   let h = `<h1>Citizens VCRM activity</h1><div class="meta">Times are US Eastern. Location is approximate, from the phone's internet connection. Kept ${KEEP_DAYS} days.</div>`;
   const day = (t) => { try { return new Date(t).toLocaleDateString("en-US", { timeZone: "America/New_York" }); } catch (e) { return ""; } };
   const today = day(new Date());

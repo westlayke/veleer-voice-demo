@@ -202,7 +202,7 @@ const isQuestion = (t) => { const x = String(t || "").toLowerCase().replace(/[â€
 const FORM_RULES = `## Form mode (whenever Right now says a form is open)
 - The app runs the form: it asks every question itself, in its own voice, says what it heard, reads the form back and asks whether to save. Inside a form you say nothing: never ask for a field, never say what's noted or on the form, never read anything back, never ask them to tap, never say what's next or ask what they'd like to do.
 - Your whole job is tool calls, with no words: when the officer answers the app's question, call the form's draft tool with their words (or optional_fields, save_form, set_capacity_rating when the tool result names it). The tool result says what the app asks next, and the app says it. "skip" or "move on" -> optional_fields step skip; "that's enough" -> step stop; "add the details" -> optional_fields step start; "save it" or a yes after the app's read-back -> save_form (confirmed true only after the read-back).
-- The one time you speak: the officer asks you a question (what a word means, a rule, a spelling, their data, what's next). Answer in one or two sentences, through the right tool when it is about records or rules, and stop; the app then asks its question again.
+- The one time you speak: the officer asks you a question (what a word means, a rule, a spelling, their data). Answer in one or two sentences, through the right tool when it is about records or rules, and stop: never end with the form's question and never say what the form still needs, since the app asks its question again itself. If they ask whether you're there, or where you are in the form, or what's next, say nothing and call no tool: the app answers.
 `;
 const HF_RULES = `HANDS-FREE MODE IS ON (it is on from the start of every conversation). The officer may be driving and can't look at or tap the screen, so this overrides "You never save anything" and every "tap the button". Keep each turn short and never describe what's on screen. When a draft has everything it needs, the app reads it back itself and asks "Shall I save it?": never read it back yourself or ask whether it's correct, and never ask them to tap. Call save_form with confirmed true only right after the officer says yes to the app's read-back; the app checks their words too. If they change something, update the draft and the app reads it back again. Scheduling a meeting needs Google Calendar on screen, so keep it as a draft for when they've parked. If they say they've parked or want to tap themselves, call set_hands_free with on false.`;
 function grokInstructions() {
@@ -630,9 +630,9 @@ function firstWord() {
   if (ms > 3000) act("step", `Ara's first word came ${(ms / 1000).toFixed(1)} s after the officer stopped`);
 }
 function replyStats() {
-  const a = (G.replyMs || []).slice().sort((x, y) => x - y); G.replyMs = []; G.stoppedAt = 0; if (!a.length) return "";
+  const a = (G.replyMs || []).slice().sort((x, y) => x - y); G.replyMs = []; G.stoppedAt = 0; if (!a.length) return typeof ttsStats === "function" ? ttsStats() : "";
   const med = a[Math.floor(a.length / 2)], s = (ms) => (ms / 1000).toFixed(1) + " s";
-  return `. Replies: ${a.length}, first word median ${s(med)} after the officer stopped, slowest ${s(a[a.length - 1])}`;
+  return `. Replies: ${a.length}, first word median ${s(med)} after the officer stopped, slowest ${s(a[a.length - 1])}${typeof ttsStats === "function" ? ttsStats() : ""}`;
 }
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
@@ -760,10 +760,13 @@ function onEvent(e) {
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
   if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardSinceRetry = true; G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN, at: Date.now() }; act("user", e.transcript); recent("Officer", e.transcript); const cmd = voiceCommand(e.transcript);
-    G.appActed = null; /* a new turn: Grok's tool calls count again */ if (formMode() && !cmd) { G.sideQ = isQuestion(e.transcript) ? { at: Date.now() } : null; if (!G.sideQ && G.muteResp === undefined) G.muteResp = true; /* an answer, not a question: a reply of Ara's to it is cut (the tool call still runs) */ formChoiceHeard(e.transcript); }
+    G.appActed = null; /* a new turn: Grok's tool calls count again */ const there = typeof heardAsk === "function" && heardAsk(e.transcript), where = formMode() && !cmd && !there && typeof WHERE_Q !== "undefined" && WHERE_Q.test(e.transcript);
+    if (formMode() && !cmd && (there || where)) { G.sideQ = null; G.muteResp = true; /* "are you there?" and "where were we?" inside a form: the app answers itself, one voice; a reply of Ara's is cut (Jim's Oct 27 2:26 PM call: Ara's "I'm here, which campaign?" then the app's question, five times) */
+      const line = there ? `I'm here. ${formReaskLine()}` : formWhere(); act("step", `${there ? "The app answers \"are you there\" itself inside the form" : "The officer asked where the form stands: the app says"}: "${line.slice(0, 80)}"`); forceSay(line); }
+    else if (formMode() && !cmd) { G.sideQ = isQuestion(e.transcript) ? { at: Date.now() } : null; if (!G.sideQ && G.muteResp === undefined) G.muteResp = true; /* an answer, not a question: a reply of Ara's to it is cut (the tool call still runs) */ formChoiceHeard(e.transcript); }
     else if (!formMode()) G.sideQ = null;
     if (V && V.awaitOther && Date.now() - V.awaitOther.at < 90000 && /\b(mobile|email|number|phone)\b/i.test(askedBefore()) && typeof contactNoOther === "function" && /^(no|nope|none|nothing|not that i know( of)?|no,? (i|we) don't|(i|we|he|she|they) (don't|doesn't|do not|does not) have( one| it| a mobile| a cell| a number| an email)?|skip( it| that)?|move on)[.!,]?( thanks| thank you)?$/i.test(e.transcript.trim())) contactNoOther();
-    if (typeof heardAsk === "function" && heardAsk(e.transcript)) { const txt = "The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."; G.heardAsk = { seq: G.seqAtStop || 0, text: txt }; guide(txt); } } // seq: replies before they spoke; a reply since is Grok's own answer
+    if (there && !(formMode() && !cmd)) { const txt = "The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."; G.heardAsk = { seq: G.seqAtStop || 0, text: txt }; guide(txt); } } // seq: replies before they spoke; a reply since is Grok's own answer
   if (G.forced) forcedEvent(t, e);
   if (t === "response.done" && G.bot) { act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); if (G.respSeq !== G.forcedResp) G.respSpoke = true; /* Ara's own words, not the app's line played through Grok */ }
   if (t === "response.done") { replyCheck(e.response || {}); if (G.bot && !G.dropNext) G.lastBot = { text: G.bot, at: Date.now() }; G.bot = ""; }
@@ -836,6 +839,11 @@ function formReask() {
   const spoke = G.reaskAfter || (G.respSpoke && !G.respTool); const had = G.reaskAfter; G.reaskAfter = false; G.respSpoke = false;
   if (!spoke || !formMode() || G.askedInResp || G.forced || G.pendingForce) return;
   const q = formReaskLine(); if (!q) return;
+  // Ara's side answer ended with the form's question already (she is told not to, but does): not asked twice (Jim's Oct 27 2:26 PM call: "Which entity will you ask for?" from both)
+  const lastQ = G.lastBot && Date.now() - G.lastBot.at < 8000 ? (G.lastBot.text.trim().split(/(?<=[.!?])\s+/).pop() || "") : "", lb = /\?$/.test(lastQ) ? sameWords(lastQ) : ""; /* only a closing question of Ara's counts, not an answer that happens to share the words */
+  if (!had && lb && wordOverlap(lb, sameWords(q.trim().split(/(?<=[.!?])\s+/).pop() || q)) >= 0.6) { act("step", "Ara's answer already asked the form's question: the app doesn't ask it again"); G.sideQ = null; return; }
+  // the app itself asked it since the officer last spoke ("I'm here. <question>", "where were we"): not again
+  if (G.lastForcedText && G.forceAt && G.lastHeard && G.forceAt > G.lastHeard.at && wordOverlap(sameWords(G.lastForcedText), sameWords(q)) >= 0.6) { vlog("form re-ask skipped: the app asked it just now"); G.sideQ = null; return; }
   act("step", `${had ? "After the cut" : "After Ara's answer"}, the app asks the form's question again`); G.sideQ = null;
   forceSay(q);
 }

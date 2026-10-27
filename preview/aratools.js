@@ -335,6 +335,10 @@ function draftTool(callId, name, data) {
   if ((tool.action === "contact" || tool.action === "editContact") && data.permText === undefined) { const t = officerSaidTexting(); if (t !== null) { data.permText = t; vlog(`${name}: texting ${t ? "permitted" : "not permitted"}, from the officer's words`); } }
   if ((tool.action === "interaction" || tool.action === "ask") && !String(data.summary || "").trim() && !(V && V.action === tool.action && V.data && String(V.data.summary || "").trim())) {
     const t = officerSummary(); if (t) { data.summary = t; vlog(`${name}: summary taken from the officer's words`); } }
+  // a yes or no is an answer to the app's question (substantive? mobile too?), never the text of a field: the field keeps what it had (Jim's Oct 27 2:26 PM call: the report saved with Summary "Yes.")
+  const YESNO = /^(yes|yeah|yep|yup|no|nope|nah|correct|right|sure|it was|it wasn't|it did|it didn't|not really|i think so|i don't think so|that's right)[.!,]?( it was| it wasn't| it did| that's right)?[.!]?$/i;
+  ["summary", "nextStep", "howMet", "text", "notes"].forEach(k => { if (data[k] === undefined || !YESNO.test(String(data[k]).trim())) return; const cur = V && V.action === tool.action && V.data ? V.data[k] : undefined;
+    vlog(`${name}: "${data[k]}" is a yes or no, not the ${k}: ${cur ? "kept what was there" : "left out"}`); act("step", `Kept the ${k === "text" ? "task" : k} as it was: the officer's "${data[k]}" answered the question, it isn't the ${k === "text" ? "task" : k}`); if (cur !== undefined && String(cur).trim()) data[k] = cur; else delete data[k]; });
   if (tool.action === "ask" && !data.response && !(V && V.action === "ask" && V.data && V.data.response)) { const r = officerResponse(); if (r) { data.response = r; vlog(`${name}: response ${r}, from the officer's words`); } }
   // a next-step due date with no next step, on the meeting's own day or earlier, is the meeting date filed in the wrong place (seen Oct 24)
   if (tool.action === "interaction" && data.nextDue && !String(data.nextStep || "").trim() && !(V && V.data && String(V.data.nextStep || "").trim())) { const nd = normDate(data.nextDue);
@@ -397,6 +401,7 @@ function draftTool(callId, name, data) {
   // a required field is missing: the app asks for the first one itself, in its own voice (Carverhill, Oct 27: required first, one at a time)
   const stateQ = missing.find(m => /^Entity of interest \(/.test(m)); // the officer named a state with more than one entity: which one, before anything else
   if (stateQ) { const st = stateQ.match(/exactly these entities: (.+?)\. Ask which/); toolReply(callId, Object.assign({ ok: true, button: A.saveLabel, ask_exactly: `${intro}Which entity: ${st ? st[1].split(", ").join(", or ") : "which one"}?` }, note)); return; }
+  if (first === "fund" && typeof ttsPrefetch === "function" && G.live) ttsPrefetch(FUNDS.filter(f => campaignsFor(f).length > 1).map(f => fieldQ(tool.action, "campaign", { fund: f }))); // the campaign question for whichever entity they pick, ready before they answer (Jim's Oct 27 2:26 PM call: 8 s to fetch it)
   if (first) { if (first === "Email or mobile") { V.askedOther = true; V.awaitOther = { which: "either", at: Date.now() }; } toolReply(callId, Object.assign({ ok: true, button: A.saveLabel, ask_exactly: intro + fieldQ(tool.action, first, d) }, note)); return; }
   // a new contact: the other of email and mobile is asked once (it's fine if they don't have it)
   if (tool.action === "contact" && (empty(d.email) || empty(d.mobile)) && !V.askedOtherDone) {

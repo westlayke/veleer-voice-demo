@@ -20,7 +20,9 @@ const NEXT_STEP_Q = "A substantive interaction needs a next step, which becomes 
 function fieldQ(action, key, d) {
   const q = (FIELD_Q[action] || {})[key]; if (q) return q(d || {});
   if (key === "campaign") { const f = (d || {}).fund; return f && campaignsFor(f).length > 1 ? `Which campaign for ${f}: National, or ${ENTITY_STATE[f]}?` : "Which campaign?"; }
-  if (key === "nextStep") return action === "ask" ? "An ask that wasn't declined needs a next step, which becomes a Task for you. What's the step, and when is it due?" : NEXT_STEP_Q;
+  if (key === "nextStep") { const dd = d || {}, step = String(dd.nextStep || "").trim(); // the step and its date are one question until one of them is in (Jim's Oct 27 2:26 PM call: the whole question again after the step alone)
+    if (step && optEmpty(dd.nextDue)) return `When is it due?`; if (!step && !optEmpty(dd.nextDue)) return "What's the step?";
+    return action === "ask" ? "An ask that wasn't declined needs a next step, which becomes a Task for you. What's the step, and when is it due?" : NEXT_STEP_Q; }
   if (key === "lostReason") return "Why did they decline?";
   const f = ((ACTIONS[action] || {}).fields || []).find(x => x.k === key); return `What's the ${(f ? f.label : key).toLowerCase().replace(/ \(.*\)$/, "")}?`;
 }
@@ -48,10 +50,12 @@ function formLines(action, d) {
   return [...Object.values(FIELD_Q[action] || {}).map(q => q(d || {})), ...(OPT_STEPS[action] || []).map(st => st.q(who, false)), ...(action === "interaction" || action === "ask" ? [SUBST_Q, NEXT_STEP_Q] : []), "Shall I save it, or change something?", ...(V && V.action === action ? [formChoiceLine(), formTapLine()] : [])];
 }
 // the officer answered the app's "save it, or the optional details?" question: the app acts on their words itself (no waiting on Grok)
-const CHOICE_SAVE = /\b(save|yes|yeah|yep|yup|sure|go ahead|do it|done|that's it|finish|ok|okay)\b/, CHOICE_OPT = /\b(optional|details|more|add|go through|take me|rating|capacity|rate)\b/;
+// a save needs a clear word: "save", "go ahead", or a short plain yes; a question ("Okay, where were we?") or an okay inside a longer sentence doesn't count (Jim's Oct 27 2:26 PM call)
+const CHOICE_SAVE = /\b(save|go ahead|do it|finish|that's it|that's all|that's everything)\b/, CHOICE_YES = /^(yes|yeah|yep|yup|sure|ok|okay|done|please|just)\b/, CHOICE_OPT = /\b(optional|details|more|add|go through|take me|rating|capacity|rate)\b/;
 function formChoiceHeard(text) {
   if (!V || !V.choice) return false; const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim();
-  const opt = CHOICE_OPT.test(t), sv = CHOICE_SAVE.test(t) && !opt; if (!opt && !sv) return false;
+  if (typeof isQuestion === "function" && isQuestion(text)) return false;
+  const opt = CHOICE_OPT.test(t), sv = !opt && (CHOICE_SAVE.test(t) || (CHOICE_YES.test(t.replace(/^(oh|um|uh|well|no|so|right)[,.]? /, "")) && t.split(" ").length <= 8)); if (!opt && !sv) return false;
   V.choice = null; G.appActed = { at: Date.now(), tools: opt ? ["save_form"] : ["save_form", "optional_fields"], started: opt }; /* an optional answer in the same breath ("capacity C") still reaches optional_fields */ stopPlayback(); if (G.responding) send({ type: "response.cancel" });
   act("step", `The officer chose ${opt ? "the optional details" : "to save"} ("${text}"): the app goes on itself`);
   if (opt) { V.opt = { done: V.opt ? V.opt.done : [] }; V.askedOptional = true; optAsk(null); return true; }
@@ -293,7 +297,7 @@ async function hfSave(callId, data, lead) {
   const r = hfCommit();
   if (!r.ok) { const m = formMissing()[0]; toolReply(callId, { ok: false, saved: false, error: `Not saved. ${r.err}${m ? " The app asked for it." : " Ask for what's missing in one short question, update the draft, then read it back again."}`, ask_exactly: m ? `Not saved yet: ${r.err} ${fieldQ(V.action, m, readDraft())}` : undefined }); return; }
   // the acknowledgement and what's next in Ara's voice from the app itself (Oct 27: Grok took up to 20 s here); Grok is told what was said and waits for the answer
-  if (r.spoken && typeof ttsSay === "function") { ttsSay(r.spoken).then(ok => { if (!G.live) return;
+  if (r.spoken && typeof ttsSay === "function") { ttsSay(r.spoken, undefined, TTS_WAIT_FORM_MS).then(ok => { /* the only voice at this moment: it may take as long as a form line (Jim's Oct 27 2:26 PM call: left to Ara at 4 s, on a slow line) */ if (!G.live) return;
     if (ok) { toolReply(callId, { ok: true, saved: true, app_said: r.spoken }, false); G.justNow = { text: `The app has just said to the officer, in its own stand-in voice: "${r.spoken}" Don't say it again or add to it: wait for their answer and act on it.`, at: Date.now() }; whenIdle("instr"); }
     else toolReply(callId, { ok: true, saved: true, say: r.say || `Say in a few words that it's saved, then ask "What's next?"` }); }); return; }
   toolReply(callId, { ok: true, saved: true, say: r.say || `Say in a few words that it's saved, then ask "What's next?"` });
@@ -328,12 +332,23 @@ function formPosition() {
   if (G.hands && G.saveCheck && G.saveCheck.key === key) return { where: `The "${A.title}" form has been read back in full and is waiting for the officer's yes to save it; the app asks "Shall I save it?" again itself.`, ask: `${hfReadback()} Shall I save it?` };
   if (V.opt && V.opt.cur && OPT_STEPS[V.action]) { const st = OPT_STEPS[V.action].find(x => x.k === V.opt.cur); if (st) return { where: `The optional questions for the "${A.title}" form are at "${label(st.k)}" (the earlier ones are done); the app asks it again itself.`, ask: st.q(optWho(), V.opt.only === st.k) }; }
   if (V.action === "interaction" && V.askedSubst && !V.fromVoice.has("substantive")) return { where: "The app asked whether the interaction was substantive and is waiting for the answer; it asks again itself.", ask: SUBST_Q };
-  const miss = formMissing(), need = miss.map(k => k === "nextStep" ? "the next step and when it is due" : k === "Email or mobile" ? "an email or a mobile number" : label(k).toLowerCase().replace(/ \(.*\)$/, ""));
-  if (miss.length) return { where: `The "${A.title}" form still needs: ${need.join(", ")}. The app asks for the first of those itself.`, ask: fieldQ(V.action, miss[0], d) };
-  if (V.choice === "saveOrOpt") return { where: `Every required field of the "${A.title}" form is in; the app asked whether to save it or add the optional details, and acts on the answer itself.`, ask: formChoiceLine() };
-  if (G.hands && V.action !== "meeting") return { where: `Every required field of the "${A.title}" form is in; the app reads it back itself and asks "Shall I save it?".`, ask: `${hfReadback()} Shall I save it?` };
-  return { where: `Every required field of the "${A.title}" form is in; the app told the officer to check it and tap "${A.saveLabel}".`, ask: formTapLine() };
+  const miss = formMissing(), need = miss.map(k => k === "nextStep" ? nextNeed(d) : k === "Email or mobile" ? "an email or a mobile number" : label(k).toLowerCase().replace(/ \(.*\)$/, ""));
+  const fp = miss.length ? { where: `The "${A.title}" form still needs: ${need.join(", ")}. The app asks for the first of those itself.`, ask: fieldQ(V.action, miss[0], d) }
+    : V.choice === "saveOrOpt" ? { where: `Every required field of the "${A.title}" form is in; the app asked whether to save it or add the optional details, and acts on the answer itself.`, ask: formChoiceLine() }
+    : G.hands && V.action !== "meeting" ? { where: `Every required field of the "${A.title}" form is in; the app reads it back itself and asks "Shall I save it?".`, ask: `${hfReadback()} Shall I save it?` }
+    : { where: `Every required field of the "${A.title}" form is in; the app told the officer to check it and tap "${A.saveLabel}".`, ask: formTapLine() };
+  fp.intro = formIntro(); return fp;
 }
+// the form by name, for a reconnect or a "where were we?" (Jim's Oct 27 2:26 PM call: "That's everything the form needs" after a lock, with no form named)
+function formIntro() { if (!V || !ACTIONS[V.action]) return ""; const c = V.target && V.target.contact; return `The ${ACTIONS[V.action].title.replace(" · ", ", ").toLowerCase()} form${c && V.action !== "contact" ? " for " + nameOf(c) : V.action === "contact" && readDraft().first ? " for " + readDraft().first : ""} is open.`; }
+const nextNeed = (d) => String((d || {}).nextStep || "").trim() ? "when the next step is due" : !optEmpty((d || {}).nextDue) ? "the next step itself" : "the next step and when it is due";
+// where the form stands, in one line: what it still needs and the pending question (the answer to "what's next?", "where were we?" and "what are we filling out?")
+function formStatusLine() {
+  const A = ACTIONS[V.action], d = readDraft(), fp = formPosition() || {}, miss = formMissing(), need = miss.map(k => k === "nextStep" ? nextNeed(d) : k === "Email or mobile" ? "an email or a mobile number" : (((A.fields || []).find(f => f.k === k) || {}).label || k).toLowerCase().replace(/ \(.*\)$/, ""));
+  return { need, line: miss.length ? `To finish the ${A.title} form it still needs ${need.join(", ")}. ${fp.ask}` : V.choice === "saveOrOpt" ? fp.ask : V.opt && V.opt.cur ? `The ${A.title} form has everything it needs; we're on the optional details. ${fp.ask}` : /substantive/.test(fp.where || "") ? `To finish the ${A.title} form it still needs one answer. ${fp.ask}` : fp.ask };
+}
+const WHERE_Q = /\b(where (were|are) we|what are we (filling|doing|on)|what('s| is) this (form )?for|what form|which form|what are you asking|what did you ask|what was the question)\b/i;
+function formWhere() { return `${formIntro()} ${formStatusLine().line}`; }
 // "What's next?" while a form is open: the actions needed to finish the form and save it, in the app's own words (Carverhill, Oct 27 9:49 AM: "the answer to always be the actions necessary to complete the form and save it")
 function formNextStep(callId, lead) {
   const A = ACTIONS[V.action], d = readDraft(), fp = formPosition() || {};
@@ -341,9 +356,8 @@ function formNextStep(callId, lead) {
   if (G.hands && /reads it back itself|read back in full/i.test(fp.where || "")) {
     const key = V.action + JSON.stringify(d); G.saveCheck = { key, step: "read", n: G.heardN || 0 }; paintCall(); act("step", `what's next with the "${A.title}" form open: it is complete, read back now`);
     toolReply(callId, { ok: true, form: A.title, still_needs: [], read_back: `${lead ? lead + " " : ""}The form is complete; here it is. ${hfReadback()} Shall I save it?`, next: "The app read the form back. After the officer's yes, call save_form with confirmed true; if they want a change, update the draft first." }); return; }
-  const miss = formMissing(), need = miss.map(k => k === "nextStep" ? "the next step and when it's due" : k === "Email or mobile" ? "an email or a mobile number" : (((A.fields || []).find(f => f.k === k) || {}).label || k).toLowerCase().replace(/ \(.*\)$/, ""));
   // what is still to do, exactly: the missing required fields, the save-or-optional choice, or the optional question under way (Oct 27 1:14 PM call: "waiting on one answer" was said five times about complete forms)
-  const line = miss.length ? `To finish the ${A.title} form it still needs ${need.join(", ")}. ${fp.ask}` : V.choice === "saveOrOpt" ? fp.ask : V.opt && V.opt.cur ? `The ${A.title} form has everything it needs; we're on the optional details. ${fp.ask}` : /substantive/.test(fp.where || "") ? `To finish the ${A.title} form it still needs one answer. ${fp.ask}` : fp.ask;
+  const { need, line } = formStatusLine();
   act("step", `what's next with the "${A.title}" form open: ${line}`);
   toolReply(callId, { ok: true, form: A.title, still_needs: need, ask_exactly: `${lead ? lead + " " : ""}${line}` });
 }

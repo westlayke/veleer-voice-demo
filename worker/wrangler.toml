@@ -10,3 +10,7 @@ keep_vars = true
 binding = "DB"
 database_name = "veleer-activity"
 database_id = "c21cd15d-3eb1-434d-93c4-fe027d895e60"
+
+[[kv_namespaces]]
+binding = "LINES"
+id = "98d3527efff8472b9f9eb99a70ddc67b"
