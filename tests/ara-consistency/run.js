@@ -36,6 +36,15 @@ function silentWav(file) {
   b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(n * 2, 40);
   fs.writeFileSync(file, b);
 }
+// a running score while the job runs (GitHub serves a job's log only once it has finished): one row per conversation in the
+// activity log, page "consistency", session = the GitHub run id, text = the numbers; nothing from the conversation but the flow id,
+// the saved line (made-up names) and the timings. PROGRESS_LOG=0 turns it off.
+async function progress(c, n) {
+  if (process.env.PROGRESS_LOG === "0") return;
+  const text = JSON.stringify({ n, flow: c.flow, turns: c.turns.length, lineMs: c.lineMs, cost: +c.cost.toFixed(4), firstMs: c.firstMs || [], saved: c.saved.map(s => s.text).join(" | "), failed: !!c.failed, cut: !!c.cut, errors: c.errors.slice(0, 2) });
+  await fetch("https://veleer-voice.klaracey.workers.dev/log", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ page: "consistency", name: PROVIDER, device: "consistency-" + PROVIDER, session: String(process.env.GITHUB_RUN_ID || "local"), events: [{ at: new Date().toISOString(), role: "progress", text }] }) });
+}
 async function mintToken() {
   if (PROVIDER === "gemini") { const at = (ms) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$/, "Z");
     const g = await fetch("https://generativelanguage.googleapis.com/v1beta/auth_tokens", { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": KEY }, body: JSON.stringify({ uses: 1, expireTime: at(10 * 60000), newSessionExpireTime: at(2 * 60000) }) });
@@ -230,6 +239,7 @@ function report(convs, extra) {
       c.failed = !c.replies.some(r => r.text); if (c.cut) console.log(`(conversation ${c.flow} #${c.n} was cut off by the budget and is left out of the scores)`); else if (!c.failed) { c.score = score(c, flow); fails = 0; } else if (++fails >= 3) { stopAll = true; console.log("Three conversations in a row got no answer from Grok: stopping. " + c.errors.slice(0, 2).join("; ")); }
       convs.push(c);
       if (!firstLogged && c.replies.length) { firstLogged = true; console.log("MILESTONE first-grok-reply: " + JSON.stringify(c.replies[0].text.slice(0, 200))); }
+      progress(c, convs.length).catch(() => {});
       console.log(`${convs.length}. ${c.flow} #${c.n}: ${c.turns.length} turns, ${(c.lineMs / 1000).toFixed(0)} s, $${c.cost.toFixed(3)}, saved: ${c.saved.map(s => s.text).join(" | ") || "nothing"}${c.errors.length ? ", errors: " + c.errors.slice(0, 2).join("; ") : ""}  [total $${spent().toFixed(3)}]`);
       if (!half.said && spent() >= BUDGET / 2) { half.said = true; console.log(`MILESTONE halfway: ${convs.length} conversations, $${spent().toFixed(3)}`); }
       console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => { let err = ""; try { err = (JSON.parse(t.out || "{}").error || "").slice(0, 220); } catch (x) {} return [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)].concat(err ? ["ERROR: " + err] : []); }), saved: c.saved.map(s => s.text), leftOut: c.leftOut || [], drops: c.drops || [], errors: c.errors.slice(0, 3) }));
