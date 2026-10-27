@@ -35,7 +35,9 @@ const FAKES = (real) => {
     if (/workers\.dev\/log/.test(s)) { if (/ping=/.test(s) && window.__pingHang) await hang(window.__pingHang, o && o.signal);
       if (o && o.body) window.__logs.push(JSON.parse(o.body)); /* kept here too in real mode: the app empties its queue when a batch goes to the Worker (run 3: saves counted as missing) */ if (window.__real) return f(u, o); return new Response(/GET|undefined/.test(o && o.method || "GET") ? '{"logging":true}' : '{"stored":1}', { status: 200 }); }
     if (/\/tts$/.test(s)) { window.__sent.push(JSON.stringify({ type: "app.tts", text: JSON.parse(o.body).text })); /* the app's own voice: a real recording from the page's own sounds, or nothing when the fault says so */
-      if (window.__ttsHang) await hang(window.__ttsHang, o && o.signal); if (window.__ttsFail) return new Response("no", { status: 502 }); return f("preview/sounds/line-back.mp3"); }
+      if (window.__ttsHang) await hang(window.__ttsHang, o && o.signal);
+      if (window.__ttsFirstHang) { const t = JSON.parse(o.body).text; window.__ttsSeen = window.__ttsSeen || {}; if (!window.__ttsSeen[t]) { window.__ttsSeen[t] = 1; await hang(window.__ttsFirstHang, o && o.signal); } } /* the first request for each line is slow, the second (sent at 2.5 s) answers at once */
+      if (window.__ttsFail) return new Response("no", { status: 502 }); return f("preview/sounds/line-back.mp3"); }
     if (/workers\.dev/.test(s)) { if (window.__tokenHang && !/tts/.test(s)) { const ms = window.__tokenHang; window.__tokenHang = 0; await hang(ms, o && o.signal); } return new Response('{"value":"test-pass"}', { status: 200 }); }
     return f(u, o); };
 };
@@ -97,10 +99,35 @@ const FAULTS = {
   token: { title: "Slow voice pass", about: "the line drops and the key holder takes 7 s to hand out a new voice pass; the dropped-line recording plays and the reconnect still completes",
     after: async (p, h) => { await p.evaluate(() => { TOK.p = null; TOK.at = 0; window.__tokenHang = 7000; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await h.newLine(14000); },
     expect: (log) => /The line dropped|Voice pass fetched in \d{4,} ms|voice pass/i.test(log) && !/Conversation ended/.test(log) },
+  // ---- faults from Jim's Oct 27 2:26 PM call (H21-H27) ----
+  slowtts: { title: "Slow voice, one request", about: "the first request for each of the app's own lines takes 9 s; the second request the app sends at 2.5 s answers at once, so the line plays without falling back to Ara",
+    before: async (p) => p.evaluate(() => { window.__ttsFirstHang = 9000; window.__ttsSeen = {}; }), settle: 4000, afterSettle: async (p) => p.evaluate(() => { window.__ttsFirstHang = 0; }),
+    expect: (log, sent, step, turnSent) => (/the second request answered first/.test(log) && !/own line didn't arrive in time/.test(log)) || (!/"app\.tts"/.test(turnSent) && "n/a: no scripted line in this turn") },
+  sideq: { title: "Side question", about: "inside a form the officer asks a side question and Ara's answer ends with the form's question; the app must not ask it a second time",
+    before: async (p, h) => { await h.said("Why do you need that?"); await p.waitForTimeout(300); const ask = await p.evaluate(() => (formPosition() || {}).ask || "What's next?"); await h.fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: `Because the form needs it to be complete. ${ask}` }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(800); },
+    expect: (log) => /Ara's answer already asked the form's question: the app doesn't ask it again/.test(log) && !/After Ara's answer, the app asks the form's question again/.test(log) },
+  there: { title: "Are you there, mid-form", about: "inside a form the officer asks whether Ara is there; the app answers \"I'm here\" and the pending question itself, and Ara's own \"I'm here\" is cut so the question isn't asked twice",
+    before: async (p, h) => { const n = await p.evaluate(() => __sent.length); await h.said("Are you there?"); await p.waitForFunction((n) => __sent.slice(n).some(s => /force_message/.test(s) && /I'm here/.test(s)), n, { timeout: 12000 }).catch(() => {}); await p.waitForTimeout(300);
+      const ask = await p.evaluate(() => (formPosition() || {}).ask || ""); await h.fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: `I'm here. ${ask}` }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(800); },
+    expect: (log, sent, step, turnSent) => /The app answers "are you there" itself inside the form/.test(log) && /Ara started to speak inside the form \("I'm here/.test(log) && !/After (Ara's answer|the cut), the app asks the form's question again/.test(log) },
+  wherewerewe: { title: "Where were we", about: "at the save-or-details question the officer says \"Oh, right. Okay, where were we?\": not a save; the app names the form and says what it still needs",
+    before: async (p, h) => { await h.said("Oh, right. Okay, where were we?"); await p.waitForTimeout(1200); },
+    expect: (log, sent, step) => OPT_STEPS_FORMS.includes(step.id) ? (/The officer asked where the form stands: the app says: "The .* form( for [^"]*)? is open\./.test(log) && !/The officer chose to save/.test(log)) : "n/a: no save-or-details question on this form" },
+  yesword: { title: "Yes as the summary", about: "Grok puts the officer's \"Yes.\" to the substantive question into the summary field; the app keeps the summary it had",
+    reply: async (p, h, turn, step) => { if (turn.field === "substantive") { await h.tool([turn.tool[0], Object.assign({}, turn.tool[1], { summary: "Yes." })]); await p.waitForTimeout(300); await h.tool(turn.tool); } else if (turn.tool) await h.tool(turn.tool); },
+    expect: (log, sent, step) => step.turns.some(t => t.field === "substantive") ? (/Kept the summary as it was/.test(log) && !/Summary: Yes\./.test(log)) : "n/a: no yes-or-no question on this form" },
+  stepnodue: { title: "Step without a date", about: "the officer gives the next step and no date; the app asks \"When is it due?\" alone, then the date comes",
+    reply: async (p, h, turn, step) => { if (turn.field === "nextStep") { const a = Object.assign({}, turn.tool[1]); const due = a.nextDue; delete a.nextDue; await h.tool([turn.tool[0], a]); await p.waitForFunction(() => __sent.some(s => /force_message/.test(s) && /When is it due\?/.test(s)), null, { timeout: 12000 }).catch(() => {}); await p.waitForTimeout(400); await h.said("Friday."); await h.tool([turn.tool[0], { contact_name: turn.tool[1].contact_name, nextDue: due }]); } else if (turn.tool) await h.tool(turn.tool); },
+    expect: (log, sent, step, turnSent) => step.turns.some(t => t.field === "nextStep") ? /"When is it due\?"/.test(turnSent) && !/What's the step, and when is it due\?".*What's the step, and when is it due\?"/s.test(turnSent) : "n/a: no next step on this form" },
+  lockform: { title: "Phone lock, mid-form", about: "the phone locks while a form is open; when the app is back, the line that asks the pending question again names the form",
+    after: async (p, h, turn, step) => FAULTS.lock.after(p, h, turn, step),
+    expect: (log, sent, step, turnSent) => /Phone locked: voice line closed/.test(log) && /Sorry, I lost you for a moment\. The .* form( for [^"]*)? is open\./.test(turnSent) },
 };
+const OPT_STEPS_FORMS = ["contact", "opportunity"];
 // which turns a fault can be aimed at: one that waits for a Grok reply (a tool call), one that ends in the app's own scripted line, or any
-const PICK = { slow: "tool", silent: "tool", slowline: "tool", stall: "tool", double: "tool", noaudio: "tool", resend: "tool", invent: "draft", noforce: "forced", tts: "forced", error: "tool" };
-const pickable = (faultId, turn) => { const k = PICK[faultId]; return !k ? true : k === "tool" ? !!turn.tool : k === "draft" ? !!(turn.tool && /^show_/.test(turn.tool[0])) : !!(turn.opt || turn.scripted); }; // scripted: the app answers that turn with its own line (journey.js)
+const PICK = { slow: "tool", silent: "tool", slowline: "tool", stall: "tool", double: "tool", noaudio: "tool", resend: "tool", invent: "draft", noforce: "forced", tts: "forced", error: "tool", slowtts: "forced", sideq: "inform", there: "inform", wherewerewe: "firstopt", yesword: "subst", stepnodue: "nextstep", lockform: "inform" };
+JOURNEY.forEach(s => s.turns.forEach((t, i) => { t.inForm = i > 0; })); /* the first turn of a step opens its form; the form is open from the second on */
+const pickable = (faultId, turn) => { const k = PICK[faultId]; return !k ? true : k === "tool" ? !!turn.tool : k === "draft" ? !!(turn.tool && /^show_/.test(turn.tool[0])) : k === "inform" ? !!turn.inForm : k === "firstopt" ? !!(turn.opt && turn.inForm) : k === "subst" ? turn.field === "substantive" : k === "nextstep" ? turn.field === "nextStep" : !!(turn.opt || turn.scripted); }; // scripted: the app answers that turn with its own line (journey.js)
 const INVENT = { contact: { capacity: "A" }, opportunity: { potential: 50000 }, interaction: { outcome: "Interested, continue cultivation" }, cultivate: {}, plan: { askType: "Pledge" }, ask: { agreedAmount: 30000 }, gift: { amount: 30000 } };
 const count = (s, re) => (s.match(new RegExp(re.source, "g")) || []).length;
 
