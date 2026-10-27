@@ -160,6 +160,10 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   const out = await p.evaluate((n) => ({ log: ACT.q.map(a => a.text).join(" | "), guide: __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "response.create").map(x => x.response.instructions).join(" ") }), n0);
   ok(/The officer asked whether Ara is there: her last line was \d+ s ago \("Smith, got it\."\): 1\.3 s of voice audio, speaker level 0\.2\d\d, mic heard [\d.]+ while it played, sound running; sound now running/.test(out.log), "the readings of the last line weren't logged: " + out.log.slice(-400));
   ok(/asked whether you are there\. Say "I'm here\." and then say your last line again, word for word/.test(out.guide), "Ara wasn't asked to repeat her last line: " + out.guide);
+  // a words-only line followed at once by a line the phone says itself is still flagged (Oct 27 harness: the newer line used to drop the older line's check)
+  await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "What's the next detail?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); G.lineEndAt = Date.now() + 1500; lineHeard("Neither flag is set. Shall I save it?", true); });
+  await p.waitForTimeout(300);
+  ok(/may not have been heard: no voice audio came from the voice service, only the words \("What's the next detail\?"\)/.test(await logged()), "a words-only line followed by the phone's own line wasn't flagged: " + (await logged()).slice(-300));
   // every log event carries an id, so the key holder can drop a batch that arrives twice
   ok(await p.evaluate(() => ACT.q.every(e => /^[a-z0-9]{10,}$/.test(e.id || ""))), "log events have no ids");
   // a form left open from an earlier conversation is in Right now, so a fresh conversation knows about it (Oct 25: "Weren't we working on a form for Pauline?")
