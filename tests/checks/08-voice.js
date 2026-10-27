@@ -404,23 +404,26 @@ test("Ara's instructions stay short and the Process FAQ is looked up with get_pr
   r = await ara(p, "get_process_faq", { question: "zebra xylophone" });
   ok(r.ok && !r.answers.length && /isn't covered/.test(r.say), "an unmatched question returned answers");
 });
-test("During a call, a save goes with Ara's next reply (no session update); a rule change refreshes the instructions; never a message in the conversation", async (p) => {
+test("During a call, a tool call or a save carries the Right now section with the reply request; a rule change refreshes the instructions; never a message in the conversation", async (p) => {
   await signIn(p);
   const full = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).length);
   const msgs = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "message").length);
-  const lastCreate = () => p.evaluate(() => (__sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && e.response.instructions).at(-1) || { response: {} }).response.instructions || "");
-  const f0 = await full(), m0 = await msgs();
-  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
-  await p.tap("[data-act=save]"); await p.waitForTimeout(900);
-  ok(await full() === f0, "the save re-sent the whole instructions as a session update");
-  const c = await lastCreate();
-  ok(/Right now \(replaces the Right now section/.test(c) && /Saved so far in this conversation: Task added/.test(c), "the save did not go with the next reply's instructions: " + c.slice(0, 200));
-  ok(await msgs() === m0, "the save was sent as a message in the conversation");
   const lastRules = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions).at(-1).session.instructions);
-  await said(p, "I've parked"); await p.waitForTimeout(900);
-  ok(await full() === f0 + 1 && !/HANDS-FREE MODE IS ON/.test(await lastRules()), "turning off hands-free did not send the new rules");
+  const lastCreate = () => p.evaluate(() => (__sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && e.response.instructions).at(-1) || { response: {} }).response.instructions || "");
+  await p.evaluate(() => { G.hands = false; paintCall(); whenIdle("instr"); }); await p.waitForTimeout(200); // tap mode (a rules change, sent now): in hands-free the app reads a finished draft back as a scripted line instead
+  const f0 = await full(), m0 = await msgs();
+  await said(p, "Add a task for Ruth: send her the board deck, due November 30.");
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
+  ok(await full() === f0, "a tool call re-sent the whole instructions as a session update");
+  const c = await lastCreate();
+  ok(/Right now \(replaces the Right now section/.test(c) && /Send Ruth the board deck/.test(c), "the open draft did not go with the reply request's instructions: " + c.slice(0, 200));
+  await p.tap("[data-act=save]"); await p.waitForTimeout(900);
+  ok(await full() === f0 && /Saved so far in this conversation: Task added/.test(await lastCreate()), "the tap save (its guidance is a reply request) did not carry the Right now section with the reply");
+  ok(await msgs() === m0, "the save was sent as a message in the conversation");
   await said(p, "I'm driving"); await p.waitForTimeout(900);
-  ok(await full() === f0 + 2 && /HANDS-FREE MODE IS ON/.test(await lastRules()), "turning on hands-free did not send the new rules");
+  ok(await full() === f0 + 1 && /HANDS-FREE MODE IS ON/.test(await lastRules()), "turning on hands-free did not send the new rules");
+  await said(p, "I've parked"); await p.waitForTimeout(900);
+  ok(await full() === f0 + 2 && !/HANDS-FREE MODE IS ON/.test(await lastRules()), "turning off hands-free did not send the new rules");
 });
 test("Voice commands: undo, start over, cancel and go back are carried out by the app", async (p) => {
   await signIn(p);

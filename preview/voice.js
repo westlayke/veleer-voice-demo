@@ -782,12 +782,15 @@ function flushQueued() {
     // the rules changed (hands-free, name, a theme) or the Right now section did (a save, a screen): the instructions go again, updated
     // Only a rules change re-sends the whole instructions. A Right now change (a save, a screen, a form) rides with the next reply request instead:
     // re-sending 18 KB of instructions after every save made xAI re-read the whole conversation each time (Oct 26 responsiveness review)
-    if (G.sentRules !== rulesKey()) { vlog("rules update"); send({ type: "session.update", session: { instructions: sentInstructions() } }); } else if (ctxNow() !== G.sentCtx) vlog("Right now changed: goes with the next reply"); }
+    // When no reply request follows (a tap, a scripted line), the Right now section must still reach Ara before the officer's next words, so it goes as a session update
+    if (G.sentRules !== rulesKey()) { vlog("rules update"); send({ type: "session.update", session: { instructions: sentInstructions() } }); }
+    else if (ctxNow() !== G.sentCtx) { if (G.qCreate) vlog("Right now changed: goes with the next reply"); else { vlog("Right now update"); send({ type: "session.update", session: { instructions: sentInstructions() } }); } } }
   if (G.qCreate) { G.qCreate = false; let g = G.qGuide; G.qGuide = ""; const ctx = ctxNow(); if (ctx !== G.sentCtx) { G.sentCtx = ctx; g = (g ? g + "\n" : "") + "Right now (replaces the Right now section of your instructions): " + ctx; } askReply(g); }
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;
-  if (!G.responding) { flushQueued(); return; }
+  // an instructions change waits a tick so that guidance sent in the same step (a save's, a screen's) carries the Right now section with its reply request instead of a separate session update
+  if (!G.responding) { if (kind === "instr") { clearTimeout(G.qTimer); G.qTimer = setTimeout(flushQueued, 0); } else flushQueued(); return; }
   clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { G.responding = false; flushQueued(); }, 6000); // in case response.done never arrives
 }
 // The app's answer to a tool call. Only data goes back in the tool result; anything about what to say next rides with the reply request
