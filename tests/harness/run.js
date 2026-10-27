@@ -23,8 +23,11 @@ const server = http.createServer((req, res) => {
 // the stand-in voice line and key holder (as tests/bot.js, plus switches the faults flip)
 const FAKES = (real) => {
   window.__sent = []; window.__logs = []; window.__real = real;
+  // a silent microphone: Chromium's fake mic beeps, which the app took for the officer talking over its lines (run 3b: every line "cut short")
+  const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices); navigator.mediaDevices.getUserMedia = async (c) => { if (c && c.audio && !window.__realMic) { const ac = new (window.AudioContext || window.webkitAudioContext)(); window.__micCtx = ac; return ac.createMediaStreamDestination().stream; } return gum(c); };
   window.WebSocket = class { constructor(u) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); }
-    send(d) { window.__sent.push(d); try { const e = JSON.parse(d); if (e.item && e.item.type === "force_message" && !window.__noAutoForce) {
+    send(d) { window.__sent.push(d); try { const e = JSON.parse(d); if (e.type === "response.cancel") setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "cancelled" } }) }), 20); /* xAI answers a cancel with a cancelled response.done; without it the app waited 6 s (run 3b) */
+      if (e.item && e.item.type === "force_message" && !window.__noAutoForce) {
       setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.created" }) }), 20); setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.output_audio.delta", delta: window.__silence || (window.__silence = btoa(String.fromCharCode(...new Uint8Array(24000)))) }) }), 40); setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }), 60); } } catch (x) {} }
     close() { this.readyState = 3; } };
   const f = window.fetch, hang = (ms, sig) => new Promise((r, j) => { const t = setTimeout(r, ms); if (sig) sig.addEventListener("abort", () => { clearTimeout(t); j(new DOMException("aborted", "AbortError")); }); });
@@ -60,10 +63,10 @@ const FAULTS = {
   noforce: { title: "Scripted line never plays", about: "the app's own voice line fails and Grok's force line (the fallback) gets no response either; Ara says the line herself at 8 s, and the late copy is cut",
     before: async (p) => p.evaluate(() => { window.__noAutoForce = true; window.__ttsFail = true; }), settle: 9500,
     afterSettle: async (p, h) => { await p.evaluate(() => { window.__noAutoForce = false; window.__ttsFail = false; }); await h.fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300); },
-    expect: (log, sent) => /Scripted line didn't play: Ara says it instead/.test(log) || (!/"app\.tts"/.test(sent) && !/force_message/.test(sent) && "n/a: no scripted line in this turn") },
+    expect: (log, sent, step, turnSent) => /Scripted line didn't play: Ara says it instead/.test(log) || (!/"app\.tts"/.test(turnSent) && !/force_message/.test(turnSent) && "n/a: no scripted line in this turn") },
   tts: { title: "Slow app voice", about: "the app's own voice line (its stand-in voice) takes 6 s to arrive: the line is left to Grok's force line, and the late audio is never played",
-    before: async (p) => p.evaluate(() => { window.__ttsHang = 6000; }), settle: 1500, afterSettle: async (p) => p.evaluate(() => { window.__ttsHang = 0; }),
-    expect: (log, sent) => (/own line didn't arrive in time/.test(log) && /force_message/.test(sent)) || (!/"app\.tts"/.test(sent) && "n/a: no scripted line in this turn") },
+    before: async (p) => p.evaluate(() => { window.__ttsHang = 6000; }), settle: 5500, /* the app gives its own voice 4 s before the force line goes out */ afterSettle: async (p) => p.evaluate(() => { window.__ttsHang = 0; }),
+    expect: (log, sent, step, turnSent) => (/own line didn't arrive in time/.test(log) && /force_message/.test(turnSent)) || (!/"app\.tts"/.test(turnSent) && "n/a: no scripted line in this turn") },
   noaudio: { title: "Words without voice", about: "Grok's reply arrives as words only, no audio; the heard check flags it",
     reply: async (p, h, turn) => { if (turn.tool) await h.tool(turn.tool); await p.waitForTimeout(300); await h.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "That's on the form now. What's the next detail?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(1500); },
     expect: (log) => /may not have been heard: no voice audio/.test(log) },
@@ -92,7 +95,7 @@ const FAULTS = {
 };
 // which turns a fault can be aimed at: one that waits for a Grok reply (a tool call), one that ends in the app's own scripted line, or any
 const PICK = { slow: "tool", silent: "tool", slowline: "tool", stall: "tool", double: "tool", noaudio: "tool", resend: "tool", invent: "draft", noforce: "forced", tts: "forced", error: "tool" };
-const pickable = (faultId, turn) => { const k = PICK[faultId]; return !k ? true : k === "tool" ? !!turn.tool : k === "draft" ? !!(turn.tool && /^show_/.test(turn.tool[0])) : !!(turn.opt || turn.ara || (turn.tool && turn.tool[0] === "optional_fields")); };
+const pickable = (faultId, turn) => { const k = PICK[faultId]; return !k ? true : k === "tool" ? !!turn.tool : k === "draft" ? !!(turn.tool && /^show_/.test(turn.tool[0])) : !!(turn.opt || turn.scripted); }; // scripted: the app answers that turn with its own line (journey.js)
 const INVENT = { contact: { capacity: "A" }, opportunity: { potential: 50000 }, interaction: { outcome: "Interested, continue cultivation" }, cultivate: {}, plan: { askType: "Pledge" }, ask: { agreedAmount: 30000 }, gift: { amount: 30000 } };
 const count = (s, re) => (s.match(new RegExp(re.source, "g")) || []).length;
 
@@ -118,8 +121,9 @@ async function walk(browser, base, faultId) {
     const rec = { step: step.id, title: step.title, field: pick.field, say: pick.say, ok: false, notes: [] }; w.steps.push(rec);
     const logStart = new Date().toISOString(), sentStart = await p.evaluate(() => __sent.length), vlogStart = await p.evaluate(() => VLOG.length);
     try {
+      let turnSent = "";
       for (const turn of step.turns) {
-        const hit = turn === pick;
+        const hit = turn === pick; const turnFrom = hit ? await p.evaluate(() => __sent.length) : 0;
         if (turn.ara) await p.evaluate((t) => recent(botName(), t), turn.ara);
         if (hit && fault.before) await fault.before(p, h);
         await h.said(turn.say); await p.waitForTimeout(250);
@@ -129,6 +133,7 @@ async function walk(browser, base, faultId) {
         else if (turn.tool) await h.tool(turn.tool);
         await p.waitForTimeout(turn.yes ? 900 : 500);
         if (hit && fault.settle) { await p.waitForTimeout(fault.settle); if (fault.afterSettle) await fault.afterSettle(p, h, turn, step); }
+        if (hit) turnSent = await p.evaluate((n) => __sent.slice(n).join("\n"), turnFrom); /* what went up the line during the faulted turn alone */
         if (turn.tool && turn.tool[0] === "save_form" && turn.yes) { for (let i = 0; i < 6 && !(await p.evaluate(() => V === null)); i++) await p.waitForTimeout(400); }
       }
       await p.waitForTimeout(600);
@@ -136,7 +141,7 @@ async function walk(browser, base, faultId) {
       const saves = log.split("\n").filter(l => / saved: /.test(l) && step.saved.test(l.replace(/^.* saved: /, ""))).length, stillOpen = await p.evaluate(() => !!V);
       rec.replies = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "function_call_output").map(x => x.item.output.slice(0, 400)), sentStart);
       rec.savedTimes = saves; rec.formStillOpen = stillOpen;
-      const seen = fault.expect(log, sent, step); rec.faultSeen = !!seen; if (typeof seen === "string") rec.na = seen;
+      const seen = fault.expect(log, sent, step, turnSent); rec.faultSeen = !!seen; if (typeof seen === "string") rec.na = seen;
       if (saves !== 1) rec.notes.push(saves ? `saved ${saves} times` : "not saved");
       if (stillOpen) rec.notes.push("form still open after the save");
       if (!rec.faultSeen) rec.notes.push("the fault's expected handling isn't in the log"); if (rec.na) rec.notes.push(rec.na);
