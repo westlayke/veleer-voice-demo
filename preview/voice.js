@@ -529,6 +529,27 @@ async function openAudio() {
     const mute = ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(ctx.destination);
     return true;
 }
+// The sound engine must be running before Ara speaks. After a Carry on (or any tap) iOS can keep the page's sound "interrupted"
+// for a while (Oct 27, 6:17 PM: the line reopened, Ara answered, the phone played nothing and the officer gave up). So the start
+// waits this long for it; if it is still held, the officer is told on screen and the call waits (soundPaused, with a longer limit),
+// and the line Ara says meanwhile is said again once the sound is back (soundBack).
+const SOUND_START_MS = 2000, SOUND_HELD_MS = 30000;
+async function soundRunning(ms) {
+  const ctx = G.ctx, t0 = Date.now();
+  while (G.live && G.ctx === ctx && ctx.state !== "running" && Date.now() - t0 < ms) { try { await ctx.resume(); } catch (e) {} await new Promise(r => setTimeout(r, 100)); }
+  if (!G.live || G.ctx !== ctx || ctx.state === "running") return true;
+  act("step", `Sound not running ${((Date.now() - t0) / 1000).toFixed(1)} s after the tap (${ctx.state}): the phone still holds it, waiting for it to come back`);
+  toast("Your phone's sound is held by another app, a call or Siri. " + botName() + " will carry on as soon as it's back.");
+  soundPaused(ctx, SOUND_HELD_MS);
+  return false;
+}
+// the sound is back after a pause: a line Ara said into the silence is said again (the officer heard none of it)
+function soundBack() {
+  const line = G.unheard; G.unheard = null; G.unheardResp = 0;
+  if (!line || !G.live) return;
+  act("step", "Sound is back: the line Ara said while it was paused is said again");
+  forceSay(line);
+}
 // After a lock: start the sound and mic afresh (see openAudio); if the phone refuses (no running sound in a moment), the old ones stay
 async function restartAudio(why) {
   const oldCtx = G.ctx, oldStream = G.stream, oldOut = G.out, oldAn = G.outAn, oldNode = G.node;
@@ -561,6 +582,7 @@ async function startCall(opening) {
     const [token, audio] = await Promise.all([tokP, openAudio()]); // the mic, the voice pass and the audio code all at once, not one after another
     if (!G.live) return; // hung up while connecting
     if (!audio) throw new Error("no sound");
+    await soundRunning(SOUND_START_MS); if (!G.live) return; /* after a Carry on the phone can still hold the sound (Oct 27, 6:17 PM: Ara came back and was never heard) */
     // spooky or Christmas mode: Ara is the host from her very first words
     const boo = spookyMode() ? "Mwahaha... welcome to the haunted CRM. " : xmasMode() ? "Ho ho ho... Merry Christmas, and welcome to the Christmas CRM. " : "";
     const hello = S.settings.userName ? boo + helloLine(OFFICER) : `${boo}Hi, I'm ${botName()}, what's your first name?`;
@@ -615,7 +637,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; G.lastBot = ""; G.lastBotAt = 0; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; G.lastBot = ""; G.lastBotAt = 0; G.unheard = null; G.unheardResp = 0; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -737,6 +759,7 @@ function onEvent(e) {
   if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
     if (typeof heardAsk === "function" && heardAsk(e.transcript)) guide("The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."); }
   if (G.forced) forcedEvent(t, e);
+  if (t === "response.done" && G.bot && G.unheardResp === G.respSeq) G.unheard = G.bot; /* said into a paused sound engine: said again when it is back */
   if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
@@ -745,7 +768,7 @@ function onEvent(e) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)
     G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
   else if (t === "response.created") { G.createAt = 0; G.respSeq = (G.respSeq || 0) + 1; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
-  else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
+  else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; if (paused) G.unheardResp = G.respSeq; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); lateForcedCheck(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);

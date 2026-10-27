@@ -324,16 +324,16 @@ async function lockResume() { // the app is back: reopen the line on the same co
   await openAgain(true);
 }
 const hiddenLimit = (ms) => document.visibilityState === "hidden" || G.hiddenAt ? Math.max(ms, LOCK_MAX_MS) : ms; // while the page is hidden, the hidden wait decides (the sound and mic are the phone's doing)
-function soundPaused(ctx) {
+function soundPaused(ctx, limit = SOUND_BACK_MS) { // limit: how long to wait for the phone (longer right after a tap, see soundRunning)
   if (G.soundPausedAt) return; G.soundPausedAt = Date.now();
   const why = `Sound paused by the phone (${ctx.state}; app ${document.visibilityState}${document.hasFocus && !document.hasFocus() ? ", not in focus" : ""})`;
   vlog(why); netLog(why);
   const tick = setInterval(() => {
     if (!G.live || G.ctx !== ctx) { clearInterval(tick); G.soundPausedAt = 0; return; }
     if (!G.soundPausedAt) { clearInterval(tick); return; }
-    if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); return; }
+    if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); if (typeof soundBack === "function") soundBack(); return; }
     if (document.visibilityState === "visible") ctx.resume().catch(() => {});
-    if (Date.now() - G.soundPausedAt > hiddenLimit(SOUND_BACK_MS)) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
+    if (Date.now() - G.soundPausedAt > hiddenLimit(limit)) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
   }, 500);
 }
 // the same for the mic: an iPhone mutes it for a moment (seen Oct 24, 4 s into a call); end only if it stays muted

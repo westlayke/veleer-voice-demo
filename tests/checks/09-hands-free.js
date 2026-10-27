@@ -217,6 +217,32 @@ test("Oct 24 call fixes: the phone pausing the sound doesn't end the call, and C
   ok(await p.evaluate(() => __sent.join(" ").includes("Hands-free mode is still on")), "Ara wasn't told hands-free is still on");
 });
 
+test("Carry on with the phone's sound held (Oct 27): the app waits and says so instead of letting Ara talk unheard, and repeats her line when the sound is back", async (p) => {
+  await signIn(p);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  await p.evaluate(() => { G.ctx.resume = () => Promise.resolve(); return G.ctx.suspend(); });
+  await p.waitForTimeout(7000);
+  ok(await p.isVisible("#rsmGo"), "no Carry on card after the sound stayed paused");
+  // the phone keeps the sound engine from running after the tap (iOS "interrupted"): every new engine starts held until released
+  await p.evaluate(() => { const AC = window.AudioContext; window.__heldAC = AC; window.AudioContext = class extends AC { constructor() { super(); const real = this.resume.bind(this); this.resume = () => Promise.resolve(); this.__release = () => { this.resume = real; return real(); }; super.suspend(); } }; });
+  const logAt = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text));
+  await p.tap("#rsmGo"); await p.waitForTimeout(3500);
+  ok(await p.evaluate(() => G.live && G.ctx && G.ctx.state !== "running" && G.soundPausedAt > 0), "the call didn't wait for the held sound: " + JSON.stringify(await p.evaluate(() => ({ live: G.live, state: G.ctx && G.ctx.state, paused: G.soundPausedAt }))));
+  ok((await logAt()).some(t => /^Sound not running .* after the tap/.test(t)), "the held sound wasn't logged: " + JSON.stringify((await logAt()).slice(-6)));
+  ok(/held by another app, a call or Siri/.test(await p.evaluate(() => document.body.innerText)), "the officer wasn't told on screen that the phone holds the sound");
+  // Ara answers into the silence: the line is kept
+  await p.evaluate(() => { const audio = btoa(String.fromCharCode(...new Array(960).fill(0))); [{ type: "response.created" }, { type: "response.output_audio.delta", delta: audio }, { type: "response.output_audio_transcript.delta", delta: "Welcome back. Was it in person, a phone call, or a video call?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
+  await p.waitForTimeout(4000); // past the usual 6 s pause limit in all: the call must still be up
+  ok(await p.evaluate(() => G.live && G.unheard === "Welcome back. Was it in person, a phone call, or a video call?"), "the unheard line wasn't kept, or the call ended: " + JSON.stringify(await p.evaluate(() => ({ live: G.live, unheard: G.unheard }))));
+  // the phone gives the sound back: the line is said again
+  const n1 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => G.ctx.__release()); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => G.live && !G.soundPausedAt && !G.unheard), "the sound coming back wasn't noticed: " + JSON.stringify(await p.evaluate(() => ({ live: G.live, paused: G.soundPausedAt, unheard: G.unheard }))));
+  const forced = await p.evaluate((n) => __sent.slice(n).map(x => JSON.parse(x)).filter(x => x.item && x.item.type === "force_message").map(x => x.item.content[0].text), n1);
+  ok(forced.some(t => /^Welcome back\. Was it in person/.test(t)), "Ara's unheard line wasn't said again: " + JSON.stringify(forced));
+  await p.evaluate(() => { window.AudioContext = window.__heldAC; endCall(); });
+});
+
 test("Turning on hands-free mid-form: Ara says she'll read back all the information, then asks the form's next question", async (p) => {
   await signIn(p);
   await ara(p, "show_contact_draft", {});

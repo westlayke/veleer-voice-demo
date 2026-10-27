@@ -34,7 +34,11 @@ Five signals, in the order they tend to fire on a drive:
 
 Two things that look like trouble but are not handled as drops: the phone **pausing the app's sound** (a notification,
 Siri, a headset change) and the phone **muting the mic**. Both keep the line open and wait, `SOUND_BACK_MS` (6 s) for sound and `MIC_BACK_MS` (45 s) for the mic, because iOS shows an "Audio Recording / Stop audio recording?" dialog when the phone locks during a call and the mic is back only once the officer taps Cancel (Oct 26), for
-the sound or mic to come back, ending the call only if it does not (`soundPaused`, `micMuted`). The **page going hidden**
+the sound or mic to come back, ending the call only if it does not (`soundPaused`, `micMuted`). A call's start (a mic tap or
+Carry on) waits `SOUND_START_MS` (2 s) for the fresh sound engine to run (`soundRunning` in voice.js); if the phone still holds it
+(iOS kept the page's audio "interrupted" after a background switch, Oct 27 6:17 PM: Ara answered and was never heard), the officer
+is told on screen and the call waits up to `SOUND_HELD_MS` (30 s) instead of 6 s; a line Ara says into a paused sound engine is
+kept (`G.unheard`) and said again as a scripted line when the sound is back (`soundBack`). The **page going hidden**
 (the phone locking, or a switch to another app) is **lock = pause** since October 26: a locked iPhone mutes the mic and
 pauses the sound anyway, so `appHidden` closes the line `LOCK_CLOSE_MS` (3 s) after the page hides (`lockPause`; nothing is
 charged while the phone sits locked), keeps the conversation id, and the moment the app is back `lockResume` reopens the
