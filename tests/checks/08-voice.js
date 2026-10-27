@@ -668,7 +668,7 @@ test("Ara: a dead spot while reconnecting: the voice pass is tried again every f
   await p.evaluate(() => { window.__hang = false; }); await p.waitForTimeout(4500);
   const end = await p.evaluate(() => ({ live: G.live, status: G.status, downAt: G.downAt, timer: G.downTimer, spoken: __spoken.length })); end.log = await logged();
   ok(end.live && end.status === "Listening" && /Voice pass fetched in \d+ ms/.test(end.log) && /Voice line open in/.test(end.log), "the line didn't come back once a voice pass could be fetched: " + end.status + " " + end.log.slice(-300));
-  ok(!end.downAt && !end.timer && saidLines(end.log).join("|") === "Sorry, the line dropped. I'm reconnecting.|Still trying to reconnect.|You're back with Ara.", "the spoken reconnect lines didn't stop when the line came back, or the back line wasn't said: " + JSON.stringify(saidLines(end.log)));
+  ok(!end.downAt && !end.timer && saidLines(end.log).join("|") === "Sorry, the line dropped. I'm reconnecting.|Still trying to reconnect.|I'm back.", "the spoken reconnect lines didn't stop when the line came back, or the back line wasn't said: " + JSON.stringify(saidLines(end.log)));
   ok(/\(recording\)/.test(end.log), "the lines were not played as recordings through the call's own sound: " + end.log.slice(-400));
   // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (Oct 25 4:38 PM: a 3-minute dead spot got the line 13 times)
   const gaps = await p.evaluate(() => { G.downAt = Date.now() - 20000; const a = downRepeatMs(); G.downAt = Date.now() - 70000; const b = downRepeatMs(); G.downAt = 0; return [a, b]; });
