@@ -139,6 +139,7 @@ async function converse(browser, base, flow, n) {
       else if (script.length) say = script.shift();
       else if (!/\?/.test(last) || saidNo > 6) break;
       else { say = "No, that's all for now."; saidNo++; }
+      if (!await p.evaluate(() => G.live)) { conv.errors.push("call ended: " + (await p.evaluate(() => (window.__acts.filter(a => a.role === "end").pop() || { text: "?" }).text)).slice(0, 160)); break; } // nobody to talk to (Oct 27 7:03 PM run: three calls ended at once with "couldn't connect" and the officer went on talking for two minutes)
       const nBefore = conv.replies.length, at = Date.now();
       conv.turns.push({ say, at, after: last.slice(0, 300) });
       await p.evaluate((t) => window.__officer(t), say);
