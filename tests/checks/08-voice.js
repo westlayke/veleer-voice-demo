@@ -737,4 +737,47 @@ test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, a s
   await p.evaluate(() => { endCall(); S.settings.provider = "grok"; save(); });
 });
 
+test("Gemini voice engine (Oct 27): the setup message, transcripts and tool calls translated, audio at 16 kHz, a scripted line and typed words as turns", async (p) => {
+  await p.evaluate(() => { S.settings.provider = "gemini"; save(); });
+  await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }).catch(async () => { throw new Error("the call never went live: " + JSON.stringify({ errors: p.errors, status: await p.evaluate(() => G.status), urls: await p.evaluate(() => window.__wsUrls), vlog: await p.evaluate(() => (G.vlog || []).slice(-6)) })); });
+  const url = await p.evaluate(() => __wsUrls[__wsUrls.length - 1]);
+  ok(/^wss:\/\/generativelanguage\.googleapis\.com\/ws\/google\.ai\.generativelanguage\.v1beta\.GenerativeService\.BidiGenerateContentConstrained\?access_token=test-pass$/.test(url), "the socket isn't Gemini's: " + url);
+  const raw = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)), n);
+  let out = await raw(0); const setup = out.find(x => x.setup);
+  ok(setup && setup.setup.model === "models/gemini-3.8-live" && setup.setup.generationConfig.responseModalities[0] === "AUDIO" && setup.setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName === "Kore" && setup.setup.systemInstruction.parts[0].text.length > 1000 && setup.setup.tools[0].functionDeclarations.length > 10 && setup.setup.inputAudioTranscription && setup.setup.outputAudioTranscription, "the setup message is wrong: " + JSON.stringify(setup).slice(0, 300));
+  ok(!JSON.stringify(setup.setup.tools).includes('"additionalProperties"'), "a tool schema still carries additionalProperties, which Gemini refuses");
+  ok(!out.some(x => x.type), "an app event reached Gemini's socket untranslated: " + JSON.stringify(out.filter(x => x.type).map(x => x.type)));
+  // the line is ready; the officer's words come as transcript pieces, then a tool call
+  const gem = (o) => p.evaluate((o) => __ws.onmessage({ data: JSON.stringify(o) }), o);
+  await gem({ setupComplete: {} });
+  ok(await p.evaluate(() => G.ws.ready === true), "setupComplete didn't mark the line ready");
+  let n0 = await p.evaluate(() => __sent.length);
+  await gem({ serverContent: { inputTranscription: { text: "Show me " } } }); await gem({ serverContent: { inputTranscription: { text: "the contacts." } } });
+  await gem({ toolCall: { functionCalls: [{ id: "c1", name: "show_screen", args: { screen: "contacts" } }] } });
+  await p.waitForTimeout(500);
+  ok((await p.evaluate(() => G.recent)).some(l => l === "Officer: Show me the contacts."), "the officer's transcript pieces weren't joined into one heard line: " + JSON.stringify(await p.evaluate(() => G.recent)));
+  ok(await titleOf(p) === "Contacts", "the tool call didn't open the Contacts screen: " + await titleOf(p));
+  out = await raw(n0); const tr = out.find(x => x.toolResponse);
+  ok(tr && tr.toolResponse.functionResponses[0].id === "c1" && tr.toolResponse.functionResponses[0].name === "show_screen" && typeof tr.toolResponse.functionResponses[0].response === "object" && tr.toolResponse.functionResponses[0].response.app_guidance, "the tool result didn't go back as a toolResponse with the app's guidance inside: " + JSON.stringify(tr).slice(0, 300));
+  ok(!out.some(x => x.clientContent && x.clientContent.turnComplete), "a reply was requested as a user turn on top of the tool result (two replies)");
+  // the model's turn: audio and its transcript, then the end of the turn
+  const pcm = await p.evaluate(() => b64FromInt16(new Int16Array(480)));
+  await gem({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: "audio/pcm;rate=24000", data: pcm } }] }, outputTranscription: { text: "Here are your contacts." } } });
+  await p.waitForTimeout(100);
+  ok(await p.evaluate(() => G.responding && /Here are your contacts\./.test(G.bot)), "the model turn didn't reach the app as a reply with its transcript: " + JSON.stringify(await p.evaluate(() => ({ responding: G.responding, bot: G.bot }))));
+  await gem({ serverContent: { turnComplete: true } }); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !G.responding), "turnComplete didn't end the reply");
+  // a scripted line and typed words become user turns; the microphone goes out at 16 kHz
+  n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { forceSay("Contact saved for Nora."); send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "Hello there." }] } }); send({ type: "input_audio_buffer.append", audio: b64FromInt16(new Int16Array(240)) }); });
+  await p.waitForTimeout(300);
+  out = await raw(n0);
+  ok(out.some(x => x.clientContent && x.clientContent.turnComplete && x.clientContent.turns[0].role === "user" && /word for word[^]*Contact saved for Nora\./.test(x.clientContent.turns[0].parts[0].text)), "the scripted line wasn't asked for as a user turn: " + JSON.stringify(out).slice(0, 300));
+  ok(out.some(x => x.clientContent && x.clientContent.turnComplete && x.clientContent.turns[0].parts[0].text === "Hello there."), "typed words weren't sent as a whole user turn");
+  const au = out.find(x => x.realtimeInput && x.realtimeInput.audio);
+  ok(au && au.realtimeInput.audio.mimeType === "audio/pcm;rate=16000" && atob(au.realtimeInput.audio.data).length === 320, "the microphone audio wasn't sent at 16 kHz: " + JSON.stringify(au && { mime: au.realtimeInput.audio.mimeType, bytes: atob(au.realtimeInput.audio.data).length }));
+  await p.evaluate(() => { endCall(); S.settings.provider = "grok"; save(); });
+});
+
 };

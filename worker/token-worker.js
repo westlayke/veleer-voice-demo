@@ -44,6 +44,15 @@ export default {
         body: JSON.stringify({ expires_after: { anchor: "created_at", seconds: 600 }, session: { type: "realtime", model: "gpt-realtime-2.1" } }) });
       return new Response(await o.text(), { status: o.status, headers: { ...cors, "Content-Type": "application/json" } });
     }
+    if (want.provider === "gemini") { // preview-only comparison engine (Oct 27): a one-use ephemeral token for the Live API
+      if (!env.GEMINI_API_KEY) return json({ error: "no_gemini_key" }, 503);
+      const at = (ms) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$/, "Z");
+      const g = await fetch("https://generativelanguage.googleapis.com/v1beta/auth_tokens", { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+        body: JSON.stringify({ uses: 1, expireTime: at(10 * 60000), newSessionExpireTime: at(2 * 60000) }) });
+      let j = {}; try { j = await g.json(); } catch (e) {}
+      if (!g.ok || !j.name) return json({ error: "gemini_token", status: g.status, detail: j.error ? String(j.error.message || "").slice(0, 200) : "" }, 502);
+      return json({ value: j.name }); // the app reads value, like xAI's pass
+    }
     const r = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.XAI_API_KEY },

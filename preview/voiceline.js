@@ -95,7 +95,7 @@ function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; const se
 function openSocket(token, first, second) {
   // a line opened again within 25 minutes picks up the same conversation (xAI keeps it 30 minutes)
   const P = PROV(), resume = P.resume && G.convId && Date.now() - (G.convAt || 0) < RESUME_MS ? G.convId : null;
-  const ws = new WebSocket(P.url(resume), P.protocols(token));
+  const ws = P.open ? P.open(token, resume) : new WebSocket(P.url(resume, token), P.protocols(token));
   ws.resumed = resume;
   if (second) G.tries.add(ws); else { G.ws = ws; G.tries = new Set([ws]); }
   const t0 = Date.now();
@@ -111,7 +111,7 @@ function openSocket(token, first, second) {
   ws.onopen = () => {
     if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws; G.lockResume = false;
-    sessUpdate(sessionCfg()); sendExtras(); if (G.drops && !P.resume) replayRecent(); if (typeof first === "function") first(); else guide(first);
+    sessUpdate(sessionCfg()); sendExtras(); if (G.drops && P.replay) replayRecent(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep();
     if (ws.resumed) netLog("Picked up the same conversation");
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);

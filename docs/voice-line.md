@@ -218,3 +218,18 @@ pronunciation table, key terms), no force_message (a scripted line is asked for 
 word", and accepted when the engine's words overlap the line), no conversation resumption (after a drop the last eight lines
 are replayed into the new session as text). `GET /providers` on the Worker says which engine keys exist (true/false).
 
+Google Gemini Live (gemini-3.8-live) is the third engine, added the same day. Its wire format is its own (setup, realtimeInput,
+clientContent, toolResponse in; setupComplete, serverContent, toolCall, goAway out), so `GeminiSocket` in provider.js wraps the
+WebSocket and translates both ways: the app keeps sending and receiving its OpenAI-style events and nothing in voice.js or
+voiceline.js knows the difference. Microphone audio is resampled to 16 kHz PCM (`down16`), Gemini's 24 kHz audio comes back as
+output_audio.delta, its input and output transcriptions become the app's transcription events, a tool call becomes
+function_call_arguments.done and the app's guidance text rides along in the tool response (`app_guidance`, held 120 ms so the
+guidance written right after the call is included), a goAway closes the socket so the app reconnects with the session
+resumption handle. Tool schemas are stripped of the keys Gemini rejects (`geminiSchema`). The Worker mints an ephemeral token
+from `POST /v1beta/auth_tokens` (secret `GEMINI_API_KEY`); the consistency run uses `GEMINI_CONSISTENCY_KEY`.
+
+The consistency run now runs the engines side by side: the workflow's `providers` input is a comma list and a job per engine
+starts at the same time, so time of day cannot favour one. Every engine is measured the same way, from app-level taps (the
+moment the officer's words are sent to the first sound of the reply), and the summary gives per-flow reply times with mean,
+standard deviation, median, 90th percentile, slowest and the count over 3 s.
+
