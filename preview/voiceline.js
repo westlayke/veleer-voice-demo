@@ -249,14 +249,16 @@ function playLine(kind) { // through the call's own sound, which the phone keeps
 // back to Grok's force_message) when the sound isn't running, the Worker takes longer than TTS_WAIT_MS, the audio can't be
 // decoded, or the line changed while waiting. It never plays over Ara: playback waits for her reply and sound to end, as a
 // scripted line does. The line goes into the conversation record as Ara's, and Grok is told through Right now by the caller.
-async function ttsSay(text) {
+// until: while it returns false the line is called off (resolves null, nothing plays, no fallback): a question or read-back whose form was saved meanwhile (harness run 3b: a read-back played after the save)
+async function ttsSay(text, until) {
   if (!G.live || !G.ctx || G.ctx.state !== "running") return false;
   const ac = new AbortController(), timer = setTimeout(() => ac.abort(), TTS_WAIT_MS), t0 = Date.now(), ws = G.ws; let buf;
   try { const r = await fetch(tokenUrl().replace(/\/$/, "") + "/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE }, body: JSON.stringify({ text, voice: APP_VOICE }), signal: ac.signal });
     if (!r.ok) throw new Error("tts " + r.status); buf = await G.ctx.decodeAudioData(await r.arrayBuffer()); }
   catch (e) { clearTimeout(timer); vlog(`the app's own line not fetched (${String(e && e.message || e).slice(0, 60)}): Grok says it instead`); act("step", `The app's own line didn't arrive in time (${Date.now() - t0} ms): Ara says it herself`); return false; }
   clearTimeout(timer); const fetched = Date.now() - t0;
-  for (let w = 0; G.live && G.ws === ws && (G.responding || playingLeft() > 0 || G.forced) && w < FORCE_WAIT_MS; w += 200) await new Promise(r => setTimeout(r, 200));
+  for (let w = 0; G.live && G.ws === ws && (G.responding || playingLeft() > 0 || G.forced) && w < FORCE_WAIT_MS; w += 200) { if (until && !until()) { vlog(`the app's own line called off: ${text.slice(0, 60)}`); return null; } await new Promise(r => setTimeout(r, 200)); }
+  if (until && !until()) { vlog(`the app's own line called off: ${text.slice(0, 60)}`); return null; }
   if (!G.live || !G.ctx || G.ctx.state !== "running" || G.ws !== ws) return false;
   try { const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.ctx.destination); const at = Math.max(G.ctx.currentTime + 0.02, G.playHead || 0); src.start(at); G.lineSrc = src; G.lineEndAt = Date.now() + (at - G.ctx.currentTime) * 1000 + buf.duration * 1000 + 50; } catch (e) { return false; }
   act("step", `The phone said in its own voice (fetched in ${fetched} ms): "${text}"`); vlog(`phone said (own voice, ${fetched} ms): ${text}`);
@@ -398,7 +400,7 @@ function forceSay(text, then, fallback, waited = 0) {
   if (!G.live) { G.pendingForce = null; return; }
   if (!waited) { G.pendingForce = text; G.forceAt = Date.now();
     // the app says its scripted lines itself, in its stand-in voice (Carverhill, Oct 27: so the officer can tell the app from Ara); Grok's force_message is the fallback
-    if (typeof ttsSay === "function" && G.ctx && G.ctx.state === "running" && !G.noTts) { ttsSay(text).then(ok => { if (!G.live) { G.pendingForce = null; return; } if (G.pendingForce !== text) return; /* called off meanwhile: a drop, another line */
+    if (typeof ttsSay === "function" && G.ctx && G.ctx.state === "running" && !G.noTts) { ttsSay(text, () => G.pendingForce === text).then(ok => { if (!G.live) { G.pendingForce = null; return; } if (ok === null || G.pendingForce !== text) return; /* called off meanwhile: a save, a drop, another line */
       if (ok) { G.pendingForce = null; G.lastForcedText = text; G.justNow = { text: `The app has just said to the officer, in its own stand-in voice: "${text}" Don't say it or anything like it: wait for their answer.`, at: Date.now() }; whenIdle("instr"); if (then) guide(then); lineDoneWatch(); }
       else forceSay(text, then, fallback, 1); }); return; } }
   if ((G.responding || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }

@@ -109,6 +109,7 @@ function savedMood(action, d) {
 }
 function grokSaved(action, r, d = {}) {
   if (!G.live) return;
+  G.pendingForce = null; // a question or read-back still waiting for its turn belongs to the form just saved: dropped (harness run 3b: it played after the save line)
   const who = r && r.contact ? nameOf(r.contact) : "";
   const hasOpp = r && r.contact && openOpp(r.contact.id);
   const o = r && r.opp, closed = o && o.stage === "Closed" ? ` The opportunity is now Closed ${o.closed}.` : "";

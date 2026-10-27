@@ -853,5 +853,8 @@ test("Oct 27 10:21 AM call: scripted lines are said by the app in its own stand-
   ok(/^The form is complete; here it is\. New contact\. First name: Nia; .*Shall I save it\?$/.test(r.read_back || ""), "what's next on a complete form didn't read it back: " + JSON.stringify(r));
   await said(p, "Yes."); r = await ara(p, "save_form", { confirmed: true }, 1500);
   ok(r.saved === true, "the yes after the read-back didn't save: " + JSON.stringify(r));
+  // 6. a scripted line still waiting for its turn when its form is saved is dropped, not played after the save line (harness run 3b)
+  const dropped = await p.evaluate(async () => { const n = ACT.q.length; G.responding = true; forceSay("An old question that no longer applies?"); await new Promise(r => setTimeout(r, 300)); G.pendingForce = null; G.responding = false; await new Promise(r => setTimeout(r, 900)); return { pending: G.pendingForce, log: ACT.q.slice(n).map(a => a.text).join(" | "), vlog: VLOG.slice(-6).join(" | ") }; });
+  ok(!/An old question/.test(dropped.log) && /called off: An old question/.test(dropped.vlog), "a scripted line whose form was saved meanwhile still played: " + JSON.stringify(dropped));
 });
 };
