@@ -27,7 +27,8 @@ jobs:
       list: ${{ steps.list.outputs.list }}
     steps:
       - id: list
-        run: echo "list=$(echo '${{ inputs.providers }}' | tr -d ' ' | awk -F, '{ printf "["; for (i = 1; i <= NF; i++) printf "%s\"%s\"", (i > 1 ? "," : ""), $i; printf "]" }')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "list=$(printf '%s' "${{ inputs.providers }}" | tr -d ' ' | jq -Rc 'split(",")')" >> "$GITHUB_OUTPUT"
   run:
     needs: plan
     runs-on: ubuntu-latest
