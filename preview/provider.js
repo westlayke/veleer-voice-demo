@@ -15,7 +15,9 @@ const PROVIDERS = {
   openai: { name: "OpenAI (" + OPENAI_MODEL + ")", voices: ["marin", "cedar", "sage", "coral", "alloy", "ash", "ballad", "echo", "shimmer", "verse"], defVoice: "marin", host: /api\.openai\.com/,
     url: () => "wss://api.openai.com/v1/realtime?model=" + OPENAI_MODEL,
     protocols: (token) => ["realtime", "openai-insecure-api-key." + token],
-    resume: false, replay: true, forceItem: false, extras: false }, // replay: the last lines go into a new session as text after a drop
+    resume: false, replay: true, forceItem: false, extras: false, // replay: the last lines go into a new session as text after a drop
+    serial: true, silentEmpty: true, // one reply request at a time (OpenAI refuses a second while one runs); a finished reply with no words is silence, not a dead line
+    rules: "- Call the tool first, with no words before it; speak only after its result comes back. Never say what you are about to do." },
   gemini: { name: "Gemini (" + GEMINI_MODEL + ")", voices: ["Kore", "Puck", "Charon", "Fenrir", "Aoede", "Leda", "Orus", "Zephyr"], defVoice: "Kore", host: /generativelanguage\.googleapis\.com/,
     url: (resume, token) => GEMINI_URL + "?access_token=" + encodeURIComponent(token), protocols: () => [],
     open: (token) => new GeminiSocket(token), // the Live API speaks another envelope: a translating socket (below) keeps the rest of the app unchanged

@@ -163,7 +163,7 @@ async function netLog(what, known) { const sess = G.session, info = netInfo(), m
 async function reconnect(why) {
   if (!G.live) return;
   if (Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now()) > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
-  G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
+  G.drops++; G.status = "Reconnecting…"; G.createAt = 0; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
   if (G.drops === 1) cue("drop");
@@ -247,8 +247,12 @@ function cue(kind) {
 }
 // Now and then Grok takes a tool answer or notice and never speaks (no response, or an empty or failed one),
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
+const CREATE_WAIT_MS = 2500; // serial engines: a second reply request waits for the first to report started (or this long)
 function askReply(guidance) {
   if (guidance !== undefined) G.askGuide = guidance; // the same guidance goes again if the app has to ask twice
+  if (PROV().serial && (G.responding || (G.createAt && Date.now() - G.createAt < CREATE_WAIT_MS))) { // one at a time: held until the running reply is done
+    G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { if (!G.responding) G.createAt = 0; flushQueued(); }, 500); vlog("reply request held: one at a time on " + PROV().name); return; }
+  G.createAt = Date.now();
   send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now();
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
   G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
@@ -267,6 +271,10 @@ function replyCheck(r) {
   const why = r.status === "never started" ? "no reply started" : r.status === "failed" ? "reply failed" + (r.status_details && r.status_details.error ? ": " + (r.status_details.error.message || r.status_details.error.type || "") : "") : "empty reply";
   G.retried = (G.retried || 0) + 1;
   vlog(`Grok gave ${why} (${G.retried} of ${MAX_ASKS})`);
+  if (PROV().silentEmpty && why === "empty reply") { // the line answered (a finished reply), it just had no words: ask once more with the officer's words, never a fresh line for it
+    if (G.retried > MAX_ASKS) { vlog("empty reply: had no words twice, waiting for the officer"); act("step", "Ara's reply had no words twice; waiting for the officer"); G.retried = 0; return; }
+    const heard = G.lastHeard && G.lastHeard.text; act("step", "Ara's reply had no words (the line is up): asked again with the officer's words");
+    G.retriedAt = Date.now(); G.heardSinceRetry = false; askReply((heard ? `The officer just said: "${heard}". ` : "") + "Answer that now, out loud in one or two sentences, or call the tool it needs." + (G.askGuide ? " " + G.askGuide : "")); return; }
   if (G.retried > MAX_ASKS) { act("step", `Grok gave ${why} after asking again`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
   // asking again on a slow line only piles up late answers (seen Oct 24: six "I'm here"s at once): test the line first, and on a slow one start a fresh line
   const ws = G.ws; busy();

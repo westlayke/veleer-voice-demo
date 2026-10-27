@@ -724,6 +724,39 @@ test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, a s
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "Okay, contact saved for Nora, all set." }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
   await p.waitForTimeout(200);
   ok(await p.evaluate(() => !G.forced && !G.lateForced && G.lastForcedText === "Contact saved for Nora."), "the line said in the assistant's own words wasn't taken as said: " + JSON.stringify(await p.evaluate(() => ({ forced: G.forced, late: G.lateForced }))));
+  // one reply request at a time (run 1, Oct 27: "conversation_already_has_active_response" six times): the second waits for the first to finish
+  const creates = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "response.create"), n);
+  n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.responding = false; G.createAt = 0; askReply("first guidance"); askReply("second guidance"); });
+  await p.waitForTimeout(100);
+  ok((await creates(n0)).length === 1, "two reply requests went out at once: " + JSON.stringify(await creates(n0)).slice(0, 200));
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "Sure." }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await p.waitForTimeout(400);
+  let cr = await creates(n0);
+  ok(cr.length === 2 && /second guidance/.test(cr[1].response.instructions || ""), "the held request didn't go out after the reply finished: " + JSON.stringify(cr).slice(0, 300));
+  // a refused request goes again after the running reply, not lost
+  n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "error", error: { type: "invalid_request_error", code: "conversation_already_has_active_response", message: "Conversation already has an active response in progress" } }) }); });
+  await p.waitForTimeout(100);
+  ok((await creates(n0)).length === 0, "a request went out while the engine said one was running");
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "One moment." }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await p.waitForTimeout(400);
+  ok((await creates(n0)).length === 1, "the refused request wasn't sent again after the running reply: " + JSON.stringify(await creates(n0)).slice(0, 200));
+  ok(!(await p.evaluate(() => VLOG)).some(l => /Grok error/.test(l)), "the refusal was logged as an engine error");
+  // a finished reply with no words is silence, not a dead line: asked again with the officer's words, and never a fresh line for it
+  await said(p, "Move on.");
+  await p.waitForTimeout(200);
+  const urlsBefore = await p.evaluate(() => __wsUrls.length), dropsBefore = await p.evaluate(() => G.drops);
+  n0 = await p.evaluate(() => __sent.length);
+  const emptyReply = () => p.evaluate(() => { G.asked = true; __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await emptyReply(); await p.waitForTimeout(700);
+  cr = await creates(n0);
+  ok(cr.length === 1 && /The officer just said: "Move on\."/.test(cr[0].response.instructions || ""), "an empty reply wasn't asked again with the officer's words: " + JSON.stringify(cr).slice(0, 300));
+  await emptyReply(); await p.waitForTimeout(1500);
+  ok((await p.evaluate(() => __wsUrls.length)) === urlsBefore && (await p.evaluate(() => G.drops)) === dropsBefore && (await p.evaluate(() => G.live)) === true, "a second empty reply opened a fresh line");
+  ok((await p.evaluate(() => VLOG.join("\n"))).includes("had no words twice"), "the second empty reply wasn't logged as waiting for the officer");
+  // the engine's own rule: tool first, no preamble (Grok's rules don't carry it)
+  ok(/Call the tool first, with no words before it/.test(sess[0].instructions), "OpenAI's rules lack the no-preamble line");
   // a drop: no resumption on this engine, so the new line carries the last lines as text
   await said(p, "Let's add Nora Quist as a contact.");
   n0 = await p.evaluate(() => __sent.length);
