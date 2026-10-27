@@ -30,44 +30,8 @@ const DOWN_GIVE_UP_MS = 300000;              // a line down this long (no voice 
 const SAY_DOWN_MS = 5000, SAY_STILL_MS = 12000, SAY_REPEAT_MS = 10000; // the phone's own spoken lines while the line is down (Carverhill, Oct 25)
 const SAY_SLOW_AFTER_MS = 60000, SAY_REPEAT_LATER_MS = 30000; // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (a long dead spot shouldn't nag)
 const downRepeatMs = () => Date.now() - (G.downAt || Date.now()) >= SAY_SLOW_AFTER_MS ? SAY_REPEAT_LATER_MS : SAY_REPEAT_MS;
-const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."]; // the release 1.0 recordings in the phone's own stand-in voice (Kokoro, restored Oct 27 so the officer can tell the app from Ara; tools/ara-lines.json): the phone's built-in speech is silent during a call on an iPhone (Oct 25)
-const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3", slow: "ara-slow.mp3" }, lineRaw = {}, lineBuf = {};
-const GAP_BACK_MS = 1000, REPLAY_LEAD_MS = 800, REPLAY_TAIL_MS = 600, REPLAY_MAX_MS = 30000, REPLAY_WAIT_MS = 7000; // the mic replay after a reconnect: from 1 s before Ara's last word, clear speech only, at most 30 s, else the sorry line
-const TTS_WAIT_MS = 4000;                   // a line in the app's own voice that takes longer than this to arrive is left to Grok (2.5 s until Oct 27)
-const APP_VOICE = "leo";                     // the stand-in voice for lines the app says itself (xAI text-to-speech): not Ara's, so the officer can tell who is speaking (Carverhill, Oct 27)
-const TTS_WAIT_FORM_MS = 10000;              // inside a form the app's line is the only voice, so it may take longer to arrive before Grok's force line is used instead (Oct 27: real fetches took 1 to 4 s)
-const TTS_FETCH_MS = 12000;                  // a fetch for the cache gives up after this
-const TTS_CACHE = new Map();                 // voice|text -> Promise<AudioBuffer>: a line said before, or fetched ahead, plays at once
-const TTS_CACHE_MAX = 80;
-// which voice says the app's own lines: Leo (a stand-in, so the officer can tell the app from Ara) or the same voice as Ara (Settings, Carverhill Oct 27)
-const formVoice = () => S.settings.formVoice === "same" ? (S.settings.voice || "ara") : APP_VOICE;
-// every text-to-speech fetch is its own log row ("tts"), and the call's end line sums them up, so the xAI voice's latency can be compared with Grok's own (Carverhill, Oct 27 2:51 PM)
-function ttsLog(text, ms, how, hedged) { (G.ttsMs = G.ttsMs || []).push({ ms, how }); act("tts", `${ms} ms, ${how}${hedged ? ", the second request answered first" : ""}: "${text.slice(0, 60)}${text.length > 60 ? "…" : ""}"`); }
-function ttsStats() {
-  const all = (G.ttsMs || []), a = all.filter(x => x.how === "xAI").map(x => x.ms).sort((x, y) => x - y); G.ttsMs = []; if (!all.length) return "";
-  const s = (ms) => (ms / 1000).toFixed(1) + " s", med = a.length ? a[Math.floor(a.length / 2)] : 0;
-  return `. App lines: ${all.length} (${all.filter(x => x.how === "cached").length} cached, ${all.filter(x => /^failed/.test(x.how)).length} failed)${a.length ? `, xAI text-to-speech median ${s(med)}, slowest ${s(a[a.length - 1])}, over 4 s: ${a.filter(x => x > 4000).length}` : ""}`;
-}
-const TTS_HEDGE_MS = 2500;                   // a line not back in this time gets a second request alongside, and the first to answer plays (Jim's Oct 27 2:26 PM call: five fetches of 8 to 10 s among fetches of 1 s; the slow ones are one-offs on xAI's side)
-function ttsFetch(text) {
-  const key = formVoice() + "|" + text; if (TTS_CACHE.has(key)) return TTS_CACHE.get(key);
-  const one = async (signal) => { const r = await fetch(tokenUrl().replace(/\/$/, "") + "/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE }, body: JSON.stringify({ text, voice: formVoice() }), signal });
-    if (!r.ok) throw new Error("tts " + r.status); const buf = await r.arrayBuffer(); return { buf: await G.ctx.decodeAudioData(buf), hit: r.headers.get("X-Line-Cache") === "hit" }; };
-  const ac = new AbortController(), timer = setTimeout(() => ac.abort(), TTS_FETCH_MS), t0 = Date.now();
-  const p = (async () => { let hedged = false; try {
-      // the first request, and a second one alongside when the first is slow: whichever answers first plays, the other is dropped
-      let start2 = null; const second = new Promise((res, rej) => { start2 = (why) => { if (hedged || ac.signal.aborted) return; hedged = true; vlog(`${why}: second request sent (${text.slice(0, 40)})`); one(ac.signal).then(x => res({ ...x, second: true }), rej); }; });
-      const first = one(ac.signal).then(x => ({ ...x, second: false })); first.catch(() => start2("first request failed")); /* a failed first request gets its second at once, not at the timer */
-      setTimeout(() => start2(`line not back in ${TTS_HEDGE_MS} ms`), TTS_HEDGE_MS);
-      const x = await Promise.any([first, second]);
-      ttsLog(text, Date.now() - t0, x.hit ? "cached" : "xAI", hedged && x.second); return x.buf; }
-    catch (e) { const err = e && e.errors ? e.errors[0] : e; ttsLog(text, Date.now() - t0, "failed: " + String(err && err.message || err).slice(0, 40)); throw err; }
-    finally { clearTimeout(timer); setTimeout(() => ac.abort(), 0); } })();
-  if (TTS_CACHE.size >= TTS_CACHE_MAX) TTS_CACHE.delete(TTS_CACHE.keys().next().value);
-  TTS_CACHE.set(key, p); p.catch(() => TTS_CACHE.delete(key)); return p;
-}
-// lines the app will say soon (the form's questions, the save question) are fetched ahead, so they play the moment they are needed
-function ttsPrefetch(texts) { if (!G.ctx || G.noTts) return; [].concat(texts).filter(t => t && t.length <= 400).forEach(t => { ttsFetch(t).catch(() => {}); }); }
+const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."]; // recorded in sounds/ (line-dropped, still-trying, line-back): the phone's own speech is silent during a call on an iPhone (Oct 25)
+const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3" }, lineRaw = {}, lineBuf = {};
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;
@@ -102,10 +66,7 @@ async function mintToken(limit = TOKEN_WAIT_MS) {
 const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
 function idleCheck() {
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
-  // Oct 27 (Carverhill): a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
-  // Oct 27 13:23 call: never while Ara's own audio is still playing or a reply is under way (the recording spoke over her); the tick waits for the sound to end
-  if (G.live && G.asked && !/^(Connecting|Reconnecting)/.test(G.status) && !G.responding && !G.audioOn && !(playingLeft() > 0) && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
-    if (!G.slowSaid && sayLocal("Ara's taking a moment.", "slow")) G.slowSaid = true; else { cue("wait"); vlog("still working: tick"); } }
+  if (G.live && ((G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS) || (/^Reconnecting/.test(G.status) && !(G.downAt && Date.now() - G.downAt >= SAY_DOWN_MS))) && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); cue("wait"); vlog("still working: tick"); }
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
   if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
@@ -202,7 +163,6 @@ async function netLog(what, known) { const sess = G.session, info = netInfo(), m
 async function reconnect(why) {
   if (!G.live) return;
   if (Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now()) > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
-  if (G.lastMsg || !G.gapFrom) G.gapFrom = (G.lastMsg || Date.now()) - GAP_BACK_MS; // from when Ara last got through: the mic from here is replayed to her once the line is back
   G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
@@ -227,39 +187,12 @@ async function openAgain(lock) {
   }
   if (!G.live) return;
   if (G.hiddenAt) { G.lockResume = false; return; } // locked again while the pass was fetched: the next unlock reopens the line
+  if (G.spokeInGap) act("step", "The officer talked while the line was down: Ara will ask them to repeat it");
   G.heardAt = G.lastMsg || G.heardAt || Date.now(); G.lastMsg = 0;
   // the app says where the form stands and, when a question is pending, asks it again itself as a scripted line; the context goes in Ara's instructions (Right now)
-  openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null, secs = lock ? 0 : replayGap();
-    if (secs) { G.justNow = { text: reconnectLine(lock) + ` The app has just replayed to you the ${secs} s the officer spoke while the line was down, so you heard it as if live: answer it now and never say you lost them.` + (fp ? " " + fp.where : ""), at: Date.now() }; whenIdle("instr"); replayWatch(fp); return; }
-    if (G.spokeInGap) act("step", "The officer talked while the line was down and the mic caught no clear speech: Ara asks them to repeat it");
-    if (fp && fp.ask) { G.justNow = { text: reconnectLine(lock) + " " + fp.where, at: Date.now() }; act("step", `${lock ? "Line reopened" : "Reconnected"}: the app asks the pending question itself (${fp.where})`); whenIdle("instr");
-      // Oct 27 13:25 call: the same question forced twice in a row after drops says so, instead of sounding like Ara forgot the answer
-      const same = G.reAsk && G.reAsk.ask === fp.ask && Date.now() - G.reAsk.at < 180000; G.reAsk = { ask: fp.ask, at: Date.now() };
-      forceSay(same ? `Sorry, the line dropped again. I'm still waiting on this: ${fp.ask}` : `Sorry, I lost you for a moment. ${fp.intro ? fp.intro + " " : ""}${fp.ask}`); } /* the form by name, so "that's everything the form needs" after a lock makes sense (Jim's Oct 27 2:26 PM call) */
-    else if (G.spokeInGap) { G.justNow = { text: reconnectLine(lock), at: Date.now() }; whenIdle("instr"); forceSay("Sorry, I lost you for a moment. Could you say that again?"); }
+  openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null;
+    if (fp && fp.ask) { G.justNow = { text: reconnectLine(lock) + " " + fp.where, at: Date.now() }; act("step", `${lock ? "Line reopened" : "Reconnected"}: the app asks the pending question itself (${fp.where})`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${fp.ask}`); }
     else guide(reconnectLine(lock) + (fp ? " " + fp.where : "")); });
-}
-// What the officer said while the line was down (from the last word Ara got through to now) goes to her again, from the phone's own mic
-// buffer, so they don't repeat themselves (Carverhill, Oct 27). Only clear speech is replayed, and only up to REPLAY_MAX_MS; the status
-// recordings the phone played meanwhile go as silence, so Ara never hears "The line dropped" as the officer's words.
-function replayGap() {
-  const from = G.gapFrom || 0; G.gapFrom = 0; if (!from || !G.ring || !G.ring.length) return 0;
-  const chunks = G.ring.filter(c => c.at >= from), loud = chunks.filter(c => c.loud);
-  if (!loud.length) return 0;
-  const t0 = loud[0].at - REPLAY_LEAD_MS, t1 = loud[loud.length - 1].at + REPLAY_TAIL_MS, part = chunks.filter(c => c.at >= t0 && c.at <= t1);
-  const ms = part.reduce((n, c) => n + c.n / 24, 0);
-  if (ms > REPLAY_MAX_MS) { act("step", `The officer spoke for ${Math.round(ms / 1000)} s while the line was down: too long to replay, Ara asks them to repeat it`); G.spokeInGap = true; return 0; }
-  part.forEach(c => send({ type: "input_audio_buffer.append", audio: c.line ? b64FromInt16(new Int16Array(c.n)) : c.b64 }));
-  const secs = Math.max(1, Math.round(ms / 1000)); G.replayAt = Date.now(); G.spokeInGap = false;
-  act("step", `Replayed ${secs} s of the officer's words from while the line was down, so they don't have to repeat them`); vlog(`replayed ${part.length} chunks (${secs} s) from the gap`);
-  return secs;
-}
-// nothing came of the replay (no turn heard, no reply started): the usual sorry line, with the pending question
-function replayWatch(fp) {
-  clearTimeout(G.replayWatchT); const seq = G.respSeq || 0, ws = G.ws, at = G.replayAt;
-  G.replayWatchT = setTimeout(() => { if (!G.live || G.ws !== ws || (G.respSeq || 0) !== seq || G.responding || G.turnWatch || (G.stoppedAt || 0) > at) return;
-    act("step", "The replayed words brought no reply: Ara asks the officer to say it again");
-    forceSay(`Sorry, I lost you for a moment. ${fp && fp.ask ? (fp.intro ? fp.intro + " " : "") + fp.ask : "Could you say that again?"}`); }, REPLAY_WAIT_MS);
 }
 const reconnectLine = (lock) => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "",
@@ -275,28 +208,6 @@ function linePrep() { // fetch and decode the recorded lines, so they can play t
 function playLine(kind) { // through the call's own sound, which the phone keeps open during a conversation
   const c = G.ctx; if (!c || c.state !== "running" || !lineBuf[kind]) return false;
   try { const src = c.createBufferSource(), g = c.createGain(); g.gain.value = 1; src.buffer = lineBuf[kind]; src.connect(g); g.connect(c.destination); src.start(c.currentTime + 0.02); G.lineSrc = src; G.lineEndAt = Date.now() + lineBuf[kind].duration * 1000 + 50; return true; } catch (e) { return false; }
-}
-// A line the app itself knows (a scripted question, a read-back, the save acknowledgement) spoken by the app in its own
-// stand-in voice (APP_VOICE, xAI text-to-speech through the Worker), so the officer never waits on Grok for it and can hear
-// that it is the app, not Ara, speaking (Carverhill, Oct 27). Resolves true once it is playing; false (so the caller falls
-// back to Grok's force_message) when the sound isn't running, the Worker takes longer than TTS_WAIT_MS, the audio can't be
-// decoded, or the line changed while waiting. It never plays over Ara: playback waits for her reply and sound to end, as a
-// scripted line does. The line goes into the conversation record as Ara's, and Grok is told through Right now by the caller.
-// until: while it returns false the line is called off (resolves null, nothing plays, no fallback): a question or read-back whose form was saved meanwhile (harness run 3b: a read-back played after the save)
-async function ttsSay(text, until, waitMs) {
-  if (!G.live || !G.ctx || G.ctx.state !== "running") return false;
-  const t0 = Date.now(), ws = G.ws, limit = waitMs || (typeof formMode === "function" && formMode() ? TTS_WAIT_FORM_MS : TTS_WAIT_MS); let buf;
-  // the line comes from the cache when it was said or fetched ahead; otherwise it is fetched now, within the wait limit
-  try { buf = await Promise.race([ttsFetch(text), new Promise((_, rej) => setTimeout(() => rej(new Error("tts wait " + limit + " ms")), limit))]); }
-  catch (e) { vlog(`the app's own line not fetched (${String(e && e.message || e).slice(0, 60)}): Grok says it instead`); act("step", `The app's own line didn't arrive in time (${Date.now() - t0} ms): Ara says it herself`); return false; }
-  const fetched = Date.now() - t0;
-  for (let w = 0; G.live && G.ws === ws && (G.responding || playingLeft() > 0 || G.forced) && w < FORCE_WAIT_MS; w += 200) { if (until && !until()) { vlog(`the app's own line called off: ${text.slice(0, 60)}`); return null; } await new Promise(r => setTimeout(r, 200)); }
-  if (until && !until()) { vlog(`the app's own line called off: ${text.slice(0, 60)}`); return null; }
-  if (!G.live || !G.ctx || G.ctx.state !== "running" || G.ws !== ws) return false;
-  try { const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.out || G.ctx.destination); /* through the output gain, so the heard check's meter sees it (Oct 27 1:14 PM call: own lines read as "no sound") */ const at = Math.max(G.ctx.currentTime + 0.02, G.playHead || 0); src.start(at); G.lineSrc = src; G.lineEndAt = Date.now() + (at - G.ctx.currentTime) * 1000 + buf.duration * 1000 + 50; } catch (e) { return false; }
-  act("step", `The phone said in its own voice (fetched in ${fetched} ms): "${text}"`); vlog(`phone said (own voice, ${fetched} ms): ${text}`);
-  recent(botName(), text); G.lastForcedText = text; if (typeof lineHeard === "function") lineHeard(text, true);
-  return true;
 }
 function sayLocal(text, kind) {
   // only ever a recording through the call's own sound: the phone's built-in speech is never used (Oct 25: an iOS "Audio Recording / Stop audio recording?" dialog appeared after it spoke, muting the mic and ending the call)
@@ -338,7 +249,7 @@ function cue(kind) {
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
 function askReply(guidance) {
   if (guidance !== undefined) G.askGuide = guidance; // the same guidance goes again if the app has to ask twice
-  send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now(); G.slowSaid = false;
+  send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now();
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
   G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
   // no reply at the first tick: test the line then, so a bad line gets a fresh one about 9 s sooner (seen Oct 24: 13 s to notice)
@@ -431,11 +342,7 @@ function micMuted(tr) {
 // If xAI doesn't play it, Ara is asked to say it instead (fallback), so the officer always hears it.
 function forceSay(text, then, fallback, waited = 0) {
   if (!G.live) { G.pendingForce = null; return; }
-  if (!waited) { G.pendingForce = text; G.forceAt = Date.now();
-    // the app says its scripted lines itself, in its stand-in voice (Carverhill, Oct 27: so the officer can tell the app from Ara); Grok's force_message is the fallback
-    if (typeof ttsSay === "function" && G.ctx && G.ctx.state === "running" && !G.noTts) { ttsSay(text, () => G.pendingForce === text).then(ok => { if (!G.live) { G.pendingForce = null; return; } if (ok === null || G.pendingForce !== text) return; /* called off meanwhile: a save, a drop, another line */
-      if (ok) { G.pendingForce = null; G.lastForcedText = text; G.justNow = { text: `The app has just said to the officer, in its own stand-in voice: "${text}" Don't say it or anything like it: wait for their answer.`, at: Date.now() }; whenIdle("instr"); if (then && !(typeof formMode === "function" && formMode())) guide(then); /* inside a form the app's line is the whole turn */ lineDoneWatch(); }
-      else forceSay(text, then, fallback, 1); }); return; } }
+  if (!waited) G.pendingForce = text;
   if ((G.responding || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
   G.forced = { text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;
   send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
@@ -444,18 +351,15 @@ function forceSay(text, then, fallback, waited = 0) {
 }
 function forcedEvent(t) {
   const f = G.forced;
-  if (t === "response.created") { f.started = true; G.forcedResp = (G.respSeq || 0) + 1; /* the response that plays the app's line (respSeq counts up right after this) */ clearTimeout(G.forceTimer); }
+  if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); }
   else if (t === "response.done" && f.started) {
     const said = sameWords(G.bot || ""), want = sameWords(f.text);
     if (said.length >= 12 && !want.startsWith(said.slice(0, 40)) && !said.startsWith(want.slice(0, 40))) {
       // Ara answered on her own (to the tool result) and the app took that for the scripted line starting (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
-      if (wordOverlap(said, want) >= 0.6) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then && !formMode()) setTimeout(() => guide(f.then), 0); }
+      if (wordOverlap(said, want) >= 0.6) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
       else { f.started = false; act("step", "Ara answered on her own while the scripted line was still to come"); clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(g.fallback); } }, FORCE_WAIT_MS); }
       return; }
-    G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; if (f.then && !formMode()) setTimeout(() => guide(f.then), 0); lineDoneWatch(); }
+    G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => guide(f.then), 0); }
 }
-// The officer spoke while the app's own line was still to come (the harness, Oct 27: an answer given during the wait): the line's own
-// response had cleared the no-reply watchdog, so nothing watched for Grok's reply to their words. It is armed again from the line's end.
-function lineDoneWatch() { if (G.live && G.lastHeard && G.lastHeard.at > (G.forceAt || 0) && !G.responding && typeof turnWatch === "function") { vlog("the officer spoke during the app's line: watching for the reply again"); turnWatch(); } }
 // how much two lines share, as a fraction of the shorter one's words
 function wordOverlap(a, b) { const A = new Set(a.split(" ").filter(Boolean)), B = new Set(b.split(" ").filter(Boolean)); if (!A.size || !B.size) return 0; let n = 0; A.forEach(w => { if (B.has(w)) n++; }); return n / Math.min(A.size, B.size); }

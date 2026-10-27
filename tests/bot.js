@@ -21,7 +21,7 @@ const FAKES = () => {
   window.WebSocket = class { constructor(u) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); try { const e = JSON.parse(d); if (e.item && e.item.type === "force_message" && !window.__noAutoForce) { // xAI plays a scripted line as a response of its own
           setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.created" }) }), 20); setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }), 60); } } catch (x) {} } close() { this.readyState = 3; } };
   window.__logs = [];
-  const f = window.fetch; window.fetch = (u, o) => { if (/\/tts$/.test(String(u)) && !window.__ttsOn) return Promise.resolve(new Response("no", { status: 502 })); /* the app's own voice line fails at once unless a check serves one, so scripted lines take Grok's force line as before */ if (/workers\.dev\/log/.test(String(u))) { if (o && o.body) window.__logs.push(JSON.parse(o.body)); return Promise.resolve(new Response('{"logging":true}', { status: 200 })); }
+  const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/log/.test(String(u))) { if (o && o.body) window.__logs.push(JSON.parse(o.body)); return Promise.resolve(new Response('{"logging":true}', { status: 200 })); }
     return /workers\.dev/.test(String(u)) ? Promise.resolve(new Response('{"value":"test-pass"}', { status: 200 })) : f(u, o); };
 };
 
@@ -82,7 +82,7 @@ for (const f of fs.readdirSync(path.join(__dirname, "checks")).filter(f => f.end
   async function one(i, again) {
     const t = run[i], p = await fresh(t.opts.page || PAGE), t0 = Date.now();
     try { await t.fn(p); ok(!p.errors.length, "page error: " + p.errors[0]); lines[i] = `✓ ${t.name}${again ? " (passed on its second try, alone)" : ""}`; }
-    catch (e) { if (!again) { if (process.env.DEBUG) console.log(`first try failed: ${t.name}\n    ${e.message.split("\n")[0]}`); fails.push(i); await p.context().close(); return; } failed++; const shot = path.join(OUT, t.name.replace(/[^\w]+/g, "-").slice(0, 60) + ".png"); await p.screenshot({ path: shot }).catch(() => {}); lines[i] = `✗ ${t.name}\n    ${e.message.split("\n")[0]}\n    screenshot: tests/results/${path.basename(shot)}`; }
+    catch (e) { if (!again) { fails.push(i); await p.context().close(); return; } failed++; const shot = path.join(OUT, t.name.replace(/[^\w]+/g, "-").slice(0, 60) + ".png"); await p.screenshot({ path: shot }).catch(() => {}); lines[i] = `✗ ${t.name}\n    ${e.message.split("\n")[0]}\n    screenshot: tests/results/${path.basename(shot)}`; }
     done[i] = `${lines[i]} (${Date.now() - t0} ms)`; if (!again) flush();
     await p.context().close();
   }

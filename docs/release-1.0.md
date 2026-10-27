@@ -37,3 +37,11 @@ The Oct 26 evening sound-engine fix and responsiveness items, the Oct 27 call fi
 question, the slow line, the no-reply re-ask, what's next, the capacity gate), the mic replay after a reconnect, the
 phone's lines recorded in Ara's voice, the hands-free save line spoken by the app in Ara's voice (Worker `/tts`), the
 9:21 AM and 9:38 AM call fixes. None of it is live.
+
+## Oct 27, 4:10 PM ET: 1.0 is the golden master
+
+Carverhill set the app-speaks-the-forms work aside ("I am not seeing the ROI on testing this approach further"). Everything after 1.0
+(the Oct 26 8:48 PM visitor-sound fix through the Oct 27 3:07 PM build: app-only forms, the phone's own voice lines, the line cache,
+the Oct 27 call fixes) lives on the branch `rnd-app-voice-forms`. `main`'s preview (`preview/`, `preview-flow.html`) and its checks
+are back to 1.0 plus the Oct 26 8:48 PM visitor-sound fix (spkReset in start.js), which went live Oct 27 afternoon as the first change on top of 1.0; the harness, the consistency run, the workflows, the Worker's `/tts` route and the notes stay on `main`.
+The harness journey and the consistency flows were written against the branch's lines and need re-aiming before a run on 1.0.

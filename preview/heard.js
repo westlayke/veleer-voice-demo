@@ -14,21 +14,18 @@ function heardTick() { if (!G.live || !G.ctx || !(playingLeft() > 0)) return; co
 setInterval(heardTick, 250);
 function heardProblem(r) {
   const words = r.text.trim().split(/\s+/).length;
-  if (words >= 2 && r.audioS < AUDIO_MIN_S) return r.own ? "the phone's own line was too short to have played" : "no voice audio came from the voice service, only the words";
+  if (words >= 2 && r.audioS < AUDIO_MIN_S) return "no voice audio came from the voice service, only the words";
   if (r.state !== "running") return `the phone's sound is ${r.state}`;
   if (r.audioS >= AUDIO_MIN_S && r.out < OUT_QUIET) return `the phone produced no sound from it (speaker level ${r.out.toFixed(3)})`;
   return "";
 }
 const heardWords = (r) => `${r.audioS.toFixed(1)} s of voice audio, speaker level ${r.out.toFixed(3)}, mic heard ${r.echo.toFixed(3)} while it played, sound ${r.state}`;
 // at the end of a line Ara said: keep its readings, and check them once it should have finished playing
-function lineHeard(text, own) {
-  // own: a line the phone played itself (a recording or Ara's voice fetched from the key holder), so its audio never came from the voice service
-  const rec = { text, at: Date.now(), own: !!own, audioS: own ? (G.lineEndAt ? Math.max(0, (G.lineEndAt - Date.now()) / 1000) : 0) : (G.audioSamples || 0) / 24000, out: G.outPeak || 0, echo: G.echoPeak || 0, state: G.ctx ? G.ctx.state : "none", left: playingLeft() };
-  if (G.lastLine && G.lastLine.check) G.lastLine.check(); // a line that follows before the last one was checked: check that one now rather than drop it (Oct 27 harness: Grok's words-only reply went unflagged when the app's own line came 300 ms later)
+function lineHeard(text) {
+  const rec = { text, at: Date.now(), audioS: (G.audioSamples || 0) / 24000, out: G.outPeak || 0, echo: G.echoPeak || 0, state: G.ctx ? G.ctx.state : "none", left: playingLeft() };
   G.lastLine = rec; G.outPeak = 0;
-  rec.check = () => { clearTimeout(rec.timer); rec.check = null; if (!G.live || G.lastLine !== rec) return; rec.out = Math.max(rec.out, G.outPeak || 0); rec.state = G.ctx ? G.ctx.state : "none";
-    const prob = heardProblem(rec); if (prob) { act("step", `Ara's line may not have been heard: ${prob} ("${text.slice(0, 80)}")`); vlog("not heard? " + prob); } };
-  rec.timer = setTimeout(rec.check, Math.max(0, rec.left * 1000) + 800);
+  setTimeout(() => { if (!G.live || G.lastLine !== rec) return; rec.out = Math.max(rec.out, G.outPeak || 0); rec.state = G.ctx ? G.ctx.state : "none";
+    const prob = heardProblem(rec); if (prob) { act("step", `Ara's line may not have been heard: ${prob} ("${text.slice(0, 80)}")`); vlog("not heard? " + prob); } }, Math.max(0, rec.left * 1000) + 800);
 }
 // the officer asks whether Ara is there: log what the phone knows about her last line, wake the sound if it's paused, and have her say it again
 function heardAsk(text) {

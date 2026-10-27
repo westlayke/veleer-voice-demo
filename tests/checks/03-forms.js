@@ -119,7 +119,7 @@ test("New contact and new opportunity forms show every field, and Ara offers the
   await said(p, "Create an opportunity for Ana.");
   let r = await ara(p, "show_opportunity_draft", { contact_name: ready });
   ok(!(await p.isVisible("details.more")) && (await p.isVisible("#f_potential")) && (await p.isVisible("#f_notes")), "the new opportunity form still hides fields under More details");
-  ok(/(Shall I save it, or add|or shall I take you through) the optional details first\?/.test(r.ask_exactly || "") && (await p.evaluate(() => V.choice === "saveOrOpt")), "the app didn't ask whether to save or add the optional details: " + JSON.stringify(r));
+  ok(/one at a time/.test(r.ask_exactly || r.status || ""), "the opportunity's optional fields weren't offered: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "start" });
   ok(r.field === "fund", "the opportunity's first optional question wasn't the entity");
   r = await ara(p, "optional_fields", { step: "answer", value: "Citizens Alliance C3" });
@@ -127,9 +127,9 @@ test("New contact and new opportunity forms show every field, and Ara offers the
   r = await ara(p, "optional_fields", { step: "answer", value: "50k" });
   ok(r.field === "notes", "notes didn't come last");
   r = await ara(p, "optional_fields", { step: "stop" });
-  ok(/Shall I save it\?$/.test(r.read_back || "") || (r.done && /tap/.test(r.ask_exactly || "")), "stop didn't end the questions: " + JSON.stringify(r));
+  ok(r.done && /tap/.test(r.status), "stop didn't end the questions");
   r = await ara(p, "show_opportunity_draft", { contact_name: ready, potential: 50000 });
-  ok((/Shall I save it\?$/.test(r.read_back || "") || /^That's everything the form needs\. Check it and tap "Save"\.$/.test(r.ask_exactly || "")) && !/optional details/.test(r.ask_exactly || ""), "the optional-fields question repeated: " + JSON.stringify(r));
+  ok(/tap/.test(r.status) && !/one at a time/.test(r.status), "the optional-fields question repeated");
 });
 test("Interaction report: Next step is a three-line box, and Summary and Next step have no field mics", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
@@ -140,7 +140,7 @@ test("Interaction report: Next step is a three-line box, and Summary and Next st
 test("Ask planning: the campaign choices follow the entity (touch and voice)", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "Pennsylvania", plannedDate: "2026-12-01", amount: 50000 });
-  ok((await p.inputValue("#f_campaign")) === "National" && /Campaign: National/.test(r.read_back || ""), "the wrong campaign for a one-campaign entity wasn't replaced by its only campaign: " + JSON.stringify(r).slice(0, 300));
+  ok(r.still_needed && r.still_needed.some(x => /Pennsylvania isn't a campaign for Citizens Alliance C3.*National/.test(x)), "Ara was not told the campaign doesn't suit the entity: " + JSON.stringify(r).slice(0, 200));
   const opts = async () => p.$$eval("#f_campaign option", os => os.map(o => o.value).filter(Boolean));
   ok((await opts()).join() === "National", "C3 should offer National only");
   await p.selectOption("#f_fund", "C.A. Idaho C4"); await p.waitForTimeout(300);

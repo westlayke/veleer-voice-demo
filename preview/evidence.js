@@ -4,7 +4,7 @@
 // Free-text fields (names, email, summary, notes, task text) are the officer's words paraphrased and are not checked here;
 // the interaction report's substantive flag, next step and outcome keep their own checks in aratools.js.
 const EVIDENCE_SKIP = new Set(["first", "last", "email", "mobile", "summary", "notes", "howMet", "reason", "lostReason", "nextStep", "text", "title", "forName", "officer", "participants",
-  "permEmail", "permCalls", "onOpp", "time", "duration", "source", "capacity", "substantive", "outcome", "installments"]); // potential (an amount) is checked since Oct 27: the harness found an invented $50,000 standing on an opportunity, which then put the officer's amount into the notes
+  "permEmail", "permCalls", "onOpp", "time", "duration", "source", "capacity", "substantive", "outcome", "installments", "potential"]);
 // words that stand for an option when the officer says them
 const OPTION_WORDS = {
   meetingType: { "In person": /\bin person\b|\bmet\b|\bmeeting\b|\blunch\b|\bcoffee\b|\bdinner\b|\bbreakfast\b|\boffice\b|\bvisit|\bface to face\b|\bevent\b|\bparty\b|\bdropped by\b|\bstopped by\b|\bhouse\b|\bhome\b/,
