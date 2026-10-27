@@ -54,7 +54,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 setInterval(prefetchToken, 60000); // keeps a pass ready while the app sits open
 async function mintToken(limit = TOKEN_WAIT_MS) {
   const ac = new AbortController(), to = setTimeout(() => ac.abort(), limit); let r;
-  try { r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || DEMO_CODE }, signal: ac.signal }); }
+  try { r = await fetch(tokenUrl(), { method: "POST", headers: { "X-Demo-Code": S.settings.demoCode || DEMO_CODE, "Content-Type": "application/json" }, body: JSON.stringify({ provider: provider() }), signal: ac.signal }); } /* the key holder mints a pass for the chosen voice engine */
   catch (e) { throw new Error(ac.signal.aborted ? `no answer in ${limit / 1000} s` : "no connection"); } finally { clearTimeout(to); }
   if (!r.ok) throw new Error(r.status === 401 ? "bad_code" : "service_" + r.status);
   const j = await r.json();
@@ -94,8 +94,8 @@ function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; const se
 /* ---------- the voice line: opened at the start, and opened again when it drops (a phone in a car loses signal) ---------- */
 function openSocket(token, first, second) {
   // a line opened again within 25 minutes picks up the same conversation (xAI keeps it 30 minutes)
-  const resume = G.convId && Date.now() - (G.convAt || 0) < RESUME_MS ? G.convId : null;
-  const ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest" + (resume ? "&conversation_id=" + encodeURIComponent(resume) : ""), ["xai-client-secret." + token]);
+  const P = PROV(), resume = P.resume && G.convId && Date.now() - (G.convAt || 0) < RESUME_MS ? G.convId : null;
+  const ws = new WebSocket(P.url(resume), P.protocols(token));
   ws.resumed = resume;
   if (second) G.tries.add(ws); else { G.ws = ws; G.tries = new Set([ws]); }
   const t0 = Date.now();
@@ -111,7 +111,7 @@ function openSocket(token, first, second) {
   ws.onopen = () => {
     if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws; G.lockResume = false;
-    send({ type: "session.update", session: sessionCfg() }); sendExtras(); if (typeof first === "function") first(); else guide(first);
+    sessUpdate(sessionCfg()); sendExtras(); if (G.drops && !P.resume) replayRecent(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep();
     if (ws.resumed) netLog("Picked up the same conversation");
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
@@ -132,7 +132,7 @@ function openSocket(token, first, second) {
     netLog(`Voice line closed (code ${ev && ev.code}${ev && ev.reason ? ", " + String(ev.reason).slice(0, 120) : ""})${opened ? "" : " before it opened"}`);
     if (document.visibilityState === "hidden") { if (G.hiddenAt) { lockPause("the line closed by itself"); return; } interrupted("connection closed while away"); return; } // locked: the line reopens when the app is back
     if (!opened && ws.resumed) { G.convId = null; act("step", "Couldn't pick up the same conversation: opening a new one"); reconnect("the conversation couldn't be picked up"); return; }
-    if (!opened && !G.drops && !G.lockResume) { endCall("couldn't connect"); toast("Couldn't connect to Grok voice. Try again in a moment."); return; }
+    if (!opened && !G.drops && !G.lockResume) { endCall("couldn't connect"); toast(`Couldn't connect to ${PROV().name} voice. Try again in a moment.`); return; }
     if (opened && G.drops && Date.now() - (G.openedAt || 0) > STABLE_MS) { vlog("the line had been up a while: reconnect count starts afresh"); G.drops = 0; }
     reconnect("the voice line dropped");
   };
@@ -345,7 +345,8 @@ function forceSay(text, then, fallback, waited = 0) {
   if (!waited) G.pendingForce = text;
   if ((G.responding || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
   G.forced = { text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;
-  send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
+  if (PROV().forceItem) send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
+  else { G.forced.viaReply = true; forceByReply(text); } /* an engine without force_message is asked to say it in a reply of its own */
   vlog("scripted line: " + text);
   clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(f.fallback); } }, FORCE_WAIT_MS);
 }
@@ -356,6 +357,7 @@ function forcedEvent(t) {
     const said = sameWords(G.bot || ""), want = sameWords(f.text);
     if (said.length >= 12 && !want.startsWith(said.slice(0, 40)) && !said.startsWith(want.slice(0, 40))) {
       // Ara answered on her own (to the tool result) and the app took that for the scripted line starting (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
+      if (f.viaReply && wordOverlap(said, want) >= 0.6) { G.forced = null; G.lastForcedText = f.text; act("step", `${PROV().name} said the scripted line in its own words`); if (f.then) setTimeout(() => guide(f.then), 0); return; } /* no late copy is coming on this engine */
       if (wordOverlap(said, want) >= 0.6) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
       else { f.started = false; act("step", "Ara answered on her own while the scripted line was still to come"); clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(g.fallback); } }, FORCE_WAIT_MS); }
       return; }

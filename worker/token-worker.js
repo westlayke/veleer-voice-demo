@@ -37,6 +37,13 @@ export default {
     if (url.pathname === "/log") return saveLog(request, env, json);
     if (url.pathname === "/tts") return speak(request, env, cors, json);
 
+    let want = {}; try { want = await request.clone().json(); } catch (e) {} // the app says which voice engine it wants a pass for (default Grok)
+    if (want.provider === "openai") { // preview-only comparison engine (Oct 27): a short-lived client secret for gpt-realtime
+      if (!env.OPENAI_API_KEY) return json({ error: "no_openai_key" }, 503);
+      const o = await fetch("https://api.openai.com/v1/realtime/client_secrets", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.OPENAI_API_KEY },
+        body: JSON.stringify({ expires_after: { anchor: "created_at", seconds: 600 }, session: { type: "realtime", model: "gpt-realtime-2.1" } }) });
+      return new Response(await o.text(), { status: o.status, headers: { ...cors, "Content-Type": "application/json" } });
+    }
     const r = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.XAI_API_KEY },

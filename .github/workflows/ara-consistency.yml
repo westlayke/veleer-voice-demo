@@ -1,6 +1,6 @@
 name: Ara consistency run
 # Real typed conversations with xAI Grok through the preview build, scored against Ara's rules (tests/ara-consistency/).
-# Costs real money (the ARA_CONSISTENCY_KEY xAI key); the script stops itself at the budget. Run by hand only.
+# Costs real money (the ARA_CONSISTENCY_KEY xAI key, or OPENAI_CONSISTENCY_KEY with provider openai); the script stops itself at the budget. Run by hand only.
 on:
   workflow_dispatch:
     inputs:
@@ -16,6 +16,9 @@ on:
       flows:
         description: "Only these flows, comma separated (blank = all)"
         default: ""
+      provider:
+        description: "Voice engine: grok or openai"
+        default: "grok"
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -28,6 +31,8 @@ jobs:
       - name: Talk to Grok
         env:
           ARA_CONSISTENCY_KEY: ${{ secrets.ARA_CONSISTENCY_KEY }}
+          OPENAI_CONSISTENCY_KEY: ${{ secrets.OPENAI_CONSISTENCY_KEY }}
+          PROVIDER: ${{ inputs.provider }}
           BUDGET: ${{ inputs.budget }}
           MAX_CONVS: ${{ inputs.max_conversations }}
           JOBS: ${{ inputs.jobs }}

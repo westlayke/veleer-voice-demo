@@ -18,7 +18,7 @@ const server = http.createServer((req, res) => {
 // stand-ins for the voice line and the Cloudflare key holder
 const FAKES = () => {
   window.__sent = [];
-  window.WebSocket = class { constructor(u) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); try { const e = JSON.parse(d); if (e.item && e.item.type === "force_message" && !window.__noAutoForce) { // xAI plays a scripted line as a response of its own
+  window.WebSocket = class { constructor(u, protos) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__wsProtos = protos || []; window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); try { const e = JSON.parse(d); if (e.item && e.item.type === "force_message" && !window.__noAutoForce) { // xAI plays a scripted line as a response of its own
           setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.created" }) }), 20); setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }), 60); } } catch (x) {} } close() { this.readyState = 3; } };
   window.__logs = [];
   const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/log/.test(String(u))) { if (o && o.body) window.__logs.push(JSON.parse(o.body)); return Promise.resolve(new Response('{"logging":true}', { status: 200 })); }

@@ -476,11 +476,12 @@ function keyTerms() {
 }
 const transcriptionCfg = () => ({ language_hint: "en", keyterms: keyTerms() });
 function sendExtras() {
+  if (!PROV().extras) return; // xAI only: OpenAI has no resumption, pronunciation table or key terms (transcription goes in the session body)
   send({ type: "session.update", session: { resumption: { enabled: true } } });
   send({ type: "session.update", session: { replace: SAY_AS } });
   send({ type: "session.update", session: { audio: Object.assign({}, sessionCfg().audio, { input: Object.assign({}, sessionCfg().audio.input, { transcription: transcriptionCfg() }) }) } });
 }
-const sessionCfg = () => ({ voice: S.settings.voice || "ara", instructions: sentInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
+const sessionCfg = () => ({ voice: providerVoice(), instructions: sentInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
   audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() * (spookyMode() ? 0.9 : 1) } } }); // spooky mode: a touch slower, like a haunted-house host
 const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
 const busy = () => { G.lastAct = Date.now(); };
@@ -769,7 +770,7 @@ function flushQueued() {
   if (left > 0 && G.live) { G.qTimer = setTimeout(flushQueued, Math.min(left * 1000 + 60, 1000)); return; }
   if (G.qInstr) { G.qInstr = false;
     // the rules changed (hands-free, name, a theme) or the Right now section did (a save, a screen): the instructions go again, updated
-    if (G.sentRules !== rulesKey() || ctxNow() !== G.sentCtx) { vlog(G.sentRules !== rulesKey() ? "rules update" : "Right now update"); send({ type: "session.update", session: { instructions: sentInstructions() } }); } }
+    if (G.sentRules !== rulesKey() || ctxNow() !== G.sentCtx) { vlog(G.sentRules !== rulesKey() ? "rules update" : "Right now update"); sessUpdate({ instructions: sentInstructions() }); } }
   if (G.qCreate) { G.qCreate = false; const g = G.qGuide; G.qGuide = ""; askReply(g); }
 }
 function whenIdle(kind) {

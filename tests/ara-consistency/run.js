@@ -7,17 +7,21 @@ const http = require("http"), fs = require("fs"), path = require("path");
 let chromium; try { ({ chromium } = require("playwright")); } catch (e) { ({ chromium } = require("/opt/node-tools/node_modules/playwright")); }
 const FLOWS = require("./flows");
 
-const KEY = process.env.ARA_CONSISTENCY_KEY;
+// the voice engine (Oct 27, the provider comparison): grok (xAI, the default) or openai; each has its own key and prices
+const PROVIDER = process.env.PROVIDER || "grok";
+const ENGINES = { grok: { name: "Grok (xAI)", key: "ARA_CONSISTENCY_KEY", host: /api\.x\.ai/, perMin: 0.08 }, openai: { name: "OpenAI (gpt-realtime-2.1)", key: "OPENAI_CONSISTENCY_KEY", host: /api\.openai\.com/, perMin: 0.10 } };
+const ENGINE = ENGINES[PROVIDER]; if (!ENGINE) { console.error("PROVIDER must be one of " + Object.keys(ENGINES).join(", ")); process.exit(1); }
+const KEY = process.env[ENGINE.key];
 const BUDGET = Number(process.env.BUDGET || 2); // dollars for this run
 const MAX_CONVS = Number(process.env.MAX_CONVS || 1000);
 const JOBS = Number(process.env.JOBS || 3);
 const ONLY = process.env.FLOWS ? process.env.FLOWS.split(",") : null;
 // xAI prices (Oct 2026): speech to speech per minute of open line, and each conversation.item.create (counted for every item, to be safe)
-const PER_MIN = Number(process.env.PER_MIN || 0.08), PER_ITEM = Number(process.env.PER_ITEM || 0.004);
+const PER_MIN = Number(process.env.PER_MIN || ENGINE.perMin), PER_ITEM = Number(process.env.PER_ITEM || 0.004); // OpenAI: about $0.019/min in + $0.077/min out of audio, counted as a flat per-minute rate
 const MAX_CONV_MS = 6 * 60000, TURN_WAIT_MS = 25000, MAX_TURNS = 20;
 const ROOT = path.resolve(__dirname, "../.."), OUT = path.join(__dirname, "results");
 
-if (!KEY) { console.error("ARA_CONSISTENCY_KEY is not set"); process.exit(1); }
+if (!KEY) { console.error(ENGINE.key + " is not set"); process.exit(1); }
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".css": "text/css", ".mp3": "audio/mpeg" };
 const server = http.createServer((req, res) => {
   const f = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]));
@@ -32,7 +36,9 @@ function silentWav(file) {
   fs.writeFileSync(file, b);
 }
 async function mintToken() {
-  const r = await fetch("https://api.x.ai/v1/realtime/client_secrets", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + KEY }, body: JSON.stringify({ expires_after: { seconds: 300 } }) });
+  const r = PROVIDER === "openai"
+    ? await fetch("https://api.openai.com/v1/realtime/client_secrets", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + KEY }, body: JSON.stringify({ expires_after: { anchor: "created_at", seconds: 600 }, session: { type: "realtime", model: "gpt-realtime-2.1" } }) })
+    : await fetch("https://api.x.ai/v1/realtime/client_secrets", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + KEY }, body: JSON.stringify({ expires_after: { seconds: 300 } }) });
   return { status: r.status, body: await r.text() };
 }
 
@@ -55,14 +61,17 @@ async function converse(browser, base, flow, n) {
   p.on("pageerror", e => conv.errors.push("page: " + e.message));
   let cur = null, lastFrame = Date.now(); const sentForced = [], convLines = [];
   p.on("websocket", ws => {
-    if (!/api\.x\.ai/.test(ws.url())) return;
+    if (!ENGINE.host.test(ws.url())) return;
     const line = { opened: Date.now(), closed: 0 }; lines.add(line); convLines.push(line);
     ws.on("close", () => { line.closed = Date.now(); });
     ws.on("framesent", f => { const s = String(f.payload); if (s.includes('"input_audio_buffer.append"')) return; let e; try { e = JSON.parse(s); } catch (x) { return; }
-      if (e.type === "conversation.item.create") { items++; conv.items++; if (e.item && e.item.type === "force_message") sentForced.push(e.item.content[0].text); }
+      if (e.type === "conversation.item.create") { items++; conv.items++; if (e.item && e.item.type === "force_message") sentForced.push(e.item.content[0].text); if (e.item && e.item.type === "message" && e.item.role === "user") conv.askedAt = Date.now(); }
+      if (e.type === "response.create" && e.response && /^Say this now, word for word/.test(e.response.instructions || "")) { const m = e.response.instructions.match(/: "([^]*)"$/); if (m) sentForced.push(m[1]); } /* a scripted line on an engine without force_message */
       if (e.type === "conversation.item.create" && e.item && e.item.type === "function_call_output") conv.tools.length && (conv.tools[conv.tools.length - 1].out = conv.tools[conv.tools.length - 1].out || e.item.output.slice(0, 600));
       if (e.type === "response.create" && e.response && e.response.instructions) { conv.lastGuide = e.response.instructions; const m = e.response.instructions.match(/Left out of the form because the officer never said it: ([^.]*)/); if (m) (conv.leftOut = conv.leftOut || []).push(m[1]); } });
-    ws.on("framereceived", f => { const s = String(f.payload); lastFrame = Date.now(); if (s.includes('audio.delta"')) return; let e; try { e = JSON.parse(s); } catch (x) { return; }
+    ws.on("framereceived", f => { const s = String(f.payload); lastFrame = Date.now();
+      if (s.includes('audio.delta"')) { if (conv.askedAt) { (conv.firstMs = conv.firstMs || []).push(Date.now() - conv.askedAt); conv.askedAt = 0; } return; } /* first sound of the reply, from the officer's words going out: the engine's own latency */
+      let e; try { e = JSON.parse(s); } catch (x) { return; }
       if (e.type === "response.created") cur = { text: "", at: Date.now(), turn: conv.turns.length, forced: sentForced.length ? sentForced[sentForced.length - 1] : null, forcedN: sentForced.length };
       else if (/transcript\.delta$/.test(e.type) && !/input_audio/.test(e.type) && cur) { (conv.kinds = conv.kinds || {})[e.type] = 1; if (!cur.kind) cur.kind = e.type; if (cur.kind === e.type) cur.text += e.delta || ""; }
       else if (e.type === "response.function_call_arguments.done") { let a = {}; try { a = JSON.parse(e.arguments || "{}"); } catch (x) {} conv.tools.push({ name: e.name, args: a, turn: conv.turns.length, at: Date.now() }); }
@@ -72,10 +81,10 @@ async function converse(browser, base, flow, n) {
   try {
     await p.goto(base + "preview-flow.html"); await p.waitForTimeout(800);
     await p.tap("text=I'd rather type my name"); await p.fill("#wlName", "Dana"); await p.tap("text=Start"); await p.waitForTimeout(600);
-    await p.evaluate(() => {
+    await p.evaluate((prov) => { window.__provider = prov;
       window.__acts = []; const real = act; act = function (role, text, sess) { window.__acts.push({ at: Date.now(), role, text: String(text || "") }); return real.apply(this, arguments); };
       window.__drops = []; const realV = vlog; vlog = function (text) { if (/: dropped |: left out /.test(String(text))) window.__drops.push(String(text)); return realV.apply(this, arguments); }; // the evidence rule's Voice log lines
-      S.settings.speed = 1.3; save(); // Ara talks faster (her words are the same), so each conversation costs less line time
+      S.settings.speed = 1.3; S.settings.provider = window.__provider; save(); // Ara talks faster (her words are the same), so each conversation costs less line time
       window.__officer = (text) => {
         send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
         onEvent({ type: "conversation.item.input_audio_transcription.completed", transcript: text }); // what the app sees when speech is transcribed
@@ -83,7 +92,7 @@ async function converse(browser, base, flow, n) {
       };
       document.querySelectorAll(".scrim").forEach(s => s.remove());
       startCall(null);
-    });
+    }, PROVIDER);
     const settle = async () => { // until Ara has finished her turn and the app has nothing more to say
       const t0 = Date.now(); let quietSince = 0;
       while (Date.now() - t0 < TURN_WAIT_MS && !stopAll) {
@@ -184,7 +193,8 @@ function table(convs) {
 function report(convs, extra) {
   const rows = table(convs), money = (x) => "$" + x.toFixed(2);
   const byFlow = {}; convs.forEach(c => { const f = byFlow[c.flow] = byFlow[c.flow] || { n: 0, saved: 0, cost: 0, min: 0 }; f.n++; f.cost += c.cost; f.min += c.lineMs / 60000; if (c.score && c.score.task_saved && !c.score.task_saved.broke) f.saved++; });
-  let md = `# Ara consistency run\n\n${extra}\n\nConversations: ${convs.length}. Estimated cost: ${money(convs.reduce((a, c) => a + c.cost, 0))} (${(convs.reduce((a, c) => a + c.lineMs, 0) / 60000).toFixed(1)} min of open line at $${PER_MIN}/min + ${convs.reduce((a, c) => a + c.items, 0)} items at $${PER_ITEM}).\n\n`;
+  const fw = convs.flatMap(c => c.firstMs || []).sort((x, y) => x - y), pct = (q) => fw.length ? (fw[Math.min(fw.length - 1, Math.floor(q * fw.length))] / 1000).toFixed(2) + " s" : "n/a";
+  let md = `# Ara consistency run: ${ENGINE.name}\n\n${extra}\n\nConversations: ${convs.length}. Estimated cost: ${money(convs.reduce((a, c) => a + c.cost, 0))} (${(convs.reduce((a, c) => a + c.lineMs, 0) / 60000).toFixed(1)} min of open line at $${PER_MIN}/min + ${convs.reduce((a, c) => a + c.items, 0)} items at $${PER_ITEM}).\n\nFirst sound of a reply after the officer's words (${fw.length} turns): median ${pct(0.5)}, 90th percentile ${pct(0.9)}, slowest ${pct(1)}, over 3 s: ${fw.filter(x => x > 3000).length}.\n\n`;
   md += `## Rule breaks\n\n| Rule | Checked | Broken | Rate |\n|---|---:|---:|---:|\n` + rows.map(r => `| ${r.rule} | ${r.checked} | ${r.broken} | ${r.rate}% |`).join("\n") + "\n\n";
   md += `## By flow\n\n| Flow | Conversations | Ended saved | Avg cost | Avg minutes |\n|---|---:|---:|---:|---:|\n` + Object.entries(byFlow).map(([k, f]) => `| ${k} | ${f.n} | ${f.saved} | ${money(f.cost / f.n)} | ${(f.min / f.n).toFixed(2)} |`).join("\n") + "\n\n";
   md += `## Examples of breaks\n\n` + rows.filter(r => r.broken).map(r => `**${r.rule}**\n` + r.examples.map(x => `- ${x.replace(/\n/g, " ")}`).join("\n")).join("\n\n") + "\n";
@@ -224,5 +234,5 @@ function report(convs, extra) {
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify({ budget: BUDGET, spent: total, perConversation: per, conversations: convs.length, rows, byFlow }, null, 1));
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
   console.log("\n===== SUMMARY =====\n" + md + "===== END SUMMARY =====");
-  console.log("SUMMARY_JSON " + JSON.stringify({ spent: total, per, n: convs.length, rows: rows.map(r => [r.id, r.checked, r.broken]), byFlow }));
+  console.log("SUMMARY_JSON " + JSON.stringify({ provider: PROVIDER, firstMs: convs.flatMap(c => c.firstMs || []), spent: total, per, n: convs.length, rows: rows.map(r => [r.id, r.checked, r.broken]), byFlow }));
 })().catch(e => { console.error(e); process.exit(1); });

@@ -71,7 +71,8 @@ function settingsScreen() {
   <section class="panel"><div class="ph"><h2>Voice assistant</h2></div><div class="sb set">
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
     <button type="button" class="linkbtn" data-act2="help">How to talk to ${esc(botName())} ›</button>
-    <label for="voiceSel">Voice<select id="voiceSel">${["ara", "eve", "rex", "sal", "leo"].map(v => `<option value="${v}" ${v === S.settings.voice ? "selected" : ""}>${v[0].toUpperCase() + v.slice(1)}</option>`).join("")}</select></label>
+    ${VERSION_FILE === "preview-version.json" ? `<label for="provSel">Voice engine<select id="provSel">${Object.keys(PROVIDERS).map(k => `<option value="${k}" ${k === provider() ? "selected" : ""}>${PROVIDERS[k].name}</option>`).join("")}</select></label>` : ""}
+    <label for="voiceSel">Voice<select id="voiceSel">${PROV().voices.map(v => `<option value="${v}" ${v === providerVoice() ? "selected" : ""}>${v[0].toUpperCase() + v.slice(1)}</option>`).join("")}</select></label>
     <label for="speedSel">Speaking speed<select id="speedSel">${SPEEDS.map(v => `<option value="${v}" ${v === talkSpeed() ? "selected" : ""}>${SPEED_NAMES[v]}</option>`).join("")}</select></label>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4;margin-top:-4px">You can also just tell ${esc(botName())} to talk faster or slower.</div>
     <label for="botName">Assistant's name<input id="botName" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="${esc(botName())}" value="${esc(S.settings.botName || "")}"></label>
@@ -166,6 +167,9 @@ document.addEventListener("click", (e) => {
 function saveName() { const el = document.getElementById("userName"); const v = el.value.trim().replace(/\s+/g, " ").slice(0, 60);
   if (!v) { el.value = S.settings.userName || ""; toast("Please enter your first name."); return; }
   if (v === S.settings.userName) return; S.settings.userName = v; save(); toast(`Saved. The assistant will call you ${v.split(" ")[0]}.`); }
+// the voice engine (preview only, Oct 27: the provider comparison); the voice list follows it, and a running call ends because the engine is chosen when the line opens
+function saveProvider(k) { if (!PROVIDERS[k] || k === provider()) return; S.settings.provider = k; if (!PROVIDERS[k].voices.includes(S.settings.voice)) S.settings.voice = PROVIDERS[k].defVoice; save();
+  if (G.live) endCall(); render(); toast(`Saved. The next conversation runs on ${PROVIDERS[k].name}; tap the mic to talk to ${botName()}.`); }
 function saveVoice() { const was = S.settings.voice + "|" + botName(); S.settings.voice = document.getElementById("voiceSel").value; S.settings.voicePicked = true; const bn = document.getElementById("botName").value.trim().replace(/\s+/g, " ").slice(0, 30); if (bn) S.settings.botName = bn; else delete S.settings.botName; save();
   if (was === S.settings.voice + "|" + botName()) return;
   // a new voice or name only takes hold in a new conversation (Grok keeps the voice, and what it already said, for the whole call)
@@ -174,10 +178,11 @@ document.addEventListener("change", (e) => { const id = e.target.id;
   if (id === "f_permText" && V && ACTIONS[V.action].fields.some(f => f.when === "permText")) { V.data = readDraft(); const y = (document.querySelector(".sheet .sb") || {}).scrollTop; renderOverlay(); const sb = document.querySelector(".sheet .sb"); if (sb && y) sb.scrollTop = y; return; }
   if (id === "f_fund" && V && ACTIONS[V.action].fields.some(f => f.k === "campaign")) { V.data = prefill(V.action, readDraft(), V.target); delete V.data.badCampaign; const y = (document.querySelector(".sheet .sb") || {}).scrollTop; renderOverlay(); const sb = document.querySelector(".sheet .sb"); if (sb && y) sb.scrollTop = y; return; }
   if (id === "userName") saveName();
+  else if (id === "provSel") saveProvider(e.target.value);
   else if (id === "voiceSel" || id === "botName") saveVoice();
-  else if (id === "speedSel") { S.settings.speed = Number(e.target.value); save(); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(`Saved. ${botName()} will talk at ${speedName(talkSpeed())} speed.`); }
-  else if (id === "spookyMode") { setSpooky(e.target.checked); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(e.target.checked ? "Spooky mode is on. Mwahaha! 🦇" : "Back to normal"); }
-  else if (id === "xmasMode") { setXmas(e.target.checked); if (G.live) send({ type: "session.update", session: sessionCfg() }); toast(e.target.checked ? "Christmas mode is on. Ho ho ho! 🎄" : "Back to normal"); }
+  else if (id === "speedSel") { S.settings.speed = Number(e.target.value); save(); if (G.live) sessUpdate(sessionCfg()); toast(`Saved. ${botName()} will talk at ${speedName(talkSpeed())} speed.`); }
+  else if (id === "spookyMode") { setSpooky(e.target.checked); if (G.live) sessUpdate(sessionCfg()); toast(e.target.checked ? "Spooky mode is on. Mwahaha! 🦇" : "Back to normal"); }
+  else if (id === "xmasMode") { setXmas(e.target.checked); if (G.live) sessUpdate(sessionCfg()); toast(e.target.checked ? "Christmas mode is on. Ho ho ho! 🎄" : "Back to normal"); }
   else if (id === "xmasTgl") { if (e.target.checked) delete S.settings.noXmas; else S.settings.noXmas = true; save(); toast(e.target.checked ? "Merry Christmas! 🎄" : "Christmas visitors are off"); }
   else if (id === "spookyTgl") { if (e.target.checked) delete S.settings.noSpooky; else S.settings.noSpooky = true; save(); toast(e.target.checked ? "Happy Halloween! 🎃" : "Halloween visitors are off"); }
   else if (id === "locTgl") { const el = e.target;

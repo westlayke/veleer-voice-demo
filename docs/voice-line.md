@@ -205,3 +205,16 @@ pass without exposing the key, a cheap request to time as a line test, a resumab
 and the phone's own record of the form. Everything else is on the phone and comes with the module unchanged. The
 timings were set from Carverhill's driveway and road tests in October 2026 and should be revisited when officers
 drive with it.
+
+## Voice engines (Oct 27)
+
+`preview/provider.js` holds everything engine-specific: the socket address and subprotocols, the session body, how a scripted
+line is said, what a dropped line does. Grok (xAI) is the engine of the proof of concept and the default. OpenAI Realtime
+(gpt-realtime-2.1) is a preview-only alternative for the provider comparison: Settings > Voice engine on the preview page
+(hidden on live), the Worker mints its pass from `POST /` with `{"provider":"openai"}` (secret `OPENAI_API_KEY`), and the
+consistency run takes a `provider` input (secret `OPENAI_CONSISTENCY_KEY`). Differences the adapter covers: the session body
+(type/model, turn detection and transcription under audio.input, the voice under audio.output), no xAI extras (resumption,
+pronunciation table, key terms), no force_message (a scripted line is asked for in a reply of its own, "Say this now, word for
+word", and accepted when the engine's words overlap the line), no conversation resumption (after a drop the last eight lines
+are replayed into the new session as text). `GET /providers` on the Worker says which engine keys exist (true/false).
+

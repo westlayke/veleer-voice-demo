@@ -700,4 +700,41 @@ test("A voice pass refused by the key holder ends the call with the reason in th
   ok(ends.some(t => /couldn't start: service_429/.test(t)), "the end row doesn't carry the reason: " + ends.join(" | "));
 });
 
+test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, a scripted line by reply, the replay after a drop", async (p) => {
+  // the engine is chosen before the call: the pass is minted for it and the socket address, subprotocols and session body follow the provider table (preview/provider.js)
+  await p.evaluate(() => { S.settings.provider = "openai"; save(); });
+  await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  const url = await p.evaluate(() => __wsUrls[__wsUrls.length - 1]), protos = await p.evaluate(() => __wsProtos);
+  ok(/^wss:\/\/api\.openai\.com\/v1\/realtime\?model=gpt-realtime-2\.1$/.test(url), "the socket isn't OpenAI's: " + url);
+  ok(protos[0] === "realtime" && /^openai-insecure-api-key\.test-pass$/.test(protos[1] || ""), "the subprotocols don't carry the pass: " + JSON.stringify(protos));
+  const sess = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(x => x.type === "session.update").map(x => x.session));
+  ok(sess.length >= 1 && sess[0].type === "realtime" && sess[0].model === "gpt-realtime-2.1" && sess[0].audio.input.turn_detection.type === "server_vad" && sess[0].audio.input.transcription.model && sess[0].audio.output.voice === "marin" && sess[0].tools.length > 10 && sess[0].instructions.length > 1000, "the OpenAI session body is wrong: " + JSON.stringify(sess[0]).slice(0, 300));
+  ok(!sess.some(x => x.resumption || x.replace || x.keyterms), "xAI-only extras were sent to OpenAI: " + JSON.stringify(sess.map(x => Object.keys(x))));
+  ok(!sess.some(x => x.instructions && !x.type), "a session update went out without the session type: " + JSON.stringify(sess.map(x => Object.keys(x))));
+  // a scripted line: no force_message on this engine, so the assistant is asked in a reply of its own to say it word for word
+  let n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => forceSay("Contact saved for Nora."));
+  await p.waitForTimeout(300);
+  const sent = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)), n);
+  let out = await sent(n0);
+  ok(!out.some(x => x.item && x.item.type === "force_message"), "a force_message was sent to OpenAI");
+  ok(out.some(x => x.type === "response.create" && /word for word[^]*"Contact saved for Nora\."/.test(x.response.instructions || "")), "the scripted line wasn't asked for by reply: " + JSON.stringify(out).slice(0, 300));
+  // the assistant says it in its own words: accepted as said, no late copy expected
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "Okay, contact saved for Nora, all set." }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !G.forced && !G.lateForced && G.lastForcedText === "Contact saved for Nora."), "the line said in the assistant's own words wasn't taken as said: " + JSON.stringify(await p.evaluate(() => ({ forced: G.forced, late: G.lateForced }))));
+  // a drop: no resumption on this engine, so the new line carries the last lines as text
+  await said(p, "Let's add Nora Quist as a contact.");
+  n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
+  const url2 = await p.evaluate(() => __wsUrls[__wsUrls.length - 1]);
+  ok(/api\.openai\.com/.test(url2) && !/conversation_id/.test(url2), "the new line isn't a plain OpenAI socket: " + url2);
+  out = await sent(n0);
+  const items = out.filter(x => x.type === "conversation.item.create" && x.item.type === "message");
+  ok(items.some(x => x.item.role === "user" && /Let's add Nora Quist/.test(x.item.content[0].text)) && items.some(x => x.item.role === "assistant" && /contact saved for Nora/i.test(x.item.content[0].text)) && items[items.length - 1].item.content[0].text.startsWith("(The line dropped"), "the last lines weren't replayed into the new session: " + JSON.stringify(items.map(x => x.item.content[0].text)));
+  // Grok keeps everything as it was
+  await p.evaluate(() => { endCall(); S.settings.provider = "grok"; save(); });
+});
+
 };
