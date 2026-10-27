@@ -1,0 +1,10 @@
+{
+  "note": "The phone's own spoken lines, recorded once in Ara's voice with xAI text-to-speech (voice ara) by the Record Ara's lines workflow, into preview/sounds/. First person: it is Ara's voice the officer hears.",
+  "voice": "ara",
+  "lines": [
+    { "file": "line-dropped.mp3", "text": "Sorry, the line dropped. I'm reconnecting." },
+    { "file": "still-trying.mp3", "text": "Still trying to reconnect." },
+    { "file": "line-back.mp3", "text": "I'm back." },
+    { "file": "ara-slow.mp3", "text": "Give me a moment." }
+  ]
+}

@@ -30,7 +30,7 @@ const DOWN_GIVE_UP_MS = 300000;              // a line down this long (no voice 
 const SAY_DOWN_MS = 5000, SAY_STILL_MS = 12000, SAY_REPEAT_MS = 10000; // the phone's own spoken lines while the line is down (Carverhill, Oct 25)
 const SAY_SLOW_AFTER_MS = 60000, SAY_REPEAT_LATER_MS = 30000; // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (a long dead spot shouldn't nag)
 const downRepeatMs = () => Date.now() - (G.downAt || Date.now()) >= SAY_SLOW_AFTER_MS ? SAY_REPEAT_LATER_MS : SAY_REPEAT_MS;
-const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."]; // recorded in sounds/ (line-dropped, still-trying, line-back): the phone's own speech is silent during a call on an iPhone (Oct 25)
+const DOWN_LINES = ["Sorry, the line dropped. I'm reconnecting.", "Still trying to reconnect."]; // recorded in sounds/ in Ara's own voice (xAI text-to-speech, tools/ara-lines.json; Carverhill Oct 27: a different voice was disconcerting): the phone's own speech is silent during a call on an iPhone (Oct 25)
 const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3", slow: "ara-slow.mp3" }, lineRaw = {}, lineBuf = {};
 const GAP_BACK_MS = 1000, REPLAY_LEAD_MS = 800, REPLAY_TAIL_MS = 600, REPLAY_MAX_MS = 30000, REPLAY_WAIT_MS = 7000; // the mic replay after a reconnect: from 1 s before Ara's last word, clear speech only, at most 30 s, else the sorry line
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
@@ -69,7 +69,7 @@ function idleCheck() {
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
   // Oct 27 (Carverhill): a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
   if (G.live && G.asked && !/^(Connecting|Reconnecting)/.test(G.status) && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
-    if (!G.slowSaid && sayLocal("Ara's taking a moment.", "slow")) G.slowSaid = true; else { cue("wait"); vlog("still working: tick"); } }
+    if (!G.slowSaid && sayLocal("Give me a moment.", "slow")) G.slowSaid = true; else { cue("wait"); vlog("still working: tick"); } }
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
   if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
@@ -251,7 +251,7 @@ function downStart() {
 function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;
   const cut = G.lineEndAt && Date.now() < G.lineEndAt; // a status recording still playing is stopped so it can't overlap Ara (Oct 25 call)
   if (cut) { try { G.lineSrc && G.lineSrc.stop(); } catch (e) {} act("step", "The phone's status line was cut short: the line came back"); } G.lineSrc = null; G.lineEndAt = 0;
-  if (G.downAt) { vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && !cut && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back"); }
+  if (G.downAt) { vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && !cut && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("I'm back.", "back"); }
   G.downAt = 0; }
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {

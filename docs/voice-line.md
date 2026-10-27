@@ -70,7 +70,7 @@ phone locked.
    On failure, try again every `TOKEN_RETRY_MS` (2 s) until `DOWN_GIVE_UP_MS` (5 minutes) or a definite refusal
    (bad code, service error), which ends the call as in step 1.
 6. **Open the socket**, with the saved `conversation_id` so the conversation resumes. On open: session configuration
-   is sent again, `downEnd(true)` stops the phone's lines and plays "You're back with Ara." if the line was down 5 s or
+   is sent again, `downEnd(true)` stops the phone's lines and plays "I'm back." if the line was down 5 s or
    more, the reading is logged ("Picked up the same conversation", "Voice line open in N ms (reconnect n)"), and a
    new pass is prefetched for the next drop. A line that stays up `STABLE_MS` (20 s) before dropping resets the try
    count, so separate drops on a drive are not one failure.
@@ -82,10 +82,10 @@ Grok cannot speak while the line is down, so the phone does, from three recordin
 call's own audio output (`playLine`, `sayLocal`). The phone's built-in speech is never used: on iOS it produced an
 "Audio Recording / Stop audio recording?" dialog that muted the mic (October 25).
 
-- `SAY_DOWN_MS` 5 s after the drop: "The line dropped. Reconnecting you to Ara."
+- `SAY_DOWN_MS` 5 s after the drop: "Sorry, the line dropped. I'm reconnecting." (all four status lines are recorded in Ara's own voice with xAI text-to-speech, `tools/ara-lines.json`, so the officer never hears a second voice)
 - `SAY_STILL_MS` 12 s: "Still trying to reconnect.", then every `SAY_REPEAT_MS` (10 s); after the first minute down,
   every `SAY_REPEAT_LATER_MS` (30 s) so a long dead spot does not nag.
-- When the line is back: "You're back with Ara.", unless a status line is still playing (it is cut instead) or the
+- When the line is back: "I'm back.", unless a status line is still playing (it is cut instead) or the
   drop lasted under 5 s.
 - Short tones: a drop tone on the first drop, a soft tick every `TICK_MS` while waiting for a slow reply or reconnecting
   (until the spoken line takes over), a down tone when the call gives up.
@@ -116,7 +116,7 @@ keeps the last 40 s of its own mic (`G.ring` in `voice.js`: 100 ms chunks with a
 captured while one of the status recordings played). When a reconnect opens, `replayGap()` in `voiceline.js` takes
 the chunks from one second before Ara's last message (`G.gapFrom`, set in `reconnect()`) to now, keeps the clear
 speech with a little lead and tail (`REPLAY_LEAD_MS`, `REPLAY_TAIL_MS`), sends them to Ara as ordinary mic audio
-(status recordings as silence, so she never hears "The line dropped" as the officer's words), and tells her in Right
+(status recordings as silence, so she never hears "the line dropped" as the officer's words), and tells her in Right
 now that she heard it live. No sorry line is spoken then. Over `REPLAY_MAX_MS` (30 s), or with nothing clear on the
 mic, the reconnect goes the usual way below. If the replay brings no turn and no reply within `REPLAY_WAIT_MS` (7 s),
 `replayWatch()` speaks the sorry line with the pending question, or "Could you say that again?". A reopen after a

@@ -105,7 +105,7 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   ok(st === "Listening", "the screen kept saying Speaking with nothing playing: " + st);
   // 4. a status recording still playing when the line returns is cut, and "You're back" isn't said over it
   const back = await p.evaluate(() => { const n = ACT.q.length; G.downAt = Date.now() - 6000; G.lineEndAt = Date.now() + 2000; G.lineSrc = { stop() { window.__lineStopped = true; } }; downEnd(true); return { stopped: window.__lineStopped, log: ACT.q.slice(n).map(a => a.text).join(" | ") }; });
-  ok(back.stopped && /status line was cut short/.test(back.log) && !/You're back with Ara/.test(back.log), "the status recording wasn't cut when the line returned: " + JSON.stringify(back));
+  ok(back.stopped && /status line was cut short/.test(back.log) && !/said \(recording\): "I'm back\."/.test(back.log), "the status recording wasn't cut when the line returned: " + JSON.stringify(back));
 });
 
 test("A $0 amount from the voice model counts as missing: the form shows it blank, Ara is told, and Save asks for it", async (p) => {
@@ -586,7 +586,7 @@ test("Ara: a slow reply gets a soft tick, a doubled reply is cut off, readings t
   await p.evaluate(() => { window.__cues = []; const c = cue; window.cue = (k) => { __cues.push(k); }; });
   await p.evaluate(() => notice("Ask the officer the next question."));
   await p.waitForTimeout(4400);
-  ok(await p.evaluate(() => __cues.includes("wait") || G.slowSaid), "no soft tick (or 'Ara's taking a moment.' recording) after 4 seconds without a reply");
+  ok(await p.evaluate(() => __cues.includes("wait") || G.slowSaid), "no soft tick (or 'Give me a moment.' recording) after 4 seconds without a reply");
   // the first ask comes back empty, the app asks again, then both answers arrive: the second is cut off
   await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(600);
   await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "Just to be sure?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
@@ -661,14 +661,14 @@ test("Ara: a dead spot while reconnecting: the voice pass is tried again every f
   const mid = await p.evaluate(() => ({ spoken: __spoken.slice(), status: G.status, live: G.live })); mid.log = await logged();
   ok(mid.live && /^Reconnecting/.test(mid.status) && /No voice pass yet \(no answer in 6 s\): trying again in 2 s/.test(mid.log), "a hanging voice pass fetch wasn't given up on and tried again: " + mid.status + " " + mid.log.slice(-300));
   const saidLines = (log) => (log.match(/The phone said \((recording|phone's speech)\): "[^"]*"/g) || []).map(x => x.replace(/^[^"]*"/, "").replace(/"$/, ""));
-  ok(saidLines(mid.log).join("|") === "The line dropped. Reconnecting you to Ara.", "the phone didn't say the line dropped at 5 s: " + JSON.stringify(saidLines(mid.log)));
+  ok(saidLines(mid.log).join("|") === "Sorry, the line dropped. I'm reconnecting.", "the phone didn't say the line dropped at 5 s: " + JSON.stringify(saidLines(mid.log)));
   await p.waitForTimeout(5000);
   const s2 = saidLines(await logged());
   ok(s2.length === 2 && s2[1] === "Still trying to reconnect.", "the phone didn't say it's still trying at 12 s: " + JSON.stringify(s2));
   await p.evaluate(() => { window.__hang = false; }); await p.waitForTimeout(4500);
   const end = await p.evaluate(() => ({ live: G.live, status: G.status, downAt: G.downAt, timer: G.downTimer, spoken: __spoken.length })); end.log = await logged();
   ok(end.live && end.status === "Listening" && /Voice pass fetched in \d+ ms/.test(end.log) && /Voice line open in/.test(end.log), "the line didn't come back once a voice pass could be fetched: " + end.status + " " + end.log.slice(-300));
-  ok(!end.downAt && !end.timer && saidLines(end.log).join("|") === "The line dropped. Reconnecting you to Ara.|Still trying to reconnect.|You're back with Ara.", "the spoken reconnect lines didn't stop when the line came back, or the back line wasn't said: " + JSON.stringify(saidLines(end.log)));
+  ok(!end.downAt && !end.timer && saidLines(end.log).join("|") === "Sorry, the line dropped. I'm reconnecting.|Still trying to reconnect.|You're back with Ara.", "the spoken reconnect lines didn't stop when the line came back, or the back line wasn't said: " + JSON.stringify(saidLines(end.log)));
   ok(/\(recording\)/.test(end.log), "the lines were not played as recordings through the call's own sound: " + end.log.slice(-400));
   // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (Oct 25 4:38 PM: a 3-minute dead spot got the line 13 times)
   const gaps = await p.evaluate(() => { G.downAt = Date.now() - 20000; const a = downRepeatMs(); G.downAt = Date.now() - 70000; const b = downRepeatMs(); G.downAt = 0; return [a, b]; });
@@ -711,7 +711,7 @@ test("A voice pass refused by the key holder ends the call with the reason in th
 });
 
 
-test("Oct 27 call fixes: the first slow reply says 'Ara's taking a moment.' (the ping only after it), and a turn with no reply started in 6 s gets a reply request", async (p) => {
+test("Oct 27 call fixes: the first slow reply says 'Give me a moment.' (the ping only after it), and a turn with no reply started in 6 s gets a reply request", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await p.waitForFunction(() => G.live, null, { timeout: 8000 });
   const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);

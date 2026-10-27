@@ -1,0 +1,32 @@
+name: Record Ara's lines
+# The phone's own spoken lines (line dropped, still trying, back, give me a moment) recorded in Ara's voice with xAI
+# text-to-speech (tools/ara-lines.json, tools/record-lines.js) and committed to preview/sounds/ on main. A few cents of the
+# ARA_CONSISTENCY_KEY xAI key. Run by hand only, after a line's text changes; the live copy gets the files at the next go-live.
+on:
+  workflow_dispatch:
+    inputs:
+      files:
+        description: "Only these files, space separated (blank = all)"
+        default: ""
+permissions:
+  contents: write
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Record with xAI text-to-speech
+        env:
+          XAI_KEY: ${{ secrets.ARA_CONSISTENCY_KEY }}
+        run: node tools/record-lines.js ${{ inputs.files }}
+      - name: Commit the recordings
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add preview/sounds/*.mp3
+          git diff --cached --quiet && echo "nothing changed" && exit 0
+          git commit -m "Ara's spoken lines recorded with xAI text-to-speech [skip ci]" -m "Recorded by the Record Ara's lines workflow (run ${{ github.run_id }}) from tools/ara-lines.json."
+          git push
