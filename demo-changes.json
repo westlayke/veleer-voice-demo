@@ -3,6 +3,13 @@
  "changes": [
     {
       "date": "Oct 26, 8:14 PM",
+      "change": "Live: the call-review changes of 8:14 PM (status read-back with person and due date, entity and campaign from the planned ask, task status FAQ, task counts first and one person's tasks, task choices and shorter next-step offers, show_visitor tool, wording). Hey Ara start-up address stays preview-only.",
+      "area": "Voice, Tasks, Opportunities, FAQ",
+      "requestedBy": "Carverhill",
+      "why": "\"Make it live\""
+    },
+    {
+      "date": "Oct 26, 8:14 PM",
       "change": "Preview, from the review of the Oct 26 7:01 PM call: a status change is read back with the task, the person and the due date; an opportunity takes its entity and campaign from the planned ask, and Ara reads a blank entity, campaign or potential as Not set; Process FAQ entry for task status choices; a long task list gives counts first and one person's tasks can be asked for; Ara offers the choices after reading a task and keeps next-step offers short while you work a list; new show_visitor tool (owls on demand, 37 tools); \"We'll fill in the form together\" wording.",
       "area": "Voice, Tasks, Opportunities, FAQ",
       "requestedBy": "Carverhill",

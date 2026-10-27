@@ -53,7 +53,7 @@ const TOOL_HANDLERS = {
     const until = st === "waiting" ? (/^\d{4}-\d{2}-\d{2}$/.test(data.check_back_on || "") ? data.check_back_on : addDays(todayISO(), 7)) : null;
     const change = st === "waiting" ? `Waiting, check back ${fmtDate(until)}` : TSTAT[st];
     if (!data.confirmed) { go("tasks"); whenIdle("instr"); setTimeout(() => { const r = document.querySelector(`.trow[data-tid="${t.id}"]`); if (r) { r.classList.add("tflash"); r.scrollIntoView({ block: "center", behavior: "smooth" }); } }, 150);
-      toolReply(callId, { ok: true, task: t.text, for: taskWhere(t), now: TSTAT[taskStatus(t)], will_become: change, ask_exactly: `Mark '${t.text}' as ${change.toLowerCase()}?${st === "waiting" && !data.check_back_on ? " The check-back date would be a week from today unless you want another day." : ""}`, next: "The app asked the question itself; don't ask it again. Wait for yes before calling again with confirmed true." }); return; } // the question is scripted (Oct 25 6:03 PM: Ara announced it and then asked it, "Didn't you just ask me that?")
+      toolReply(callId, { ok: true, task: t.text, for: taskWhere(t), now: TSTAT[taskStatus(t)], will_become: change, ask_exactly: `Mark '${t.text}'${taskWhere(t) ? " for " + taskWhere(t) : ""}${t.due ? ", due " + fmtDate(t.due) : ""}, as ${change.toLowerCase()}?${st === "waiting" && !data.check_back_on ? " The check-back date would be a week from today unless you want another day." : ""}`, next: "The app asked the question itself; don't ask it again. Wait for yes before calling again with confirmed true." }); return; } // the question is scripted (Oct 25 6:03 PM: Ara announced it and then asked it, "Didn't you just ask me that?")
     const undo = setTaskStatus(t, st, until); go("tasks"); toast(`${change}: ${t.text}`, undo);
     const meetingish = /follow|call|meet|visit|lunch|coffee|pledge|ask/i.test(t.text);
     toolReply(callId, { ok: true, saved: true, task: t.text, status: change, say: `Confirm in one short sentence that it's saved${st === "done" && meetingish ? ", then ask whether they'd like to log an interaction for it (for example a call or meeting report)" : ""}.` }); return;
@@ -66,6 +66,13 @@ const TOOL_HANDLERS = {
     toolReply(callId, { ok: true, hands_free: G.hands, status: "The app now says the confirmation line itself, word for word, then tells you what's next. Don't say anything yet." }, false); hfAnnounce(); return;
   },
   optional_fields(callId, data, name) { optStep(callId, data); return; },
+  show_visitor(callId, data, name) {
+    const SPOOKY = ["spider", "pumpkin", "ghost", "bat", "owl", "skeleton"], XMAS = ["snow", "gift", "elf", "reindeer", "sleigh", "tree"], v = data.visitor;
+    const okNow = SPOOKY.includes(v) ? spookyMode() : XMAS.includes(v) ? xmasMode() : false;
+    if (!okNow) { toolReply(callId, { ok: false, error: `${v || "That visitor"} only comes by in ${SPOOKY.includes(v) ? "spooky" : "Christmas"} mode.`, say: `Say in one short sentence that the ${v || "visitor"} only comes by in ${SPOOKY.includes(v) ? "spooky" : "Christmas"} mode, and offer to turn it on.` }); return; }
+    spookyOnce(v); // sounds stay off during a call: the visitor is silent while the line is open
+    toolReply(callId, { ok: true, visitor: v, say: `In one short, playful sentence say the ${v} is on its way across the screen.` }); return;
+  },
   set_spooky_mode(callId, data, name) {
     if (!spookySeason()) { toolReply(callId, { ok: false, error: "Spooky mode is only around in October.", say: "Say in one short sentence that spooky mode is only around in October." }); return; }
     if (!!data.on === spookyMode()) { toolReply(callId, { ok: true, spooky: spookyMode(), already: true, status: `Spooky mode is already ${spookyMode() ? "on" : "off"}. Don't announce it again.` }, false); return; } // e.g. after Carry on: nothing to redo, and no second welcome
@@ -163,7 +170,7 @@ const TOOL_HANDLERS = {
       stage: F(o.stage === "Closed" ? `Closed ${o.closed || ""}`.trim() : o.stage, "The system moves the stage only when something is recorded (an ask, pledge, gift or payment). The only manual move is Move to Cultivation, or Defer with a reason. Nobody sets the stage directly."),
       next_action_button: F(o.stage === "Closed" ? "None, it's closed" : NEXT[o.stage], "Follows the stage"),
       gift_officer: F(OFFICER, "Only the Chief Gift Officer can reassign an opportunity"),
-      potential: F(money(o.potential), "You (the gift officer)"), entity: F(o.fund, "You (the gift officer)"), campaign: F(o.campaign || "", "You (the gift officer)"),
+      potential: F(o.potential ? money(o.potential) : "Not set", "You (the gift officer)"), entity: F(o.fund || (latestAsk(o) && latestAsk(o).fund) || "Not set", "You (the gift officer)"), campaign: F(o.campaign || (latestAsk(o) && latestAsk(o).campaign) || "Not set", "You (the gift officer)"),
       asked_tile: F(askedOf(o) ? money(askedOf(o)) : "Nothing asked yet", "Calculated by the system: the latest revised ask"),
       asks: F(asks.length ? asks : "No asks yet", "See each ask"),
       pledge: F(p ? { type: p.implied ? "Implied commitment (a gift arrived while the ask was open)" : p.outright ? "Outright gift agreed at the ask, waiting for the gift" : "Pledge", amount: money(p.amount), entity: p.fund, confirmed_by: p.confirmedBy, confirmed_on: fmtDate(p.confirmedDate), installments: p.installments, frequency: p.frequency || "", first_payment: money(p.firstAmount), first_due: p.firstDue ? fmtDate(p.firstDue) : "", paid: money(paid), balance: money(Math.max(0, p.amount - paid)), status: p.status || "Open" } : "None", p ? MONEY : "Recorded with Record pledge"),
@@ -195,13 +202,14 @@ const TOOL_HANDLERS = {
       say: `In one short sentence, say the ${F[v][0]} view is on screen and how many there are${shown.length ? "; name up to three if they ask" : ""}.` }); return;
   },
   get_my_tasks(callId, data, name) {
-    const T = todayISO(), which = data.which || "all";
+    const T = todayISO(), which = data.which || "all", who = data.contact_name ? resolveTarget("interaction", data.contact_name) : null;
     const open = S.tasks.filter(t => !t.done).sort((x, y) => (x.due || "9999").localeCompare(y.due || "9999"));
-    const pick = open.filter(t => which === "overdue" ? t.due && t.due < T : which === "due_today" ? t.due && t.due <= T : which === "this_week" ? t.due && t.due <= addDays(T, 7) : which === "waiting" ? taskStatus(t) === "waiting" : which === "in_progress" ? taskStatus(t) === "doing" : true);
+    const pick = open.filter(t => !(who && !who.error) || t.contactId === who.contact.id).filter(t => which === "overdue" ? t.due && t.due < T : which === "due_today" ? t.due && t.due <= T : which === "this_week" ? t.due && t.due <= addDays(T, 7) : which === "waiting" ? taskStatus(t) === "waiting" : which === "in_progress" ? taskStatus(t) === "doing" : true);
     S.tFilter = { overdue: "overdue", this_week: "week", due_today: "week", waiting: "waiting" }[which] || "open"; go("tasks"); whenIdle("instr");
-    toolReply(callId, { ok: true, open_tasks_total: open.length, overdue_total: open.filter(t => t.due && t.due < T).length, showing: which, count: pick.length,
+    const byStatus = {}, byPerson = {}; open.forEach(t => { const k = TSTAT[taskStatus(t)], w = taskWhere(t) || "no one"; byStatus[k] = (byStatus[k] || 0) + 1; byPerson[w] = (byPerson[w] || 0) + 1; });
+    toolReply(callId, { ok: true, open_tasks_total: open.length, overdue_total: open.filter(t => t.due && t.due < T).length, by_status: byStatus, people_with_most_tasks: Object.entries(byPerson).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([w, n]) => ({ who: w, n })), showing: which, for_person: who && !who.error ? nameOf(who.contact) : "everyone", count: pick.length,
       tasks: pick.map(t => ({ task: t.text, status: TSTAT[taskStatus(t)], for: taskWhere(t), due: t.due ? fmtDate(t.due) + (t.due.slice(0, 4) !== T.slice(0, 4) ? " " + t.due.slice(0, 4) : "") : "no due date", overdue: !!(t.due && t.due < T), due_today: t.due === T })),
-      say: pick.length ? "Say how many there are, overdue ones first, then read each task briefly with who it's for and when it's due (say overdue, today, or the day). If there are more than five, read the first five and ask whether to go on. Then ask if they'd like to act on one, for example log the follow-up." : "Say there are no open tasks of that kind." }); return;
+      say: pick.length > 8 ? "A long list: first give the counts in one sentence (open, overdue, and the two or three people with the most tasks), then ask whether to hear the oldest five, the ones for one person, or the ones due this week. Read tasks only after they choose, five at a time, each briefly with who it's for and when it's due." : pick.length ? "Say how many there are, overdue ones first, then read each task briefly with who it's for and when it's due (say overdue, today, or the day). If there are more than five, read the first five and ask whether to go on. Then ask if they'd like to act on one, for example log the follow-up." : "Say there are no open tasks of that kind." }); return;
   },
   get_contact_history(callId, data, name) {
     const r = resolveTarget("interaction", data.contact_name);
