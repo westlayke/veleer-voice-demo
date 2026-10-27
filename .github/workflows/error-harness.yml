@@ -1,0 +1,37 @@
+name: Testing Terry's walks
+# The error-condition harness (tests/harness/): a stand-in Grok walks the journey from a new contact to a gift (Closed Won),
+# throwing one fault at one field before each save. No xAI calls, so a run costs nothing. With log=real the walks reach the
+# activity page as "Testing Terry". Run by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      log:
+        description: "real = the walks' log rows go to the activity page (as Testing Terry); report = kept in the report only"
+        default: "real"
+      faults:
+        description: "Only these faults, comma separated (blank = all): none,drop,slow,silent,slowline,stall,double,noforce,noaudio,lock,micend,resend,invent,error,token"
+        default: ""
+      jobs:
+        description: "Walks at once"
+        default: "3"
+jobs:
+  walk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Walk the journey
+        env:
+          LOG: ${{ inputs.log }}
+          FAULTS: ${{ inputs.faults }}
+          JOBS: ${{ inputs.jobs }}
+        run: node tests/harness/run.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testing-terry-walks
+          path: tests/harness/results/
+          retention-days: 30
