@@ -2,6 +2,8 @@
 // 1. POST /          hands the demo a 5-minute Grok voice session token (keeps the xAI key off the page).
 // 2. GET/POST /log   saves each conversation (phone ID, name, rough location, what was said) to a D1 database.
 // 3. GET /activity   a password-protected page listing phones and their conversations.
+// 4. POST /tts       speaks a short line the app itself knows (a save acknowledgement) in Ara's own voice, with xAI text-to-speech
+//                    (Carverhill, Oct 27: no waiting for Grok at the slowest moment, and no second voice).
 //
 // Secrets (set in the Worker's Settings > Variables and Secrets, never in this file):
 //   XAI_API_KEY     your xAI API key
@@ -29,6 +31,7 @@ export default {
     if (request.headers.get("Origin") !== ALLOWED_ORIGIN) return new Response("Forbidden", { status: 403, headers: cors });
     if (env.DEMO_CODE && request.headers.get("X-Demo-Code") !== env.DEMO_CODE) return json({ error: "bad_code" }, 401);
     if (url.pathname === "/log") return saveLog(request, env, json);
+    if (url.pathname === "/tts") return speak(request, env, cors, json);
 
     const r = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
       method: "POST",
@@ -38,6 +41,20 @@ export default {
     return new Response(await r.text(), { status: r.status, headers: { ...cors, "Content-Type": "application/json" } });
   },
 };
+
+// a line in Ara's voice: at most 400 characters (about $0.006), mp3 at 24 kHz; the audio is cached by the browser per text
+async function speak(request, env, cors, json) {
+  let b; try { b = await request.json(); } catch (e) { return json({ error: "bad_json" }, 400); }
+  const text = String(b.text || "").trim().slice(0, 400);
+  if (!text) return json({ error: "no_text" }, 400);
+  const r = await fetch("https://api.x.ai/v1/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.XAI_API_KEY },
+    body: JSON.stringify({ text, voice_id: "ara", language: "en", output_format: { codec: "mp3", sample_rate: 24000, bit_rate: 64000 } }),
+  });
+  if (!r.ok) return json({ error: "tts_" + r.status }, 502);
+  return new Response(await r.arrayBuffer(), { status: 200, headers: { ...cors, "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=3600" } });
+}
 
 async function ensureTable(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, device TEXT, name TEXT,

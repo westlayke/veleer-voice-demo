@@ -33,6 +33,7 @@ const downRepeatMs = () => Date.now() - (G.downAt || Date.now()) >= SAY_SLOW_AFT
 const DOWN_LINES = ["Sorry, the line dropped. I'm reconnecting.", "Still trying to reconnect."]; // recorded in sounds/ in Ara's own voice (xAI text-to-speech, tools/ara-lines.json; Carverhill Oct 27: a different voice was disconcerting): the phone's own speech is silent during a call on an iPhone (Oct 25)
 const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3", slow: "ara-slow.mp3" }, lineRaw = {}, lineBuf = {};
 const GAP_BACK_MS = 1000, REPLAY_LEAD_MS = 800, REPLAY_TAIL_MS = 600, REPLAY_MAX_MS = 30000, REPLAY_WAIT_MS = 7000; // the mic replay after a reconnect: from 1 s before Ara's last word, clear speech only, at most 30 s, else the sorry line
+const TTS_WAIT_MS = 2500;                   // a line in Ara's voice that takes longer than this to arrive is left to Grok
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;
@@ -236,6 +237,23 @@ function linePrep() { // fetch and decode the recorded lines, so they can play t
 function playLine(kind) { // through the call's own sound, which the phone keeps open during a conversation
   const c = G.ctx; if (!c || c.state !== "running" || !lineBuf[kind]) return false;
   try { const src = c.createBufferSource(), g = c.createGain(); g.gain.value = 1; src.buffer = lineBuf[kind]; src.connect(g); g.connect(c.destination); src.start(c.currentTime + 0.02); G.lineSrc = src; G.lineEndAt = Date.now() + lineBuf[kind].duration * 1000 + 50; return true; } catch (e) { return false; }
+}
+// A line the app itself knows (the save acknowledgement and what's next) spoken in Ara's own voice by xAI text-to-speech
+// through the Worker, so the officer never waits on Grok for it and hears no second voice (Carverhill, Oct 27: a 19.8 s wait).
+// Resolves true once it is playing; false (so the caller falls back to Grok) when the sound isn't running, the Worker takes
+// longer than TTS_WAIT_MS, or the audio can't be decoded. The line goes into the conversation record as Ara's, and Grok is
+// told through Right now by the caller.
+async function ttsSay(text) {
+  if (!G.live || !G.ctx || G.ctx.state !== "running") return false;
+  const ac = new AbortController(), timer = setTimeout(() => ac.abort(), TTS_WAIT_MS), t0 = Date.now(), ws = G.ws; let buf;
+  try { const r = await fetch(tokenUrl().replace(/\/$/, "") + "/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE }, body: JSON.stringify({ text }), signal: ac.signal });
+    if (!r.ok) throw new Error("tts " + r.status); buf = await G.ctx.decodeAudioData(await r.arrayBuffer()); }
+  catch (e) { clearTimeout(timer); vlog(`Ara's voice line not fetched (${String(e && e.message || e).slice(0, 60)}): Grok says it instead`); act("step", `The app's line in Ara's voice didn't arrive in time (${Date.now() - t0} ms): Ara says it herself`); return false; }
+  clearTimeout(timer); if (!G.live || !G.ctx || G.ctx.state !== "running" || G.ws !== ws) return false;
+  try { const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.ctx.destination); src.start(G.ctx.currentTime + 0.02); G.lineSrc = src; G.lineEndAt = Date.now() + buf.duration * 1000 + 50; } catch (e) { return false; }
+  act("step", `The phone said in Ara's voice (fetched in ${Date.now() - t0} ms): "${text}"`); vlog(`phone said (Ara's voice, ${Date.now() - t0} ms): ${text}`);
+  recent(botName(), text); G.lastForcedText = text; if (typeof lineHeard === "function") lineHeard(text);
+  return true;
 }
 function sayLocal(text, kind) {
   // only ever a recording through the call's own sound: the phone's built-in speech is never used (Oct 25: an iOS "Audio Recording / Stop audio recording?" dialog appeared after it spoke, muting the mic and ending the call)

@@ -392,4 +392,29 @@ test("Oct 27 driveway call: the officer's words from while the line was down are
   out = await p.evaluate(() => { const xs = __sent.slice(__n0).map(s => JSON.parse(s)); return { sent: xs.filter(e => e.type === "input_audio_buffer.append").map(e => e.audio), told: ACT.q.concat(__logs.flatMap(l => l.events || [l])).filter(a => /^Replayed \d s/.test(a.text)).length }; });
   ok(!out.sent.some(a => /^UVVJ/.test(a)) && out.told === 1, "quiet mic chunks were replayed: " + JSON.stringify(out.sent.map(a => a.slice(0, 8))));
 });
+test("Oct 27: a hands-free save is acknowledged by the app itself in Ara's voice (no Grok wait), Grok is told what was said, and the Grok line is the fallback when the voice doesn't arrive", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  // the Worker's /tts answers with a real recording here (the test server's own file)
+  await p.evaluate(() => { const f = window.fetch; window.__tts = []; window.fetch = (u, o) => { if (/\/tts$/.test(String(u))) { __tts.push(JSON.parse(o.body).text); return window.__ttsFail ? Promise.resolve(new Response("no", { status: 502 })) : f("preview/sounds/line-back.mp3"); } return f(u, o); }; });
+  await said(p, "New contact: Pat Moss, pat at example dot org, mobile 555 010 0150.");
+  let r = await ara(p, "show_contact_draft", { first: "Pat", last: "Moss", email: "pat@example.org", mobile: "(555) 010-0150" });
+  await said(p, "Rate them C."); r = await ara(p, "optional_fields", { step: "answer", value: "C" }); await ara(p, "optional_fields", { step: "stop" });
+  await p.waitForTimeout(300); await said(p, "Yes.");
+  const n = await p.evaluate(() => __sent.length);
+  r = await ara(p, "save_form", { confirmed: true }, 1200);
+  const out = await p.evaluate((n) => { const xs = __sent.slice(n).map(s => JSON.parse(s)); return { tts: __tts, create: xs.some(e => e.type === "response.create"), told: xs.filter(e => e.type === "session.update").map(e => e.session.instructions || "").join(" "), log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), recent: (G.recent || []).slice(-2).join(" | "), last: G.lastForcedText }; }, n);
+  ok(r.saved === true && r.app_said === "Contact saved for Pat. Say undo if that's wrong. Next is to create an opportunity for Pat. Want to do that now?", "the save wasn't acknowledged by the app's own line: " + JSON.stringify(r));
+  ok(out.tts.length === 1 && !out.create && /said in Ara's voice/.test(out.log) && /in your voice: "Contact saved for Pat\./.test(out.told) && /Contact saved for Pat/.test(out.recent) && out.last === r.app_said, "the line wasn't played, recorded or told to Grok as expected: " + JSON.stringify({ tts: out.tts, create: out.create, told: /in your voice/.test(out.told), recent: out.recent }));
+  // the officer answers the app's question: the opportunity opens on that yes (the app's line counts as Ara's offer)
+  await p.evaluate(() => { G.lastSaved.at = Date.now(); });
+  await said(p, "Yes."); r = await ara(p, "show_opportunity_draft", { contact_name: "Pat Moss" });
+  ok(r.ok !== false && !/hasn't asked/.test(r.error || ""), "the yes to the app's own offer didn't open the opportunity: " + JSON.stringify(r));
+  await ara(p, "optional_fields", { step: "stop" }); await said(p, "Yes.");
+  // the voice line fails: Grok says it instead, as before
+  await p.evaluate(() => { window.__ttsFail = true; });
+  const n2 = await p.evaluate(() => __sent.length);
+  r = await ara(p, "save_form", { confirmed: true }, 1200);
+  ok(r.saved === true && !r.app_said && /saved/.test(r.say || "") && (await p.evaluate((n) => __sent.slice(n).some(s => JSON.parse(s).type === "response.create"), n2)) && /didn't arrive in time/.test(await p.evaluate(() => ACT.q.map(a => a.text).join(" | "))), "no fallback to Grok when the voice line failed: " + JSON.stringify(r));
+});
 };

@@ -511,12 +511,15 @@ async function openAudio() {
     if (G.ctx !== ctx) return;
       // Echo guard: while Grok's voice is playing, the phone's mic can hear the speaker and Grok cuts itself off.
       // Quiet sound during playback is sent as silence; speaking up over Grok still interrupts it.
-      if (G.playHead > G.ctx.currentTime + 0.03) {
+      // The same guard while the phone plays one of its own lines in Ara's voice (Oct 27): Grok must not hear that line as the officer's words
+      const ownLine = !!(G.lineEndAt && Date.now() < G.lineEndAt);
+      if (G.playHead > G.ctx.currentTime + 0.03 || ownLine) {
         let sq = 0; for (let i = 0; i < f32.length; i++) sq += f32[i] * f32[i];
         const rms = Math.sqrt(sq / f32.length); G.echoPeak = Math.max(G.echoPeak || 0, rms);
-        if (rms < BARGE_RMS) f32 = new Float32Array(f32.length); else G.barge = (G.barge || 0) + 1;
+        if (rms < BARGE_RMS) f32 = new Float32Array(f32.length); else { G.barge = (G.barge || 0) + 1;
+          if (ownLine && G.lineSrc) { try { G.lineSrc.stop(); } catch (e) {} G.lineEndAt = 0; act("step", "The officer spoke over the phone's line: cut short"); } }
       }
-      if (!(G.playHead > G.ctx.currentTime + 0.03)) { let sq = 0; for (let i = 0; i < f32.length; i += 4) sq += f32[i] * f32[i]; const lvl = Math.sqrt(sq / (f32.length / 4));
+      if (!(G.playHead > G.ctx.currentTime + 0.03) && !ownLine) { let sq = 0; for (let i = 0; i < f32.length; i += 4) sq += f32[i] * f32[i]; const lvl = Math.sqrt(sq / (f32.length / 4));
       if (lvl > SPEAK_RMS) { if (!G.speechSince) G.speechSince = Date.now(); G.loudAt = Date.now(); G.loudChunk = true; if (/^Reconnecting/.test(G.status)) G.spokeInGap = true; } else if (G.speechSince && Date.now() - (G.loudAt || 0) > 8000) G.speechSince = 0; }
     G.buf.push(downsample(f32, G.ctx.sampleRate));
       const total = G.buf.reduce((n, a) => n + a.length, 0);
