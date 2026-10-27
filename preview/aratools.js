@@ -278,6 +278,7 @@ function onTool(callId, name, args) {
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
   if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command." }); return; }
+  if (V && V.awaitOther && name !== "show_contact_draft") V.awaitOther = null; // the mobile question is over once anything else happens (Oct 27: "Move on." to a later question was taken as "no mobile")
   if (Object.hasOwn(TOOL_HANDLERS, name)) { TOOL_HANDLERS[name](callId, data, name); return; }
   draftTool(callId, name, data);
 }
@@ -375,7 +376,7 @@ function draftTool(callId, name, data) {
   if (tool.action === "interaction" && !missing.length && !V.askedSubst && !V.fromVoice.has("substantive")) { V.askedSubst = true; toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: SUBST_Q, next: "After the officer answers, call this tool again with substantive true or false." + droppedNote }); return; } // the app asks it itself (Oct 25: Ara skipped the question when it was only guidance)
   if (V.opt && V.opt.only && !empty(d[V.opt.only])) V.opt = null; // the one field asked for came in through this tool instead
   if (tool.action === "contact" && !missing.length) {
-    if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true; V.awaitOther = empty(d.email) ? "email" : "mobile"; toolReply(callId, { ok: true, button: A.saveLabel, status: `The draft is open on screen. Now ask in one short question for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.${droppedNote}` }); return; }
+    if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true; V.awaitOther = { which: empty(d.email) ? "email" : "mobile", at: Date.now() }; toolReply(callId, { ok: true, button: A.saveLabel, status: `The draft is open on screen. Now ask in one short question for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.${droppedNote}` }); return; }
     // the rating an opportunity will need is asked for right away (Carverhill, Oct 25), then the rest of the optional fields are offered
     if (empty(d.capacity) && !V.askedCap && !V.opt) { V.askedCap = true; V.opt = { done: [], only: "capacity" }; optAsk(callId); return; }
     if (!V.askedOptional && !V.opt) { offerMore(callId); return; }
@@ -390,7 +391,7 @@ function draftTool(callId, name, data) {
 
 // The officer said they have no mobile (or email) for a new contact: the app moves the form on itself instead of waiting for Ara to call the tool again (Oct 27 11:23 AM call: "No." then silence)
 function contactNoOther() {
-  const which = V.awaitOther; V.awaitOther = null; const d = readDraft();
+  const which = V.awaitOther.which; V.awaitOther = null; const d = readDraft();
   act("step", `The officer has no ${which} for ${optWho()}: the form moves on`);
   if ((d.capacity === undefined || d.capacity === null || String(d.capacity).trim() === "") && !V.askedCap) {
     V.askedCap = true; V.opt = { done: [], only: "capacity", cur: "capacity" };

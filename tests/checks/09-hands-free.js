@@ -348,9 +348,10 @@ test("Oct 27 call fixes: a spelled last name replaces Ara's spelling, 'No' to th
   await said(p, "New contact, George Bailey. B, B A I L E Y. Email george at example dot org.");
   let r = await ara(p, "show_contact_draft", { first: "George", last: "Bbailey", email: "george@example.org" });
   ok((await p.evaluate(() => readDraft().last)) === "Bailey", "the spelled name didn't replace Bbailey: " + JSON.stringify(await p.evaluate(() => readDraft())));
-  ok(/mobile number/.test(r.status || "") && (await p.evaluate(() => V.awaitOther)) === "mobile", "the mobile wasn't asked for: " + JSON.stringify(r));
+  ok(/mobile number/.test(r.status || "") && (await p.evaluate(() => V.awaitOther && V.awaitOther.which)) === "mobile", "the mobile wasn't asked for: " + JSON.stringify(r));
   // "No." to the mobile: the app asks the rating itself instead of waiting for Ara to call the tool again (she never did on Oct 27)
   let n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => recent("Ara", "Do you have a mobile number for George?"));
   await said(p, "No."); await p.waitForTimeout(500);
   const forced = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
   ok(forced.some(t => /George's capacity rating/.test(t)), "the app didn't ask the rating after 'No.': " + JSON.stringify(forced));
@@ -371,5 +372,24 @@ test("Oct 27 call fixes: a spelled last name replaces Ara's spelling, 'No' to th
   await p.evaluate(() => { G.lastSaved = { at: Date.now() }; G.recent = ["Officer: C."]; }); // as right after a save with only the rating said: the reopening must not need the officer's word again
   r = await ara(p, "show_opportunity_draft", { contact_name: "George Bailey" });
   ok(r.ok !== false && !/hasn't asked/.test(r.error || "") && (await p.evaluate(() => V && V.action === "opportunity" && G.formOk === null)), "the opportunity didn't reopen after the rating: " + JSON.stringify(r));
+});
+test("Oct 27 driveway call: the officer's words from while the line was down are replayed to Ara when it's back (status recordings as silence), a replay that brings no reply falls back to the sorry line, and silence isn't replayed", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  // the mic buffer is set by hand: 4 s of chunks, the officer talking in the middle 2 s, one chunk while a status recording played
+  await p.evaluate(() => { const now = Date.now(); const arr = []; for (let i = 0; i < 40; i++) arr.push({ at: now - 4000 + i * 100, n: 2400, b64: "QUJD" + i + "=", loud: i >= 10 && i < 30, line: i === 15 }); G.ring = arr; G.ring.push = () => 0; G.lastMsg = now - 3500; window.__n0 = __sent.length; window.__ws0 = __ws; __ws.onclose({ code: 1006 }); });
+  await p.waitForTimeout(1800);
+  let out = await p.evaluate(() => { const xs = __sent.slice(__n0).map(s => JSON.parse(s)); return { newLine: __ws !== __ws0, sent: xs.filter(e => e.type === "input_audio_buffer.append").map(e => e.audio), told: xs.some(e => e.type === "session.update" && /replayed to you/.test(e.session.instructions || "")), sorry: xs.some(e => e.item && e.item.type === "force_message"), log: ACT.q.map(a => a.text).join(" | ") }; });
+  ok(out.newLine && out.sent.includes("QUJD10=") && out.sent.includes("QUJD29=") && !out.sent.includes("QUJD1=") && !out.sent.includes("QUJD15=") && out.sent.some(a => /^AAAA/.test(a)), "the gap wasn't replayed as expected: " + JSON.stringify(out.sent.map(a => a.slice(0, 8))));
+  ok(out.told && !out.sorry && /Replayed \d s of the officer's words/.test(out.log), "Ara wasn't told about the replay, or the sorry line went out anyway: " + JSON.stringify({ told: out.told, sorry: out.sorry }));
+  // nothing came of it: the sorry line after 7 s
+  await p.waitForTimeout(7300);
+  const sorry = await p.evaluate(() => __sent.slice(__n0).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text));
+  ok(sorry.some(t => /^Sorry, I lost you for a moment\. Could you say that again\?$/.test(t)), "no fallback sorry line after a replay with no reply: " + JSON.stringify(sorry));
+  // a drop with only quiet on the mic: nothing replayed, the usual reconnect
+  await p.evaluate(() => { const now = Date.now(); const arr = []; for (let i = 0; i < 20; i++) arr.push({ at: now - 2000 + i * 100, n: 2400, b64: "UVVJ" + i + "=", loud: false, line: false }); G.ring = arr; G.ring.push = () => 0; G.lastMsg = now - 1500; window.__n0 = __sent.length; __ws.onclose({ code: 1006 }); });
+  await p.waitForTimeout(2500);
+  out = await p.evaluate(() => { const xs = __sent.slice(__n0).map(s => JSON.parse(s)); return { sent: xs.filter(e => e.type === "input_audio_buffer.append").map(e => e.audio), told: ACT.q.concat(__logs.flatMap(l => l.events || [l])).filter(a => /^Replayed \d s/.test(a.text)).length }; });
+  ok(!out.sent.some(a => /^UVVJ/.test(a)) && out.told === 1, "quiet mic chunks were replayed: " + JSON.stringify(out.sent.map(a => a.slice(0, 8))));
 });
 };

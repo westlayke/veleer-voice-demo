@@ -109,6 +109,19 @@ a moment. " followed by the pending question, word for word. With no pending que
 guidance instead: the last lines said, what has been saved (never to be saved again), the open form, whether
 hands-free is on, whether the officer may have talked unheard, and the rule to ask one question and not start over.
 
+## Replaying what was said while the line was down
+
+The officer often keeps talking into a dead line (Oct 27: an email address, "The New Hampshire entity"). The phone
+keeps the last 40 s of its own mic (`G.ring` in `voice.js`: 100 ms chunks with a loud flag, and a flag for chunks
+captured while one of the status recordings played). When a reconnect opens, `replayGap()` in `voiceline.js` takes
+the chunks from one second before Ara's last message (`G.gapFrom`, set in `reconnect()`) to now, keeps the clear
+speech with a little lead and tail (`REPLAY_LEAD_MS`, `REPLAY_TAIL_MS`), sends them to Ara as ordinary mic audio
+(status recordings as silence, so she never hears "The line dropped" as the officer's words), and tells her in Right
+now that she heard it live. No sorry line is spoken then. Over `REPLAY_MAX_MS` (30 s), or with nothing clear on the
+mic, the reconnect goes the usual way below. If the replay brings no turn and no reply within `REPLAY_WAIT_MS` (7 s),
+`replayWatch()` speaks the sorry line with the pending question, or "Could you say that again?". A reopen after a
+phone lock never replays (the mic was muted). Everything is logged ("Replayed N s of the officer's words…").
+
 The same `where` goes into the Carry on card when a call ends with a form open, so a restarted call also resumes from
 the right question. A read-back the officer had already said yes to is saved before anything else happens
 (`hfSettlePending`).

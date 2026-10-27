@@ -32,6 +32,7 @@ const SAY_SLOW_AFTER_MS = 60000, SAY_REPEAT_LATER_MS = 30000; // after the first
 const downRepeatMs = () => Date.now() - (G.downAt || Date.now()) >= SAY_SLOW_AFTER_MS ? SAY_REPEAT_LATER_MS : SAY_REPEAT_MS;
 const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."]; // recorded in sounds/ (line-dropped, still-trying, line-back): the phone's own speech is silent during a call on an iPhone (Oct 25)
 const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3", slow: "ara-slow.mp3" }, lineRaw = {}, lineBuf = {};
+const GAP_BACK_MS = 1000, REPLAY_LEAD_MS = 800, REPLAY_TAIL_MS = 600, REPLAY_MAX_MS = 30000, REPLAY_WAIT_MS = 7000; // the mic replay after a reconnect: from 1 s before Ara's last word, clear speech only, at most 30 s, else the sorry line
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;
@@ -67,7 +68,7 @@ const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
 function idleCheck() {
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
   // Oct 27 (Carverhill): a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
-  if (G.live && G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
+  if (G.live && G.asked && !/^(Connecting|Reconnecting)/.test(G.status) && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
     if (!G.slowSaid && sayLocal("Ara's taking a moment.", "slow")) G.slowSaid = true; else { cue("wait"); vlog("still working: tick"); } }
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
@@ -165,6 +166,7 @@ async function netLog(what, known) { const sess = G.session, info = netInfo(), m
 async function reconnect(why) {
   if (!G.live) return;
   if (Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now()) > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
+  if (G.lastMsg || !G.gapFrom) G.gapFrom = (G.lastMsg || Date.now()) - GAP_BACK_MS; // from when Ara last got through: the mic from here is replayed to her once the line is back
   G.drops++; G.status = "Reconnecting…"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
@@ -189,12 +191,36 @@ async function openAgain(lock) {
   }
   if (!G.live) return;
   if (G.hiddenAt) { G.lockResume = false; return; } // locked again while the pass was fetched: the next unlock reopens the line
-  if (G.spokeInGap) act("step", "The officer talked while the line was down: Ara will ask them to repeat it");
   G.heardAt = G.lastMsg || G.heardAt || Date.now(); G.lastMsg = 0;
   // the app says where the form stands and, when a question is pending, asks it again itself as a scripted line; the context goes in Ara's instructions (Right now)
-  openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null;
+  openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null, secs = lock ? 0 : replayGap();
+    if (secs) { G.justNow = { text: reconnectLine(lock) + ` The app has just replayed to you the ${secs} s the officer spoke while the line was down, so you heard it as if live: answer it now and never say you lost them.` + (fp ? " " + fp.where : ""), at: Date.now() }; whenIdle("instr"); replayWatch(fp); return; }
+    if (G.spokeInGap) act("step", "The officer talked while the line was down and the mic caught no clear speech: Ara asks them to repeat it");
     if (fp && fp.ask) { G.justNow = { text: reconnectLine(lock) + " " + fp.where, at: Date.now() }; act("step", `${lock ? "Line reopened" : "Reconnected"}: the app asks the pending question itself (${fp.where})`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${fp.ask}`); }
+    else if (G.spokeInGap) { G.justNow = { text: reconnectLine(lock), at: Date.now() }; whenIdle("instr"); forceSay("Sorry, I lost you for a moment. Could you say that again?"); }
     else guide(reconnectLine(lock) + (fp ? " " + fp.where : "")); });
+}
+// What the officer said while the line was down (from the last word Ara got through to now) goes to her again, from the phone's own mic
+// buffer, so they don't repeat themselves (Carverhill, Oct 27). Only clear speech is replayed, and only up to REPLAY_MAX_MS; the status
+// recordings the phone played meanwhile go as silence, so Ara never hears "The line dropped" as the officer's words.
+function replayGap() {
+  const from = G.gapFrom || 0; G.gapFrom = 0; if (!from || !G.ring || !G.ring.length) return 0;
+  const chunks = G.ring.filter(c => c.at >= from), loud = chunks.filter(c => c.loud);
+  if (!loud.length) return 0;
+  const t0 = loud[0].at - REPLAY_LEAD_MS, t1 = loud[loud.length - 1].at + REPLAY_TAIL_MS, part = chunks.filter(c => c.at >= t0 && c.at <= t1);
+  const ms = part.reduce((n, c) => n + c.n / 24, 0);
+  if (ms > REPLAY_MAX_MS) { act("step", `The officer spoke for ${Math.round(ms / 1000)} s while the line was down: too long to replay, Ara asks them to repeat it`); G.spokeInGap = true; return 0; }
+  part.forEach(c => send({ type: "input_audio_buffer.append", audio: c.line ? b64FromInt16(new Int16Array(c.n)) : c.b64 }));
+  const secs = Math.max(1, Math.round(ms / 1000)); G.replayAt = Date.now(); G.spokeInGap = false;
+  act("step", `Replayed ${secs} s of the officer's words from while the line was down, so they don't have to repeat them`); vlog(`replayed ${part.length} chunks (${secs} s) from the gap`);
+  return secs;
+}
+// nothing came of the replay (no turn heard, no reply started): the usual sorry line, with the pending question
+function replayWatch(fp) {
+  clearTimeout(G.replayWatchT); const seq = G.respSeq || 0, ws = G.ws, at = G.replayAt;
+  G.replayWatchT = setTimeout(() => { if (!G.live || G.ws !== ws || (G.respSeq || 0) !== seq || G.responding || G.turnWatch || (G.stoppedAt || 0) > at) return;
+    act("step", "The replayed words brought no reply: Ara asks the officer to say it again");
+    forceSay(`Sorry, I lost you for a moment. ${fp && fp.ask ? fp.ask : "Could you say that again?"}`); }, REPLAY_WAIT_MS);
 }
 const reconnectLine = (lock) => { const d = draftSummary(), l = G.recent || [], sv = (G.saves || []).length ? `Saved so far in this conversation, all done and NOT to be saved again: ${G.saves.join("; ")}. ` : "",
     justSaved = G.savedAt && Date.now() - G.savedAt < 2 * 60e3 && !V ? `The last save (${G.savedLine}) went through just before the drop and its form closed; don't call save_form for it. ` : "",

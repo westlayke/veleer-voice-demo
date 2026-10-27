@@ -167,6 +167,7 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
 });
 test("Ara: after a reconnect the app says where the form stands and asks the pending question itself (an optional question, or the read-back waiting for a yes)", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { replayGap = () => { G.spokeInGap = false; return 0; }; }); // the pretend mic is never quiet: no replay of the gap in this check, and no missed words
   await ara(p, "show_contact_draft", { first: "Nora", last: "Quist", email: "nora@example.org", mobile: "(555) 010-0188" });
   ok(await p.evaluate(() => V && V.opt && V.opt.cur === "capacity"), "the capacity question isn't pending after the required details");
   const forced = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "force_message").map(x => x.item.content[0].text), n);
@@ -675,6 +676,7 @@ test("Ara: a dead spot while reconnecting: the voice pass is tried again every f
 });
 test("Ara: a drop with no form open comes back to the person just worked on, and a rating said before the questions is taken", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { replayGap = () => { G.spokeInGap = false; return 0; }; }); // the pretend mic is never quiet: no replay of the gap in this check, and no missed words
   let r = await ara(p, "show_contact_draft", { first: "Nora", last: "Quist", email: "nora@example.org", mobile: "(555) 010-0188" });
   ok(r.field === "capacity", "the rating wasn't asked first: " + JSON.stringify(r));
   // the officer answers before the questions have started (Oct 25: "a capacity rating of C" got every option read out)
@@ -717,7 +719,7 @@ test("Oct 27 call fixes: the first slow reply says 'Ara's taking a moment.' (the
   // the recording stands in: sayLocal counts as played
   await p.evaluate(() => { window.__cues = []; window.__lines = []; window.cue = (k) => { __cues.push(k); }; window.sayLocal = (t, k) => { __lines.push(k); return true; }; });
   await p.evaluate(() => askReply("Ask the officer the next question."));
-  await p.waitForTimeout(4400);
+  await p.waitForTimeout(5600);
   ok(await p.evaluate(() => __lines.includes("slow") && !__cues.includes("wait")), "the first slow tick wasn't the spoken line: " + JSON.stringify(await p.evaluate(() => [__lines, __cues])));
   await p.waitForTimeout(4200);
   ok(await p.evaluate(() => __lines.filter(k => k === "slow").length === 1 && __cues.includes("wait")), "the second tick wasn't the ping (the line should be said once per ask): " + JSON.stringify(await p.evaluate(() => [__lines, __cues])));
