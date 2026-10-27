@@ -30,7 +30,7 @@ const FAKES = (real) => {
   const f = window.fetch, hang = (ms, sig) => new Promise((r, j) => { const t = setTimeout(r, ms); if (sig) sig.addEventListener("abort", () => { clearTimeout(t); j(new DOMException("aborted", "AbortError")); }); });
   window.fetch = async (u, o) => { const s = String(u);
     if (/workers\.dev\/log/.test(s)) { if (/ping=/.test(s) && window.__pingHang) await hang(window.__pingHang, o && o.signal);
-      if (window.__real) return f(u, o); if (o && o.body) window.__logs.push(JSON.parse(o.body)); return new Response(/GET|undefined/.test(o && o.method || "GET") ? '{"logging":true}' : '{"stored":1}', { status: 200 }); }
+      if (o && o.body) window.__logs.push(JSON.parse(o.body)); /* kept here too in real mode: the app empties its queue when a batch goes to the Worker (run 3: saves counted as missing) */ if (window.__real) return f(u, o); return new Response(/GET|undefined/.test(o && o.method || "GET") ? '{"logging":true}' : '{"stored":1}', { status: 200 }); }
     if (/\/tts$/.test(s)) { window.__sent.push(JSON.stringify({ type: "app.tts", text: JSON.parse(o.body).text })); /* the app's own voice: a real recording from the page's own sounds, or nothing when the fault says so */
       if (window.__ttsHang) await hang(window.__ttsHang, o && o.signal); if (window.__ttsFail) return new Response("no", { status: 502 }); return f("preview/sounds/line-back.mp3"); }
     if (/workers\.dev/.test(s)) { if (window.__tokenHang && !/tts/.test(s)) { const ms = window.__tokenHang; window.__tokenHang = 0; await hang(ms, o && o.signal); } return new Response('{"value":"test-pass"}', { status: 200 }); }
@@ -175,4 +175,6 @@ async function walk(browser, base, faultId) {
   const summary = `${walks.filter(w => w.steps.length === JOURNEY.length && w.steps.every(s => s.ok)).length} of ${walks.length} walks clean, ${rows.filter(r => /\| pass \|/.test(r)).length} of ${rows.length} saves clean`;
   console.log("\n" + summary + `\nreport: ${path.join(OUT, `report-${stamp}.md`)}`);
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Testing Terry's walks: ${summary}\n\n` + md.split("## The faults")[0] + "\n");
+  // on a runner the failed steps go to the job log as well (the report artifact can't be fetched from every place the log can)
+  if (process.env.CI) walks.forEach(w => w.steps.filter(s => !s.ok).forEach(s => { console.log(`::group::FAILED ${w.title} / ${s.title} (${s.field}): ${s.notes.join("; ")}`); console.log((s.log || "").split("\n").slice(-40).join("\n")); console.log("-- app voice log --"); console.log((s.vlog || []).filter(l => !/(audio|delta|transcript|session\.update|net:)/.test(l)).slice(-30).join("\n")); console.log("::endgroup::"); }));
 })();

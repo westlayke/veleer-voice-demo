@@ -9,7 +9,7 @@ on:
         description: "real = the walks' log rows go to the activity page (as Testing Terry); report = kept in the report only"
         default: "real"
       faults:
-        description: "Only these faults, comma separated (blank = all): none,drop,slow,silent,slowline,stall,double,noforce,noaudio,lock,micend,resend,invent,error,token"
+        description: "Only these faults, comma separated (blank = all): none,drop,slow,silent,slowline,stall,double,noforce,noaudio,lock,micend,resend,invent,error,token,tts"
         default: ""
       jobs:
         description: "Walks at once"
