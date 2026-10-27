@@ -266,6 +266,17 @@ function formPosition() {
   const need = (A.fields || []).filter(f => f.req && optEmpty(d[f.k])).map(f => f.label);
   return { where: need.length ? `The "${A.title}" form still needs: ${need.join(", ")}. Ask for the first of those.` : `Every required field of the "${A.title}" form is in; nothing has been read back yet.`, ask: "" };
 }
+// "What's next?" while a form is open: the actions needed to finish the form and save it, in the app's own words (Carverhill, Oct 27 9:49 AM: "the answer to always be the actions necessary to complete the form and save it")
+function formNextStep(callId) {
+  const A = ACTIONS[V.action], d = readDraft(), fp = formPosition() || {};
+  const need = (A.fields || []).filter(f => f.req && optEmpty(d[f.k])).map(f => f.label);
+  if (V.action === "interaction" && d.substantive && optEmpty(d.nextStep)) need.push("the next step (it becomes a Task)"); if (V.action === "interaction" && d.substantive && optEmpty(d.nextDue)) need.push("when it is due");
+  const pending = fp.ask ? fp.ask : "";
+  const how = G.hands ? "then I read it back and you say yes to save it" : "then tap Save";
+  const line = need.length ? `To finish the ${A.title} form it still needs ${need.join(", ")}, ${how}.` : pending ? `The ${A.title} form is waiting on one answer, ${how}.` : `The ${A.title} form has everything it needs: ${G.hands ? "I'll read it back and you say yes to save it." : "tap Save."}`;
+  act("step", `what's next with the "${A.title}" form open: ${line}`);
+  toolReply(callId, { ok: true, form: A.title, still_needs: need, ask_exactly: pending ? `${line} ${pending}` : line + (need.length ? ` ${need[0].replace(/ \(.*\)$/, "")}?` : G.hands && !need.length ? " Shall I read it back?" : "") });
+}
 function hfSettlePending() {
   const c = G.saveCheck; if (!V || !c || !G.hands || c.key !== V.action + JSON.stringify(readDraft())) return null;
   const title = ACTIONS[V.action].title, heard = (G.heardN || 0) > c.n ? G.lastHeard : null;

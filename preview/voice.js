@@ -242,7 +242,7 @@ function grokInstructions() {
 - Giving (lifetime, this year, last gift): get_giving, and speak its figures; never estimate them.
 - Their tasks, what's due or overdue: get_my_tasks. To just show a list: show_list. Past interactions, what happened last time, or what's outstanding for a contact: get_contact_history (focus history, tasks, or both).
 - Preparing for a meeting: get_contact_history for that contact, then a spoken briefing in three or four sentences: their giving (last gift and this year's total), where their opportunity stands and the latest ask, anything outstanding, and one suggested goal for the meeting.
-- What's next, the next step, or what to do now for a contact or opportunity: call get_next_step and say its line, then ask whether they want to do it now. Never answer that from the records yourself.
+- What's next, the next step, or what to do now for a contact or opportunity: call get_next_step and say its line, then ask whether they want to do it now. Never answer that from the records yourself. While a form is open, what's next is always finishing that form and saving it: call get_next_step and the app says what it still needs.
 ### Questions about the process
 - Questions about who can do what, rules, flags, alerts, settings or terms: call get_process_faq with the question, then answer only from what it returns and the stages below, in one to three spoken sentences, using its exact names for buttons, stages, flags and alerts. Do not guess, generalise from other CRMs, or fill gaps. If two answers seem to disagree, give the more specific one.
 - If the answer isn't there, say plainly that it isn't covered in this proof of concept and offer to pass the question to the project team; if the FAQ says something is still open with the customer, say that.
@@ -741,7 +741,7 @@ function onEvent(e) {
   const t = e.type || "";
   if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
-  if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0; clearTimeout(G.turnWatch); G.turnWatch = null;
+  if (t === "input_audio_buffer.speech_started") { G.speechSince = 0; clearTimeout(G.turnWatch); G.turnWatch = null;
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0; clearTimeout(G.idleTimer); if (G.responding) send({ type: "response.cancel" }); stopPlayback(); if (G.forced) { G.forced = null; clearTimeout(G.forceTimer); } /* a goodbye still waiting to be said is dropped */ vlog("hang-up called off: the officer spoke"); act("step", "Quiet hang-up called off: the officer spoke"); } }
   if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); firstWord(); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
@@ -752,19 +752,21 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardSinceRetry = true; G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
     if (V && V.awaitOther && Date.now() - V.awaitOther.at < 90000 && /\b(mobile|email|number|phone)\b/i.test(askedBefore()) && typeof contactNoOther === "function" && /^(no|nope|none|nothing|not that i know( of)?|no,? (i|we) don't|(i|we|he|she|they) (don't|doesn't|do not|does not) have( one| it| a mobile| a cell| a number| an email)?|skip( it| that)?|move on)[.!,]?( thanks| thank you)?$/i.test(e.transcript.trim())) contactNoOther();
-    if (typeof heardAsk === "function" && heardAsk(e.transcript)) guide("The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."); }
+    if (typeof heardAsk === "function" && heardAsk(e.transcript)) { const txt = "The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."; G.heardAsk = { seq: G.seqAtStop || 0, text: txt }; guide(txt); } } // seq: replies before they spoke; a reply since is Grok's own answer
   if (G.forced) forcedEvent(t, e);
   if (t === "response.done" && G.bot) { act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
-  if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
+  if (t === "response.done") { replyCheck(e.response || {}); if (G.bot && !G.dropNext) G.lastBot = { text: G.bot, at: Date.now() }; G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
-  else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; G.stoppedAt = Date.now(); paintCall(); turnWatch(); }
+  else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; G.stoppedAt = Date.now(); G.seqAtStop = G.respSeq || 0; paintCall(); turnWatch(); }
   else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)
     G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
   else if (t === "response.created") { G.respSeq = (G.respSeq || 0) + 1; clearTimeout(G.turnWatch); G.turnWatch = null; G.slowSaid = false; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
   else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
+  else if (/audio_transcript\.delta$/.test(t) && e.delta && sameAsLast(G.bot + e.delta)) { // Oct 27 9:45 AM call: the same line twice, 3 s apart, after a re-ask
+    act("step", `Grok began the line it just said ("${(G.bot + e.delta).slice(0, 60)}"): cut it off`); send({ type: "response.cancel" }); stopPlayback(); G.dropNext = true; G.bot = ""; }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); lateForcedCheck(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
@@ -791,6 +793,8 @@ function lateForcedCheck() {
   send({ type: "response.cancel" }); stopPlayback(); G.dropNext = true;
 }
 function sentInstructions() { G.sentRules = rulesKey(); G.sentCtx = ctxNow(); return grokInstructions(); }
+// the first words of a reply match the reply Grok finished within the last 20 s: a doubled answer to a re-ask (Oct 27 9:45 AM call)
+const sameAsLast = (text) => { const l = G.lastBot; if (!l || !l.text || Date.now() - l.at > 20000) return false; const a = text.replace(/\s+/g, " ").trim(), b = l.text.replace(/\s+/g, " ").trim(); return a.length >= 24 && b.startsWith(a); };
 const playingLeft = () => G.ctx && G.playHead > G.ctx.currentTime + 0.05 ? G.playHead - G.ctx.currentTime : 0;
 function flushQueued() {
   clearTimeout(G.qTimer); G.qTimer = null;
@@ -804,7 +808,9 @@ function flushQueued() {
     // When no reply request follows (a tap, a scripted line), the Right now section must still reach Ara before the officer's next words, so it goes as a session update
     if (G.sentRules !== rulesKey()) { vlog("rules update"); send({ type: "session.update", session: { instructions: sentInstructions() } }); }
     else if (ctxNow() !== G.sentCtx) { if (G.qCreate) vlog("Right now changed: goes with the next reply"); else { vlog("Right now update"); send({ type: "session.update", session: { instructions: sentInstructions() } }); } } }
-  if (G.qCreate) { G.qCreate = false; let g = G.qGuide; G.qGuide = ""; const ctx = ctxNow(); if (ctx !== G.sentCtx) { G.sentCtx = ctx; g = (g ? g + "\n" : "") + "Right now (replaces the Right now section of your instructions): " + ctx; } askReply(g); }
+  // Oct 27 9:42 AM call: "Are you there?" got Grok's own answer at once; the app's queued prompt then went out after it and got nothing, so a slow line and a re-ask followed
+  if (G.qCreate && G.heardAsk && (G.respSeq || 0) > G.heardAsk.seq) { G.qGuide = G.qGuide.split("\n").filter(x => x !== G.heardAsk.text).join("\n"); G.heardAsk = null; if (!G.qGuide) { G.qCreate = false; act("step", "Ara had already answered the officer's \"are you there\": the app's prompt for it was dropped"); } }
+  if (G.qCreate) { G.qCreate = false; G.heardAsk = null; let g = G.qGuide; G.qGuide = ""; const ctx = ctxNow(); if (ctx !== G.sentCtx) { G.sentCtx = ctx; g = (g ? g + "\n" : "") + "Right now (replaces the Right now section of your instructions): " + ctx; } askReply(g); }
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;

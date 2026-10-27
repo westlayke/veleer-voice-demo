@@ -256,7 +256,7 @@ async function ttsSay(text) {
   clearTimeout(timer); if (!G.live || !G.ctx || G.ctx.state !== "running" || G.ws !== ws) return false;
   try { const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.ctx.destination); src.start(G.ctx.currentTime + 0.02); G.lineSrc = src; G.lineEndAt = Date.now() + buf.duration * 1000 + 50; } catch (e) { return false; }
   act("step", `The phone said in Ara's voice (fetched in ${Date.now() - t0} ms): "${text}"`); vlog(`phone said (Ara's voice, ${Date.now() - t0} ms): ${text}`);
-  recent(botName(), text); G.lastForcedText = text; if (typeof lineHeard === "function") lineHeard(text);
+  recent(botName(), text); G.lastForcedText = text; if (typeof lineHeard === "function") lineHeard(text, true);
   return true;
 }
 function sayLocal(text, kind) {

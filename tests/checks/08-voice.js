@@ -155,6 +155,7 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   ok(!/may not have been heard: [^|]*Smith, got it/.test(await logged()), "a line with sound was flagged as not heard");
   // "Are you there?" (Carverhill, Oct 25: it always means he heard nothing for a while)
   const n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { [{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }); // the officer's speech comes before its transcript
   await said(p, "Are you there?"); await p.waitForTimeout(400);
   const out = await p.evaluate((n) => ({ log: ACT.q.map(a => a.text).join(" | "), guide: __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "response.create").map(x => x.response.instructions).join(" ") }), n0);
   ok(/The officer asked whether Ara is there: her last line was \d+ s ago \("Smith, got it\."\): 1\.3 s of voice audio, speaker level 0\.2\d\d, mic heard [\d.]+ while it played, sound running; sound now running/.test(out.log), "the readings of the last line weren't logged: " + out.log.slice(-400));
@@ -768,5 +769,50 @@ test("Oct 27 13:21 call: a long answer is not a repeat of the one-letter rating,
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
   f = await forced(n0);
   ok(f.some(t => /^Sorry, the line dropped again\. I'm still waiting on this: /.test(t)), "the second drop didn't say the line dropped again: " + JSON.stringify(f));
+});
+test("Oct 27 9:38 AM call: the Cultivation rule answers first, what's next with a form open is the form, a repeated line is cut, a late 'are you there' prompt is dropped, the app's own lines pass the heard check", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
+  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  // 1. "Do I not have to log an interaction first before I can move her to Cultivation?" got "No" from a nearby FAQ entry
+  await said(p, "Do I not have to log an interaction first before I can move her to Cultivation?");
+  let r = await ara(p, "get_process_faq", { question: "Do I not have to log an interaction first before I can move her to Cultivation?" });
+  ok(r.answers && r.answers[0] && r.answers[0].topic === "App rule" && /substantive interaction is required/.test(r.answers[0].a), "the app's Cultivation rule didn't come first: " + JSON.stringify((r.answers || []).slice(0, 2)));
+  ok(r.answers.some(a => /Do I need to log an interaction before I can move/.test(a.q)), "the new FAQ entry wasn't found: " + JSON.stringify(r.answers.map(a => a.q)));
+  // 2. what's next while an interaction report is open: finish the form and save it
+  await said(p, "Log an interaction with Ruth Abernathy. Video call. Very interested in New Hampshire.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", meetingType: "Video call", summary: "Very interested in New Hampshire." });
+  ok(await p.evaluate(() => V && V.action === "interaction"), "no interaction report open: " + JSON.stringify(r));
+  await said(p, "What is the next step in our process?");
+  r = await ara(p, "get_next_step", { contact_name: "Ruth Abernathy" });
+  ok(/^To finish the Interaction report form it still needs .*then I read it back and you say yes to save it\./.test(r.ask_exactly || "") || /^The Interaction report form is waiting on one answer/.test(r.ask_exactly || ""), "what's next with a form open wasn't the form: " + JSON.stringify(r));
+  r = await ara(p, "get_process_faq", { question: "What does our process suggest the next step is after a substantive interaction?" });
+  ok(/Interaction report form/.test(r.ask_exactly || ""), "the FAQ next-step question with a form open wasn't the form: " + JSON.stringify(r));
+  ok(/what's next with the "Interaction report" form open/.test(await logged()), "the in-form next step wasn't logged");
+  await p.evaluate(() => { V = null; renderOverlay(); });
+  // 3. the same line twice after a re-ask (9:45:29 and 9:45:32): the second is cut before it plays
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "It isn't covered in this proof of concept. Want me to pass that to the project team?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  let n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "It isn't covered in this proof of concept. " }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => JSON.parse(s).type === "response.cancel"), n) && /began the line it just said/.test(await logged()), "the repeated line wasn't cut off: " + (await logged()).slice(-300));
+  // a different line is not cut
+  n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Passed to the project team. What would you like to do next?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  ok(!(await p.evaluate((n) => __sent.slice(n).some(s => JSON.parse(s).type === "response.cancel"), n)), "a different line was cut off");
+  // 4. "Are you there?" answered by Grok herself: the app's queued prompt is dropped instead of going out afterwards
+  n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }, { type: "response.created" }]);
+  await said(p, "Are you there?"); await p.waitForTimeout(100);
+  await fire([{ type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "Yes, I'm here. Do you want to log that interaction now?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(400);
+  ok(!(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /asked whether you are there/.test(x.response && x.response.instructions || ""); }), n)) && /prompt for it was dropped/.test(await logged()), "the late 'are you there' prompt still went out: " + (await logged()).slice(-300));
+  // the prompt still goes out when Grok hasn't answered
+  n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }]); await said(p, "Are you there?"); await p.waitForTimeout(400);
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /asked whether you are there/.test(x.response && x.response.instructions || ""); }), n), "the 'are you there' prompt didn't go out when Grok was silent");
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  // 5. a line the phone said itself in Ara's voice is not reported as "no voice audio came from the voice service"
+  await p.evaluate(() => { G.audioSamples = 0; G.lineEndAt = Date.now() + 2500; lineHeard("Decision recorded for Valerie. Next is to add a planned ask. Want to do that now?", true); });
+  await p.waitForTimeout(1200);
+  ok(!/may not have been heard: no voice audio[^|]*Decision recorded/.test(await logged()), "the app's own Ara-voice line was reported as not heard: " + (await logged()).slice(-300));
 });
 };

@@ -91,7 +91,11 @@ const TOOL_HANDLERS = {
     toolReply(callId, { ok: true, speed: next, status: next === now ? `You're already at the ${data.change === "faster" ? "fastest" : data.change === "slower" ? "slowest" : "normal"} speed. Say so in one short sentence.` : `Saved: you now talk at ${speedName(next)} speed, and it's remembered on this phone (also in Settings). Confirm in one short sentence, then carry on.` }); return;
   },
   get_process_faq(callId, data, name) {
+    // Oct 27 9:45 AM call: "what's next" asked while a form is open is answered with what the form still needs (Carverhill's rule)
+    if (V && ACTIONS[V.action] && /\b(next|what (do|should) i do|what now|how do i (finish|complete|save))\b/i.test(data.question || "")) { formNextStep(callId); return; }
     const hits = faqLookup(data.question || "");
+    // Oct 27 9:40 AM call: "do I need an interaction before moving her to Cultivation?" got "No" from a nearby entry; the app's own rule comes first
+    if (/cultivation/i.test(data.question || "") && /\b(move|moving|before|need|needs|require|required|have to|must|criteria|ready)\b/i.test(data.question || "")) hits.unshift({ section: "App rule", q: "What does the app require before Move to Cultivation?", a: "A capacity rating on the Contact and a substantive interaction recorded in an Interaction report. The app refuses the move until both are there; a substantive interaction is required, not optional." });
     toolReply(callId, hits.length ? { ok: true, answers: hits.map(h => ({ topic: h.section, q: h.q, a: h.a })), say: "Answer in one to three spoken sentences from these only, using their exact names. If none of them answers the question, say it isn't covered in this proof of concept and offer to pass it to the project team." }
       : { ok: true, answers: [], say: "Nothing in the Process FAQ matches. Say it isn't covered in this proof of concept and offer to pass the question to the project team." }); return;
   },
@@ -108,6 +112,7 @@ const TOOL_HANDLERS = {
     }); return;
   },
   get_next_step(callId, data, name) {
+    if (V && ACTIONS[V.action]) { formNextStep(callId); return; } // a form is open: the next step is to finish and save it (Carverhill, Oct 27 9:49 AM)
     const t = resolveTarget("interaction", data.contact_name || "");
     if (t.error) { toolReply(callId, { ok: false, error: t.error }); return; }
     const c = t.contact, n = typeof journeyNext === "function" ? journeyNext(c) : null, o = openOpp(c.id);
