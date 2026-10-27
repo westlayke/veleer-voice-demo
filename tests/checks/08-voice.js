@@ -728,7 +728,7 @@ test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, scr
   const creates = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "response.create"), n);
   n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.responding = false; G.createAt = 0; askReply("first guidance"); askReply("second guidance"); });
-  await p.waitForTimeout(100);
+  await p.waitForTimeout(900); // the engine can take over half a second to report the first reply started: the second still waits
   ok((await creates(n0)).length === 1, "two reply requests went out at once: " + JSON.stringify(await creates(n0)).slice(0, 200));
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "Sure." }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
   await p.waitForTimeout(400);

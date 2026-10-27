@@ -253,7 +253,9 @@ const replyBusy = () => G.responding || (PROV().serial && !!G.createAt && Date.n
 function askReply(guidance) {
   if (guidance !== undefined) G.askGuide = guidance; // the same guidance goes again if the app has to ask twice
   if (PROV().serial && replyBusy()) { // one at a time: held until the running reply is done
-    G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { if (!G.responding) G.createAt = 0; flushQueued(); }, 500); vlog("reply request held: one at a time on " + PROV().name); return; }
+    G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; clearTimeout(G.qTimer);
+    const again = () => { if (!G.live || !G.qCreate) return; if (replyBusy()) { G.qTimer = setTimeout(again, 200); return; } flushQueued(); }; G.qTimer = setTimeout(again, 200); /* waits for the first request to report started (or CREATE_WAIT_MS); zeroing G.createAt after 500 ms sent the second too soon and OpenAI refused it (Oct 27, 7:03 PM run) */
+    vlog("reply request held: one at a time on " + PROV().name); return; }
   G.createAt = Date.now();
   send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now();
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
