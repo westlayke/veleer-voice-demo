@@ -341,4 +341,35 @@ test("The phone locking (page hidden) closes the line a few seconds later and re
   ok(steps.some(t => /Phone locked: voice line closed after [\d.]+ s/.test(t)) && steps.some(t => /App hidden for [\d.]+ s: reopening the line/.test(t)) && steps.some(t => /Sound and mic started afresh after the lock/.test(t)), "the lock pause or the audio restart wasn't logged: " + steps.slice(-6).join(" | "));
 });
 
+
+test("Oct 27 call fixes: a spelled last name replaces Ara's spelling, 'No' to the mobile question moves the form on to the rating, what's next comes from the journey, and an opportunity blocked only by the rating asks it and reopens", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  // "Bailey. B, B A I L E Y" came back as last name "Bbailey" (it contained the spelling, so the old guard let it through)
+  await said(p, "New contact, George Bailey. B, B A I L E Y. Email george at example dot org.");
+  let r = await ara(p, "show_contact_draft", { first: "George", last: "Bbailey", email: "george@example.org" });
+  ok((await p.evaluate(() => readDraft().last)) === "Bailey", "the spelled name didn't replace Bbailey: " + JSON.stringify(await p.evaluate(() => readDraft())));
+  ok(/mobile number/.test(r.status || "") && (await p.evaluate(() => V.awaitOther)) === "mobile", "the mobile wasn't asked for: " + JSON.stringify(r));
+  // "No." to the mobile: the app asks the rating itself instead of waiting for Ara to call the tool again (she never did on Oct 27)
+  let n = await p.evaluate(() => __sent.length);
+  await said(p, "No."); await p.waitForTimeout(500);
+  const forced = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
+  ok(forced.some(t => /George's capacity rating/.test(t)), "the app didn't ask the rating after 'No.': " + JSON.stringify(forced));
+  ok(await p.evaluate(() => V.opt && V.opt.only === "capacity" && !V.awaitOther), "the optional step isn't on the rating");
+  r = await ara(p, "optional_fields", { step: "skip" });
+  ok(!(await p.evaluate(() => V.opt && V.opt.only === "capacity")), "skip didn't move on from the rating: " + JSON.stringify(r));
+  // the contact exists without a rating: what's next, and the opportunity, both run into it
+  await p.evaluate(() => { V = null; renderOverlay(); S.contacts.push({ id: "c_gb", first: "George", last: "Bailey", email: "george@example.org", mobile: "", capacity: "", permEmail: true, permCall: true, createdOn: todayISO() }); save(); render(); });
+  r = await ara(p, "get_next_step", { contact_name: "George Bailey" });
+  ok(/set a capacity rating for George/.test(r.next_step || "") && /Next is to set a capacity rating/.test(r.say || ""), "what's next didn't come from the journey: " + JSON.stringify(r));
+  await said(p, "Create an opportunity for George.");
+  r = await ara(p, "show_opportunity_draft", { contact_name: "George Bailey" });
+  ok(r.ok === false && /George needs a capacity rating before an opportunity\. .*Which fits George\?$/.test(r.ask_exactly || ""), "the app didn't ask the rating itself: " + JSON.stringify(r));
+  ok((await p.evaluate(() => G.afterRate)) === "c_gb", "the reopening wasn't remembered");
+  await said(p, "C.");
+  r = await ara(p, "set_capacity_rating", { contact_name: "George Bailey", rating: "C", confirmed: true });
+  ok(r.saved && /call show_opportunity_draft for George Bailey right away/.test(r.say || "") && (await p.evaluate(() => G.formOk)) === "opportunity", "the rating didn't send Ara back to the opportunity: " + JSON.stringify(r));
+  await p.evaluate(() => { G.lastSaved = { at: Date.now() }; G.recent = ["Officer: C."]; }); // as right after a save with only the rating said: the reopening must not need the officer's word again
+  r = await ara(p, "show_opportunity_draft", { contact_name: "George Bailey" });
+  ok(r.ok !== false && !/hasn't asked/.test(r.error || "") && (await p.evaluate(() => V && V.action === "opportunity" && G.formOk === null)), "the opportunity didn't reopen after the rating: " + JSON.stringify(r));
+});
 };

@@ -95,13 +95,14 @@ test("Planning an ask: the entity set on the opportunity is on the form, and Ara
   ok(/Already on the form[^.]*Entity: C\.A\. North Dakota C4/.test(r.status) && /Never ask for these again/.test(r.status), "Ara was not told the entity is already set: " + JSON.stringify(r));
   ok(!r.still_needed.includes("Entity") && /already set/.test(r.still_needed[0]), "Ara was asked for the entity again");
 });
-test("Opportunity: an unrated contact gets the checklist, not the form (voice and touch)", async (p) => {
+test("Opportunity: an unrated contact gets the rating asked (voice) or the checklist, not the form (touch)", async (p) => {
   await signIn(p);
   await ara(p, "show_contact_draft", { first: "Noor", last: "Haddad", email: "noor@example.org", mobile: "(555) 010-0199" });
   for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   const r = await ara(p, "show_opportunity_draft", { contact_name: "Noor Haddad" });
-  ok(r.ok === false && /only when all of these are true/.test(r.error) && /capacity rating \(not yet/.test(r.error), "Ara was not given the checklist: " + JSON.stringify(r).slice(0, 160));
+  ok(r.ok === false && /needs a capacity rating before an opportunity/.test(r.error) && /Which fits Noor\?$/.test(r.ask_exactly || ""), "Ara wasn't told the rating is missing, with the app asking it (Oct 27): " + JSON.stringify(r).slice(0, 160));
+  await p.evaluate(() => { G.afterRate = null; }); // the rest is the touch path
   ok(!(await p.isVisible("[data-act=save]")), "the opportunity form opened anyway");
   await p.tap("text=Create opportunity"); await p.waitForTimeout(300);
   ok(await p.isVisible("text=isn't ready for an opportunity yet"), "tapping Create opportunity did not show the checklist");

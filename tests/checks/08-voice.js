@@ -585,7 +585,7 @@ test("Ara: a slow reply gets a soft tick, a doubled reply is cut off, readings t
   await p.evaluate(() => { window.__cues = []; const c = cue; window.cue = (k) => { __cues.push(k); }; });
   await p.evaluate(() => notice("Ask the officer the next question."));
   await p.waitForTimeout(4400);
-  ok(await p.evaluate(() => __cues.includes("wait")), "no soft tick after 4 seconds without a reply");
+  ok(await p.evaluate(() => __cues.includes("wait") || G.slowSaid), "no soft tick (or 'Ara's taking a moment.' recording) after 4 seconds without a reply");
   // the first ask comes back empty, the app asks again, then both answers arrive: the second is cut off
   await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(600);
   await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "Just to be sure?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
@@ -708,4 +708,31 @@ test("A voice pass refused by the key holder ends the call with the reason in th
   ok(ends.some(t => /couldn't start: service_429/.test(t)), "the end row doesn't carry the reason: " + ends.join(" | "));
 });
 
+
+test("Oct 27 call fixes: the first slow reply says 'Ara's taking a moment.' (the ping only after it), and a turn with no reply started in 6 s gets a reply request", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
+  await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
+  // the recording stands in: sayLocal counts as played
+  await p.evaluate(() => { window.__cues = []; window.__lines = []; window.cue = (k) => { __cues.push(k); }; window.sayLocal = (t, k) => { __lines.push(k); return true; }; });
+  await p.evaluate(() => askReply("Ask the officer the next question."));
+  await p.waitForTimeout(4400);
+  ok(await p.evaluate(() => __lines.includes("slow") && !__cues.includes("wait")), "the first slow tick wasn't the spoken line: " + JSON.stringify(await p.evaluate(() => [__lines, __cues])));
+  await p.waitForTimeout(4200);
+  ok(await p.evaluate(() => __lines.filter(k => k === "slow").length === 1 && __cues.includes("wait")), "the second tick wasn't the ping (the line should be said once per ask): " + JSON.stringify(await p.evaluate(() => [__lines, __cues])));
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  await p.evaluate(() => { clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.asked = false; });
+  // the officer talks, nothing comes back: the app asks for a reply after 6 s (Oct 27 11:25 AM: 36 s of silence while the transcripts kept growing)
+  let n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }, { type: "conversation.item.input_audio_transcription.completed", transcript: "So what should I do next with Ruth?" }]);
+  await p.waitForTimeout(6600);
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => JSON.parse(s).type === "response.create"), n), "no reply request after 6 s of silence following the officer's turn");
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  // a reply that starts in time cancels the watch
+  n = await p.evaluate(() => __sent.length);
+  await fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }, { type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.done", response: { status: "completed" } }]);
+  await p.waitForTimeout(6600);
+  ok(await p.evaluate((n) => !__sent.slice(n).some(s => JSON.parse(s).type === "response.create"), n), "a reply request went out although Ara had answered");
+});
 };
