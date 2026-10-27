@@ -50,12 +50,17 @@ const FAULTS = {
     wait: 12000, expect: (log, sent) => count(log, /taking a moment/) === 1 && count(sent, /"type":"response.create"/) >= 1 && !/stopped answering/.test(log) },
   silent: { title: "Grok stops answering", about: "nothing comes back for 28 s; the app opens a fresh line and asks the pending question once",
     wait: 28000, afterWait: async (p, h) => { await h.newLine(); }, expect: (log) => /stopped answering|fresh line/.test(log) },
-  slowline: { title: "Slow line", about: "the line test never answers while a reply is pending; the app opens a fresh line at 4 s",
-    before: async (p) => p.evaluate(() => { window.__pingHang = 9000; }), wait: 6500, afterWait: async (p, h) => { await p.evaluate(() => { window.__pingHang = 0; }); await h.newLine(); },
-    expect: (log) => /on a slow line|fresh line|too slow|Line stalled/.test(log) },
-  stall: { title: "Stalled line", about: "the officer talks, nothing comes back from the voice service and the line test fails; the app reconnects",
-    before: async (p) => p.evaluate(() => { window.__pingHang = 9000; G.lastMsg = Date.now() - 20000; G.speechSince = Date.now() - 6000; G.loudAt = Date.now(); }), wait: 9000,
-    afterWait: async (p, h) => { await p.evaluate(() => { window.__pingHang = 0; }); await h.newLine(); }, expect: (log) => /stalled|Reconnect/.test(log) },
+  slowline: { title: "Slow line", about: "the line test never answers while a reply is pending; the app asks again at 6 s, tests the line at the 4 s tick and opens a fresh line when the test gets no answer (about 12.5 s)",
+    before: async (p) => p.evaluate(() => { window.__pingHang = 9000; }), wait: 13500, /* the hang must still be on when the app tests the line (6 s + 4 s + the 2.5 s limit); 6.5 s only ever passed because the beeping fake microphone set off the stall check (run 3c) */
+    afterWait: async (p, h) => { await p.evaluate(() => { window.__pingHang = 0; }); await h.newLine(); },
+    expect: (log) => /No reply started after \d+ s on a slow line .*fresh line/.test(log) },
+  stall: { title: "Stalled line", about: "in a quiet gap after the reply, the officer talks, nothing comes back from the voice service and the line test fails; the app's stall check reconnects",
+    /* aimed at the gap, not at the officer's words: while a reply is pending the stall check stands aside for the no-reply watchdog (run 3c) */
+    settle: 200, afterSettle: async (p, h) => { await p.waitForFunction(() => !G.responding && !G.audioOn && !(playingLeft() > 0), null, { timeout: 15000 }).catch(() => {});
+      await p.evaluate(() => { window.__pingHang = 9000; G.lastMsg = Date.now() - 20000; G.speechSince = Date.now() - 6000; G.loudAt = Date.now(); });
+      await p.waitForFunction(() => /^Reconnecting/.test(G.status) || !G.live, null, { timeout: 12000 }).catch(() => {});
+      await p.evaluate(() => { window.__pingHang = 0; }); await h.newLine(); },
+    expect: (log) => /Line stalled \(officer talking, nothing heard back\)/.test(log) },
   double: { title: "Doubled reply", about: "after the app asks again, Grok answers twice with the same line; the second is cut before it plays",
     wait: 11000, afterWait: async (p, h) => { const line = "Got it, that's on the form. What's next?"; await h.fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: line }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(400);
       await h.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: line }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(400); },
