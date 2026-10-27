@@ -82,6 +82,10 @@ test("Halloween sounds: a visitor makes a sound after the first tap, but not dur
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Contacts"); await p.waitForTimeout(300);
   const a = await p.evaluate(() => { const n = window.__demo.spkPlayed; window.__demo.spookyOnce("ghost").dataset.t = "1"; return window.__demo.spkPlayed - n; });
   ok(a === 1, "the ghost made no sound when no conversation was on");
+  const stuck = await p.evaluate(async () => { const c = window.__demo.spkCtx; Object.defineProperty(c, "state", { get: () => "interrupted" }); /* what iOS leaves behind after the background */
+    document.dispatchEvent(new Event("visibilitychange")); await new Promise(r => setTimeout(r, 1300)); const gone = window.__demo.spkCtx !== c;
+    window.__demo.spkUnlock(); await new Promise(r => setTimeout(r, 200)); const fresh = window.__demo.spkCtx, n = window.__demo.spkPlayed; window.__demo.spookyOnce("ghost").dataset.t = "1"; return { gone, fresh: !!fresh && fresh !== c && fresh.state === "running", played: window.__demo.spkPlayed - n }; });
+  ok(stuck.gone && stuck.fresh && stuck.played === 1, "a sound engine stuck after the background wasn't replaced on the next tap: " + JSON.stringify(stuck));
   await p.tap("nav >> text=Home"); await p.waitForTimeout(200); await p.tap("nav .micbtn"); await p.waitForTimeout(600);
   const live = await p.isVisible(".cb-end");
   const b = await p.evaluate(() => { const n = window.__demo.spkPlayed; window.__demo.spookyOnce("spider").dataset.t = "1"; return window.__demo.spkPlayed - n; });
