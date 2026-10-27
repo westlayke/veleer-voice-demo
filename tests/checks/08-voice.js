@@ -737,4 +737,36 @@ test("Oct 27 call fixes: the first slow reply says 'Give me a moment.' (the ping
   await p.waitForTimeout(6600);
   ok(await p.evaluate((n) => !__sent.slice(n).some(s => JSON.parse(s).type === "response.create"), n), "a reply request went out although Ara had answered");
 });
+test("Oct 27 13:21 call: a long answer is not a repeat of the one-letter rating, the slow line waits for Ara's sound to end, and a question forced again after a second drop says the line dropped again", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { replayGap = () => { G.spokeInGap = false; return 0; }; });
+  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  await ara(p, "show_contact_draft", { first: "Veronica", last: "Quist", email: "veronica@example.org", mobile: "(555) 010-0188" });
+  ok(await p.evaluate(() => V && V.opt && V.opt.cur === "capacity"), "the capacity question isn't pending");
+  await said(p, "C."); let r = await ara(p, "optional_fields", { step: "answer", value: "C" });
+  ok(await p.evaluate(() => readDraft().capacity === "C" && V.opt.cur === "howMet"), "the rating wasn't taken: " + JSON.stringify(r));
+  // "He met her at the Citizens Alliance Halloween party." was thrown out as a repeat of "C" (the letter is in the sentence)
+  await said(p, "He met her at the Citizens Alliance Halloween party."); r = await ara(p, "optional_fields", { step: "answer", value: "He met her at the Citizens Alliance Halloween party." });
+  ok(/Halloween party/.test(await p.evaluate(() => readDraft().howMet || "")) && !/repeats the last answer/.test(await logged()), "the how-we-met answer was taken as a repeat of the rating: " + JSON.stringify(r));
+  // a real repeat of a longer answer is still ignored
+  await said(p, "He met her at the Citizens Alliance Halloween party."); r = await ara(p, "optional_fields", { step: "answer", value: "He met her at the Citizens Alliance Halloween party." });
+  ok(/repeats the last answer \(howMet\)/.test(await logged()), "a word-for-word repeat wasn't ignored: " + JSON.stringify(r));
+  // the slow line: not while Ara's sound is still playing
+  await p.evaluate(() => { window.__lines = []; window.sayLocal = (t, k) => { __lines.push(k); return true; }; G.asked = true; G.askedAt = Date.now() - 9000; G.tickAt = 0; G.slowSaid = false; G.responding = false; G.audioOn = false; G.playHead = G.ctx.currentTime + 4; });
+  await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => !__lines.length), "'Give me a moment.' played over Ara's own sound: " + JSON.stringify(await p.evaluate(() => __lines)));
+  await p.evaluate(() => { G.playHead = 0; }); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => __lines.includes("slow")), "the slow line didn't play once Ara's sound had ended");
+  await p.evaluate(() => { G.asked = false; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); });
+  // the pending question after two drops in a row
+  const forced = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "force_message").map(x => x.item.content[0].text), n);
+  let n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.reAsk = null; G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
+  let f = await forced(n0);
+  ok(f.some(t => /^Sorry, I lost you for a moment\. /.test(t)), "the pending question wasn't asked after the first drop: " + JSON.stringify(f));
+  n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
+  f = await forced(n0);
+  ok(f.some(t => /^Sorry, the line dropped again\. I'm still waiting on this: /.test(t)), "the second drop didn't say the line dropped again: " + JSON.stringify(f));
+});
 };

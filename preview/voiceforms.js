@@ -75,7 +75,9 @@ function optStep(callId, data) {
   let k = V.opt.cur; if (!k) { optAsk(callId); return; }
   // the same answer again within half a minute is the voice model re-sending it after a drop, not an answer to the next question (Oct 25)
   const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  if (step === "answer" && V.opt.lastVal && norm(data.value) && (norm(data.value) === V.opt.lastVal || norm(data.value).includes(V.opt.lastVal)) && Date.now() - (V.opt.lastAt || 0) < 30000 && V.opt.done.includes(V.opt.lastK)) {
+  // Oct 27 call: "He met her at the Halloween party" is not a repeat of the capacity answer "C": a short last answer only counts when said again word for word
+  const again = (v) => v === V.opt.lastVal || (V.opt.lastVal.length >= 4 && new RegExp("(^| )" + V.opt.lastVal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "( |$)").test(v));
+  if (step === "answer" && V.opt.lastVal && norm(data.value) && again(norm(data.value)) && Date.now() - (V.opt.lastAt || 0) < 30000 && V.opt.done.includes(V.opt.lastK)) {
     act("step", `optional fields: "${data.value}" repeats the last answer (${V.opt.lastK}); asking the ${k} question again`); optAsk(callId); return; }
   // an answer that fits an earlier question better ("it's one of the New Hampshire entities" while the amount was asked, Oct 24): take it for that one
   if (k !== "fund" && V.opt.done.includes("fund") && OPT_STEPS[V.action].some(st => st.k === "fund") && optEmpty(readDraft().fund) && optParse(k, data.value) === null && matchEntity(data.value || "").hits.length) {

@@ -69,7 +69,8 @@ const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
 function idleCheck() {
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
   // Oct 27 (Carverhill): a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
-  if (G.live && G.asked && !/^(Connecting|Reconnecting)/.test(G.status) && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
+  // Oct 27 13:23 call: never while Ara's own audio is still playing or a reply is under way (the recording spoke over her); the tick waits for the sound to end
+  if (G.live && G.asked && !/^(Connecting|Reconnecting)/.test(G.status) && !G.responding && !G.audioOn && !(playingLeft() > 0) && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
     if (!G.slowSaid && sayLocal("Give me a moment.", "slow")) G.slowSaid = true; else { cue("wait"); vlog("still working: tick"); } }
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
@@ -197,7 +198,10 @@ async function openAgain(lock) {
   openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null, secs = lock ? 0 : replayGap();
     if (secs) { G.justNow = { text: reconnectLine(lock) + ` The app has just replayed to you the ${secs} s the officer spoke while the line was down, so you heard it as if live: answer it now and never say you lost them.` + (fp ? " " + fp.where : ""), at: Date.now() }; whenIdle("instr"); replayWatch(fp); return; }
     if (G.spokeInGap) act("step", "The officer talked while the line was down and the mic caught no clear speech: Ara asks them to repeat it");
-    if (fp && fp.ask) { G.justNow = { text: reconnectLine(lock) + " " + fp.where, at: Date.now() }; act("step", `${lock ? "Line reopened" : "Reconnected"}: the app asks the pending question itself (${fp.where})`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${fp.ask}`); }
+    if (fp && fp.ask) { G.justNow = { text: reconnectLine(lock) + " " + fp.where, at: Date.now() }; act("step", `${lock ? "Line reopened" : "Reconnected"}: the app asks the pending question itself (${fp.where})`); whenIdle("instr");
+      // Oct 27 13:25 call: the same question forced twice in a row after drops says so, instead of sounding like Ara forgot the answer
+      const same = G.reAsk && G.reAsk.ask === fp.ask && Date.now() - G.reAsk.at < 180000; G.reAsk = { ask: fp.ask, at: Date.now() };
+      forceSay(same ? `Sorry, the line dropped again. I'm still waiting on this: ${fp.ask}` : `Sorry, I lost you for a moment. ${fp.ask}`); }
     else if (G.spokeInGap) { G.justNow = { text: reconnectLine(lock), at: Date.now() }; whenIdle("instr"); forceSay("Sorry, I lost you for a moment. Could you say that again?"); }
     else guide(reconnectLine(lock) + (fp ? " " + fp.where : "")); });
 }

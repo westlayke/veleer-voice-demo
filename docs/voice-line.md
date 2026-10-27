@@ -105,7 +105,9 @@ sentence for Ara's instructions, and `ask`, the exact pending question, in this 
 
 On reconnect, when there is a pending question, the app puts "Just now: …" in Ara's live context, logs the step
 ("Reconnected: the app asks the pending question itself") and has Ara speak a **scripted line**: "Sorry, I lost you for
-a moment. " followed by the pending question, word for word. With no pending question, Ara gets `reconnectLine()` as
+a moment. " followed by the pending question, word for word. When the same question is forced again within three minutes
+(a second drop in a row, Oct 27 13:25 call) the line is "Sorry, the line dropped again. I'm still waiting on this: " and the
+question, so it doesn't sound as if Ara forgot the answer (`G.reAsk`). With no pending question, Ara gets `reconnectLine()` as
 guidance instead: the last lines said, what has been saved (never to be saved again), the open form, whether
 hands-free is on, whether the officer may have talked unheard, and the rule to ask one question and not start over.
 
