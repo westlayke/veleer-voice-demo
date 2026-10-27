@@ -35,10 +35,19 @@ test("Ara: reading open tasks matches the Tasks list", async (p) => {
   ok(r.ok && r.open_tasks_total === open, `Ara heard ${r.open_tasks_total} open tasks, the app has ${open}`);
   ok(await titleOf(p) === "Tasks", "Tasks screen did not open");
 });
+test("Ara: a long task list gives counts first, and one person's tasks can be asked for", async (p) => {
+  await signIn(p);
+  await p.evaluate(() => { const c = S.contacts[0]; for (let i = 0; i < 12; i++) S.tasks.push({ id: "lt" + i, contactId: c.id, text: "Long list task " + i, due: "2026-10-01", done: false }); save(); });
+  const all = await ara(p, "get_my_tasks", { which: "all" });
+  ok(all.ok && all.count > 8 && all.by_status && all.people_with_most_tasks && all.people_with_most_tasks[0].n >= 12 && /counts in one sentence/.test(all.say), "a long list wasn't summarised first: " + JSON.stringify({ count: all.count, say: all.say }));
+  const one = await ara(p, "get_my_tasks", { which: "all", contact_name: await p.evaluate(() => nameOf(S.contacts[0])) });
+  ok(one.ok && one.count >= 12 && one.tasks.every(t => /Long list task|/.test(t.task)) && one.for_person !== "everyone", "one person's tasks weren't filtered: " + JSON.stringify({ count: one.count, for: one.for_person }));
+  await p.evaluate(() => { S.tasks = S.tasks.filter(t => !/^lt/.test(t.id)); save(); });
+});
 test("Ara: changing a task's status asks first, then saves", async (p) => {
   await signIn(p);
   const ask = await ara(p, "set_task_status", { task: "Pennsylvania update", status: "done", confirmed: false });
-  ok(ask.ok && /^Mark '[^']*Pennsylvania update' as done\?$/.test(ask.ask_exactly || ""), "the app didn't ask the question itself: " + JSON.stringify(ask));
+  ok(ask.ok && /^Mark '[^']*Pennsylvania update' for [A-Z][^,]+, due [A-Z][a-z]{2} \d+, as done\?$/.test(ask.ask_exactly || ""), "the question doesn't name the task, the person and the due date: " + JSON.stringify(ask));
   ok(!(await state(p)).tasks.find(t => /Pennsylvania/.test(t.text)).done, "saved before the officer said yes");
   const yes = await ara(p, "set_task_status", { task: "Pennsylvania update", status: "done", confirmed: true });
   ok(yes.saved, "not saved after yes");

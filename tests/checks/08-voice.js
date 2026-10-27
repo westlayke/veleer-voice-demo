@@ -387,6 +387,10 @@ test("Ara: reads contact and opportunity details, with who can change each field
   ok(o.fields.asks.value[0].planned_ask_date && await titleOf(p) !== "Contact", "planned ask date missing or opportunity did not open");
   const v = await ara(p, "get_opportunity_details", { contact_name: "Elena Vasquez" });
   ok(/You can edit a planned ask/.test(v.fields.asks.value[0].who_can_change), "a planned ask is not marked editable");
+  const gap = await p.evaluate(async () => { const o = S.opps.find(x => x.contactId === S.contacts.find(c => c.first === "Elena").id); const keep = { fund: o.fund, campaign: o.campaign, potential: o.potential }; o.fund = null; o.campaign = null; o.potential = 0; window.__gapKeep = keep; return true; });
+  const g = await ara(p, "get_opportunity_details", { contact_name: "Elena Vasquez" });
+  ok(gap && g.fields.entity.value === g.fields.asks.value[0].entity && g.fields.campaign.value === g.fields.asks.value[0].campaign && g.fields.potential.value === "Not set", "a blank opportunity entity, campaign or potential isn't read from the planned ask / as Not set: " + JSON.stringify({ e: g.fields.entity.value, c: g.fields.campaign.value, p: g.fields.potential.value }));
+  await p.evaluate(() => { const o = S.opps.find(x => x.contactId === S.contacts.find(c => c.first === "Elena").id); Object.assign(o, window.__gapKeep); save(); });
 });
 test("Ara's instructions stay short and the Process FAQ is looked up with get_process_faq", async (p) => {
   await signIn(p);
@@ -395,6 +399,8 @@ test("Ara's instructions stay short and the Process FAQ is looked up with get_pr
   ok(!/\nQ: /.test(instr) && /get_process_faq/.test(instr) && /Ally - Do Not Solicit/.test(instr), "the FAQ is still sent whole, or the topics are missing");
   let r = await ara(p, "get_process_faq", { question: "Who can clear the ally flag?" });
   ok(r.ok && /clear the Ally - Do Not Solicit flag/.test(r.answers[0].q), "FAQ lookup missed: " + JSON.stringify(r.answers && r.answers[0]));
+  r = await ara(p, "get_process_faq", { question: "What are the status choices for a task?" });
+  ok(r.ok && /status choices for a Task/.test(r.answers[0].q) && /To do, In progress, Waiting/.test(r.answers[0].a), "the task status FAQ entry is missing: " + JSON.stringify(r.answers && r.answers[0]));
   r = await ara(p, "get_process_faq", { question: "zebra xylophone" });
   ok(r.ok && !r.answers.length && /isn't covered/.test(r.say), "an unmatched question returned answers");
 });

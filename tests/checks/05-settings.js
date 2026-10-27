@@ -95,6 +95,10 @@ test("Spooky mode: Ara turns it on and off, with the night look, slower host voi
   ok(on.ok && on.spooky, "Ara couldn't turn spooky mode on");
   const look = await p.evaluate(() => ({ cls: document.documentElement.classList.contains("spooky"), candle: !!document.querySelector(".top .candle"), bg: getComputedStyle(document.body).backgroundColor }));
   ok(look.cls && look.candle, "the night look or the candle by the logo didn't appear");
+  const owl = await ara(p, "show_visitor", { visitor: "owl" });
+  ok(owl.ok && await p.evaluate(() => !!document.querySelector(".spk-owl")), "Ara couldn't send the owl across the screen: " + JSON.stringify(owl));
+  const snow = await ara(p, "show_visitor", { visitor: "snow" });
+  ok(!snow.ok && /Christmas mode/.test(snow.error || ""), "a Christmas visitor was sent in spooky mode");
   await tab(p, "Contacts"); const sb = await p.evaluate(() => getComputedStyle(document.querySelector(".search")).backgroundColor);
   ok(sb !== "rgb(255, 255, 255)", "the search box stayed white in spooky mode (Carverhill's screenshot, Oct 26): " + sb);
   await tab(p, "Home");

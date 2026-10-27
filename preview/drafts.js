@@ -418,6 +418,7 @@ const APPLY = {
   plan(d, t) {
     const o = t.opp;
     o.asks.unshift({ fund: d.fund, campaign: d.campaign, plannedDate: d.plannedDate, amount: d.amount, askType: d.askType || "Outright", participants: d.participants, status: "Planned" });
+    if (d.fund) o.fund = d.fund; if (d.campaign) o.campaign = d.campaign; /* the opportunity carries the planned ask's entity and campaign (Oct 26: Ara read "entity not set" beside an ask to New Hampshire) */
     o.stage = "Ask Planning"; log(`Ask planned: ${money(d.amount)} for ${d.fund}, ${fmtDate(d.plannedDate)}. Moved to Ask Planning`, { contactId: o.contactId, oppId: o.id });
     const remind = addDays(d.plannedDate, -7); // the reminder is due seven days before the planned ask date
     S.tasks.unshift({ id: uid(), contactId: o.contactId, oppId: o.id, text: `Make the ask: ${money(d.amount)} for ${d.fund} on ${fmtDate(d.plannedDate)}`, due: remind < todayISO() ? todayISO() : remind, done: false, auto: true });
