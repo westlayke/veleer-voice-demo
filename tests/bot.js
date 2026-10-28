@@ -3,7 +3,7 @@
 // Run: node tests/bot.js            (tests preview-flow.html and a smoke test of index.html; JOBS=1 runs one check at a time; a failed check gets one more try on its own)
 //      JOBS=4 node tests/bot.js     (4 checks side by side, the default; the whole suite takes about 3 minutes on a 4-core machine)
 //      SHARD=2/3 node tests/bot.js  (only every third check, starting at the second: the GitHub workflow runs the three shards on three machines at once)
-//      ONLY=substring node tests/bot.js   (only the checks whose name contains it: what a preview build runs; the whole suite runs before a go-live)
+//      ONLY=substring[,substring] node tests/bot.js   (only the checks whose name contains one of them: what a preview build runs; the whole suite runs before a go-live)
 //      PAGE=index.html node tests/bot.js   (full run against the live page)
 // The checks themselves are in tests/checks/, one file per area; this file is the runner and its helpers.
 const http = require("http"), fs = require("fs"), path = require("path");
@@ -79,7 +79,7 @@ for (const f of fs.readdirSync(path.join(__dirname, "checks")).filter(f => f.end
   fs.mkdirSync(OUT, { recursive: true });
   const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD || ""), part = shard ? Number(shard[1]) : 1, parts = shard ? Number(shard[2]) : 1;
   if (shard && !(part >= 1 && part <= parts)) { console.log("SHARD must be k/n with 1 <= k <= n"); process.exit(2); }
-  const run = tests.filter(t => PAGE === "preview-flow.html" || !t.opts.page || t.opts.always).filter(t => !process.env.ONLY || t.name.includes(process.env.ONLY)).filter((t, i) => i % parts === part - 1);
+  const run = tests.filter(t => PAGE === "preview-flow.html" || !t.opts.page || t.opts.always).filter(t => !process.env.ONLY || process.env.ONLY.split(",").some(w => t.name.includes(w.trim()))).filter((t, i) => i % parts === part - 1);
   // checks run side by side (JOBS at a time, default 6) in separate browser windows; results print in the usual order
   let failed = 0; const lines = new Array(run.length); let next = 0, printed = 0; const done = new Array(run.length);
   const flush = () => { while (printed < run.length && done[printed]) console.log(done[printed++]); };
