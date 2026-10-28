@@ -81,7 +81,7 @@ test("Hands-free: a drop right after a save tells Ara it went through, and savin
   ok(r.saved === true, "not saved: " + JSON.stringify(r));
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
   const line = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || "");
-  ok(/went through just before the drop/.test(line) && /Send Ruth the agenda|Task added/.test(line), "the reconnect didn't say the last save went through");
+  ok(/Carry on where you were/.test(line) && !/went through just before the drop|Saved so far/.test(line), "the reconnect line still rebuilds Ara's memory of the save (Oct 28): " + line.slice(0, 300));
   const again = await ara(p, "save_form", { confirmed: true });
   ok(again.saved === true && again.already && /already saved/.test(again.status), "saving again after the drop didn't say it was already saved: " + JSON.stringify(again));
 });
@@ -122,8 +122,8 @@ test("Hands-free: words said while the line was down make Ara ask for them again
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the agenda" });
   await p.evaluate(() => { G.spokeInGap = true; window.__ws0 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
-  const line = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || "");
-  ok(/say that again/.test(line) && /never ask \\"what would you like to do\\" while a form is open/.test(line) && /Send Ruth the agenda/.test(line), "the reconnect didn't ask for the missed words or keep the form: " + line.slice(0, 300));
+  const line = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || ""), now = await p.evaluate(() => (G.justNow || {}).text || "");
+  ok(/Sorry, I lost you for a moment\. When is it due\?/.test(line) && /say that again/.test(now) && /"New task" form still needs/.test(now) && await p.evaluate(() => !!V), "the reconnect didn't re-ask the task's question or keep the form: " + line.slice(0, 300) + " | " + now.slice(0, 300));
   ok(await p.evaluate(() => !G.spokeInGap), "the missed-words flag stayed on after the line came back");
 });
 
@@ -136,8 +136,13 @@ test("Hands-free: after a save Ara says the undo line once per call, never 'Save
   ok(a.saved && /Say undo/.test(a.ask_exactly), "the first save has no undo line: " + JSON.stringify(a));
   ok(b.saved && b.ask_exactly && !/Say undo/.test(b.ask_exactly), "the second save repeats the undo line: " + JSON.stringify(b));
   ok(![a.ask_exactly, b.ask_exactly].some(s => /Saved: /.test(s)), "a save line still starts with 'Saved:': " + a.ask_exactly);
-  ok(/^Task added for \w+\. Say undo if that's wrong\. The next step in the process (to move \w+ to [\w ]+ is|is to confirm \w+'s move) to .*\. Do you want to do that now, or something else\?$/.test(a.ask_exactly), "the save line isn't the scripted save plus next step: " + a.ask_exactly);
+  ok(/^Task added for \w+\. Say undo if that's wrong\. The next step in the process (to move \w+ to [\w ]+ is|is to confirm \w+'s move) to .*\. Do you want to do that now\?$/.test(a.ask_exactly), "the save line isn't the scripted save plus next step: " + a.ask_exactly);
   ok(await p.evaluate(() => !grokInstructions().includes("whether to stop")), "Ara's instructions still ask whether to stop");
+  // a bare no to "Do you want to do that now?" gets the app's own "What would you like to do?"; "no, <step>" is left to Ara (Carverhill, Oct 28)
+  await p.evaluate(() => { __sent.length = 0; }); await said(p, "No."); await p.waitForTimeout(600);
+  ok(await p.evaluate(() => __sent.some(s => s.includes("force_message") && s.includes("What would you like to do?"))) && await p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).some(a => /a no to the next step: the app asks what they'd like to do/.test(a.text))), "a bare no to the next step didn't get the app's question");
+  await p.evaluate(() => { __sent.length = 0; recent(botName(), "The next step in the process to move Ruth to Ask Planning is to add a planned ask. Do you want to do that now?"); }); await said(p, "No, record a gift."); await p.waitForTimeout(600);
+  ok(await p.evaluate(() => !__sent.some(s => s.includes("What would you like to do?"))), "\"no, <step>\" was taken as a bare no");
 });
 
 test("Oct 24 call fixes: email spelling, substantive asked and read back, edits need a next step, going back in optional questions", async (p) => {

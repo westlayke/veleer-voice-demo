@@ -287,3 +287,22 @@ changed value is re-read on its own in `hfSave` ("Payment method, credit card. S
 in Commitment routes to the payment form), refuses a second form with "The <form> form is waiting on your yes. Save it, change
 something, or drop it?", and applies `requiredWhen`, `needsOneOf`, `askFirst` and `prefilled` generically. No voice code
 branches on a form name; drafts.js keeps the per-form data layer.
+
+## Reconnect without state notes, silent replies, the next-step question (Oct 28 evening)
+
+After a drop the app no longer rebuilds Ara's memory of the call. `reconnectLine` says only that the line dropped and to carry on
+(plus "ask them to say that again" when the officer talked while the line was down); she resumes her own conversation and the tool
+guards refuse anything stale (a save already done, a rating already set, a tool call replayed from before the drop). The one thing
+the app adds is its own pending form question, through `formPosition().ask`, which now also covers a form with required fields
+missing (`reqQuestion`). Carverhill's rule: hold the state of the last action completed, don't reprogram hers.
+
+A reply that arrives as words with no sound (heard.js reading 1, under `AUDIO_MIN_S` of audio for two words or more, with the
+sound engine running) is acted on by `silentLine`: the phone plays "Ara's taking a moment", then asks for the line again once
+(the app's own scripted line is re-sent as a forced message; a line of hers is requested word for word); a second silent copy of the
+same line calls `reconnect`. Only once a line of hers has been heard in the call (`G.audioEver`), so a typed test never triggers it.
+
+The next-step line after every save ends "Do you want to do that now?" (`NEXT_Q`). A bare no is answered by the app with
+`NEXT_NO_Q` ("What would you like to do?") from `nextStepNo` on the transcript; "no, <step>" is left to Ara. Every line the phone
+says itself (named reconnect lines, "Still waiting on Ara", the hang-up lines, the four stock recordings) is one voice, xAI's Eve
+(`NAMED_VOICE`, `tools/ara-lines.json`).
+

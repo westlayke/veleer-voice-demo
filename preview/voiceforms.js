@@ -181,7 +181,15 @@ const savedShort = (action, who, d = {}) => {
   if (action === "cultivate" && first) return d.decision === "Defer" ? `${first}'s move to Cultivation is deferred${d.reconsiderOn ? " until " + dateSaid(d.reconsiderOn).replace(/ \((today|tomorrow|yesterday)\)$/, "") : ""}.` : `${first} is now in Cultivation.`; /* Carverhill, Oct 28: "Decision recorded for Y" said nothing */
   return `${ACTIONS[action].saved}${who ? " for " + first : ""}.`; };
 // the next step in the process for a contact, word for word: said after every save and whenever the officer asks what's next
-const NEXT_Q = " Do you want to do that now, or something else?";
+const NEXT_Q = " Do you want to do that now?", NEXT_NO_Q = "What would you like to do?"; /* yes opens the step; a bare no gets NEXT_NO_Q from the app; "no, <step>" goes to that step (Carverhill, Oct 28) */
+// the officer's bare no to the next-step question: the app asks what they'd like to do, in its own scripted words
+function nextStepNo(text) {
+  const t = String(text || "").toLowerCase().replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim().replace(/^((no|nope) )?(thanks|thank you)$/, "no");
+  if (!/^(no|nope|not now|not right now|no not now|not yet|no not yet)$/.test(t)) return false;
+  const last = ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").trim(); if (!last.endsWith(NEXT_Q.trim())) return false;
+  act("step", "a no to the next step: the app asks what they'd like to do"); stopPlayback(); if (G.responding) send({ type: "response.cancel" }); G.cmdAt = Date.now();
+  forceSay(NEXT_NO_Q); return true;
+}
 function nextStepLine(c, closed) {
   if (!c) return "What would you like to do next?";
   if (closed) return `That completes the process for ${c.first}. What would you like to do next?`;
@@ -355,8 +363,8 @@ function formPosition() {
   if (V.opt && V.opt.cur) { const st = optSteps().find(x => x.k === V.opt.cur); if (st) return { where: `The optional questions for the "${A.title}" form are at "${label(st.k)}" (the earlier ones are done); the app asks it again itself.`, ask: optQuestion(st, optWho(), V.opt.only === st.k) }; }
   if (V.choice === "saveOrOpt") return { where: `Every required field of the "${A.title}" form is in; the app asked whether to save it or add the optional details first, and asks again itself.`, ask: `That's everything the ${formName(A)} form needs. Save it, or add the optional details first?` };
   if (voiceRule(V.action).alwaysAsk === "substantive" && V.askedSubst && !V.fromVoice.has("substantive")) return { where: "The app asked whether the interaction was substantive and is waiting for the answer; it asks again itself.", ask: SUBST_Q };
-  const need = (A.fields || []).filter(f => f.req && optEmpty(d[f.k])).map(f => f.label);
-  return { where: need.length ? `The "${A.title}" form still needs: ${need.join(", ")}. Ask for the first of those.` : `Every required field of the "${A.title}" form is in; nothing has been read back yet.`, ask: "" };
+  const needF = (A.fields || []).filter(f => f.req && !f.fixed && optEmpty(d[f.k])), need = needF.map(f => f.label);
+  return { where: need.length ? `The "${A.title}" form still needs: ${need.join(", ")}; the app asks for the first of those itself.` : `Every required field of the "${A.title}" form is in; nothing has been read back yet.`, ask: need.length ? reqQuestion(V.action, needF, d) : "" };
 }
 // "What fields are left?": the app answers with the list itself, in one scripted line (Jacqueline's call, Oct 27: Ara's answer was vague)
 function fieldsLeft() {

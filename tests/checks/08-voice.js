@@ -62,7 +62,7 @@ test("Jacqueline's call: a dropped rating is said to be not caught before it's a
   // a dropped amount the form needs: the app says it didn't catch it, then Ara asks (the tool result carries what was said)
   await p.waitForTimeout(900); await said(p, "On December first."); // the command's 800 ms guard against a repeated tool call has passed
   r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", plannedDate: "2026-12-01", amount: 25000 });
-  ok(/^I didn't catch the amount from you, so it's not on the form\.$/.test(r.ask_exactly || "") && r.still_needed && r.still_needed.includes("Amount") && /Still needed: Amount/.test(r.status || "") && /never say "noted"/.test(r.status || ""), "a dropped required amount wasn't owned up to before the ask: " + JSON.stringify(r));
+  ok(/^I didn't catch the amount from you, so it's not on the form\. How much is the amount\?$/.test(r.ask_exactly || "") && r.still_needed && r.still_needed.includes("Amount") && /Still needed: Amount/.test(r.next || "") && /never say "noted"/.test(r.next || ""), "a dropped required amount wasn't owned up to before the ask: " + JSON.stringify(r));
 });
 test("A touch on the mic button warms the voice line, and the tap's call uses it (Oct 28: a second off the greeting)", async (p) => {
   await signIn(p); await p.waitForFunction(() => G.live, null, { timeout: 8000 });
@@ -282,6 +282,14 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   // a form left open from an earlier conversation is in Right now, so a fresh conversation knows about it (Oct 25: "Weren't we working on a form for Pauline?")
   await ara(p, "show_contact_draft", { first: "Pauline", last: "Smith" });
   ok(/The "New contact" form is still open on screen, not saved yet\. Filled in so far: First name: Pauline; Last name: Smith[^\n]*If the officer asks about it, carry on with it/.test(await p.evaluate(() => ctxNow())), "the open form isn't in Right now: " + await p.evaluate(() => ctxNow().replace(/\n/g, " / ").slice(0, 400)));
+  // a line with words and no sound, once a line has been heard in the call: "Ara's taking a moment", then the line is asked for again; a second silent copy reconnects (Carverhill, Oct 28)
+  const nS = await p.evaluate(() => { G.audioEver = true; __sent.length = 0; return __sent.length; });
+  await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
+  await p.waitForTimeout(3500);
+  ok(/came without sound: the phone says she's taking a moment, then asks for it again/.test(await logged()) && await p.evaluate(() => __sent.some(s => /Say it again now, word for word: \\"Which campaign: National, or Idaho\?\\"/.test(s))), "a silent line wasn't asked for again: " + (await logged()).slice(-300));
+  await p.evaluate(() => { window.__wsS = __ws; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
+  await p.waitForFunction(() => __ws !== __wsS, null, { timeout: 8000 }).catch(() => {});
+  ok(/came without sound twice: the line is treated as dead/.test(await logged()) && await p.evaluate(() => __ws !== __wsS), "a second silent copy didn't reconnect: " + (await logged()).slice(-300));
 });
 test("Ara: after a reconnect the app says where the form stands and asks the pending question itself (an optional question, or the read-back waiting for a yes)", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -310,7 +318,7 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
-  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /Sorry, I lost you[^]*The "Add planned ask" form still needs: /.test(x.response.instructions || ""); }), n0), "a form with required fields missing didn't guide Ara with what's still needed");
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return /Sorry, I lost you for a moment\. (Which entity, and which campaign|When is the planned ask date|Which campaign)/.test(s); }), n0), "a form with required fields missing wasn't asked its first required question after the reconnect");
 });
 test("Ara: a task named in full is found even when another task shares a word with it; the hands-free filter lists the saves to check; Ara's own answer isn't taken for a scripted line", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -611,7 +619,7 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; it ke
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   await p.evaluate(() => recent(botName(), "Which entity is the ask for?"));
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1200);
-  const back = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, sorry: __sent.some(s => s.includes("Sorry, I lost you") && s.includes("Which entity is the ask for?")) }));
+  const back = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, sorry: __sent.some(s => /Sorry, I lost you for a moment\. (Which entity|When is the planned ask date|Which campaign)/.test(s)) }));
   ok(back.newLine && back.live && back.sorry, "the dropped line wasn't reopened with the last question and the open form");
   ok(await p.evaluate(() => !!document.getElementById("draftForm")), "the planned ask form closed when the line dropped");
   await p.evaluate(() => { window.speechSynthesis.speak = (u) => { window.__spoke = u.text; }; }); // the phone's built-in speech must never be used (Oct 25: iOS "Stop audio recording?" dialog)
@@ -739,7 +747,7 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   ok(/^Move James to Cultivation\? That means you, as the gift officer, believe they're ready to be pursued for a gift\.$/.test(r.read_back || ""), "the Cultivation read-back isn't the decision with its meaning: " + JSON.stringify(r));
   await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved && /^James is now in Cultivation\. (Say undo if that's wrong\. )?The next step in the process to move James to Ask Planning is to add a planned ask\. Do you want to do that now, or something else\?$/.test(r.ask_exactly || ""), "the Cultivation save line isn't \"James is now in Cultivation\": " + JSON.stringify(r));
+  ok(r.saved && /^James is now in Cultivation\. (Say undo if that's wrong\. )?The next step in the process to move James to Ask Planning is to add a planned ask\. Do you want to do that now\?$/.test(r.ask_exactly || ""), "the Cultivation save line isn't \"James is now in Cultivation\": " + JSON.stringify(r));
   // a deferral reads back and saves as what it is
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); const o = S.opps.find(o => o.id === "o_cult"); o.stage = "Qualification"; G.lastSaved = null; });
   await said(p, "Let's defer James's move, he's travelling until the new year, reconsider on January 15th.");
@@ -832,7 +840,7 @@ test("Ara: a drop with no form open comes back to the person just worked on, and
   // the line drops with no form open: Ara carries on with Nora, never "anyone else" (Carverhill, Oct 25)
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1200);
   const line = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && /Sorry, I lost you/.test(e.response.instructions)).map(e => e.response.instructions).pop() || "");
-  ok(/You were working on Nora Quist: after the sorry line, say exactly: "The next step in the process to move Nora to Qualification is to create an opportunity\. Do you want to do that now, or something else\?"/.test(line) && /Never ask whether they want to work on someone else/.test(line), "the reconnect line doesn't carry on with Nora: " + line.slice(0, 600));
+  ok(/Carry on where you were/.test(line) && !/You were working on|Saved so far|last things said/.test(line), "the reconnect line rebuilds Ara's memory instead of letting her carry on (Oct 28): " + line.slice(0, 600));
 });
 test("Ara: Move to Cultivation is refused while the criteria are missing, by voice and at the save", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -1089,8 +1097,7 @@ test("Oct 28 11:51 AM call: a repeated letter rates, a yes to Ara's offer opens 
   ok(yes.saved && (await state(p)).contacts.find(x => x.id === c0.id).capacity === "B", "not saved after yes");
   // the resumed line asks about the saved rating again: the app answers "already B" instead of asking
   const already = await ara(p, "set_capacity_rating", { contact_name: name, rating: "B", confirmed: false });
-  ok(already.already && /^Horatio is already rated B, \$100,000 to \$250,000\. The next step in the process to move Horatio to Qualification is to create an opportunity\. Do you want to do that now, or something else\?$/.test(already.ask_exactly || ""), "a saved rating was re-asked, or the line lacks the letter, range and next step: " + JSON.stringify(already));
-  ok(/latest words were "b\."/.test(await p.evaluate(() => reconnectLine(false))), "the reconnect guidance doesn't point Ara at the officer's latest words");
+  ok(already.already && /^Horatio is already rated B, \$100,000 to \$250,000\. The next step in the process to move Horatio to Qualification is to create an opportunity\. Do you want to do that now\?$/.test(already.ask_exactly || ""), "a saved rating was re-asked, or the line lacks the letter, range and next step: " + JSON.stringify(already));
   // Ara offers the opportunity, the officer says yes (sent three times as the transcript grows): the form opens
   await p.evaluate(() => { G.lastSaved = { at: Date.now(), who: "Horatio Alger", next: "" }; recent("Ara", "It's saved. Would you like to create an opportunity for him?"); });
   await said(p, "Yes."); await said(p, "Yes."); await said(p, "Yes.");
@@ -1102,11 +1109,11 @@ test("Reconnect lines with the officer's name (Oct 28): fetched once from the ke
   await signIn(p, "Pat"); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   // the fetch: one request per line, in the stand-in voice, stored under the name; a reply that isn't audio is not kept
   await p.evaluate(() => { window.__tts = []; const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/tts/.test(String(u))) { const b = JSON.parse(o.body); b.code = (o.headers || {})["X-Demo-Code"]; __tts.push(b); return Promise.resolve(new Response(new Uint8Array([1, 2, 3, 4]), { status: 200, headers: { "Content-Type": "audio/mpeg" } })); } return f(u, o); };
-    localStorage.removeItem("namedLines:v2"); Object.keys(namedRaw).forEach(k => delete namedRaw[k]); });
+    localStorage.removeItem("namedLines:v3"); Object.keys(namedRaw).forEach(k => delete namedRaw[k]); });
   await p.evaluate(() => prepNamedLines("test")); await p.waitForTimeout(400);
-  const fetched = await p.evaluate(() => ({ n: __tts.length, voices: [...new Set(__tts.map(b => b.voice))], texts: __tts.map(b => b.text), stored: JSON.parse(localStorage.getItem("namedLines:v2") || "null"), log: ACT.q.map(a => a.text).join(" | ") }));
+  const fetched = await p.evaluate(() => ({ n: __tts.length, voices: [...new Set(__tts.map(b => b.voice))], texts: __tts.map(b => b.text), stored: JSON.parse(localStorage.getItem("namedLines:v3") || "null"), log: ACT.q.map(a => a.text).join(" | ") }));
   ok(await p.evaluate(() => __tts.every(b => b.code === "veleer2026")), "the line fetch didn't carry the demo code (the key holder refuses it without one; Oct 28)");
-  ok(fetched.n === 11 && fetched.voices.join() === "leo" && fetched.texts[0] === "The line dropped, Pat. Reconnecting you to Ara." && fetched.texts.includes("Still trying, Pat. I'm not giving up on you.") && fetched.texts.includes("Hang in there, Pat. I'll keep knocking until Ara answers.") && fetched.texts[7] === "You're back with Ara, Pat." && fetched.texts.includes("Still waiting on Ara.") && fetched.texts.includes("I'll hang up for now. Your form stays on the screen."), "the named and phone lines weren't fetched as expected: " + JSON.stringify(fetched.texts));
+  ok(fetched.n === 11 && fetched.voices.join() === "eve" && fetched.texts[0] === "The line dropped, Pat. Reconnecting you to Ara." && fetched.texts.includes("Still trying, Pat. I'm not giving up on you.") && fetched.texts.includes("Hang in there, Pat. I'll keep knocking until Ara answers.") && fetched.texts[7] === "You're back with Ara, Pat." && fetched.texts.includes("Still waiting on Ara.") && fetched.texts.includes("I'll hang up for now. Your form stays on the screen."), "the named and phone lines weren't fetched as expected: " + JSON.stringify(fetched.texts));
   ok(fetched.stored && fetched.stored.name === "Pat" && Object.keys(fetched.stored.lines).length === 11 && /11 phone lines with Pat's name fetched \(test\)/.test(fetched.log), "the lines weren't kept on the phone under the name: " + JSON.stringify(fetched.stored && Object.keys(fetched.stored.lines).length) + " " + fetched.log.slice(-200));
   await p.evaluate(() => { __tts.length = 0; }); await p.evaluate(() => prepNamedLines("again")); await p.waitForTimeout(200);
   ok(await p.evaluate(() => __tts.length === 0), "the lines were fetched a second time although the phone has them");

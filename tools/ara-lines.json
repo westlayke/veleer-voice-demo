@@ -1,6 +1,6 @@
 {
-  "note": "The phone's own recorded lines in preview/sounds/. Since Oct 27 these are the release 1.0 recordings in the phone's stand-in voice (Kokoro af_heart, third person: it is the app speaking about Ara), restored so the officer can tell the app from Ara (Carverhill). The Record Ara's lines workflow would re-record them in Ara's voice (xAI text-to-speech, voice ara): don't run it unless that is wanted again.",
-  "voice": "kokoro af_heart (release 1.0)",
+  "note": "The phone's own recorded lines in preview/sounds/. Since Oct 28 2026 they are recorded in xAI's Eve voice, the same voice the phone uses for the lines with the officer's name (NAMED_VOICE in voiceline.js), so every status line the phone says is one voice, distinct from Ara (Carverhill: the phone had a mix of male and female voices). Re-record with the Record Ara's lines workflow after changing a text or the voice.",
+  "voice": "eve",
   "lines": [
     { "file": "line-dropped.mp3", "text": "The line dropped. Reconnecting you to Ara." },
     { "file": "still-trying.mp3", "text": "Still trying to reconnect." },

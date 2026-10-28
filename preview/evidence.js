@@ -86,6 +86,17 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
   if (f.type === "select" || f.type === "bool") return false; // an option with no words of its own: only the officer's own tap sets it
   return null;
 }
+// could these words of the officer's answer this field at all? (no value to check, only the kind of answer the field takes)
+function fieldSaidIn(action, f, lines) {
+  if (!f || !lines.length) return false; const all = lines.join(" \n ").toLowerCase();
+  if (f.k === "capacity") return ratedIn(lines);
+  if (f.k === "fund") return !!(typeof matchEntity === "function" && matchEntity(lines[lines.length - 1]).hits.length);
+  if (f.k === "campaign") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all) || [...new Set(Object.values(ENTITY_STATE).filter(Boolean))].some(s => all.includes(s.toLowerCase()));
+  if (OPTION_WORDS[f.k]) return Object.values(OPTION_WORDS[f.k]).some(re => re.test(all) || re.test(all.replace(/-/g, " ")));
+  if (f.type === "money") return /\$|\d|\b(thousand|hundred|million|grand|bucks|dollars)\b/.test(all);
+  if (f.type === "date") return DATE_WORDS.test(all) || /\d/.test(all);
+  return false; /* free text: the app can't tell, so it asks */
+}
 // drop every value the officer never gave; returns the labels dropped (the interaction report's substantive, next step and outcome last, in that order)
 function applyEvidence(action, data, name) {
   const A = ACTIONS[action]; if (!A) return [];

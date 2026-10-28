@@ -25,7 +25,20 @@ function lineHeard(text) {
   const rec = { text, at: Date.now(), audioS: (G.audioSamples || 0) / 24000, out: G.outPeak || 0, echo: G.echoPeak || 0, state: G.ctx ? G.ctx.state : "none", left: playingLeft() };
   G.lastLine = rec; G.outPeak = 0;
   setTimeout(() => { if (!G.live || G.lastLine !== rec) return; rec.out = Math.max(rec.out, G.outPeak || 0); rec.state = G.ctx ? G.ctx.state : "none";
-    const prob = heardProblem(rec); if (prob) { act("step", `Ara's line may not have been heard: ${prob} ("${text.slice(0, 80)}")`); vlog("not heard? " + prob); } }, Math.max(0, rec.left * 1000) + 800);
+    const prob = heardProblem(rec); if (prob) { act("step", `Ara's line may not have been heard: ${prob} ("${text.slice(0, 80)}")`); vlog("not heard? " + prob); if (/^no voice audio|^the phone produced no sound/.test(prob) && rec.state === "running") silentLine(rec); }
+    else { G.silentAgain = null; if (rec.audioS >= AUDIO_MIN_S) G.audioEver = true; } }, Math.max(0, rec.left * 1000) + 800);
+}
+// her line came with words but no sound (Carverhill, Oct 28: 33 s of silence until "are you there?"): the phone says "Ara's taking a moment", then asks for the line again,
+// once; a second silent copy means the line is dead and the phone reconnects. Only once a line of hers has been heard in this call (a typed test sends no audio).
+function silentLine(rec) {
+  if (!G.audioEver || !G.live) return;
+  if (G.lastHeard && G.lastHeard.at > rec.at) { act("step", "Ara's line came without sound, but the officer answered: not asked again"); return; }
+  if (G.silentAgain && G.silentAgain.text === rec.text) { G.silentAgain = null; act("step", "Ara's line came without sound twice: the line is treated as dead"); reconnect("her line came without sound twice"); return; }
+  G.silentAgain = { text: rec.text, at: Date.now() }; act("step", `Ara's line came without sound: the phone says she's taking a moment, then asks for it again ("${rec.text.slice(0, 60)}")`);
+  sayLocal("Ara's taking a moment.", "slow"); G.slowSaid = true;
+  const wait = Math.round(((lineBuf.slow && lineBuf.slow.duration) || 1.6) * 1000) + 300;
+  setTimeout(() => { if (!G.live || (G.lastHeard && G.lastHeard.at > rec.at)) return; const own = rec.text === G.lastForcedText; G.lastBot = ""; /* else the resend is cut as a doubled reply */
+    if (own) forceSay(rec.text); else askReply(`Your last line reached the officer as text only, with no sound. Say it again now, word for word: "${rec.text}"`); }, wait);
 }
 // the officer asks whether Ara is there: log what the phone knows about her last line, wake the sound if it's paused, and have her say it again
 function heardAsk(text) {
