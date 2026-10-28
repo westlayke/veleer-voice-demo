@@ -43,7 +43,8 @@ function silentWav(file) {
 async function progress(c, n) {
   if (process.env.PROGRESS_LOG === "0") return;
   const text = JSON.stringify({ n, flow: c.flow, turns: c.turns.length, lineMs: c.lineMs, cost: +c.cost.toFixed(4), firstMs: c.firstMs || [], saved: c.saved.map(s => s.text).join(" | "), failed: !!c.failed, cut: !!c.cut, errors: c.errors.slice(0, 2) });
-  await fetch("https://veleer-voice.klaracey.workers.dev/log", { method: "POST", headers: { "Content-Type": "application/json" },
+  // the Worker takes a POST only from the app's own address with the built-in demo code (the same two the phone sends)
+  await fetch("https://veleer-voice.klaracey.workers.dev/log", { method: "POST", headers: { "Content-Type": "application/json", Origin: "https://westlayke.github.io", "X-Demo-Code": "veleer2026" },
     body: JSON.stringify({ page: "consistency", name: PROVIDER, device: "consistency-" + PROVIDER, session: String(process.env.GITHUB_RUN_ID || "local"), events: [{ at: new Date().toISOString(), role: "progress", text }] }) });
 }
 async function mintToken() {
