@@ -346,9 +346,17 @@ const canTalk = () => !!tokenUrl();
 const ACT = { ready: null, q: [], timer: null };
 // Unsent log rows also sit in the phone's storage until the key holder has them (Oct 28: the end of a call was lost when iOS discarded the locked page), and the queue is sent at once when the page hides
 const ACT_KEY = "actPending";
-function actPending(fn) { let rows = []; try { rows = JSON.parse(localStorage.getItem(ACT_KEY) || "[]"); } catch (e) {} const out = fn(rows) || rows; try { localStorage.setItem(ACT_KEY, JSON.stringify(out.slice(-400))); } catch (e) {} }
+function keptRows() { if (!ACT.kept) { try { ACT.kept = JSON.parse(localStorage.getItem(ACT_KEY) || "[]"); } catch (e) { ACT.kept = []; } } return ACT.kept; }
+function actPending(fn) { const rows = keptRows(); const out = fn(rows) || rows; ACT.kept = out.slice(-200); actStore(); }
+// the copy goes to the phone's storage at most every 2 s, and at once when the page hides (Oct 28: a write on every row, several a second while the
+// officer talks, came in with the 1:49 PM build, and every call since then died without a word; the writes are the one thing those calls shared)
+function actStore(now) {
+  if (!now) { if (!ACT.storeTimer) ACT.storeTimer = setTimeout(() => actStore(true), 2000); return; }
+  clearTimeout(ACT.storeTimer); ACT.storeTimer = null; try { localStorage.setItem(ACT_KEY, JSON.stringify((ACT.kept || []).map(r => ({ ...r, text: String(r.text).slice(0, 600) })))); } catch (e) {}
+}
 function actRestore() { actPending(rows => { if (rows.length) { ACT.q.push(...rows.map(r => ({ ...r, tries: 0 }))); vlog(`${rows.length} log rows kept from the last page are being sent`); clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, 1500); } return rows; }); }
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && ACT.q.length) { clearTimeout(ACT.timer); flushAct(); } });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { actStore(true); if (ACT.q.length) { clearTimeout(ACT.timer); flushAct(); } } });
+window.addEventListener("pagehide", () => actStore(true));
 function deviceId() {
   if (!S.settings.deviceId) { S.settings.deviceId = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + "-" + uid() + uid()); save(); }
   return S.settings.deviceId;
@@ -371,7 +379,7 @@ function act(role, text, sess) {
   if (!text) return; const session = sess || G.session || visitId();
   const row = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session }; // the id lets the key holder drop a batch that arrives twice (Oct 25: a resent batch doubled 20 s of log)
   ACT.q.push(row); actPending(rows => { rows.push(row); });
-  G.lastRow = { text: `${role}: ${row.text.slice(0, 120)}`, at: Date.now() }; G.keptAt = 0; keepAlive(); // a copy of the call in case the phone closes the page without a word
+  G.lastRow = { text: `${role}: ${row.text.slice(0, 120)}`, at: Date.now() }; // the 1 s tick keeps a copy of the call in case the phone closes the page without a word (keepAlive)
   clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, role === "end" ? 0 : 4000);
 }
 // what was in a form when Save was tapped, for the activity log (the privacy notice says so)

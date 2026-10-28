@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 2:55 PM",
+   "change": "Preview: the copy of unsent log rows and of the live call is written to the phone's storage at most every 2 seconds (and at once when the app hides) instead of on every log row. Since the 1:49 PM build wrote on every row, several a second while the officer talks, every call (1:51, 2:32 and 2:45 PM) died without a word, each time while Ara was speaking; the writes are the one thing those calls shared, so they are the first suspect.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"the app just stopped right as Ara was speaking so there is some big bug\" (2:47 PM)"
+  },
+  {
    "date": "Oct 28, 2:45 PM",
    "change": "Preview: when the phone closes the app in the middle of a call without a word (iOS did this twice on Oct 28, both times seconds after a reconnect), the next open logs \"The last call ended without the app noticing\" against that call, with the last thing logged before it, and offers Carry on with the reason \"Your phone closed the app in the middle of the conversation.\" Every log row keeps a copy of the call on the phone for this. The copy is refreshed every 2 seconds, so the log row says to within 2 seconds when the page died and how long after the last logged event.",
    "area": "Voice",

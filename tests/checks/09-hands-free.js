@@ -403,7 +403,7 @@ test("A page the phone closed while a conversation was paused offers Carry on on
 });
 test("A page the phone closed in the middle of a call (no end logged) is noticed on the next open: the silent end is logged against that call and Carry on is offered", async (p) => {
   await signIn(p); await p.waitForFunction(() => G.live, null, { timeout: 8000 });
-  await said(p, "Let's add a task for Ruth."); await p.evaluate(() => act("step", "breadcrumb check"));
+  await said(p, "Let's add a task for Ruth."); await p.evaluate(() => act("step", "breadcrumb check")); await p.waitForTimeout(2300); /* the copy is refreshed by the 1 s tick */
   const kept = await p.evaluate(() => { const r = JSON.parse(localStorage.getItem("resumeKeep") || "null"); return r && { killed: r.killed, same: r.session === G.session, last: r.last, lines: r.lines.length }; });
   ok(kept && kept.killed && kept.same && /breadcrumb check/.test(kept.last) && kept.lines > 0, "the live call isn't kept on the phone with its session and last row: " + JSON.stringify(kept));
   const oldSession = await p.evaluate(() => G.session);
