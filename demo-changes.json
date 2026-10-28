@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 1:25 PM",
+   "change": "Preview: a \"yes\" or \"save it\" repeated within 8 seconds of a hands-free save is taken as the same answer: it no longer cancels Ara's save confirmation, and a second save call in that window tells Ara to confirm once (never \"checking on that save\").",
+   "area": "Ara, hands-free",
+   "requestedBy": "Carverhill",
+   "why": "Oct 28, 12:54 PM call: the ask saved but the officer heard nothing and asked \"are you there?\"; plan approved \"Go\" 1:18 PM"
+  },
+  {
    "date": "Oct 28, 1:16 PM",
    "change": "Preview: the first time a reply is slow the phone says the recorded \"Ara's taking a moment.\" again instead of a beep; the soft tick only repeats after it. The recording had left with the reset to release 1.0.",
    "area": "Ara, connection",

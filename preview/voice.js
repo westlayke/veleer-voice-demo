@@ -18,6 +18,7 @@ function spelledWords() {
   const out = []; lines.forEach(t => (spellPrep(t).match(/(?<![A-Za-z'’])(?:[A-Za-z][.,-]?\s+){2,}[A-Za-z]\b\.?/g) || []).forEach(m => { const w = m.replace(/[^A-Za-z]/g, ""); if (w.length >= 3) out.push(w); }));
   return out;
 }
+const SAVE_ECHO_MS = 8000; // a "yes" or "save it" repeated within this of a hands-free save is the same answer, not a new turn
 function officerRated() { if (ratedIn(officerLines(3))) return true; const last = officerLines(1)[0] || ""; return /^[a-e][.!]?$/.test(last.trim()) && /\b(rating|capacity|a through e|a to e)\b/.test(askedBefore(1)); } /* a letter alone answers the rating question (Oct 28) */ // the matcher lives in evidence.js (Oct 28 tidy-up); this wrapper serves set_capacity_rating
 // the officer's last words turn texting on or off ("texting is permitted", "you can text him", "no texts"), or null if they didn't mention texting
 function officerSaidTexting() {
@@ -813,7 +814,8 @@ function onEvent(e) {
   if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } truncateSpoken(); stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall();
-    if (G.asked && !G.responding && PROV().forceItem) { send({ type: "response.cancel" }); clearTimeout(G.askWatch); G.askWatch = null; clearTimeout(G.tickWatch); G.asked = false; act("step", "The officer spoke while a reply was still requested: that request was cancelled (one question, one answer)"); } } /* Oct 25 review item 10: stacked re-asks gave three "I'm here" in a row */
+    if (G.asked && !G.responding && PROV().forceItem) { if (G.savedAt && Date.now() - G.savedAt < SAVE_ECHO_MS) act("step", "The officer spoke right after a save: the save confirmation is still coming (not cancelled)"); /* Oct 28 12:54 PM call: a repeated "yes, save it" cancelled the confirmation and the officer heard nothing */
+      else { send({ type: "response.cancel" }); clearTimeout(G.askWatch); G.askWatch = null; clearTimeout(G.tickWatch); G.asked = false; act("step", "The officer spoke while a reply was still requested: that request was cancelled (one question, one answer)"); } } } /* Oct 25 review item 10: stacked re-asks gave three "I'm here" in a row */
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; G.heardWait = { n: G.heardN || 0, at: Date.now() }; paintCall(); } /* the transcript of this turn is still to come: a tool call before it waits (onTool) */
   else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)

@@ -189,7 +189,8 @@ function hfReadback() {
 function hfHeardAfter(n, ms = 2500) { return new Promise(res => { const t0 = Date.now(); (function poll() { if ((G.heardN || 0) > n) return res(G.lastHeard); if (Date.now() - t0 > ms) return res(null); setTimeout(poll, 100); })(); }); }
 async function hfSave(callId, data, lead) {
   if (!V) { const recentSave = G.savedAt && Date.now() - G.savedAt < 3 * 60e3;
-    toolReply(callId, recentSave ? { ok: true, saved: true, already: true, status: `That form was already saved (${G.savedLine}); it closed when it saved. Say in a few words that it's saved, then ask what's next. Don't open it again.` } : { ok: false, saved: false, error: "No form is open, so there's nothing to save." }); return; }
+    toolReply(callId, recentSave && Date.now() - G.savedAt < SAVE_ECHO_MS ? { ok: true, saved: true, already: true, status: `The officer repeated their yes; the form was already saved a moment ago (${G.savedLine}) and your confirmation of it is what they are waiting for. Confirm it once, in your words, with the undo offer and what's next; never say "checking on that save".` }
+      : recentSave ? { ok: true, saved: true, already: true, status: `That form was already saved (${G.savedLine}); it closed when it saved. Say in a few words that it's saved, then ask what's next. Don't open it again.` } : { ok: false, saved: false, error: "No form is open, so there's nothing to save." }); return; }
   const A = ACTIONS[V.action];
   // the optional questions are still going (Oct 24: Ara jumped to the read-back before the amount and notes)
   if (V.opt && V.opt.cur && OPT_STEPS[V.action] && optNext()) { const st = optNext(); V.opt.cur = st.k; toolReply(callId, { ok: false, saved: false, field: st.k, ask_exactly: `Not yet, a couple of questions first. ${st.q(optWho())}`, error: "The optional questions aren't finished; the app asked the next one. After the answer, call optional_fields with step answer (or skip or stop)." }); return; }

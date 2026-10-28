@@ -107,6 +107,11 @@ test("xAI review items (Oct 28): service idle timer, streaming transcription, tr
   n = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.asked = true; G.askedAt = Date.now(); G.responding = false; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
   ok(await p.evaluate((n) => __sent.slice(n).some(s => /"response\.cancel"/.test(s)) && !G.asked, n), "the outstanding reply request wasn't cancelled when the officer spoke");
+  // ...except right after a hands-free save: a repeated "yes, save it" is the same answer and the save confirmation stays requested (Oct 28 12:54 PM call: the officer heard nothing)
+  n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.asked = true; G.askedAt = Date.now(); G.responding = false; G.savedAt = Date.now() - 2000; G.savedLine = "Ask recorded"; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
+  ok(await p.evaluate((n) => !__sent.slice(n).some(s => /"response\.cancel"/.test(s)) && G.asked, n), "the save confirmation was cancelled by a yes repeated right after the save");
+  await p.evaluate(() => { G.asked = false; G.savedAt = 0; });
   // the service's idle timer fired (road noise kept the phone's from firing): its check-in is dropped and the app's goodbye goes
   n = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { window.__noAutoForce = true; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.timeout_triggered" }) }); }); await p.waitForTimeout(300);
