@@ -23,6 +23,12 @@ on:
       diag:
         description: "1 = print each conversation's voice log (diagnostic run)"
         default: "0"
+      spoken:
+        description: "1 = the officer's lines are spoken into the microphone (engine speech recognition in the loop); 0 = typed"
+        default: "0"
+      noise:
+        description: "Spoken runs: car-like noise level under the voice (0 = quiet, 0.1 = a car at speed)"
+        default: "0"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -46,6 +52,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - uses: actions/cache@v4
+        if: inputs.spoken == '1'
+        with:
+          path: tests/ara-consistency/voices
+          key: officer-voices-${{ hashFiles('tests/ara-consistency/flows.js', 'tests/ara-consistency/officer-voice.js') }}
       - name: Talk to ${{ matrix.provider }}
         env:
           ARA_CONSISTENCY_KEY: ${{ secrets.ARA_CONSISTENCY_KEY }}
@@ -57,6 +68,8 @@ jobs:
           JOBS: ${{ inputs.jobs }}
           FLOWS: ${{ inputs.flows }}
           DIAG: ${{ inputs.diag }}
+          SPOKEN: ${{ inputs.spoken }}
+          NOISE: ${{ inputs.noise }}
         run: node tests/ara-consistency/run.js
       - uses: actions/upload-artifact@v4
         if: always()

@@ -3,3 +3,4 @@ node_modules/
 tests-live/
 tests/ara-consistency/results/
 tests/harness/results/
+tests/ara-consistency/voices/

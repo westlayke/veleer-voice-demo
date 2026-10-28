@@ -10,10 +10,16 @@ const FLOWS = require("./flows");
 // the voice engine (Oct 27, the provider comparison): grok (xAI, the default) or openai; each has its own key and prices
 const PROVIDER = process.env.PROVIDER || "grok";
 const DIAG = process.env.DIAG === "1"; // print every conversation's voice log (VOICELOG lines) for a diagnostic run
+// SPOKEN=1 (Oct 27): the officer's lines are played into the app's microphone as speech (a second Grok voice, see officer-voice.js) instead
+// of typed, so the engine's own speech recognition and turn detection are in the run; NOISE=<gain> mixes a car-like noise under the voice
+// (0.1 is about a car at speed; 0 = quiet). The reply time then runs from the end of the officer's speech to the first sound of the reply.
+const SPOKEN = process.env.SPOKEN === "1", NOISE = SPOKEN ? Number(process.env.NOISE || 0) : 0, OFFICER_VOICE = process.env.OFFICER_VOICE || "rex";
+const { officerAudio } = require("./officer-voice");
+const ANSWERS = ["Yes.", "No.", "Move on.", "Neither.", "No, that's all for now.", "Today.", "Collect the check from her.", "Yes, collect the check from her, due today.", "Yes, it was."]; // every line the pretend officer can answer with, besides the flows' own
 const ENGINES = { grok: { name: "Grok (xAI)", key: "ARA_CONSISTENCY_KEY", host: /api\.x\.ai/, perMin: 0.08 }, openai: { name: "OpenAI (gpt-realtime-2.1)", key: "OPENAI_CONSISTENCY_KEY", host: /api\.openai\.com/, perMin: 0.10 },
   gemini: { name: "Gemini (gemini-3.8-live)", key: "GEMINI_CONSISTENCY_KEY", host: /generativelanguage\.googleapis\.com/, perMin: 0.03 } };
 const ENGINE = ENGINES[PROVIDER]; if (!ENGINE) { console.error("PROVIDER must be one of " + Object.keys(ENGINES).join(", ")); process.exit(1); }
-const KEY = process.env[ENGINE.key];
+const KEY = process.env[ENGINE.key], XAI_KEY = process.env.ARA_CONSISTENCY_KEY; // the officer's voice is always xAI's, whatever engine Ara runs on
 const BUDGET = Number(process.env.BUDGET || 2); // dollars for this run
 const MAX_CONVS = Number(process.env.MAX_CONVS || 1000);
 const JOBS = Number(process.env.JOBS || 3);
@@ -63,6 +69,7 @@ const spent = () => { let ms = 0; lines.forEach(l => { ms += (l.closed || Date.n
 let items = 0, stopAll = false;
 
 // ---------- one conversation ----------
+let voices = {}; // officer line -> 24 kHz PCM, in spoken mode
 async function converse(browser, base, flow, n) {
   const conv = { flow: flow.id, n, turns: [], replies: [], tools: [], saved: [], acts: [], errors: [], forced: [], lineMs: 0, items: 0, started: new Date().toISOString() };
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true, permissions: ["microphone"] });
@@ -89,13 +96,25 @@ async function converse(browser, base, flow, n) {
       else if (e.type === "response.function_call_arguments.done") { let a = {}; try { a = JSON.parse(e.arguments || "{}"); } catch (x) {} conv.tools.push({ name: e.name, args: a, turn: conv.turns.length, at: Date.now() }); if (cur) cur.tool = true; }
       else if (e.type === "response.done") { if (cur) { cur.status = e.response && e.response.status; if (e.response && e.response.usage) cur.usage = e.response.usage; if (cur.text || (cur.status !== "cancelled" && !cur.tool)) conv.replies.push(cur); } cur = null; } /* a reply that only called a tool is not a wordless reply (OpenAI calls the tool first, then speaks in the next one) */
       else if (e.type === "error") conv.errors.push("grok: " + JSON.stringify(e.error || e).slice(0, 300));
+      else if (/input_audio_transcription\.completed$/.test(e.type) && conv.turns.length) { const t = conv.turns[conv.turns.length - 1]; t.heardText = (t.heardText ? t.heardText + " " : "") + (e.transcript || ""); } /* the engine's own transcript of the officer's speech (spoken runs) */
   };
   await p.exposeFunction("__tap", (dir, s) => { let e; try { e = JSON.parse(s); } catch (x) { return; } if (e && e.type) (dir === "sent" ? onSent : onGot)(e); });
   p.on("websocket", ws => { if (!ENGINE.host.test(ws.url())) return; const line = { opened: Date.now(), closed: 0 }; lines.add(line); convLines.push(line); ws.on("close", () => { line.closed = Date.now(); }); });
   try {
     await p.goto(base + "preview-flow.html"); await p.waitForTimeout(800);
     await p.tap("text=I'd rather type my name"); await p.fill("#wlName", "Dana"); await p.tap("text=Start"); await p.waitForTimeout(600);
-    await p.evaluate((prov) => { window.__provider = prov;
+    await p.evaluate(({ prov, spoken, noise }) => { window.__provider = prov;
+      if (spoken) { // the microphone is a stream this script plays the officer's lines into (plus a steady noise), through the app's own capture path
+        const mctx = new AudioContext({ sampleRate: 24000 }), dst = mctx.createMediaStreamDestination();
+        if (noise > 0) { const n = mctx.createBuffer(1, 24000 * 4, 24000), d = n.getChannelData(0); let last = 0, sq = 0; for (let i = 0; i < d.length; i++) { last = 0.97 * last + 0.03 * (Math.random() * 2 - 1); d[i] = last; sq += last * last; }
+          const rms = Math.sqrt(sq / d.length); for (let i = 0; i < d.length; i++) d[i] = d[i] / rms * 0.3; /* a dull, car-like rumble, normalised so NOISE is its level: 0.1 = rms 0.03 */
+          const src = mctx.createBufferSource(); src.buffer = n; src.loop = true; const g = mctx.createGain(); g.gain.value = noise; src.connect(g).connect(dst); src.start(); }
+        window.__mic = { ctx: mctx, dst, played: 0 };
+        navigator.mediaDevices.getUserMedia = async () => dst.stream;
+        window.__speak = (b64) => new Promise((res) => { mctx.resume(); const bin = atob(b64), n = bin.length >> 1, buf = mctx.createBuffer(1, n, 24000), d = buf.getChannelData(0);
+          for (let i = 0; i < n; i++) { const v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); d[i] = (v >= 0x8000 ? v - 0x10000 : v) / 32768; }
+          const s = mctx.createBufferSource(); s.buffer = buf; s.connect(dst); s.onended = () => { window.__mic.played++; res(n / 24); }; s.start(); });
+      }
       window.__acts = []; const real = act; act = function (role, text, sess) { window.__acts.push({ at: Date.now(), role, text: String(text || "") }); return real.apply(this, arguments); };
       window.__drops = []; window.__vlog = []; const vt0 = Date.now(); const realV = vlog; vlog = function (text) { if (/: dropped |: left out /.test(String(text))) window.__drops.push(String(text)); if (window.__vlog.length < 900) window.__vlog.push(((Date.now() - vt0) / 1000).toFixed(1) + " " + String(text).slice(0, 220)); return realV.apply(this, arguments); }; // the evidence rule's Voice log lines, and the whole voice log for a diagnostic run (DIAG=1)
       const tapSend = (proto) => { const real = proto.send; proto.send = function (d) { try { const t = String(d); if (!t.includes('"input_audio_buffer.append"') && !t.includes('"realtimeInput"')) window.__tap("sent", t); } catch (x) {} return real.call(this, d); }; };
@@ -109,12 +128,12 @@ async function converse(browser, base, flow, n) {
       };
       document.querySelectorAll(".scrim").forEach(s => s.remove());
       startCall(null);
-    }, PROVIDER);
+    }, { prov: PROVIDER, spoken: SPOKEN, noise: NOISE });
     const settle = async () => { // until Ara has finished her turn and the app has nothing more to say
       const t0 = Date.now(); let quietSince = 0;
       while (Date.now() - t0 < TURN_WAIT_MS && !stopAll) {
         await p.waitForTimeout(250);
-        const busy = await p.evaluate(() => !!(G.responding || G.qCreate || G.qInstr || G.forced || G.pendingForce || playingLeft() > 0 || /^(Connecting|Reconnecting)/.test(G.status)));
+        const busy = await p.evaluate(() => !!(G.responding || G.qCreate || G.qInstr || G.forced || G.pendingForce || playingLeft() > 0 || /^(Connecting|Reconnecting|Thinking)/.test(G.status)));
         if (busy || Date.now() - lastFrame < 1200) { quietSince = 0; continue; }
         if (!quietSince) quietSince = Date.now(); if (Date.now() - quietSince > 900) return true;
       }
@@ -143,7 +162,12 @@ async function converse(browser, base, flow, n) {
       if (!await p.evaluate(() => G.live)) { conv.errors.push("call ended: " + (await p.evaluate(() => (window.__acts.filter(a => a.role === "end").pop() || { text: "?" }).text)).slice(0, 160)); break; } // nobody to talk to (Oct 27 7:03 PM run: three calls ended at once with "couldn't connect" and the officer went on talking for two minutes)
       const nBefore = conv.replies.length, at = Date.now();
       conv.turns.push({ say, at, after: last.slice(0, 300) });
-      await p.evaluate((t) => window.__officer(t), say);
+      if (SPOKEN) { // the line plays into the microphone; the engine hears it, decides when the officer has finished and answers on its own
+        const pcm = voices[say]; if (!pcm) { conv.errors.push("no voice for: " + say); break; }
+        const ms = await p.evaluate((b) => window.__speak(b), pcm.toString("base64"));
+        conv.askedAt = Date.now(); conv.turns[conv.turns.length - 1].spokenMs = Math.round(ms);
+        await p.waitForTimeout(1500); // the engine's silence wait before it decides the officer has finished
+      } else await p.evaluate((t) => window.__officer(t), say);
       const settled = await settle();
       conv.turns[conv.turns.length - 1].heard = conv.replies.slice(nBefore).some(r => r.text);
       conv.turns[conv.turns.length - 1].settled = settled;
@@ -184,7 +208,9 @@ const RULES = [
   { id: "no_false_saved", text: "Never says saved before the app saved" },
   { id: "replies_every_turn", text: "Answers every officer turn" },
   { id: "no_double_reply", text: "Doesn't say the same thing twice in a row" },
+  { id: "heard_right", text: "Fields reach the form as the officer said them (names, emails, amounts)" },
 ];
+const fieldOk = (want, got) => got != null && (want instanceof RegExp ? want.test(String(got)) : typeof want === "number" ? Number(got) === want : String(got).trim().toLowerCase() === String(want).trim().toLowerCase());
 function score(conv, flow) {
   const res = {}; const hit = (id, ok, note) => { const r = res[id] = res[id] || { n: 0, broke: 0, notes: [] }; r.n++; if (!ok) { r.broke++; if (note && r.notes.length < 3) r.notes.push(String(note).slice(0, 240)); } };
   const own = conv.replies.filter(r => r.text && !scripted(r, conv.forced));
@@ -203,6 +229,8 @@ function score(conv, flow) {
   own.forEach(r => hit("no_guidance_aloud", !/app guidance|never read it aloud|tool result|the app is saying|still[_ ]needed|function call/i.test(r.text), r.text));
   own.forEach(r => { if (/\b(i've|i have|it's|it is|has been|been|all) (saved|recorded|logged|added)\b|\bsaved it\b/i.test(r.text)) hit("no_false_saved", conv.saved.some(s => s.at <= r.at + 1500) && conv.saved.filter(s => s.at <= r.at + 1500).length > 0 && conv.acts.some(a => a.role === "saved" && a.at <= r.at + 1500 && a.at > r.at - 60000), r.text); });
   conv.turns.forEach(t => hit("replies_every_turn", t.heard, `no reply to "${t.say}"`));
+  if (flow.heard) { const got = {}; conv.tools.forEach(t => Object.entries(t.args || {}).forEach(([k, v]) => { if (v !== "" && v != null) got[k] = v; })); /* the last value the engine put in each field */
+    Object.entries(flow.heard).forEach(([k, want]) => hit("heard_right", fieldOk(want, got[k]), `${k}: wanted ${want}, got ${JSON.stringify(got[k] === undefined ? null : got[k])}; heard: ${conv.turns.map(t => t.heardText || "").filter(Boolean).join(" / ").slice(0, 200)}`)); }
   const heard = conv.acts.filter(a => a.role === "grok"); // what the app played and logged, as the officer heard it
   for (let i = 1; i < heard.length; i++) hit("no_double_reply", sameWords(heard[i - 1].text) !== sameWords(heard[i].text), heard[i].text);
   return res;
@@ -217,7 +245,7 @@ function report(convs, extra) {
   const rows = table(convs), money = (x) => "$" + x.toFixed(2);
   const byFlow = {}; convs.forEach(c => { const f = byFlow[c.flow] = byFlow[c.flow] || { n: 0, saved: 0, cost: 0, min: 0 }; f.n++; f.cost += c.cost; f.min += c.lineMs / 60000; if (c.score && c.score.task_saved && !c.score.task_saved.broke) f.saved++; });
   const fw = convs.flatMap(c => c.firstMs || []).sort((x, y) => x - y), pct = (q) => fw.length ? (fw[Math.min(fw.length - 1, Math.floor(q * fw.length))] / 1000).toFixed(2) + " s" : "n/a";
-  let md = `# Ara consistency run: ${ENGINE.name}\n\n${extra}\n\nConversations: ${convs.length}. Estimated cost: ${money(convs.reduce((a, c) => a + c.cost, 0))} (${(convs.reduce((a, c) => a + c.lineMs, 0) / 60000).toFixed(1)} min of open line at $${PER_MIN}/min + ${convs.reduce((a, c) => a + c.items, 0)} items at $${PER_ITEM}).\n\nFirst sound of a reply after the officer's words (${fw.length} turns): median ${pct(0.5)}, 90th percentile ${pct(0.9)}, slowest ${pct(1)}, over 3 s: ${fw.filter(x => x > 3000).length}.\n\n`;
+  let md = `# Ara consistency run: ${ENGINE.name}${SPOKEN ? " (spoken" + (NOISE ? ", noise " + NOISE : ", quiet") + ")" : ""}\n\n${extra}${SPOKEN ? "\n\nThe officer's lines were spoken into the microphone (Grok's " + OFFICER_VOICE + " voice" + (NOISE ? ", with car-like noise at level " + NOISE : ", no noise") + "); reply time runs from the end of the officer's speech." : ""}\n\nConversations: ${convs.length}. Estimated cost: ${money(convs.reduce((a, c) => a + c.cost, 0))} (${(convs.reduce((a, c) => a + c.lineMs, 0) / 60000).toFixed(1)} min of open line at $${PER_MIN}/min + ${convs.reduce((a, c) => a + c.items, 0)} items at $${PER_ITEM}).\n\nFirst sound of a reply after the officer's words (${fw.length} turns): median ${pct(0.5)}, 90th percentile ${pct(0.9)}, slowest ${pct(1)}, over 3 s: ${fw.filter(x => x > 3000).length}.\n\n`;
   md += `## Rule breaks\n\n| Rule | Checked | Broken | Rate |\n|---|---:|---:|---:|\n` + rows.map(r => `| ${r.rule} | ${r.checked} | ${r.broken} | ${r.rate}% |`).join("\n") + "\n\n";
   md += `## By flow\n\n| Flow | Conversations | Ended saved | Avg cost | Avg minutes |\n|---|---:|---:|---:|---:|\n` + Object.entries(byFlow).map(([k, f]) => `| ${k} | ${f.n} | ${f.saved} | ${money(f.cost / f.n)} | ${(f.min / f.n).toFixed(2)} |`).join("\n") + "\n\n";
   // reply time by flow: mean, standard deviation, median, 90th percentile (Carverhill, Oct 27: "compare standard deviation on response times too")
@@ -236,6 +264,12 @@ function report(convs, extra) {
   const args = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--use-file-for-fake-audio-capture=" + wav, "--autoplay-policy=no-user-gesture-required"];
   const browser = await chromium.launch(Object.assign({ args }, process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : fs.existsSync("/opt/pw-browsers/chromium") ? { executablePath: "/opt/pw-browsers/chromium" } : {}));
   const flows = FLOWS.filter(f => !ONLY || ONLY.includes(f.id));
+  if (SPOKEN) { // every line the officer may say, as speech, before any conversation starts
+    const texts = flows.flatMap(f => f.lines.concat(f.subst ? [f.subst] : [])).concat(ANSWERS);
+    const v = await officerAudio(texts, { key: XAI_KEY, voice: OFFICER_VOICE }); voices = v.pcm;
+    console.log(`Officer voice (${OFFICER_VOICE}): ${v.log.length} lines, ${v.log.filter(l => l.cached).length} from the cache, ${v.log.reduce((a, l) => a + l.seconds, 0).toFixed(0)} s of speech`);
+    v.log.filter(l => !l.cached && l.heard && l.heard.replace(/\W/g, "").toLowerCase() !== l.text.replace(/\W/g, "").toLowerCase()).forEach(l => console.log(`  said differently: "${l.text}" -> "${l.heard}"`));
+  }
   const convs = []; let started = 0, running = 0, firstLogged = false, fails = 0; const avg = () => { const ok = convs.filter(c => !c.failed); return ok.length ? ok.reduce((a, c) => a + c.cost, 0) / ok.length : Number(process.env.EST || 0.3); };
   const guard = setInterval(() => { if (spent() > BUDGET && !stopAll) { stopAll = true; console.log(`Budget reached ($${spent().toFixed(3)}): stopping`); } }, 1000);
   const half = { said: false };
@@ -249,7 +283,7 @@ function report(convs, extra) {
       progress(c, convs.length).catch(() => {});
       console.log(`${convs.length}. ${c.flow} #${c.n}: ${c.turns.length} turns, ${(c.lineMs / 1000).toFixed(0)} s, $${c.cost.toFixed(3)}, saved: ${c.saved.map(s => s.text).join(" | ") || "nothing"}${c.errors.length ? ", errors: " + c.errors.slice(0, 2).join("; ") : ""}  [total $${spent().toFixed(3)}]`);
       if (!half.said && spent() >= BUDGET / 2) { half.said = true; console.log(`MILESTONE halfway: ${convs.length} conversations, $${spent().toFixed(3)}`); }
-      console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => { let err = ""; try { err = (JSON.parse(t.out || "{}").error || "").slice(0, 220); } catch (x) {} return [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)].concat(err ? ["ERROR: " + err] : []); }), saved: c.saved.map(s => s.text), leftOut: c.leftOut || [], drops: c.drops || [], errors: c.errors.slice(0, 3) }));
+      console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => { let err = ""; try { err = (JSON.parse(t.out || "{}").error || "").slice(0, 220); } catch (x) {} return [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)].concat(err ? ["ERROR: " + err] : []); }), saved: c.saved.map(s => s.text), leftOut: c.leftOut || [], drops: c.drops || [], errors: c.errors.slice(0, 3), heard: SPOKEN ? c.turns.map(t => [t.say, t.heardText || "", t.spokenMs || 0]) : undefined }));
       if (DIAG) console.log("VOICELOG " + JSON.stringify({ flow: c.flow, n: c.n, steps: c.acts.filter(a => a.role === "step").map(a => [a.at, a.text.slice(0, 220)]), vlog: c.vlog || [] })); /* the app's own voice log, for reading an engine's behaviour line by line */
       fs.writeFileSync(path.join(OUT, "conversations.json"), JSON.stringify(convs, null, 1));
     }

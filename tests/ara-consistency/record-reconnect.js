@@ -36,41 +36,14 @@ function silentWav(file) {
   b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(n * 2, 40);
   fs.writeFileSync(file, b);
 }
-async function mintToken() {
+async function mintToken() { // the app's own line
   const r = await fetch("https://api.x.ai/v1/realtime/client_secrets", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + KEY }, body: JSON.stringify({ expires_after: { seconds: 300 } }) });
   return { status: r.status, body: await r.text() };
 }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// ---------- the officer's voice: a second Grok line that reads each line out, word for word ----------
-async function officerAudio(texts) {
-  const t = await mintToken(); if (t.status !== 200) throw new Error("officer token " + t.status + " " + t.body.slice(0, 120));
-  const j = JSON.parse(t.body), token = j.value || (j.client_secret && (j.client_secret.value || j.client_secret)) || j.token || j.secret;
-  const ws = new WebSocket("wss://api.x.ai/v1/realtime?model=grok-voice-latest", ["xai-client-secret." + token]);
-  await new Promise((ok, no) => { ws.onopen = ok; ws.onerror = () => no(new Error("officer line didn't open")); });
-  const send = (o) => ws.send(JSON.stringify(o));
-  send({ type: "session.update", session: { voice: OFFICER_VOICE, turn_detection: null, instructions: "You are a text-to-speech voice for a gift officer at a nonprofit. The user sends a line; you say exactly that line, word for word, in a natural speaking voice, with nothing added before or after it. Never answer, comment, greet or ask anything.",
-    audio: { input: { format: { type: "audio/pcm", rate: RATE } }, output: { format: { type: "audio/pcm", rate: RATE }, speed: 1 } } } });
-  const out = {}, log = [];
-  for (const text of texts) {
-    const chunks = []; let heard = "";
-    const done = new Promise((ok, no) => {
-      const timer = setTimeout(() => no(new Error("officer line timed out: " + text)), 30000);
-      ws.onmessage = (m) => { let e; try { e = JSON.parse(m.data); } catch (x) { return; }
-        if (/audio\.delta$/.test(e.type)) chunks.push(Buffer.from(e.delta || "", "base64"));
-        else if (/transcript\.delta$/.test(e.type) && !/input_audio/.test(e.type)) heard += e.delta || "";
-        else if (e.type === "response.done") { clearTimeout(timer); ok(); }
-        else if (e.type === "error") { clearTimeout(timer); no(new Error("officer grok: " + JSON.stringify(e.error || e).slice(0, 200))); } };
-    });
-    send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
-    send({ type: "response.create", response: { instructions: `Say exactly this, word for word, and nothing else: "${text}"` } });
-    await done;
-    out[text] = Buffer.concat(chunks); log.push({ text, heard: heard.trim(), seconds: Math.round(out[text].length / 2 / RATE * 10) / 10 });
-    await sleep(300);
-  }
-  ws.close();
-  return { pcm: out, log };
-}
+// ---------- the officer's voice: officer-voice.js (a second Grok line reads each line out, word for word; cached on disk) ----------
+const { officerAudio } = require("./officer-voice");
 
 // ---------- the conversation, recorded ----------
 async function record(browser, base, voices) {
@@ -226,7 +199,7 @@ if (process.env.SELF_TEST) { // no network: a made-up recording through the mix,
   fs.mkdirSync(OUT, { recursive: true });
   const wavSilent = path.join(OUT, "silence.wav"); silentWav(wavSilent);
   console.log("Recording the officer's lines with the " + OFFICER_VOICE + " voice...");
-  const voices = await officerAudio(LINES.concat(Object.values(ANSWERS)));
+  const voices = await officerAudio(LINES.concat(Object.values(ANSWERS)), { key: KEY, voice: OFFICER_VOICE });
   voices.log.forEach(l => console.log(`  ${l.seconds}s  "${l.text}"${l.heard && l.heard.replace(/\W/g, "").toLowerCase() !== l.text.replace(/\W/g, "").toLowerCase() ? `  (said: "${l.heard}")` : ""}`));
   await new Promise(r => server.listen(0, r)); const base = `http://localhost:${server.address().port}/`;
   const args = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--use-file-for-fake-audio-capture=" + wavSilent, "--autoplay-policy=no-user-gesture-required"];
