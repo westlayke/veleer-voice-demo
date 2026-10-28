@@ -103,10 +103,10 @@ test("xAI review items (Oct 28): service idle timer, streaming transcription, tr
   const tr = (await sent()).slice(n - 0).find(e => e.type === "conversation.item.truncate");
   ok(tr && tr.item_id === "item_7" && tr.content_index === 0 && tr.audio_end_ms >= 0 && tr.audio_end_ms < 1500, "the interruption wasn't reported with the heard duration: " + JSON.stringify(tr));
   await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "cancelled" } }) })); await p.waitForTimeout(100);
-  // a reply request still outstanding when the officer speaks is cancelled: one question, one answer
+  // a reply request still outstanding when the officer speaks is dropped: one question, one answer; no cancel is sent, nothing is being generated yet (Oct 28: "Cancellation failed: no active response found")
   n = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.asked = true; G.askedAt = Date.now(); G.responding = false; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
-  ok(await p.evaluate((n) => __sent.slice(n).some(s => /"response\.cancel"/.test(s)) && !G.asked, n), "the outstanding reply request wasn't cancelled when the officer spoke");
+  ok(await p.evaluate((n) => !__sent.slice(n).some(s => /"response\.cancel"/.test(s)) && !G.asked && ACT.q.some(a => /that request is dropped/.test(a.text)), n), "the outstanding reply request wasn't dropped (without a cancel) when the officer spoke");
   // ...except right after a hands-free save: a repeated "yes, save it" is the same answer and the save confirmation stays requested (Oct 28 12:54 PM call: the officer heard nothing)
   n = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.asked = true; G.askedAt = Date.now(); G.responding = false; G.savedAt = Date.now() - 2000; G.savedLine = "Ask recorded"; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
