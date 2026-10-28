@@ -165,7 +165,8 @@ test("Christmas mode: visitors and sounds (sleigh bells, ho ho ho, chime, carol)
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300);
   await p.evaluate(() => window.__demo.setXmas(true));
   await p.tap("nav >> text=Home").catch(() => {}); await p.waitForTimeout(200);
-  await p.evaluate(() => { spkCtx = null; delete window.__demo.state.settings.seenOwlHint; document.getElementById("modal").innerHTML = ""; window.__demo.owlHint(); });
+  // in October the owl's own hint may already be on the page (it retries every second while a call is up and the test just ended one): it must go first, or owlHint() sees a hint and shows no Santa
+  await p.evaluate(() => { spkCtx = null; delete window.__demo.state.settings.seenOwlHint; document.getElementById("modal").innerHTML = ""; document.querySelectorAll(".owlhint").forEach(e => e.remove()); window.__demo.owlHint(); });
   await p.waitForTimeout(1000);
   ok(await p.isVisible(".owlhint >> text=Tap me to hear me ho ho ho!"), "Santa didn't ask for a tap");
   ok((await p.textContent(".owlhint-owl")).includes("🎅"), "it wasn't Santa");
