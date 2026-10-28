@@ -6,6 +6,8 @@
 
 /* ---------- timings: tune here ---------- */
 const IDLE_MS = 12000, IDLE_HF_MS = 30000;   // hang up after this much quiet (hands-free: a driver may take a while to answer)
+const IDLE_FORM_MS = 60000;                  // with a form open and waiting on the officer, twice that (Carverhill Oct 28 4:12 PM: the service took 20 to 29 s a reply, then the call hung up with the form open)
+const STILL_WAIT_MS = 10000;                 // while a reply is outstanding, after "Ara's taking a moment." the phone says "Still waiting on Ara." this often (never a long silence)
 const NOISE_CAP_MS = 60000;                  // sound on the mic counts as talking, but not for longer than this (road noise)
 const STALL_MS = 5000, SPEAK_RMS = 0.04;     // officer's voice on the mic this long with no word from the voice service: the line may be dead
 const LINE_TEST_MS = 3000;                   // how long a line test (a tiny request to the key holder) may take before it counts as failed
@@ -24,7 +26,7 @@ const EARLY_PING_MS = 2500;                  // the early line test's limit
 const RESUME_MS = 25 * 60000;               // a line reopened within this long picks up the same conversation on xAI (kept 30 minutes)
 const FORCE_WAIT_MS = 8000;                  // a scripted line that hasn't started by now is said by Ara instead (3 s was too short on a slow line, Oct 25; 5 s still fell back 5 times in the 4:42 PM call, lines then played late)
 const REPLAY_MS = 20000;                     // a tool call repeated this soon after a picked-up conversation, identical to one made before the drop, is the service replaying it (Oct 28)
-const LATE_FORCE_MS = 25000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long
+const LATE_FORCE_MS = 90000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long (25 s until Oct 28 4:12 PM: Ara took 29 s and the officer heard the line twice)
 const TOKEN_WAIT_MS = 6000;                  // a voice pass that takes longer counts as failed (Oct 25: one took 89 s, the next never came back and the call hung)
 const TOKEN_RETRY_MS = 2000;                 // between tries for a voice pass while the line is down
 const DOWN_GIVE_UP_MS = 480000;              // a line down this long (no voice pass to be had) ends the call with the phone's spoken notice (8 minutes, as above)
@@ -41,9 +43,12 @@ const NAMED_LINES = {
     (n) => `Still at it, ${n}. A dead spot won't beat us.`, (n) => `Not there yet, ${n}. I'll keep trying for as long as it takes.`, (n) => `Still trying, ${n}. I won't give up before the signal does.`],
   back: (n) => `You're back with Ara, ${n}.`,
 };
-const NAMED_VOICE = "leo", NAMED_KEY = "namedLines:v1", namedRaw = {}, namedBuf = {};
+const NAMED_VOICE = "leo", NAMED_KEY = "namedLines:v2", namedRaw = {}, namedBuf = {};
+// phone lines without a name, made and kept the same way (the stock recordings have no words for these)
+const STILL_WAIT_TEXT = "Still waiting on Ara.", HANGUP_TEXT = "I'll hang up for now. Tap the mic when you need me.", HANGUP_FORM_TEXT = "I'll hang up for now. Your form stays on the screen.";
+const PHONE_LINES = [STILL_WAIT_TEXT, HANGUP_TEXT, HANGUP_FORM_TEXT];
 const officerFirst = () => { const n = String((typeof S !== "undefined" && S.settings && S.settings.userName) || "").trim().split(/\s+/)[0] || ""; return n ? n[0].toUpperCase() + n.slice(1) : ""; };
-const namedTexts = (n) => [NAMED_LINES.dropped(n), ...NAMED_LINES.still.map(f => f(n)), NAMED_LINES.back(n)];
+const namedTexts = (n) => (n ? [NAMED_LINES.dropped(n), ...NAMED_LINES.still.map(f => f(n)), NAMED_LINES.back(n)] : []).concat(PHONE_LINES);
 const namedText = (kind, i) => { const n = officerFirst(); if (!n) return ""; return kind === "still" ? NAMED_LINES.still[i % NAMED_LINES.still.length](n) : NAMED_LINES[kind] ? NAMED_LINES[kind](n) : ""; };
 const b64buf = (s) => { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < u.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
 const bufb64 = (b) => { const u = new Uint8Array(b); let s = ""; for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); };
@@ -51,14 +56,14 @@ function namedLoad() { let st = null; try { st = JSON.parse(localStorage.getItem
 function decodeNamed() { const c = G.ctx; if (!c) return; Object.entries(namedRaw).forEach(([t, b]) => { if (!namedBuf[t] && b) c.decodeAudioData(b.slice(0)).then(buf => { namedBuf[t] = buf; }).catch(() => {}); }); }
 // fetched once per name (the key holder keeps each line 30 days, so the second phone with the same name waits on nobody), never while a line is down
 async function prepNamedLines(why) {
-  const n = officerFirst(); if (!n || G.namedBusy || G.downAt || !navigator.onLine) return; namedLoad();
+  const n = officerFirst(); if (G.namedBusy || G.downAt || !navigator.onLine) return; namedLoad();
   const want = namedTexts(n).filter(t => !namedRaw[t]); if (!want.length) { decodeNamed(); return; }
   G.namedBusy = true; let got = 0;
   for (const t of want) { try { const r = await fetch(tokenUrl() + "/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: t, voice: NAMED_VOICE }), signal: AbortSignal.timeout(15000) });
     if (!r.ok || !/audio/.test(r.headers.get("content-type") || "")) continue; const b = await r.arrayBuffer(); if (b.byteLength) { namedRaw[t] = b; got++; } } catch (e) {} }
   G.namedBusy = false;
   if (got) { const lines = {}; namedTexts(n).forEach(t => { if (namedRaw[t]) lines[t] = bufb64(namedRaw[t]); }); try { localStorage.setItem(NAMED_KEY, JSON.stringify({ name: n, lines })); } catch (e) {}
-    vlog(`${got} reconnect lines with ${n}'s name fetched (${why})`); act("step", `${got} reconnect line${got === 1 ? "" : "s"} with ${n}'s name fetched (${why}): the phone keeps them for a dead spot`); }
+    vlog(`${got} phone lines${n ? " with " + n + "'s name" : ""} fetched (${why})`); act("step", `${got} phone line${got === 1 ? "" : "s"}${n ? " with " + n + "'s name" : ""} fetched (${why}): the phone keeps them for a dead spot or a slow reply`); }
   decodeNamed();
 }
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
@@ -92,12 +97,14 @@ async function mintToken(limit = TOKEN_WAIT_MS) {
   return t;
 }
 // Grok bills for every minute a conversation is open, so hang up after 12 seconds with no talking and no taps
-const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
+const idleMs = () => typeof V !== "undefined" && V && ACTIONS[V.action] ? Math.max(IDLE_FORM_MS, G.hands ? IDLE_HF_MS : IDLE_MS) : G.hands ? IDLE_HF_MS : IDLE_MS;
 function idleCheck() { if (typeof keepAlive === "function") keepAlive();
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
   // Oct 27 (Carverhill), back on Oct 28 after the 1.0 reset dropped it: a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
   if (G.live && G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
-    if (!G.slowSaid && sayLocal("Ara's taking a moment.", "slow")) G.slowSaid = true; else { cue("wait"); vlog("still working: tick"); } }
+    if (!G.slowSaid) { if (sayLocal("Ara's taking a moment.", "slow")) { G.slowSaid = true; G.slowAt = Date.now(); } else { cue("wait"); vlog("still working: tick"); } }
+    else if (Date.now() - (G.slowAt || 0) >= STILL_WAIT_MS && sayLocal(STILL_WAIT_TEXT, "", STILL_WAIT_TEXT)) G.slowAt = Date.now(); /* every 10 s until Ara answers (Oct 28: 29 s gaps with one line in them) */
+    else { cue("wait"); vlog("still working: tick"); } }
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
   if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
@@ -118,7 +125,10 @@ function idleCheck() { if (typeof keepAlive === "function") keepAlive();
 }
 function idleStart() {
   G.idleEnding = true; G.idleAt = Date.now(); vlog(`${idleMs() / 1000} seconds quiet: hanging up`);
-  forceSay("I'll hang up for now. Tap the mic when you need me.");
+  const form = typeof V !== "undefined" && V && ACTIONS[V.action], text = form ? HANGUP_FORM_TEXT : HANGUP_TEXT;
+  // the phone's own line when it has it (it always plays; Oct 28 4:16 PM the forced line never came), else Ara is asked to say it
+  if (sayLocal(text, "", text)) { G.idleTimer = setTimeout(idleHangUp, Math.max(1500, (G.lineEndAt || Date.now()) - Date.now() + 700)); return; }
+  forceSay(text);
   G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
 }
 function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; const secs = idleMs() / 1000; endCall(`${secs} seconds of quiet`); toast(`Hung up after ${secs} seconds of quiet. Tap the mic when you need me.`); }

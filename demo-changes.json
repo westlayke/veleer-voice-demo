@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 4:26 PM",
+   "change": "Preview: from the 4:12 PM call (the service took 20 to 29 s a reply and the call hung up with the ask-result form open). (1) While Ara is slow, after \"Ara's taking a moment\" the phone says \"Still waiting on Ara\" every 10 seconds until she answers, so there is no long silence. (2) With a form open the quiet allowance before hanging up is 60 seconds (was 30), and the goodbye is a phone line that always plays: \"I'll hang up for now. Your form stays on the screen.\" (3) An after-save line Ara says late is no longer heard a second time from the app (the duplicate cut now lasts 90 seconds, not 25). The two new phone lines are fetched and kept like the named reconnect lines.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Bad call, Ara just dropped leaving interaction report up\" (4:17 PM); \"Can't we just be better about saying 'Ara is taking a minute' rather than have those long silent periods?\" (4:20 PM); \"Ok do the new build on preview\" (4:22 PM)"
+  },
+  {
    "date": "Oct 28, 4:08 PM",
    "change": "Preview: the phone keeps reconnecting for 8 minutes (was 5) before giving up on the voice service. While the line is down it says the officer's name and that it isn't giving up, a different line each time (\"The line dropped, Pat. Reconnecting you to Ara.\", \"Still trying, Pat. I'm not giving up on you.\", \"Hang in there, Pat. I'll keep knocking until Ara answers.\", \"No signal yet, Pat, but I'm as determined as ever.\", \"Still at it, Pat. A dead spot won't beat us.\", \"Not there yet, Pat. I'll keep trying for as long as it takes.\", \"Still trying, Pat. I won't give up before the signal does.\", then \"You're back with Ara, Pat.\"). The lines are made by the key holder's text-to-speech in the phone's stand-in voice when the name is entered, when the app opens and when a line opens, and kept on the phone, so they play with no signal; a phone that doesn't have them yet hears the old recordings.",
    "area": "Voice",

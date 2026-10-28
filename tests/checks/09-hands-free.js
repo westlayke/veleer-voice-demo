@@ -114,7 +114,7 @@ test("Hands-free: a new opportunity always asks the campaign when the entity has
   // a slow test request while the voice service is still sending is not a stall
   await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise(res => setTimeout(() => res(new Response("{}")), 2800)) : f(u, o); });
   await p.evaluate(() => { clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.asked = false; window.__noAutoForce = true; }); // the pretend service never answered the earlier reply requests, and leaves the goodbye line pending
-  await p.evaluate(() => { window.__ws0 = __ws; G.lastAct = Date.now() - 31000; G.loudAt = 0; const keep = setInterval(() => { if (!G.live) return clearInterval(keep); G.lastMsg = Date.now(); G.loudAt = 0; G.speechSince = 0; }, 100); window.__keep = keep; }); // the test browser's pretend mic beeps
+  await p.evaluate(() => { window.__ws0 = __ws; G.lastAct = Date.now() - 61000; G.loudAt = 0; /* a form is open: the phone allows 60 s of quiet (Oct 28) */ const keep = setInterval(() => { if (!G.live) return clearInterval(keep); G.lastMsg = Date.now(); G.loudAt = 0; G.speechSince = 0; }, 100); window.__keep = keep; }); // the test browser's pretend mic beeps
   await p.waitForTimeout(4500);
   ok(await p.evaluate(() => __ws === __ws0 && G.idleEnding && G.forced && /hang up for now/.test(G.forced.text)), "a live line with a slow test was reconnected instead of the normal quiet hang-up (a scripted goodbye)");
   await p.evaluate(() => { clearInterval(__keep); G.responding = true; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });

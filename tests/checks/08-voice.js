@@ -114,7 +114,7 @@ test("xAI review items (Oct 28): service idle timer, streaming transcription, tr
   await p.evaluate(() => { G.asked = false; G.savedAt = 0; });
   // the service's idle timer fired (road noise kept the phone's from firing): its check-in is dropped and the app's goodbye goes
   n = await p.evaluate(() => __sent.length);
-  await p.evaluate(() => { window.__noAutoForce = true; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.timeout_triggered" }) }); }); await p.waitForTimeout(300);
+  await p.evaluate(() => { window.__noAutoForce = true; G.lastAct = Date.now() - 40000; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.timeout_triggered" }) }); }); await p.waitForTimeout(300); /* quiet longer than the phone allows (no form open) */
   ok(await p.evaluate((n) => __sent.slice(n).some(s => /"response\.cancel"/.test(s)) && G.idleEnding && G.dropNext, n), "the service's idle timer didn't start the hang-up");
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }); await p.waitForTimeout(300);
   ok(await p.evaluate((n) => !G.dropNext && !G.responding && __sent.slice(n).some(s => /force_message/.test(s) && /hang up for now/.test(s)), n), "the check-in wasn't dropped, or the goodbye line wasn't sent");
@@ -1100,11 +1100,11 @@ test("Reconnect lines with the officer's name (Oct 28): fetched once from the ke
   await signIn(p, "Pat"); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   // the fetch: one request per line, in the stand-in voice, stored under the name; a reply that isn't audio is not kept
   await p.evaluate(() => { window.__tts = []; const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/tts/.test(String(u))) { const b = JSON.parse(o.body); __tts.push(b); return Promise.resolve(new Response(new Uint8Array([1, 2, 3, 4]), { status: 200, headers: { "Content-Type": "audio/mpeg" } })); } return f(u, o); };
-    localStorage.removeItem("namedLines:v1"); Object.keys(namedRaw).forEach(k => delete namedRaw[k]); });
+    localStorage.removeItem("namedLines:v2"); Object.keys(namedRaw).forEach(k => delete namedRaw[k]); });
   await p.evaluate(() => prepNamedLines("test")); await p.waitForTimeout(400);
-  const fetched = await p.evaluate(() => ({ n: __tts.length, voices: [...new Set(__tts.map(b => b.voice))], texts: __tts.map(b => b.text), stored: JSON.parse(localStorage.getItem("namedLines:v1") || "null"), log: ACT.q.map(a => a.text).join(" | ") }));
-  ok(fetched.n === 8 && fetched.voices.join() === "leo" && fetched.texts[0] === "The line dropped, Pat. Reconnecting you to Ara." && fetched.texts.includes("Still trying, Pat. I'm not giving up on you.") && fetched.texts.includes("Hang in there, Pat. I'll keep knocking until Ara answers.") && fetched.texts[7] === "You're back with Ara, Pat.", "the named lines weren't fetched as expected: " + JSON.stringify(fetched.texts));
-  ok(fetched.stored && fetched.stored.name === "Pat" && Object.keys(fetched.stored.lines).length === 8 && /8 reconnect lines with Pat's name fetched \(test\)/.test(fetched.log), "the lines weren't kept on the phone under the name: " + JSON.stringify(fetched.stored && Object.keys(fetched.stored.lines).length) + " " + fetched.log.slice(-200));
+  const fetched = await p.evaluate(() => ({ n: __tts.length, voices: [...new Set(__tts.map(b => b.voice))], texts: __tts.map(b => b.text), stored: JSON.parse(localStorage.getItem("namedLines:v2") || "null"), log: ACT.q.map(a => a.text).join(" | ") }));
+  ok(fetched.n === 11 && fetched.voices.join() === "leo" && fetched.texts[0] === "The line dropped, Pat. Reconnecting you to Ara." && fetched.texts.includes("Still trying, Pat. I'm not giving up on you.") && fetched.texts.includes("Hang in there, Pat. I'll keep knocking until Ara answers.") && fetched.texts[7] === "You're back with Ara, Pat." && fetched.texts.includes("Still waiting on Ara.") && fetched.texts.includes("I'll hang up for now. Your form stays on the screen."), "the named and phone lines weren't fetched as expected: " + JSON.stringify(fetched.texts));
+  ok(fetched.stored && fetched.stored.name === "Pat" && Object.keys(fetched.stored.lines).length === 11 && /11 phone lines with Pat's name fetched \(test\)/.test(fetched.log), "the lines weren't kept on the phone under the name: " + JSON.stringify(fetched.stored && Object.keys(fetched.stored.lines).length) + " " + fetched.log.slice(-200));
   await p.evaluate(() => { __tts.length = 0; }); await p.evaluate(() => prepNamedLines("again")); await p.waitForTimeout(200);
   ok(await p.evaluate(() => __tts.length === 0), "the lines were fetched a second time although the phone has them");
   // with the lines decoded, the dropped line and the still-trying lines come with the name, in turn; back too
@@ -1120,5 +1120,17 @@ test("Reconnect lines with the officer's name (Oct 28): fetched once from the ke
   ok(said.join("|") === "The line dropped. Reconnecting you to Ara.|Still trying to reconnect.|You're back with Ara.", "without the named lines the stock recordings weren't used: " + JSON.stringify(said));
   // the give-up is 8 minutes (an 8-minute dead spot, Carverhill Oct 28)
   ok(await p.evaluate(() => NO_LINE_GIVE_UP_MS === 480000 && DOWN_GIVE_UP_MS === 480000), "the give-up isn't 8 minutes");
+  // 4:12 PM call: while a reply is outstanding, after "Ara's taking a moment." the phone says "Still waiting on Ara." every 10 s; with a form open the quiet allowance is 60 s and the hang-up line is the phone's own
+  await p.evaluate(() => { namedTexts("Pat").forEach(t => { namedBuf[t] = G.ctx.createBuffer(1, 240, 24000); }); ACT.q.length = 0; G.asked = true; G.askedAt = Date.now() - 5000; G.slowSaid = true; G.slowAt = Date.now() - 11000; G.tickAt = 0; idleCheck(); G.asked = false; });
+  ok(await p.evaluate(() => ACT.q.some(a => a.text === 'The phone said (recording): "Still waiting on Ara."') && Date.now() - G.slowAt < 2000), "the still-waiting line wasn't said 10 s after the slow line: " + JSON.stringify(await p.evaluate(() => ACT.q.map(a => a.text))));
+  await p.evaluate(() => { G.slowAt = Date.now() - 4000; G.tickAt = 0; ACT.q.length = 0; G.asked = true; idleCheck(); G.asked = false; });
+  ok(await p.evaluate(() => !ACT.q.some(a => /Still waiting on Ara/.test(a.text))), "the still-waiting line repeated sooner than 10 s");
+  const idle = await p.evaluate(() => { const a = idleMs(); V = { action: "task", data: {}, target: {}, fromVoice: new Set() }; const b = idleMs(); G.hands = false; const c = idleMs(); G.hands = true; return [a, b, c]; });
+  ok(idle[0] === 30000 && idle[1] === 60000 && idle[2] === 60000, "the quiet allowance isn't 30 s, and 60 s with a form open: " + JSON.stringify(idle));
+  await p.evaluate(() => { ACT.q.length = 0; G.lastAct = Date.now(); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.timeout_triggered" }) }); });
+  ok(await p.evaluate(() => !G.idleEnding && ACT.q.some(a => /its idle timer\): ignored, a form is open and the phone allows 60 s/.test(a.text))), "the service's idle timer hung up although a form is open and the phone allows 60 s: " + JSON.stringify(await p.evaluate(() => [G.idleEnding, ACT.q.map(a => a.text)])));
+  await p.evaluate(() => { ACT.q.length = 0; idleStart(); });
+  ok(await p.evaluate(() => G.idleEnding && !!G.idleTimer && ACT.q.some(a => a.text === 'The phone said (recording): "I\'ll hang up for now. Your form stays on the screen."') && !G.forced), "the hang-up line with a form open wasn't the phone's own recording: " + JSON.stringify(await p.evaluate(() => ACT.q.map(a => a.text))));
+  await p.evaluate(() => { clearTimeout(G.idleTimer); G.idleEnding = false; G.idleAt = 0; V = null; });
 });
 };

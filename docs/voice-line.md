@@ -112,6 +112,11 @@ call's own audio output (`playLine`, `sayLocal`). The phone's built-in speech is
   are made by the key holder's `/tts` in the phone's stand-in voice (`NAMED_LINES`, `prepNamedLines`) when the name is entered,
   when the app opens and when a line opens, and kept on the phone (`localStorage` `namedLines:v1`, decoded into `namedBuf`),
   so they play in a dead spot. Without them (first open with no signal) the stock recordings play. `downSay(kind)` picks the line.
+- While a reply from Ara is outstanding: "Ara's taking a moment." at `TICK_MS`, then "Still waiting on Ara." every
+  `STILL_WAIT_MS` (10 s) until she answers (a phone line made like the named ones; a soft tick when the phone has none).
+- Quiet hang-up: `idleMs()` is 12 s, 30 s hands-free, and `IDLE_FORM_MS` (60 s) with a form open; the service's own idle
+  event is ignored while the phone still allows quiet. The goodbye is the phone's own line ("I'll hang up for now. Your form
+  stays on the screen." with a form open), else Ara is asked to say it.
 - Short tones: a drop tone on the first drop, a soft tick every `TICK_MS` while waiting for a slow reply or reconnecting
   (until the spoken line takes over), a down tone when the call gives up.
 
