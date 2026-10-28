@@ -18,18 +18,27 @@ function spelledWords() {
   const out = []; lines.forEach(t => (spellPrep(t).match(/(?<![A-Za-z'’])(?:[A-Za-z][.,-]?\s+){2,}[A-Za-z]\b\.?/g) || []).forEach(m => { const w = m.replace(/[^A-Za-z]/g, ""); if (w.length >= 3) out.push(w); }));
   return out;
 }
-function officerRated() {
-  const lines = (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-3).map(l => l.slice(9).toLowerCase().trim());
-  return lines.some(t => /\b(capacity|rating|rated|rate them|rate her|rate him)\b/.test(t) || /\$\s?\d|\b\d+\s?(k|thousand|million)\b|\b(thousand|million|grand)\b|\b(donat\w*|gives?|gave|giving)\b.*\b(dollars?|a year|annually)\b|\bunder (five|5)\b/.test(t)
-    || /^(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)[.!]?( please)?[.!]?$/.test(t.replace(/^(it's|its|make it|let's say|lets say|say|um|uh|okay|ok)[, ]+/, ""))
-    || /\b(let's do|lets do|go with|i'd say|i would say|make (it|him|her|them)|set (it|him|her|them)( to| at)?|put (him|her|them) (at|as|down as)|rate (him|her|them)( as| at)?)\s+(an? )?(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)\b/.test(t)); // "Let's do C." after hearing the choices (Oct 25)
-}
+function officerRated() { return ratedIn(officerLines(3)); } // the matcher lives in evidence.js (Oct 28 tidy-up); this wrapper serves set_capacity_rating
 // the officer's last words turn texting on or off ("texting is permitted", "you can text him", "no texts"), or null if they didn't mention texting
 function officerSaidTexting() {
   const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9).toLowerCase().replace(/[’‘]/g, "'");
   if (!/\btext(s|ing|ed)?\b/.test(t)) return null;
   if (/\b(no|not|don't|do not|never|shouldn't|can't|cannot|off)\b/.test(t)) return false;
   return /\b(permit|permitted|allow|allowed|ok|okay|fine|yes|can|should|turn on|on|check|tick|agreed|sure)\b/.test(t) ? true : null;
+}
+// the officer said there is no email, or no mobile ("no email, but the mobile is...", "she doesn't have a cell"): the app asks only for the other one, never "as well" (Oct 27 spoken run: Ara asked for an email after "No email")
+function officerSaidNone(k) { // their last two lines: the one that said so and, at most, the one that gave the other number
+  const lines = (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-2).map(l => l.slice(9).toLowerCase().replace(/[’‘]/g, "'"));
+  const word = k === "email" ? "(e-?mail( address)?)" : "(mobile( number| phone)?|cell( ?phone| number)?|phone( number)?)";
+  const re = new RegExp(`\\b(no|not|without|doesn't have|does not have|don't have|do not have|hasn't got|has no|have no|haven't got|isn't on|not on|never gave( me)?|didn't give( me)?)\\s+(an? |any |the |his |her |their )?${word}\\b`);
+  return lines.some(t => re.test(t));
+}
+// seven or more digits in the officer's last line, said as figures or words ("two zero eight, five five five..."): a phone number the tool call should carry
+function officerSaidDigits() {
+  const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9).toLowerCase();
+  const w = { zero: "0", oh: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
+  const digits = t.split(/[^a-z0-9]+/).map(x => /^\d+$/.test(x) ? x : w[x] !== undefined ? w[x] : "").join("");
+  return digits.length >= 7 ? digits : "";
 }
 // the voice model sometimes never sends an interaction's summary (seen Oct 24: twelve tries, same fields each time): when Ara has just asked what was talked about, take the officer's answer
 function officerSummary() {
@@ -49,16 +58,6 @@ function officerResponse() {
 // the last few officer lines, newest last, and the line Ara said just before the officer's latest
 function officerLines(n = 4) { return (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-n).map(l => l.slice(9).toLowerCase().replace(/[’‘]/g, "'")); }
 function askedBefore(n = 1) { const r = G.recent || []; let i = r.length - 1; while (i >= 0 && !r[i].startsWith("Officer: ")) i--; if (i < 1) return ""; const ara = []; for (let j = i - 1; j >= 0 && ara.length < n; j--) { if (r[j].startsWith("Officer: ")) break; ara.unshift(r[j]); } return ara.join(" ").toLowerCase(); } // the last n things Ara said before the officer's latest line (Oct 25: "...move to Cultivation." then "Want to do that now?" came as two lines)
-// did the officer say whether it was substantive (the word itself, or a yes/no to a question that used it)? Oct 25 consistency run: Grok marked 2 of 6 reports substantive on its own
-function officerGaveSubstantive() { const ls = officerLines(3); if (ls.some(t => /\bsubstantive\b/.test(t))) return true;
-  const last = ls[ls.length - 1] || ""; return /\bsubstantive\b/.test(askedBefore()) && (hfYes(last) || /\b(no|not|wasn't|nope)\b/.test(last)); }
-// did the officer give a next step (an action word in their words, or an answer to a next-step question)? Oct 25: Grok invented "Follow up on James's interest"
-function officerGaveNextStep() { const ls = officerLines(4), last = ls[ls.length - 1] || "";
-  if (/\b(next step|follow[- ]?up|follow up|what's next)\b/.test(askedBefore()) && last.split(/\s+/).length >= 2 && !/\b(no|none|nothing|not sure|don't know)\b/.test(last)) return true;
-  return ls.some(t => /\b(next step|follow[- ]?up|call (him|her|them|back)|give (him|her|them) a call|phone (him|her|them)|meet(ing)?|lunch|coffee|dinner|breakfast|send (him|her|them)?|email (him|her|them)?|text (him|her|them)|visit|drop by|stop by|check (in|back)|reach out|invite|schedule|set up|get back|circle back|touch base|task|remind|tour|introduce|proposal|deck|materials)\b/.test(t)); }
-// did the officer say something that matches the outcome Grok picked?
-const OUTCOME_WORDS = { "Interested, continue cultivation": /\b(interested|keen|excited|enthusiastic|positive|receptive|engaged|on board|liked it|loved it)\b|went (really |very )?well|(good|great) (meeting|call|conversation)|keep cultivating/, "Ask made": /\bask(ed)?\b|proposed|pitched|requested|invited (him|her|them) to give/, "Ask accepted": /accept|agreed|said yes|yes to|committed|he's in|she's in|they're in|pledg|handed|check/, "Not now, revisit": /not now|later|revisit|next year|next quarter|hold off|wait|timing|busy|not yet|down the road/, "Not interested": /not interested|no interest|declined|turned (me|us|it) down|passed|no thanks|not for (him|her|them)/, "Referred elsewhere": /refer|pointed (me|us) to|sent (me|us) to|someone else|better fit/ };
-function officerGaveOutcome(o) { const re = OUTCOME_WORDS[o]; if (!re) return false; return officerLines(4).some(t => re.test(t)); }
 // which words in the officer's own lines ask for each form (a new form opens only on their word, Oct 25: Ara opened the ask-result form unasked after a save)
 const FORM_WORDS = {
   contact: /\b(contact|person|someone|somebody|new (guy|woman|man|donor|investor)|add (him|her|them)|met (a|someone)|prospect)\b/,
@@ -72,6 +71,7 @@ const FORM_WORDS = {
   plan: /\b(plan|planned|ask planning|planning|add (an |a |the )?ask|an ask)\b/, /* "let's go add an ask" was refused on the Oct 26 drive */
   editPlan: /\b(change|edit|update|fix|correct|wrong|plan|planned|amount|date)\b/,
   ask: /\b(ask|asked|asking|response|answer|accepted|declined|countered|said yes|said no|turned|agreed|proposal|pitch|result|outcome)\b/,
+  response: /\b(response|answer|answered|accepted|declined|countered|said yes|said no|turned|agreed|heard back|got back|wrote back|called back|came back|decision|decided|result)\b/,
   pledge: /\b(pledge|promise|commit)/,
   cultivate: /\b(cultivat|move (him|her|them|it)|defer|ready|qualif)/,
   gift: /\b(gift|check|cheque|donat|gave|give|money|payment|paid|received|wire|cash|credit card|stock|contribution)\b/,
@@ -146,6 +146,9 @@ const TOOLS = [
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, amount: { type: "number", description: "Amount asked; leave out to use the planned ask" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" },
     response: { type: "string", enum: RESPONSES, description: "Accepted (yes), Countered (a different amount), Awaiting (still thinking it over) or Declined (no)" }, agreedAmount: { type: "number", description: "Verbal figure agreed, or the counter amount" },
     lostReason: { type: "string", description: "Required when Declined: why, in a few words" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: S_DATE }) },
+  { action: "response", name: "show_ask_response_draft", description: "Show the Record the response form on a contact's open opportunity when the investor's answer to an ask that is already out comes in later (by email, phone or in person): Accepted, Countered or Declined, with the agreed or counter amount or the reason, and the date heard. Saving marks the Check on the answer task done. (The answer given at the ask meeting itself goes in show_ask_result_draft.)", req: ["contact_name", "response", "date"], props: Object.assign({}, FOR, {
+    response: { type: "string", enum: ["Accepted", "Countered", "Declined"], description: "Accepted (yes), Countered (a different amount) or Declined (no)" }, agreedAmount: { type: "number", description: "Verbal figure agreed, or the counter amount" },
+    lostReason: { type: "string", description: "Required when Declined: why, in a few words" }, date: Object.assign({}, S_DATE, { description: "The day the answer was heard (YYYY-MM-DD); today unless the officer says otherwise" }), nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "pledge", name: "show_pledge_draft", description: "Show a Record pledge draft on the contact's open opportunity.", req: ["contact_name", "amount", "confirmedBy", "firstDue"], props: Object.assign({}, FOR, {
     amount: { type: "number" }, fund: { type: "string", enum: FUNDS, description: "The entity receiving the money" }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD; use today if not said" },
     installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: ["Annual", "Quarterly", "Monthly", "One payment"] }, firstAmount: { type: "number" }, firstDue: S_DATE }) },
@@ -232,6 +235,7 @@ function grokInstructions() {
 - An opportunity can be created only when the contact has a capacity rating, isn't Do Not Contact or an Ally - Do Not Solicit, and has no other open opportunity. If the app says they aren't ready, explain what's already true and what's still to do, and offer set_capacity_rating when the rating is missing. If the officer asks to create one for a contact who already has one, call show_opportunity_draft anyway and relay what the app says.
 - Qualification to Cultivation needs a capacity rating, a substantive interaction and the officer's confirmation (show_cultivation_decision), or a defer with a reason. An ask can be planned only in Cultivation; the app adds a reminder task due seven days before the planned date.
 - Ask responses are Accepted, Countered, Awaiting or Declined. A gift or check handed over when asked, or any yes, is Accepted; Awaiting is only for "still thinking it over". Always send the response. A declined ask closes the opportunity as Closed Lost and needs a reason, so ask why if the officer hasn't said. After Accepted or Countered the app adds a Follow up on agreed pledge task.
+- An ask recorded as Awaiting gets a task, "Check on the answer to the ask", due ${ASK_CHECK_DAYS} days on; the app tells the officer so (never ask whether to add it). When the answer comes in later, use show_ask_response_draft (Accepted, Countered or Declined, with the date heard); saving it, or recording a pledge or gift, marks that task done.
 - A yes to an OUTRIGHT ask moves the opportunity straight to Commitment, waiting for the gift; a pledge ask stays in Ask Made until the pledge is recorded with its schedule.
 - Whenever money comes in, use show_gift_draft: in Ask Made a gift with no pledge is an implied commitment (it passes through Commitment and closes as Closed Won); in Commitment the gift is applied to the pledge and the first one closes it as Closed Won. A closed opportunity is final; the next gift starts a new opportunity.
 ### Looking things up (always call the tool; never answer from memory, since records change)
@@ -419,6 +423,7 @@ const callError = (e) => {
   return "The conversation couldn't start (" + m + ").";
 };
 const BARGE_RMS = 0.06; // mic level needed to interrupt Grok while it is speaking; tune from the voice log's "mic while Grok spoke" lines
+const sendBin = (buf) => { if (G.ws && G.ws.readyState === 1) G.ws.send(buf); }; /* mic audio as a raw PCM16 frame (binary transport) */
 const send = (o) => { if (o.type !== "input_audio_buffer.append") vlog("→ " + o.type + (o.item ? " " + (o.item.type === "message" ? "notice: " + String(o.item.content[0].text).slice(40, 120) : o.item.type) : "")); if (G.ws && G.ws.readyState === 1) G.ws.send(JSON.stringify(o)); };
 /* Voice log: the last few hundred events of the conversation, kept on this phone so the officer can copy it from Settings when something sounds wrong. */
 const LOGKEY = "veleer-voice-log";
@@ -436,14 +441,23 @@ function downsample(f32, from) {
   for (let i = 0; i < n; i++) out[i] = f32[Math.floor(i * ratio)];
   return out;
 }
-function playChunk(b64) {
-  const i16 = int16FromB64(b64); if (!i16.length) return;
+function playChunk(b64) { return playPcm(int16FromB64(b64)); }
+function playPcm(i16) {
+  if (!i16 || !i16.length) return;
   const buf = G.ctx.createBuffer(1, i16.length, 24000), ch = buf.getChannelData(0);
   for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 32768;
   const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.out || G.ctx.destination);
   const at = Math.max(G.ctx.currentTime + 0.02, G.playHead); src.start(at); G.playHead = at + buf.duration;
+  if (G.respAudio) { if (G.respAudio.t0 == null) G.respAudio.t0 = at; G.respAudio.end = G.playHead; } /* where this reply's audio sits on the clock, for a truncate on interruption */
   const cap = G.caps && G.caps[G.caps.length - 1]; if (cap) { if (cap.t0 == null) cap.t0 = at; cap.t1 = G.playHead; }
   G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
+}
+// the officer talked over Ara: tell the service how much of her reply was actually heard, so her record matches (Oct 25 review item 6; xAI: conversation.item.truncate)
+function truncateSpoken() {
+  const r = G.respAudio; if (!PROV().forceItem || !r || !r.itemId || r.t0 == null || !G.ctx) return;
+  const now = G.ctx.currentTime; if (!(r.end > now + 0.05)) return; /* nothing left to cut: it was all heard */
+  const ms = Math.max(0, Math.round((now - r.t0) * 1000)); send({ type: "conversation.item.truncate", item_id: r.itemId, content_index: 0, audio_end_ms: ms });
+  vlog(`interrupted after ${ms} ms of ${Math.round((r.end - r.t0) * 1000)}: the rest is cut from the record`); r.itemId = null;
 }
 function stopPlayback() { if (G.sources.length) vlog(`playback stopped (${G.sources.length} chunks cut)`); G.sources.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = []; G.playHead = 0; }
 
@@ -480,6 +494,9 @@ function sendExtras() {
   send({ type: "session.update", session: { resumption: { enabled: true } } });
   send({ type: "session.update", session: { replace: SAY_AS } });
   send({ type: "session.update", session: { audio: Object.assign({}, sessionCfg().audio, { input: Object.assign({}, sessionCfg().audio.input, { transcription: transcriptionCfg() }) }) } });
+  // the officer's words as they speak (conversation.item.input_audio_transcription.updated): its own update, so a refusal keeps the key terms above
+  send({ type: "session.update", session: { audio: Object.assign({}, sessionCfg().audio, { input: Object.assign({}, sessionCfg().audio.input, { transcription: Object.assign({ model: "grok-transcribe" }, transcriptionCfg()) }) }) } });
+  if (quickThinking()) send({ type: "session.update", session: { reasoning: { effort: "none" } } }); /* xAI documents "none" for lower latency; the default is "high" */
   if (turnTuned()) { vlog("turn detection " + JSON.stringify(turnDetection())); send({ type: "session.update", session: { turn_detection: turnDetection() } }); }
 }
 // Turn detection: when a silence ends the officer's turn and how loud the mic must be to count as speech. The engine's own defaults,
@@ -492,8 +509,13 @@ const turnTuned = () => Object.keys(window.__turn || {}).length > 0;
 // A high-pass filter on the microphone before capture (Hz, 0 = none): car rumble sits below the voice, so cutting it leaves the
 // officer's words and gives the engine the silence it waits for. Off unless the harness sets window.__micHp; a setting if it helps.
 const micHighPass = () => Number(window.__micHp || 0);
-const sessionCfg = () => ({ voice: providerVoice(), instructions: sentInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
-  audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() * (spookyMode() ? 0.9 : 1) } } }); // spooky mode: a touch slower, like a haunted-house host
+// xAI items taken from the Oct 25 review (built Oct 28, preview): the service's own idle timer as a backstop to the phone's (road noise keeps
+// the phone's from firing), audio as binary frames when the setting is on, and reasoning effort "none" when the setting is on
+const binAudio = () => !!PROV().extras && S.settings.binAudio === true; /* raw PCM16 frames both ways instead of base64 inside JSON (a third less data) */
+const quickThinking = () => !!PROV().extras && S.settings.reasoning === "none";
+const IDLE_SERVER_EXTRA_MS = 3000; /* the service's idle timer fires this much after the phone's own, so it only acts when the phone's never did */
+const sessionCfg = () => ({ voice: providerVoice(), instructions: sentInstructions(), turn_detection: Object.assign({ type: "server_vad" }, PROV().extras ? { idle_timeout_ms: idleMs() + IDLE_SERVER_EXTRA_MS } : {}), tools: toolDefs(),
+  audio: { input: Object.assign({ format: { type: "audio/pcm", rate: 24000 } }, binAudio() ? { transport: "binary" } : {}), output: Object.assign({ format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() * (spookyMode() ? 0.9 : 1) }, binAudio() ? { transport: "binary" } : {}) } }); // spooky mode: a touch slower, like a haunted-house host
 const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
 const busy = () => { G.lastAct = Date.now(); };
 document.addEventListener("pointerdown", () => { if (G.live) { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } } }, true);
@@ -532,7 +554,7 @@ async function openAudio() {
       if (total < 2400) return; // ~100 ms
       const i16 = new Int16Array(total); let o = 0;
       G.buf.forEach(a => { for (let i = 0; i < a.length; i++) { const v = Math.max(-1, Math.min(1, a[i])); i16[o++] = v < 0 ? v * 0x8000 : v * 0x7fff; } }); G.buf = [];
-      send({ type: "input_audio_buffer.append", audio: b64FromInt16(i16) });
+      if (binAudio()) sendBin(i16.buffer); else send({ type: "input_audio_buffer.append", audio: b64FromInt16(i16) });
     };
     if (worklet) { G.node = new AudioWorkletNode(ctx, "cap"); G.node.port.onmessage = (ev) => onPcm(ev.data); }
     else { G.node = ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
@@ -593,8 +615,9 @@ async function startCall(opening) {
   if (!G.keepRecent) { G.recent = []; G.saves = []; G.convId = null; } G.keepRecent = false;
   G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
-    G.t0 = Date.now(); G.heardAt = 0; G.passReady = !!TOK.p;
-    const tokP = getToken(); tokP.catch(() => {});
+    const warm = typeof takeWarm === "function" ? takeWarm() : null; /* a line that started opening when the mic button was first touched (Oct 28) */
+    G.t0 = Date.now(); G.heardAt = 0; G.passReady = !!TOK.p || !!warm;
+    const tokP = warm ? warm.tokP : getToken(); tokP.catch(() => {});
     const [token, audio] = await Promise.all([tokP, openAudio()]); // the mic, the voice pass and the audio code all at once, not one after another
     if (!G.live) return; // hung up while connecting
     if (!audio) throw new Error("no sound");
@@ -605,7 +628,7 @@ async function startCall(opening) {
     if (S.settings.userName && G.hands) { S.settings.hfGreeted = (S.settings.hfGreeted || 0) + 1; save(); } // one more call greeted with hands-free on (after the line is built, so this call still gets the full one)
     // the greeting is scripted (said word for word by the app's line); a tapped request is the officer's input, with the greeting folded in
     const first = opening ? () => notice(S.settings.userName ? opening : opening + ` You don't know their name yet: first say "${hello}", then call set_user_name, then help with that.`) : () => forceSay(hello);
-    G.drops = 0; openSocket(token, first);
+    G.drops = 0; openSocket(token, first, false, warm);
   } catch (e) { endCall("couldn't start: " + String(e && e.message || e)); if (String(e && e.message) === "bad_code") codeModal(opening); else toast(callError(e)); } /* the reason goes to the activity log (four silent ends on Oct 26) */
 }
 // the greeting says that hands-free is on (Jacqueline, Oct 27: nobody told her, so she tapped Save and then tapped hands-free off by
@@ -674,6 +697,7 @@ const VOICE_CMDS = [
   [/^((turn on |switch on |start |use )?(hands ?free|driving)( mode)?( on)?|(i'm|i am) driving( now)?)$/, "hfon"],
   [/^((turn off |switch off |stop |end )(hands ?free|driving)( mode)?|(hands ?free|driving)( mode)? off|(i'm|i am|i've|i have) (parked|stopped driving)( now)?)$/, "hfoff"],
   [/^(say (that|it) again|repeat( that| it)?|what did you say|come again)$/, "repeat"],
+  [/^((what|which)('s| is| are)?( the)?( fields?| details?| information| info| else| more| things?)?( are| is| do you| does it| do we| still| yet)*( still| else)? ?(left|missing|remaining|outstanding|needed|need|to go|to fill in|do you need|does it need|do you still need)( to (fill|be filled) in| on the form| to fill| on it)?|(is there )?anything (else )?(left|missing|still needed)( to fill in)?)$/, "left"], // "what fields are left?" (Jacqueline's call, Oct 27)
 ];
 // Cancel and start over are said many ways ("let's cancel this contact and start a new one"): the sentence counts when,
 // once its cancel or start-over words are found, everything left is filler such as "this", "the form" or "please".
@@ -693,6 +717,7 @@ function voiceCommand(text) {
   const hit = VOICE_CMDS.find(([re]) => re.test(t)), cmd = hit ? hit[1] : formCommand(t); if (!cmd) return false;
   const who = botName() + ": "; let say;
   if (cmd === "repeat") { const last = (G.recent || []).filter(l => l.startsWith(who)).slice(-1)[0]; if (!last) return false; say = { force: last.slice(who.length) }; }
+  else if (cmd === "left") { if (!V || !ACTIONS[V.action]) return false; say = fieldsLeft(); }
   else if (cmd === "cancel") { if (!V) return false; const what = cancelForm(); say = { force: "Cancelled, nothing was saved. What would you like to do?" }; }
   else if (cmd === "hfon" || cmd === "hfoff") { setHandsFree(cmd === "hfon"); say = null; }
   else if (cmd === "undo" && !(V && (V.history || []).length) && G.lastSave && G.lastSave.hf && Date.now() - G.lastSave.at < 5 * 60e3) {
@@ -704,7 +729,7 @@ function voiceCommand(text) {
   else if (cmd === "back") { if (V) return false; const b = document.querySelector("header.top .back"); if (!b) return false; const where = BACK_NAMES[b.dataset.go] || "the previous screen"; go(b.dataset.go); say = { force: `Back on ${where}.` }; }
   vlog("voice command: " + cmd); act("step", "voice command " + cmd);
   stopPlayback(); if (G.responding) send({ type: "response.cancel" }); G.cmdAt = Date.now(); // drop whatever the model started to do with those words
-  if (say === null) hfAnnounce(); else if (say.force) forceSay(say.force); else guide(say); return true;
+  if (say === null) hfAnnounce(); else if (say.force) forceSay(say.force, say.then); else guide(say); return true;
 }
 // Guidance for Ara's next reply only: it travels with the reply request (xAI's per-response instructions), so it never sits in the
 // conversation where she could read it aloud (Oct 24: "Skip it and move on. Then ask exactly" was spoken). Nothing to remember goes here.
@@ -759,12 +784,17 @@ function ask(request) {
 }
 function onEvent(e) {
   const t = e.type || "";
-  if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
+  if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; G.responding = false; flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
   if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0;
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0; clearTimeout(G.idleTimer); if (G.responding) send({ type: "response.cancel" }); stopPlayback(); if (G.forced) { G.forced = null; clearTimeout(G.forceTimer); } /* a goodbye still waiting to be said is dropped */ vlog("hang-up called off: the officer spoke"); act("step", "Quiet hang-up called off: the officer spoke"); } }
-  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += Math.floor(atob(e.delta || "").length / 2); }
+  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += e.pcm ? e.pcm.length : Math.floor(atob(e.delta || "").length / 2); if (e.item_id && G.respAudio && !G.respAudio.itemId) G.respAudio.itemId = e.item_id; }
+  if (t === "session.created") { vlog(`session created ${Date.now() - (G.t0 || Date.now())} ms after the tap`); netLog(`Session created ${Date.now() - (G.t0 || Date.now())} ms after the tap`); } /* separates the service's connect time from the Worker's when a line is slow */
+  if (t === "conversation.item.input_audio_transcription.updated" && e.transcript) { G.heardLive = e.transcript; if (Date.now() - (G.heardLiveAt || 0) > 2000) { G.heardLiveAt = Date.now(); vlog('← officer (so far) "' + String(e.transcript).slice(-120) + '"'); } } /* the officer's words as they speak */
+  if (t === "input_audio_buffer.timeout_triggered") { /* the service's own idle timer (its speech detection, not the phone's mic level): its check-in is dropped and the app's goodbye goes instead */
+    act("step", "The voice service heard no speech for a while (its idle timer)"); if (G.live && !G.idleEnding && !G.idleAt) { send({ type: "response.cancel" }); G.dropNext = true; idleStart(); } }
+  if (t === "error" && e.error && e.error.code !== "conversation_already_has_active_response") act("step", `Voice service error ${e.error.code || ""}: ${String(e.error.message || "").slice(0, 160)} (a refused session.update keeps the previous settings)`);
   else if (!/transcript\.delta$|^response\.(content_part|output_item\.added|function_call_arguments\.delta)/.test(t)) {
     if (t === "response.done" && G.idleEnding) { clearTimeout(G.idleTimer); const left = G.ctx ? Math.max(0, G.playHead - G.ctx.currentTime) : 0; G.idleTimer = setTimeout(idleHangUp, left * 1000 + 500); }
     if (t === "response.done" && G.lateForced && G.lateForced.resp === G.respSeq) G.lateForced.firstAudio = G.audioSamples || 0;
@@ -778,13 +808,14 @@ function onEvent(e) {
   if (t === "response.done" && G.bot && G.unheardResp === G.respSeq) G.unheard = G.bot; /* said into a paused sound engine: said again when it is back */
   if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
-  if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
+  if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } truncateSpoken(); stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall();
+    if (G.asked && !G.responding && PROV().forceItem) { send({ type: "response.cancel" }); clearTimeout(G.askWatch); G.askWatch = null; clearTimeout(G.tickWatch); G.asked = false; act("step", "The officer spoke while a reply was still requested: that request was cancelled (one question, one answer)"); } } /* Oct 25 review item 10: stacked re-asks gave three "I'm here" in a row */
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; G.heardWait = { n: G.heardN || 0, at: Date.now() }; paintCall(); } /* the transcript of this turn is still to come: a tool call before it waits (onTool) */
   else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)
     G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
-  else if (t === "response.created") { G.createAt = 0; G.respSeq = (G.respSeq || 0) + 1; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
-  else if (/audio\.delta$/.test(t) && e.delta) { playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; if (paused) G.unheardResp = G.respSeq; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
+  else if (t === "response.created") { G.createAt = 0; G.respSeq = (G.respSeq || 0) + 1; G.respAudio = { itemId: null, t0: null, end: 0 }; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
+  else if (/audio\.delta$/.test(t) && (e.delta || e.pcm)) { if (e.pcm) playPcm(e.pcm); else playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; if (paused) G.unheardResp = G.respSeq; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); lateForcedCheck(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);

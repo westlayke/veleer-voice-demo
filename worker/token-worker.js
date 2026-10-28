@@ -56,7 +56,7 @@ export default {
     const r = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.XAI_API_KEY },
-      body: JSON.stringify({ expires_after: { seconds: 300 } }),
+      body: JSON.stringify({ expires_after: { seconds: 1800 } }), // 30 minutes (5 until Oct 28): a reconnect in a dead spot usually has a pass already, so it skips this round trip
     });
     return new Response(await r.text(), { status: r.status, headers: { ...cors, "Content-Type": "application/json" } });
   },

@@ -72,6 +72,8 @@ function settingsScreen() {
     <div class="status-line"><span class="dot g"></span> Voice is ready. No key is needed on this phone.</div>
     <button type="button" class="linkbtn" data-act2="help">How to talk to ${esc(botName())} ›</button>
     ${VERSION_FILE === "preview-version.json" ? `<label for="provSel">Voice engine<select id="provSel">${Object.keys(PROVIDERS).map(k => `<option value="${k}" ${k === provider() ? "selected" : ""}>${PROVIDERS[k].name}</option>`).join("")}</select></label>` : ""}
+    ${VERSION_FILE === "preview-version.json" ? `<label for="reasonSel">Thinking (Grok)<select id="reasonSel"><option value="high" ${S.settings.reasoning === "none" ? "" : "selected"}>Careful (the service's default)</option><option value="none" ${S.settings.reasoning === "none" ? "selected" : ""}>Quick (answers sooner)</option></select></label>
+    <label class="hint-tgl" for="binTgl"><input type="checkbox" id="binTgl" ${S.settings.binAudio ? "checked" : ""}> Send and receive audio as binary frames (Grok; a third less data on the line, from the next conversation)</label>` : ""}
     <label for="voiceSel">Voice<select id="voiceSel">${PROV().voices.map(v => `<option value="${v}" ${v === providerVoice() ? "selected" : ""}>${v[0].toUpperCase() + v.slice(1)}</option>`).join("")}</select></label>
     <label for="speedSel">Speaking speed<select id="speedSel">${SPEEDS.map(v => `<option value="${v}" ${v === talkSpeed() ? "selected" : ""}>${SPEED_NAMES[v]}</option>`).join("")}</select></label>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.4;margin-top:-4px">You can also just tell ${esc(botName())} to talk faster or slower.</div>
@@ -180,6 +182,8 @@ document.addEventListener("change", (e) => { const id = e.target.id;
   if (id === "userName") saveName();
   else if (id === "provSel") saveProvider(e.target.value);
   else if (id === "voiceSel" || id === "botName") saveVoice();
+  else if (id === "reasonSel") { S.settings.reasoning = e.target.value; save(); if (G.live && PROV().extras) sessUpdate({ reasoning: { effort: e.target.value } }); toast(e.target.value === "none" ? "Quick thinking: Grok answers sooner" : "Careful thinking (the service's default)"); }
+  else if (id === "binTgl") { if (e.target.checked) S.settings.binAudio = true; else delete S.settings.binAudio; save(); toast(e.target.checked ? "Binary audio from the next conversation" : "Audio as text (base64) from the next conversation"); }
   else if (id === "speedSel") { S.settings.speed = Number(e.target.value); save(); if (G.live) sessUpdate(sessionCfg()); toast(`Saved. ${botName()} will talk at ${speedName(talkSpeed())} speed.`); }
   else if (id === "spookyMode") { setSpooky(e.target.checked); if (G.live) sessUpdate(sessionCfg()); toast(e.target.checked ? "Spooky mode is on. Mwahaha! 🦇" : "Back to normal"); }
   else if (id === "xmasMode") { setXmas(e.target.checked); if (G.live) sessUpdate(sessionCfg()); toast(e.target.checked ? "Christmas mode is on. Ho ho ho! 🎄" : "Back to normal"); }

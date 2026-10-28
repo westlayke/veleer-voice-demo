@@ -53,6 +53,9 @@ const NO_NEXT_STEP = ["Not interested", "Referred elsewhere"];
 const RESPONSES = ["Awaiting", "Accepted", "Countered", "Declined"];
 const PAY_METHODS = ["Check", "Credit card", "Bank transfer", "Wire", "Stock", "Other"];
 const PLEDGE_FOLLOWUP_DAYS = 10; // demo default; the guide's pledge reminder interval is still open with the customer
+const ASK_CHECK_DAYS = 30; // a setting: an ask still waiting for its answer gets a task to check on it within this many days (Carverhill, Oct 28)
+const ASK_CHECK_RE = /^Check on the answer to the /; // the text of that task; a recorded response, pledge or gift marks it done
+const askCheckTask = (t) => !!t && !t.done && ASK_CHECK_RE.test(t.text || "") && !!t.oppId;
 const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
 const MIC = '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
 const mic = (s) => MIC.replace(/SZ/g, s);
@@ -134,6 +137,15 @@ const ACTIONS = {
       ...F_NEXT() ],
     pairs: [["date", "meetingType"], ["amount", "fund"]],
     left: "An ask meeting is substantive, so it needs a next step and its due date unless the investor declined. A declined ask closes the opportunity as Closed Lost and needs a reason. A yes to an outright ask moves it to Commitment, waiting for the gift; a pledge ask waits in Ask Made until Record pledge adds the schedule." },
+  // the investor's answer to an ask that is out, when it comes in later by email, phone or in person (Carverhill, Oct 28)
+  response: { title: "Record the response", saved: "Response recorded", saveLabel: "Save response",
+    fields: [
+      { k: "forName", label: "Opportunity", fixed: true },
+      { k: "response", label: "Response", type: "select", opts: ["", "Accepted", "Countered", "Declined"], req: true },
+      { k: "agreedAmount", label: "Agreed or counter amount (verbal)", type: "money" }, { k: "lostReason", label: "Reason (if declined)" },
+      { k: "date", label: "Date heard", type: "date", req: true },
+      ...F_NEXT() ],
+    left: "The investor's answer to the ask that is out. A yes to an outright ask moves the opportunity to Commitment, waiting for the gift; a yes to a pledge ask waits for Record pledge; a counter creates the follow-on ask; a decline closes it as Closed Lost, with a reason. Saving marks the Check on the answer task done." },
   pledge: { title: "Record pledge", saved: "Pledge recorded", saveLabel: "Record pledge",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
@@ -195,7 +207,7 @@ function seedActivity(st) {
   I(pr, 23, "Video call", "Talked through the Pennsylvania field plan. Asked for the budget summary.", true);
   I(el, 59, "In person", "First meeting after Luis Ortega's handover. Toured the New Hampshire office.", true);
   const K = (c, text, due, onOpp, example) => c && st.tasks.push({ id: uid(), contactId: c.id, oppId: onOpp && opp(c) ? opp(c).id : null, text, due, done: false, example: true });
-  K(ke, "Follow up on Ken's pledge decision", addDays(T, -4), true);
+  K(ke, "Check on the answer to the $30,000 ask", addDays(T, -4), true); // the task every awaiting ask gets (Oct 28); Ken's is overdue in the example data
   K(el, "Ask reminder: Vasquez, Elena - 2026", addDays(T, 11), true);
   K(ru, "Send Ruth the Pennsylvania update", addDays(T, 6), false);
   st.meetings = st.meetings || [];
@@ -261,6 +273,11 @@ const MIGRATIONS = [
   // 6: earlier versions used the responses Yes / Counter-offer / Considering / No
   (S) => { const ST = { Asked: "Made", Pledged: "Accepted" }, RS = { Yes: "Accepted", "Counter-offer": "Countered", Considering: "Awaiting", No: "Declined" };
     S.opps.forEach(o => (o.asks || []).forEach(a => { if (ST[a.status]) a.status = ST[a.status]; if (RS[a.response]) a.response = RS[a.response]; })); },
+  // 7: every ask still awaiting its answer gets the Check on the answer task (Oct 28); the example task for Ken's ask takes the standard wording
+  (S) => { S.opps.filter(o => o.stage === "Ask Made").forEach(o => { const a = (o.asks || [])[0]; if (!a || a.status !== "Made") return;
+    const old = S.tasks.find(t => t.oppId === o.id && !t.done && /pledge decision/.test(t.text || ""));
+    if (old) old.text = `Check on the answer to the ${money(a.amount)} ask`;
+    else if (!S.tasks.some(t => t.oppId === o.id && askCheckTask(t))) S.tasks.unshift({ id: uid(), contactId: o.contactId, oppId: o.id, text: `Check on the answer to the ${money(a.amount)} ask`, due: addDays(a.askedOn || todayISO(), ASK_CHECK_DAYS), done: false, auto: true }); }); },
 ];
 const DATA_VERSION = MIGRATIONS.length;
 // phones saved before versioning have no number and run every step once (each step is safe to repeat)

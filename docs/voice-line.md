@@ -9,7 +9,7 @@ October 26, 2026.
 
 A conversation with Ara is one WebSocket from the phone to xAI's realtime voice service. The phone streams microphone
 audio up it; Ara's voice, transcripts, tool calls and events come down it. The socket is opened with a short-lived
-**voice pass** (an xAI client secret, good for 5 minutes) minted by the key holder, today the Cloudflare Worker; the
+**voice pass** (an xAI client secret, good for 30 minutes since Oct 28; 5 before) minted by the key holder, today the Cloudflare Worker; the
 xAI key itself never reaches the phone. The same key holder answers a tiny `/log?ping=` request, which the app uses
 as its **line test**: iPhones only report "online" or "offline", so the app measures the network itself.
 
@@ -19,6 +19,22 @@ conversation**: Ara remembers what was said. The app keeps the id from the `conv
 
 Everything the app keeps itself (the open form, what has been saved, the last lines said, where the form stands)
 survives a drop regardless, because it lives on the phone, not on the line.
+
+## A line warmed on touch (Oct 28)
+
+`warmLine()` runs on `pointerdown` of the mic button (and the welcome Start and Carry on buttons): it takes the prefetched
+voice pass and opens the socket at once, while the finger is still on the button and the tap's call spends its first second on
+the mic and the sound engine. `startCall` calls `takeWarm()` and hands the warmed line to `openSocket`, which adopts it (if it
+is already open, its `onopen` runs once; events it was sent meanwhile are replayed). A warmed line nobody used closes after
+`WARM_MAX_MS` (20 s). A Carry on that resumes a conversation does not use a warmed line, since that needs the `conversation_id`
+in the address. Logged as "line warmed on touch" and "(warmed on touch)" on the Voice line open row.
+
+## The service's own idle timer (Oct 28)
+
+`turn_detection.idle_timeout_ms` is set `IDLE_SERVER_EXTRA_MS` (3 s) after the phone's own quiet limit (`idleMs()`: 12 s, 30 s
+hands-free; it follows a hands-free switch with a `turn_detection` update). The phone's timer normally fires first; the service's
+acts when road noise kept the phone's from firing. On `input_audio_buffer.timeout_triggered` the app cancels the service's
+check-in reply (`response.cancel`, `G.dropNext`) and says its own goodbye through `idleStart()`.
 
 ## Noticing that the line is in trouble
 

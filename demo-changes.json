@@ -2,6 +2,48 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 10:40 AM",
+   "change": "Preview: xAI review items (item 4). The service's own idle timer (turn_detection.idle_timeout_ms, 3 s after the phone's) as a backstop when road noise keeps the phone's from firing, its check-in dropped and the app's goodbye said instead; the officer's words streamed as they speak (grok-transcribe, logged); an interruption tells the service how much of Ara's reply was heard (conversation.item.truncate) so her record matches; a reply request still outstanding when the officer speaks is cancelled (one question, one answer); audio as binary frames both ways (Settings, off by default); quick thinking, reasoning effort none (Settings, off by default); voice passes last 30 minutes instead of 5 (Worker), so a reconnect usually has one; session.created time and every error event logged. Untested against the real service from here: needs a drive call. 126 checks.",
+   "area": "Voice: engines (Grok)",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill, Oct 28 9:47 AM ET: \"please go ahead and add items 4 to 9 to preview, do the build\" (the numbered change list of Oct 28, 9:45 AM ET)."
+  },
+  {
+   "date": "Oct 28, 10:40 AM",
+   "change": "Preview: evidence tidy-up (item 6). The five drop-side guards (an invented capacity rating, a $0 amount, and the interaction report's substantive flag, next step and outcome) moved from aratools.js into the evidence rule in evidence.js, unchanged in effect; the evidence check now judges 821 cases (634 before). No change to what an officer hears.",
+   "area": "Voice: forms",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill, Oct 28 9:47 AM ET: \"please go ahead and add items 4 to 9 to preview, do the build\" (the numbered change list of Oct 28, 9:45 AM ET)."
+  },
+  {
+   "date": "Oct 28, 10:40 AM",
+   "change": "Preview: faster greeting (item 5). The voice line starts opening on the first touch of the mic button (also the welcome Start and Carry on buttons), while the finger is still down and the mic and sound engine start; the tap's call takes that line over, about a second off the wait for the greeting. A warmed line nobody used closes after 20 s. Logged as \"line warmed on touch\". 126 checks.",
+   "area": "Voice: line",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill, Oct 28 9:47 AM ET: \"please go ahead and add items 4 to 9 to preview, do the build\" (the numbered change list of Oct 28, 9:45 AM ET)."
+  },
+  {
+   "date": "Oct 28, 10:40 AM",
+   "change": "Preview: email asked for after a mobile (item 9). When the officer says there is no email (or no mobile, no cell), the app asks only for the other one and never \"an email as well?\"; and a tool call that arrives without the phone number the officer just read out is sent back for the number instead of the officer being asked to repeat it. 126 checks.",
+   "area": "Voice: forms",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill, Oct 28 9:47 AM ET: \"please go ahead and add items 4 to 9 to preview, do the build\" (the numbered change list of Oct 28, 9:45 AM ET)."
+  },
+  {
+   "date": "Oct 28, 10:40 AM",
+   "change": "Preview: from Jacqueline's call (item 7). \"What fields are left?\" (and \"what's still needed\", \"anything missing\") is answered by the app itself with the list of required fields still empty and the optional ones, then the pending question; and a value the guard just dropped that the form still needs is owned up to in the app's own words (\"I didn't catch the capacity rating from you, so it's not on the form\") before it is asked for, so Ara can't answer \"noted\". 126 checks.",
+   "area": "Voice: forms",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill, Oct 28 9:47 AM ET: \"please go ahead and add items 4 to 9 to preview, do the build\" (the numbered change list of Oct 28, 9:45 AM ET)."
+  },
+  {
+   "date": "Oct 28, 10:40 AM",
+   "change": "Preview: the ask follow-up pattern (item 8). An ask saved with the answer still to come creates one task, \"Check on the answer to the $X ask\", due in 30 days (a setting), and the app states that it did (never asks). A new Record the response form on the opportunity (response Accepted, Countered or Declined, agreed amount or reason, date heard), from the Asks panel, the stage button and the Ara tool show_ask_response_draft, applies the same outcome logic as recording the ask and marks that task done; a pledge or a gift settles it too. The task's text on the Tasks list and in Needs attention is a link that opens the opportunity with the form over it and the Response field focused. Ken Ito's example task takes the standard wording; older phones get the task from a data upgrade. 126 checks.",
+   "area": "App: opportunities and tasks",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill, Oct 28 9:47 AM ET: \"please go ahead and add items 4 to 9 to preview, do the build\" (the numbered change list of Oct 28, 9:45 AM ET)."
+  },
+  {
    "date": "Oct 27, 11:20 PM",
    "change": "Preview: every tool refusal now ends with a way out for the engine (tell the officer what's needed or that it can't be done that way, ask what's next, don't call the same tool again), and the short refusals (no name, no phone number, Do Not Contact, unknown stage, no open opportunity, unknown tool, form changed) say what to do instead. 121 checks.",
    "area": "Voice: engines (all)",

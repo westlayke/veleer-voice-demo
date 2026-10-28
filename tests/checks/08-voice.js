@@ -20,6 +20,117 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   ok((await state(p)).contacts.find(c => c.first === "Maya").capacity === "C", "the rating was not saved with the contact");
 });
+test("Ara: no email, so only the mobile is asked for, the number the officer said is waited for, and no email is asked for as well", async (p) => {
+  await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); });
+  await said(p, "New contact, Priya Natarajan. She has no email.");
+  let r = await ara(p, "show_contact_draft", { first: "Priya", last: "Natarajan" });
+  ok(r.still_needed && r.still_needed.some(x => /^Mobile number \(the officer said there is no email/.test(x)) && !r.still_needed.some(x => /Email or mobile/.test(x)), "after \"no email\" the app didn't ask for just the mobile: " + JSON.stringify(r.still_needed));
+  // the officer reads the number out, but Grok's call doesn't carry it (Oct 27 spoken run): the app asks for the same call again with the number, not the officer to repeat it
+  await said(p, "The mobile is two zero eight, five five five, zero one four seven.");
+  r = await ara(p, "show_contact_draft", { first: "Priya", last: "Natarajan" });
+  ok(/said a phone number \(the digits 2085550147\)/.test(r.status || "") && !r.still_needed, "the number the officer said wasn't waited for: " + JSON.stringify(r));
+  r = await ara(p, "show_contact_draft", { first: "Priya", last: "Natarajan", mobile: "208-555-0147" });
+  ok(!/email/i.test(r.status || "") && r.field === "capacity", "an email was asked for as well, or the rating wasn't asked next: " + JSON.stringify(r));
+  // the other way round: no mobile, so only the email is asked for
+  await p.evaluate(() => { V = null; renderOverlay(); });
+  await said(p, "Another one, Tom Reyes, he doesn't have a cell phone.");
+  r = await ara(p, "show_contact_draft", { first: "Tom", last: "Reyes" });
+  ok(r.still_needed && r.still_needed.some(x => /^Email address \(the officer said there is no mobile/.test(x)), "after \"no cell\" the app didn't ask for just the email: " + JSON.stringify(r.still_needed));
+  r = await ara(p, "show_contact_draft", { first: "Tom", last: "Reyes", email: "tom@example.org" });
+  ok(!/mobile/i.test(r.status || "") && r.field === "capacity", "a mobile was asked for as well: " + JSON.stringify(r));
+});
+test("Jacqueline's call: a dropped rating is said to be not caught before it's asked for (never \"noted\"), and \"what fields are left?\" gets the list", async (p) => {
+  await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); });
+  await said(p, "New contact, Dana Fox, email dana at example dot org, mobile five five five, zero one zero, zero one nine nine.");
+  let r = await ara(p, "show_contact_draft", { first: "Dana", last: "Fox", email: "dana@example.org", mobile: "555-010-0199", capacity: "B" });
+  ok(r.field === "capacity" && /^I didn't catch the capacity rating from you, so it's not on the form\. Next, Dana's capacity rating, which an opportunity needs\./.test(r.ask_exactly || ""), "the dropped rating wasn't owned up to before the rating question: " + JSON.stringify(r));
+  let n = await p.evaluate(() => __sent.length);
+  await said(p, "What fields are left?"); await p.waitForTimeout(400);
+  let forced = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
+  ok(forced.length === 1 && /^Everything required is in on the new contact form\. You could still add how we met and capacity rating\. Next, Dana's capacity rating/.test(forced[0]) && /which an opportunity needs\. A is \$250,000 and up/.test(forced[0]), "\"what fields are left?\" with everything required in didn't list the optional ones and the pending question: " + JSON.stringify(forced));
+  // a form with required fields still empty: the list, then Ara asks for the first one
+  await p.evaluate(() => { V = null; G.cmdAt = 0; renderOverlay(); }); // (the command's own guard against a repeated tool call is not what's checked here)
+  await said(p, "Plan an ask for Ruth Abernathy.");
+  r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
+  ok(r.still_needed && r.still_needed.length === 2, "the planned ask didn't need its fields: " + JSON.stringify(r));
+  n = await p.evaluate(() => __sent.length);
+  await said(p, "Um, what's still needed?"); await p.waitForTimeout(400);
+  forced = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
+  ok(forced.length === 1 && /^Still needed on the add planned ask form: planned ask date and amount\. Optional, if you want them: participants in the ask\.$/.test(forced[0]), "the list of fields left is wrong: " + JSON.stringify(forced));
+  // a dropped amount the form needs: the app says it didn't catch it, then Ara asks (the tool result carries what was said)
+  await p.waitForTimeout(900); await said(p, "On December first."); // the command's 800 ms guard against a repeated tool call has passed
+  r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", plannedDate: "2026-12-01", amount: 25000 });
+  ok(/^I didn't catch the amount from you, so it's not on the form\.$/.test(r.ask_exactly || "") && r.still_needed && r.still_needed.includes("Amount") && /Still needed: Amount/.test(r.status || "") && /never say "noted"/.test(r.status || ""), "a dropped required amount wasn't owned up to before the ask: " + JSON.stringify(r));
+});
+test("A touch on the mic button warms the voice line, and the tap's call uses it (Oct 28: a second off the greeting)", async (p) => {
+  await signIn(p); await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  await p.evaluate(() => endCall("test")); await p.waitForTimeout(1200); // the app sits open with a pass ready
+  const before = await p.evaluate(() => (window.__wsUrls || []).length);
+  await p.dispatchEvent("[data-act2=mic]", "pointerdown"); await p.waitForTimeout(150); // a finger lands on the mic: the line starts opening
+  ok(await p.evaluate((n) => !!G.warm && !!G.warm.ws && (window.__wsUrls || []).length === n + 1, before), "the touch didn't start opening a line");
+  const warmWs = await p.evaluateHandle(() => G.warm.ws);
+  await p.tap("[data-act2=mic]"); await p.waitForFunction(() => G.live && G.ws, null, { timeout: 8000 }); await p.waitForTimeout(400);
+  ok(await p.evaluate((w) => G.ws === w && !G.warm && G.ws.warmed === true, warmWs), "the call didn't take over the warmed line");
+  ok(await p.evaluate(() => __sent.filter(s => /"session\.update"/.test(s)).length >= 1 && __sent.filter(s => /force_message/.test(s) && /Hi Sam/.test(s)).length === 1), "the warmed line was set up twice, or the greeting said twice: " + (await p.evaluate(() => __sent.filter(s => /force_message/.test(s)).length)));
+  // a touch that never becomes a tap: the warmed line is closed unused
+  await p.evaluate(() => endCall("test")); await p.waitForTimeout(1200);
+  await p.dispatchEvent("[data-act2=mic]", "pointerdown"); await p.waitForTimeout(150);
+  ok(await p.evaluate(() => !!G.warm && !!G.warm.ws), "the second touch didn't warm a line");
+  await p.evaluate(() => { const w = G.warm; w.at -= 30000; return w; }); // older than the limit
+  await p.tap("[data-act2=mic]"); await p.waitForFunction(() => G.live && G.ws, null, { timeout: 8000 }); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => G.ws && !G.ws.warmed && !G.warm), "a stale warmed line was used instead of a fresh one");
+});
+test("xAI review items (Oct 28): service idle timer, streaming transcription, truncate on interruption, one outstanding reply request, binary audio, quick thinking, error and session logs", async (p) => {
+  await signIn(p); await p.waitForFunction(() => G.live && G.ws, null, { timeout: 8000 }); await p.waitForTimeout(500);
+  const sent = () => p.evaluate(() => __sent.filter(s => typeof s === "string").map(s => JSON.parse(s)));
+  let xs = await sent();
+  const first = xs.find(e => e.type === "session.update" && e.session && e.session.turn_detection && e.session.tools);
+  ok(first && first.session.turn_detection.idle_timeout_ms === 33000, "the service's idle timer isn't set 3 s after the phone's hands-free wait: " + JSON.stringify(first && first.session.turn_detection));
+  ok(xs.some(e => e.type === "session.update" && e.session.audio && e.session.audio.input.transcription && e.session.audio.input.transcription.model === "grok-transcribe" && e.session.audio.input.transcription.language_hint === "en"), "streaming transcription (grok-transcribe) isn't asked for in its own update");
+  ok(!xs.some(e => e.type === "session.update" && e.session.reasoning), "reasoning effort was sent although the setting is the default");
+  // hands-free off: the service's idle timer follows the shorter wait
+  let n = await p.evaluate(() => __sent.length); await p.evaluate(() => setHandsFree(false)); await p.waitForTimeout(100);
+  ok((await sent()).slice(-6).some(e => e.type === "session.update" && e.session.turn_detection && e.session.turn_detection.idle_timeout_ms === 15000 && !e.session.tools), "hands-free off didn't shorten the service's idle timer to 15 s");
+  // the officer's words as they speak, and the session.created time, are logged
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "session.created", session: {} }) }); __ws.onmessage({ data: JSON.stringify({ type: "conversation.item.input_audio_transcription.updated", transcript: "new contact priya" }) }); });
+  ok(await p.evaluate(() => G.heardLive === "new contact priya" && VLOG.some(l => /session created \d+ ms after the tap/.test(l)) && VLOG.some(l => /officer \(so far\) "new contact priya"/.test(l))), "the live transcript or the session.created time wasn't logged");
+  // interruption: Ara's audio is playing, the officer starts talking: the service is told how much was heard
+  n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { const audio = btoa(String.fromCharCode(...new Array(48000).fill(0))); [{ type: "response.created" }, { type: "response.output_audio.delta", item_id: "item_7", delta: audio }, { type: "response.output_audio.delta", item_id: "item_7", delta: audio }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
+  await p.waitForTimeout(300); await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) })); await p.waitForTimeout(100);
+  const tr = (await sent()).slice(n - 0).find(e => e.type === "conversation.item.truncate");
+  ok(tr && tr.item_id === "item_7" && tr.content_index === 0 && tr.audio_end_ms >= 0 && tr.audio_end_ms < 1500, "the interruption wasn't reported with the heard duration: " + JSON.stringify(tr));
+  await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "cancelled" } }) })); await p.waitForTimeout(100);
+  // a reply request still outstanding when the officer speaks is cancelled: one question, one answer
+  n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.asked = true; G.askedAt = Date.now(); G.responding = false; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => /"response\.cancel"/.test(s)) && !G.asked, n), "the outstanding reply request wasn't cancelled when the officer spoke");
+  // the service's idle timer fired (road noise kept the phone's from firing): its check-in is dropped and the app's goodbye goes
+  n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { window.__noAutoForce = true; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.timeout_triggered" }) }); }); await p.waitForTimeout(300);
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => /"response\.cancel"/.test(s)) && G.idleEnding && G.dropNext, n), "the service's idle timer didn't start the hang-up");
+  await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }); await p.waitForTimeout(300);
+  ok(await p.evaluate((n) => !G.dropNext && !G.responding && __sent.slice(n).some(s => /force_message/.test(s) && /hang up for now/.test(s)), n), "the check-in wasn't dropped, or the goodbye line wasn't sent");
+  await p.evaluate(() => { G.idleEnding = false; clearTimeout(G.idleTimer); G.forced = null; window.__noAutoForce = false; });
+  // an error event is logged as a step (a refused session.update keeps the previous settings)
+  await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "error", error: { code: "invalid_session_update", message: "unknown field" } }) }));
+  ok(await p.evaluate(() => ACT.q.some(x => /Voice service error invalid_session_update: unknown field/.test(x.text))), "the error event wasn't logged");
+  // binary audio: a frame from the line is played as Ara's audio, the mic frame goes out as bytes, and the session asks for binary both ways
+  await p.evaluate(() => { S.settings.binAudio = true; });
+  ok(await p.evaluate(() => sessionCfg().audio.input.transport === "binary" && sessionCfg().audio.output.transport === "binary"), "the session doesn't ask for binary transport");
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: new ArrayBuffer(4800) }); });
+  ok(await p.evaluate(() => G.audioSamples === 2400 && G.status === "Speaking"), "a binary frame wasn't played as audio: " + (await p.evaluate(() => G.audioSamples + " " + G.status)));
+  n = await p.evaluate(() => __sent.length); await p.evaluate(() => sendBin(new Int16Array(2400).buffer));
+  ok(await p.evaluate((n) => __sent.slice(n).some(x => x instanceof ArrayBuffer && x.byteLength === 4800), n), "the mic frame didn't go out as bytes");
+  await p.evaluate(() => { delete S.settings.binAudio; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  // quick thinking: the setting sends reasoning effort none on the next call's set-up
+  await p.evaluate(() => { S.settings.reasoning = "none"; save(); endCall("test"); }); await p.waitForTimeout(1200);
+  await p.tap("[data-act2=mic]"); await p.waitForFunction(() => G.live && G.ws, null, { timeout: 8000 }); await p.waitForTimeout(500);
+  ok((await sent()).slice(-30).some(e => e.type === "session.update" && e.session.reasoning && e.session.reasoning.effort === "none"), "quick thinking wasn't sent");
+  await p.evaluate(() => { delete S.settings.reasoning; save(); });
+});
 test("Ara: an interaction report keeps only what the officer said (substantive, outcome, next step are dropped when invented, kept when said)", async (p) => {
   await signIn(p);
   await said(p, "I met Ken Ito this morning, we talked about the gala and the North Dakota work.");

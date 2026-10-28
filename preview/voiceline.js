@@ -40,14 +40,14 @@ const LOCK_CLOSE_MS = 3000;                  // the phone locking (or a switch t
 const LOCK_MAX_MS = RESUME_MS;               // hidden longer than this (the conversation can no longer be picked up on xAI) ends the call with the Carry on card
 /* MIC_BACK_MS: a muted mic gets longer than the sound, since iOS shows "Audio Recording / Stop audio recording?" and the mic is back on Cancel, which takes a reach (Oct 26 drive). SOUND_BACK_MS: when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back */
 
-// a voice pass lasts 5 minutes: fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
-const TOK = { p: null, at: 0 };
+// a voice pass lasts 30 minutes (5 until Oct 28; the Worker mints it): fetch one when the app opens or comes back, so tapping the mic doesn't wait for it (also wakes the Cloudflare service)
+const TOK = { p: null, at: 0 }, PASS_REFRESH_MS = 20 * 60e3, PASS_FRESH_MS = 25 * 60e3;
 function prefetchToken() {
-  if (document.visibilityState !== "visible" || (TOK.p && Date.now() - TOK.at < 180000)) return; // during a call too, so a dropped line reconnects without waiting for a new pass
+  if (document.visibilityState !== "visible" || (TOK.p && Date.now() - TOK.at < PASS_REFRESH_MS)) return; // during a call too, so a dropped line reconnects without waiting for a new pass
   TOK.at = Date.now(); TOK.p = mintToken(); TOK.p.catch(() => { TOK.p = null; TOK.at = 0; });
 }
 function getToken() { // each pass is used once; an old or failed one is replaced by a fresh fetch
-  const p = TOK.p, fresh = p && Date.now() - TOK.at < 240000; TOK.p = null; TOK.at = 0;
+  const p = TOK.p, fresh = p && Date.now() - TOK.at < PASS_FRESH_MS; TOK.p = null; TOK.at = 0;
   return fresh ? p.catch(() => mintToken()) : mintToken();
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") prefetchToken(); });
@@ -91,12 +91,28 @@ function idleStart() {
   G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
 }
 function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; const secs = idleMs() / 1000; endCall(`${secs} seconds of quiet`); toast(`Hung up after ${secs} seconds of quiet. Tap the mic when you need me.`); }
+/* ---------- a line warmed on the first touch of the mic (Oct 28): the socket handshake runs while the finger is still on the button ---------- */
+// The tap's click comes after pointerdown, and the call then spends its first second on the mic and the sound engine; a line already
+// opening in that time takes about a second off the wait for the greeting. A warmed line nobody used closes after WARM_MAX_MS.
+const WARM_MAX_MS = 20000;
+function warmLine() {
+  const P = PROV(); if (G.live || G.warm || P.open) return; /* Gemini opens its own kind of line */
+  const w = G.warm = { at: Date.now(), ws: null, queued: [], tokP: getToken() }; w.tokP.catch(() => { if (G.warm === w) G.warm = null; });
+  w.tokP.then(token => { if (G.warm !== w || G.live) return; /* the tap already started the call with this pass */
+    const ws = w.ws = new WebSocket(P.url(null, token), P.protocols(token)); ws.binaryType = "arraybuffer"; vlog("line warmed on touch");
+    ws.onmessage = (m) => w.queued.push(m); ws.onclose = ws.onerror = () => { if (G.warm === w) G.warm = null; };
+    setTimeout(() => { if (G.warm === w && !G.live) { G.warm = null; try { ws.close(); } catch (e) {} vlog("warmed line closed unused"); } }, WARM_MAX_MS); }).catch(() => {});
+}
+function takeWarm() { const w = G.warm; G.warm = null; if (!w) return null; if (w.ws && (w.ws.readyState > 1 || Date.now() - w.at > WARM_MAX_MS)) { try { w.ws.close(); } catch (e) {} w.ws = null; } return w; }
+document.addEventListener("pointerdown", (e) => { if (!G.live && e.target.closest("[data-act2=mic], [data-act4=voice], [data-act4=welcome-ok], #rsmGo")) warmLine(); }, { passive: true });
 /* ---------- the voice line: opened at the start, and opened again when it drops (a phone in a car loses signal) ---------- */
-function openSocket(token, first, second) {
+function openSocket(token, first, second, warm) {
   // a line opened again within 25 minutes picks up the same conversation (xAI keeps it 30 minutes)
   const P = PROV(), resume = P.resume && G.convId && Date.now() - (G.convAt || 0) < RESUME_MS ? G.convId : null;
-  const ws = P.open ? P.open(token, resume) : new WebSocket(P.url(resume, token), P.protocols(token));
-  ws.resumed = resume;
+  const useWarm = !!(warm && warm.ws && warm.ws.readyState <= 1 && !resume && !second && !P.open);
+  if (!useWarm && !token) { getToken().then(tk => openSocket(tk, first, second)).catch(e => { endCall("couldn't start: " + String(e && e.message || e)); toast(callError(e)); }); return; } /* the warmed line went before the tap finished: a fresh pass */
+  const ws = useWarm ? warm.ws : P.open ? P.open(token, resume) : new WebSocket(P.url(resume, token), P.protocols(token));
+  ws.resumed = resume; if (useWarm) { ws.onerror = null; ws.warmed = true; } try { ws.binaryType = "arraybuffer"; } catch (e) {} /* audio can come as binary frames (binAudio) */
   if (second) G.tries.add(ws); else { G.ws = ws; G.tries = new Set([ws]); }
   const t0 = Date.now();
   if ((G.drops || G.lockResume) && !second) {
@@ -109,14 +125,15 @@ function openSocket(token, first, second) {
     setTimeout(() => { if (G.live && G.ws === ws && ws.readyState === 0) { netLog(`Voice line didn't open in ${OPEN_TIMEOUT_MS / 1000} s`); reconnect("the line didn't open"); } }, OPEN_TIMEOUT_MS);
   }
   ws.onopen = () => {
+    if (ws.opened) return; ws.opened = true; /* a warmed line that was already open is told once */
     if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws; G.lockResume = false;
     sessUpdate(sessionCfg()); sendExtras(); if (G.drops && P.replay) replayRecent(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep();
     if (ws.resumed) netLog("Picked up the same conversation");
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
-    vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"})`);
-    netLog(`Voice line open in ${Date.now() - t0} ms${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops})` : ""}`);
+    vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"}${ws.warmed ? ", line warmed on touch" : ""})`);
+    netLog(`Voice line open in ${Date.now() - t0} ms${ws.warmed ? " (warmed on touch)" : ""}${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops})` : ""}`);
     if (G.drops) setTimeout(prefetchToken, 2000); // the ready pass was used: have the next one ready for another drop (seen Oct 24: 7 s to fetch one)
     clearInterval(G.netTick); G.netTick = setInterval(async () => { if (!(G.live && G.ws === ws)) return; const ms = await pingMs(); netLog("Reading", ms);
       // nothing was expected from Grok (the officer was thinking), so nothing else notices a dead network: a second quick test, then a fresh line (Oct 25: 35 s of "Hello?")
@@ -124,7 +141,10 @@ function openSocket(token, first, second) {
       const again = await pingMs(LINE_TEST_MS); if (typeof again === "number" || !G.live || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
       act("step", "The line went quiet (two test requests unanswered): fresh line"); reconnect("the line went quiet"); }, 30000);
   };
-  ws.onmessage = (m) => { if (G.ws !== ws) return; G.lastMsg = G.convAt = Date.now(); let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
+  ws.onmessage = (m) => { if (G.ws !== ws) return; G.lastMsg = G.convAt = Date.now();
+    if (m.data instanceof ArrayBuffer) { if (m.data.byteLength >= 2) onEvent({ type: "response.output_audio.delta", pcm: new Int16Array(m.data, 0, m.data.byteLength >> 1) }); return; } /* a binary frame is Ara's audio, raw PCM16 */
+    let e; try { e = JSON.parse(m.data); } catch (x) { return; } onEvent(e); };
+  if (useWarm) setTimeout(() => { if (G.ws !== ws) return; if (ws.readyState === 1) ws.onopen(); warm.queued.splice(0).forEach(m => ws.onmessage(m)); }, 0); /* already open: carry on as if it had just opened, with anything it was sent meanwhile */
   ws.onclose = (ev) => {
     if (G.ws !== ws || !G.live) return;
     vlog("connection closed " + (ev && ev.code));

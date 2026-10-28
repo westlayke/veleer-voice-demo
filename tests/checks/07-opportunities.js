@@ -61,7 +61,7 @@ test("Home: Needs attention has filter chips and urgency groups; the overview pa
   ok(["All", "Overdue", "Opportunities", "Tasks", "Contacts"].every((k, i) => chips[i] && chips[i].startsWith(k)), "Needs attention chips missing: " + chips.join(" | "));
   ok(await p.evaluate(() => { const ps = [...document.querySelectorAll("main > section.panel")]; return /From first contact to Closed Won/.test(ps[ps.length - 1].textContent); }), "the overview panel is not last on Home");
   await p.tap(".na-chips button >> text=Tasks"); await p.waitForTimeout(250);
-  ok(await p.evaluate(() => [...document.querySelectorAll(".na-chips ~ .row")].every(r => r.dataset.go === "tasks")), "the Tasks chip shows more than tasks");
+  ok(await p.evaluate(() => [...document.querySelectorAll(".na-chips ~ .row")].every(r => r.dataset.go === "tasks" || r.dataset.form === "response")), "the Tasks chip shows more than tasks"); // a Check on the answer task links to the response form (Oct 28)
   ok((await state(p)).naFilter === "tasks", "the chip choice is not remembered");
   const r = await ara(p, "show_needs_attention", { filter: "overdue" });
   ok(r.ok && r.filter === "Overdue" && (await state(p)).naFilter === "overdue", "Ara cannot filter Needs attention");
@@ -71,7 +71,7 @@ test("Ask Made shows Record gift beside Record pledge, and Record gift in Commit
   const name = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage === "Ask Made" && (o.asks[0] || {}).askType !== "Outright"); const c = o && S.contacts.find(c => c.id === o.contactId); return o && c.first + " " + c.last; });
   ok(name, "no Ask Made pledge opportunity in the seed");
   await tab(p, "Opportunities"); await p.tap(`text=${name}`); await p.waitForTimeout(300);
-  ok(await p.locator("button.btn.blue >> text=Record pledge").count() && await p.locator("button.btn.out[data-form=gift] >> text=Record gift").count(), "Ask Made is missing the Record gift button");
+  ok(await p.locator("button.btn.blue[data-form=response] >> text=Record the response").count() && await p.locator("button.btn.out[data-form=gift] >> text=Record gift").count(), "Ask Made awaiting its answer is missing Record the response (Oct 28) or the Record gift button");
   await p.evaluate((name) => { const S = window.__demo.state, c = S.contacts.find(c => c.first + " " + c.last === name), o = S.opps.find(o => o.contactId === c.id && o.stage !== "Closed"); o.stage = "Commitment"; o.pledge = { amount: 3000, fund: "Citizens Alliance C3", confirmedBy: "Email", installments: 3, frequency: "Annual", firstAmount: 1000, firstDue: "2026-12-01" }; }, name);
   await tab(p, "Home"); await tab(p, "Opportunities"); await p.tap(`text=${name}`); await p.waitForTimeout(300);
   ok(await p.locator("button.btn.blue >> text=Record gift").count(), "Commitment's button is not Record gift");
@@ -190,5 +190,64 @@ test("Ken's last gift gives its year once, and a defer reason ending in a full s
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
   const h = (await state(p)).history.map(x => x.text).find(t => /deferred/.test(t));
   ok(h && /board meeting\. Reconsider on/.test(h) && !/\.\./.test(h), "the defer reason is wrong in History: " + h);
+});
+
+test("Oct 28 ask follow-up: an awaiting ask creates the 30-day check task, its text links to the response field, the answer or a gift marks it done", async (p) => {
+  await signIn(p);
+  // two open opportunities with a planned ask; the ask is recorded with the answer still to come
+  const [who, other] = await p.evaluate(() => { const S = window.__demo.state, open = S.opps.filter(o => o.stage !== "Closed").slice(0, 2);
+    open.forEach((o, i) => { o.stage = "Ask Planning"; o.asks = [{ fund: "Citizens Alliance C3", campaign: "National", amount: 5000, askType: i ? "Pledge" : "Outright", status: "Planned", plannedDate: "2026-10-20" }]; delete o.pledge; });
+    S.tasks = S.tasks.filter(t => !open.some(o => o.id === t.oppId)); return open.map(o => { const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; }); });
+  for (const name of [who, other]) {
+    const r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-21", meetingType: "Phone call", response: "Awaiting", summary: "Made the ask on the call; they'll think it over.", nextStep: "Send the proposal", nextDue: "2026-10-25" });
+    ok(/Awaiting/.test(await p.inputValue("#f_response")), "the ask draft didn't take Awaiting: " + JSON.stringify(r));
+    await p.tap("[data-act=save]"); await p.waitForTimeout(400);
+  }
+  let st = await state(p); const oid = (n) => st.opps.find(o => o.stage !== "Closed" && st.contacts.find(c => c.id === o.contactId && c.first + " " + c.last === n));
+  const o1 = oid(who), o2 = oid(other), check = (o) => st.tasks.find(k => k.oppId === o.id && /^Check on the answer to the \$5,000 ask$/.test(k.text));
+  ok(o1.stage === "Ask Made" && o1.asks[0].status === "Made" && check(o1) && !check(o1).done && check(o1).due === "2026-11-20", "an awaiting ask didn't get its Check on the answer task due 30 days on: " + JSON.stringify(st.tasks.filter(k => k.oppId === o1.id)));
+  ok(/Task added: check on the answer to the \$5,000 ask by Nov 20/.test((await p.evaluate(() => document.body.innerText))), "History doesn't state the task was added");
+  // Tasks list: the task's text is a link that opens the opportunity with Record the response over it, Response focused
+  await tab(p, "Tasks"); await p.waitForTimeout(300);
+  const link = p.locator(`.trow[data-tid="${check(o1).id}"] .ttext .lnk[data-form=response]`);
+  ok(await link.count() === 1, "the check task's text isn't a link to the response form");
+  await link.first().tap(); await p.waitForTimeout(500);
+  ok(await p.evaluate(() => S.screen === "opp") && (await state(p)).sel.opp === o1.id, "the task link didn't land on the opportunity");
+  ok(await p.evaluate(() => /Record the response/.test(document.getElementById("overlay").textContent)), "the Record the response form isn't open");
+  ok(await p.evaluate(() => document.activeElement && document.activeElement.id === "f_response"), "the Response field isn't focused: " + (await p.evaluate(() => document.activeElement && document.activeElement.id)));
+  ok(await p.evaluate(() => V && V.action === "response" && V.data.date === new Date().toISOString().slice(0, 10)), "the date heard doesn't default to today");
+  // Accepted (outright): Commitment, the agreed-gift follow-up, and the check task done
+  await p.selectOption("#f_response", "Accepted"); await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  st = await state(p); const o1b = st.opps.find(o => o.id === o1.id);
+  ok(o1b.stage === "Commitment" && o1b.pledge && o1b.pledge.outright && o1b.asks[0].status === "Accepted", "an accepted outright response didn't move the opportunity to Commitment: " + o1b.stage);
+  ok(st.tasks.find(k => k.id === check(o1).id).done && st.tasks.some(k => k.oppId === o1.id && /^Follow up on agreed gift/.test(k.text)), "the check task wasn't marked done, or no agreed-gift follow-up was added");
+  ok(/Response recorded: Accepted/.test(await p.evaluate(() => document.body.innerText)), "History doesn't show the response");
+  // the opportunity record: Asks panel row has the Record the response button while awaiting, the stage button too, both gone once answered
+  await tab(p, "Opportunities"); await p.tap(`text=${other}`); await p.waitForTimeout(300);
+  ok(await p.locator(".rowedit[data-form=response]").count() === 1 && await p.locator("button.btn.blue[data-form=response]").count() === 1, "the awaiting opportunity lacks the Record the response buttons");
+  ok(await p.locator("button.btn.out[data-form=gift]").count() === 1, "Record gift isn't beside it");
+  // a gift that arrives while the ask is out answers it: Closed Won and the check task done
+  await ara(p, "show_gift_draft", { contact_name: other, amount: 5000, date: "2026-10-24", method: "Check" });
+  await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  st = await state(p); const o2b = st.opps.find(o => o.id === o2.id);
+  ok(o2b.stage === "Closed" && o2b.closed === "Won" && st.tasks.find(k => k.id === check(o2).id).done, "a gift while awaiting didn't close the opportunity and the check task");
+  // Needs attention: a check task due this week links to the response form too (not just the Tasks list)
+  const nm = await p.evaluate(([a, b]) => { const S = window.__demo.state, o = S.opps.find(o => o.stage !== "Closed" && o.id !== a && o.id !== b) || null; if (!o) return null; // a third opportunity, set up as an ask out for a while
+    o.stage = "Ask Made"; o.asks = [{ fund: "Citizens Alliance C3", campaign: "National", amount: 12000, askType: "Pledge", status: "Made", plannedDate: "2026-09-28", askedOn: "2026-09-28" }]; delete o.pledge;
+    S.tasks = S.tasks.filter(k => k.oppId !== o.id); S.tasks.unshift({ id: uid(), contactId: o.contactId, oppId: o.id, text: "Check on the answer to the $12,000 ask", due: new Date().toISOString().slice(0, 10), done: false, auto: true });
+    save(); S.screen = "home"; render(); return o.name; }, [o1.id, o2.id]);
+  ok(nm && await p.locator(`.row.tap[data-form=response][data-cid]`).count() >= 1, "Needs attention doesn't link the check task to the response form (seed opportunity: " + nm + ")");
+  // the voice tool: Countered creates the follow-on ask and marks the check task done
+  const seed = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage !== "Closed" && o.asks && o.asks[0] && o.asks[0].status === "Made"); const c = S.contacts.find(c => c.id === o.contactId); return { name: c.first + " " + c.last, oid: o.id }; });
+  await said(p, `${seed.name} got back to me, they countered at twenty thousand.`);
+  const r = await ara(p, "show_ask_response_draft", { contact_name: seed.name, response: "Countered", agreedAmount: 20000, date: "2026-10-28" });
+  ok(r.ok !== false && await p.evaluate(() => V && V.action === "response" && V.data.response === "Countered"), "the voice response draft didn't open: " + JSON.stringify(r));
+  await p.tap("[data-act=save]"); await p.waitForTimeout(500);
+  st = await state(p); const o3 = st.opps.find(o => o.id === seed.oid);
+  ok(o3.stage === "Ask Made" && o3.asks[0].status === "Agreed, pledge to follow" && o3.asks[0].amount === 20000 && o3.asks[1].status === "Countered" && st.tasks.filter(k => k.oppId === o3.id && /^Check on the answer/.test(k.text)).every(k => k.done), "a countered response didn't create the follow-on ask and settle the check task: " + JSON.stringify(o3.asks));
+  // a phone with an older ask still awaiting gets the task from the data upgrade, and the example task takes the standard wording
+  const mig = await p.evaluate(() => { const st = { opps: [{ id: "o1", contactId: "c1", stage: "Ask Made", asks: [{ amount: 30000, status: "Made", askedOn: "2026-09-30" }] }, { id: "o2", contactId: "c2", stage: "Ask Made", asks: [{ amount: 8000, status: "Made", askedOn: "2026-10-10" }] }], tasks: [{ id: "t1", oppId: "o1", contactId: "c1", text: "Follow up on Ken's pledge decision", due: "2026-10-24", done: false }], contacts: [] };
+    MIGRATIONS[6](st); return st.tasks.map(t => [t.oppId, t.text, t.due]); });
+  ok(mig.length === 2 && mig[0][1] === "Check on the answer to the $8,000 ask" && mig[0][2] === "2026-11-09" && mig[1][1] === "Check on the answer to the $30,000 ask" && mig[1][2] === "2026-10-24", "the data upgrade didn't add or rename the check tasks: " + JSON.stringify(mig));
 });
 };

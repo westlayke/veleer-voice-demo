@@ -111,9 +111,9 @@ function grokSaved(action, r, d = {}) {
   const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? (hasOpp.stage === "Qualification" ? "for example move the opportunity to Cultivation if it's ready, or log another meeting" : hasOpp.stage === "Cultivation" ? "for example plan an ask or log another meeting" : "for example add a task or log another meeting") : "for example create an opportunity or log another meeting") : "";
   whenIdle("instr");
   if (G.hfTry) { const undo = !G.undoSaid; G.undoSaid = true; // the undo reminder once per conversation: every save repeating it got tiresome (Oct 24)
-    G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Say"} in a few words that it's saved (for example "${savedShort(action, who)}")${undo ? `, then "Say undo if that's wrong."` : ""}, then ${nextAsk(r, closed)}`; return; }
-  G.saveAck = { at: Date.now(), action, who, next: nextAsk(r, closed, hint) };
-  guide(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see ${savedShort(action, who).replace(/\.$/, "").toLowerCase()}."), even if the officer has started talking; then ${nextAsk(r, closed, hint)}`);
+    G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Say"} in a few words that it's saved (for example "${savedShort(action, who)}")${undo ? `, then "Say undo if that's wrong."` : ""}${r && r.note ? `, then state (don't ask) "${r.note}"` : ""}, then ${nextAsk(r, closed)}`; return; }
+  G.saveAck = { at: Date.now(), action, who, next: `${r && r.note ? `first state, without asking, "${r.note}" Then ` : ""}${nextAsk(r, closed, hint)}` };
+  guide(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see ${savedShort(action, who).replace(/\.$/, "").toLowerCase()}."), even if the officer has started talking; then ${r && r.note ? `state, without asking, "${r.note}" Then ` : ""}${nextAsk(r, closed, hint)}`);
 }
 // "Planned ask saved for Jen." (the item's name once, not "Saved: Planned ask saved")
 // a tapped save Ara talked past (Oct 24: the officer said "uh, yes" right after tapping, and Ara answered "go ahead and tap it"):
@@ -161,6 +161,7 @@ function hfAnnounce() {
 function setHandsFree(on) {
   G.hands = !!on && G.live; G.saveCheck = null; act("step", "hands-free " + (G.hands ? "on" : "off")); vlog("hands-free " + (G.hands ? "on" : "off"));
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); } // the form's save note changes
+  if (G.live && PROV().extras && G.ws && G.ws.readyState === 1) sessUpdate({ turn_detection: sessionCfg().turn_detection }); /* the service's idle timer follows the hands-free wait */
   paintCall(); whenIdle("instr"); toast(G.hands ? "Hands-free on: Ara saves when you say yes" : "Hands-free off: tap Save yourself");
 }
 // what Ara reads back before saving: the form, who it's for, and each filled-in field (long text cut short)
@@ -244,6 +245,18 @@ function formPosition() {
   if (V.action === "interaction" && V.askedSubst && !V.fromVoice.has("substantive")) return { where: "The app asked whether the interaction was substantive and is waiting for the answer; it asks again itself.", ask: SUBST_Q };
   const need = (A.fields || []).filter(f => f.req && optEmpty(d[f.k])).map(f => f.label);
   return { where: need.length ? `The "${A.title}" form still needs: ${need.join(", ")}. Ask for the first of those.` : `Every required field of the "${A.title}" form is in; nothing has been read back yet.`, ask: "" };
+}
+// "What fields are left?": the app answers with the list itself, in one scripted line (Jacqueline's call, Oct 27: Ara's answer was vague)
+function fieldsLeft() {
+  const A = ACTIONS[V.action], d = readDraft(), fields = (A.fields || []).filter(f => !f.fixed && f.type !== "bool" && !(f.when && !d[f.when]));
+  const req = fields.filter(f => f.req && fieldBlank(f, d[f.k])).map(f => f.label.toLowerCase()), opt = fields.filter(f => !f.req && fieldBlank(f, d[f.k])).map(f => f.label.toLowerCase());
+  if ((V.action === "contact" || V.action === "editContact") && optEmpty(d.email) && optEmpty(d.mobile)) req.push("an email or a mobile");
+  if (oppNeedsCampaign(V.action, d)) req.push("the campaign");
+  if (V.action === "interaction" && !V.fromVoice.has("substantive")) req.push("whether it was substantive");
+  const list = (xs) => xs.join(", ").replace(/, ([^,]*)$/, " and $1"), title = A.title.toLowerCase().replace(/ · /, ", ");
+  if (req.length) return { force: `Still needed on the ${title} form: ${list(req)}.${opt.length ? ` Optional, if you want them: ${list(opt)}.` : ""}`, then: `The app just listed what the form still needs. Now ask for the first one, ${req[0]}, in one short question.` };
+  const pending = formPosition(); // the optional questions or a read-back may be waiting on an answer
+  return { force: `Everything required is in on the ${title} form.${opt.length ? ` You could still add ${list(opt)}.` : ""} ${pending && pending.ask ? pending.ask : G.hands ? "Say save when you're ready, or tell me what to change." : `Check the draft and tap "${A.saveLabel}", or tell me what to change.`}` };
 }
 function hfSettlePending() {
   const c = G.saveCheck; if (!V || !c || !G.hands || c.key !== V.action + JSON.stringify(readDraft())) return null;
