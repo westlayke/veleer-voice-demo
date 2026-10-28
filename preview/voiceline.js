@@ -31,7 +31,7 @@ const SAY_DOWN_MS = 5000, SAY_STILL_MS = 12000, SAY_REPEAT_MS = 10000; // the ph
 const SAY_SLOW_AFTER_MS = 60000, SAY_REPEAT_LATER_MS = 30000; // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (a long dead spot shouldn't nag)
 const downRepeatMs = () => Date.now() - (G.downAt || Date.now()) >= SAY_SLOW_AFTER_MS ? SAY_REPEAT_LATER_MS : SAY_REPEAT_MS;
 const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."]; // recorded in sounds/ (line-dropped, still-trying, line-back): the phone's own speech is silent during a call on an iPhone (Oct 25)
-const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3" }, lineRaw = {}, lineBuf = {};
+const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3", slow: "ara-slow.mp3" }, lineRaw = {}, lineBuf = {};
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;
@@ -66,7 +66,9 @@ async function mintToken(limit = TOKEN_WAIT_MS) {
 const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
 function idleCheck() {
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
-  if (G.live && ((G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS) || (/^Reconnecting/.test(G.status) && !(G.downAt && Date.now() - G.downAt >= SAY_DOWN_MS))) && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); cue("wait"); vlog("still working: tick"); }
+  // Oct 27 (Carverhill), back on Oct 28 after the 1.0 reset dropped it: a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
+  if (G.live && G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
+    if (!G.slowSaid && sayLocal("Ara's taking a moment.", "slow")) G.slowSaid = true; else { cue("wait"); vlog("still working: tick"); } }
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
   if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
@@ -277,7 +279,7 @@ function askReply(guidance) {
     const again = () => { if (!G.live || !G.qCreate) return; if (replyBusy()) { G.qTimer = setTimeout(again, 200); return; } flushQueued(); }; G.qTimer = setTimeout(again, 200); /* waits for the first request to report started (or CREATE_WAIT_MS); zeroing G.createAt after 500 ms sent the second too soon and OpenAI refused it (Oct 27, 7:03 PM run) */
     vlog("reply request held: one at a time on " + PROV().name); return; }
   G.createAt = Date.now();
-  send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now();
+  send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now(); G.slowSaid = false;
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
   G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
   // no reply at the first tick: test the line then, so a bad line gets a fresh one about 9 s sooner (seen Oct 24: 13 s to notice)

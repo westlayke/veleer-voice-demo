@@ -685,10 +685,13 @@ test("Ara: a slow reply gets a soft tick, a doubled reply is cut off, readings t
   await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); }); // this check starts in tap mode; hands-free is on by default since Oct 25
   const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
   await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
-  await p.evaluate(() => { window.__cues = []; const c = cue; window.cue = (k) => { __cues.push(k); }; });
+  await p.evaluate(() => { window.__cues = []; window.__said = []; const c = cue; window.cue = (k) => { __cues.push(k); }; window.sayLocal = (t, k) => { __said.push(k + ": " + t); return true; }; });
   await p.evaluate(() => notice("Ask the officer the next question."));
   await p.waitForTimeout(4400);
-  ok(await p.evaluate(() => __cues.includes("wait")), "no soft tick after 4 seconds without a reply");
+  // Oct 27/28 (Carverhill): the first slow tick is the recorded "Ara's taking a moment.", not a beep; the beep only repeats after it
+  ok(await p.evaluate(() => __said.includes("slow: Ara's taking a moment.") && !__cues.includes("wait")), "the first slow tick wasn't the spoken \"Ara's taking a moment.\": " + JSON.stringify(await p.evaluate(() => [__said, __cues])));
+  await p.waitForTimeout(4200);
+  ok(await p.evaluate(() => __cues.includes("wait") && __said.length === 1), "no soft tick after the spoken line, or the line was said twice");
   // the first ask comes back empty, the app asks again, then both answers arrive: the second is cut off
   await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(600);
   await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "Just to be sure?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
