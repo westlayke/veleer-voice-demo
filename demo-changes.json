@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 6:29 PM",
+   "change": "Preview: one generic voice form policy. Every form's voice behaviour is now declared in one table (which fields are required, which optional and in what order, which need a second yes on the amount, which are filled in advance, which can't be saved by voice) and one engine walks every form the same way: the first required question is scripted, optional details are offered once (\"Save it, or add the optional details first?\") and asked one at a time, the read-back is short (values only, bare amounts and dates) and ends \"Save it, or change something?\", and a changed value is re-read on its own (\"Payment method, credit card. Save it, or change something?\") instead of the whole form. Also from the 4:41 PM call: Record gift on a Commitment opportunity routes to the payment form without refusing the officer's change as a new form, and the gift amount is filled from the pledge. Form-specific branches in the voice code are gone; the data layer is unchanged.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"should we just have a 'generic' approach to how we use voice to complete forms ... not have 'form specific' code, which should simplify the code\" (5:14 PM); \"Let's go with your policy, build it\" (5:32 PM). Full 129-check suite passed."
+  },
+  {
    "date": "Oct 28, 5:20 PM",
    "change": "Preview: three connection fixes from the 4:41 PM call (21 minutes, 19 reconnects). (1) A tool call repeated after a picked-up conversation counts as a replay only when the earlier call came within 90 s before the drop (a yes to the gift had been refused as a replay of a save 7 minutes earlier). (2) When the phone ignores the voice service's idle timer because a form is open, the check-in the service starts on its own is dropped, so no filler line plays over the form. (3) The phone's named reconnect lines now carry the demo code (the key holder had refused every fetch, silently, on every phone) and a failed fetch is logged; \"Ara's taking a moment\" is said once per wait, then \"Still waiting on Ara\" every 10 s, instead of restarting on each re-ask.",
    "area": "Voice",

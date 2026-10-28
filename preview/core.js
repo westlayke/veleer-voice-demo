@@ -180,6 +180,27 @@ const ACTIONS = {
     left: "This gift is applied to the commitment: the outright gift agreed at the ask, or the pledge. The first gift closes the opportunity as Closed Won; later installments are tracked on the pledge." }
 };
 
+// optional: the optional fields asked one at a time, in this order (absent = every optional field); groups: fields asked as one question
+// Voice form policy (Carverhill, Oct 28: one generic way to fill every form by voice; what differs between forms is declared here,
+// and voiceforms.js applies it the same way to every form). A rule not in this table is not a rule the voice engine knows about.
+const VOICE_RULES = {
+  contact: { needsOneOf: ["email", "mobile"], askFirst: "capacity", optional: ["capacity", "howMet", "permText", "permSource", "flags"], groups: { flags: ["ally", "dnc"] }, defaultOn: ["permEmail", "permCalls"] },
+  editContact: { needsOneOf: ["email", "mobile"], optional: [], groups: { flags: ["ally", "dnc"] }, defaultOn: ["permEmail", "permCalls"] },
+  interaction: { alwaysAsk: "substantive", optional: [], nextStepWhen: (d, t) => needsNextStep("interaction", d, t) }, /* outcome and the rating stay on the screen: the report is long enough */
+  editInteraction: { optional: [], nextStepWhen: (d, t) => needsNextStep("editInteraction", d, t) },
+  ask: { optional: [], nextStepWhen: (d) => !!d.response && d.response !== "Declined", followUpWhen: (d) => d.response === "Awaiting", requiredWhen: (d) => d.response === "Declined" ? ["lostReason"] : [] },
+  response: { optional: [], nextStepWhen: (d) => !!d.response && d.response !== "Declined", followUpWhen: (d) => d.response === "Awaiting", requiredWhen: (d) => d.response === "Declined" ? ["lostReason"] : [] },
+  cultivate: { optional: [], requiredWhen: (d) => d.decision === "Defer" ? ["reason", "reconsiderOn"] : [], ownWords: true },
+  opportunity: { optional: ["fund", "campaign", "potential", "notes"] },
+  plan: { optional: ["askType"] },
+  task: { optional: [] },
+  pledge: { secondYes: "amount", optional: ["installments", "frequency", "firstAmount"] },
+  gift: { secondYes: "amount", optional: [] },
+  payment: { prefilled: ["amount"], optional: [], routedFrom: "gift" }, /* Record gift on a Commitment opportunity opens this form (drafts.js resolveTarget) */
+  meeting: { noVoiceSave: true, optional: [] }
+};
+const voiceRule = (action) => VOICE_RULES[action] || {};
+
 /* ---------- giving history (example gifts already received) ---------- */
 const g = (date, amount, fund, method) => ({ date, amount, fund, method });
 const SEED_GIFTS = {

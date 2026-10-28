@@ -62,7 +62,7 @@ async function prepNamedLines(why) {
   for (const t of want) { try { const r = await fetch(tokenUrl() + "/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE }, body: JSON.stringify({ text: t, voice: NAMED_VOICE }), signal: AbortSignal.timeout(15000) }); /* the demo code too: without it the key holder refused every line (Oct 28, never fetched on any phone) */
     if (!r.ok || !/audio/.test(r.headers.get("content-type") || "")) { fail = "answer " + r.status; continue; } const b = await r.arrayBuffer(); if (b.byteLength) { namedRaw[t] = b; got++; } } catch (e) { fail = e && e.name === "TimeoutError" ? "no answer in 15 s" : "no connection"; } }
   G.namedBusy = false;
-  if (!got && fail) act("step", `Phone lines not fetched (${why}): ${fail}; the stock recordings stand in`);
+  if (!got && fail) vlog(`Phone lines not fetched (${why}): ${fail}; the stock recordings stand in`); /* voice log only: an activity row here kept resetting the log batch timer (the "fetched" row is the sign it worked) */
   if (got) { const lines = {}; namedTexts(n).forEach(t => { if (namedRaw[t]) lines[t] = bufb64(namedRaw[t]); }); try { localStorage.setItem(NAMED_KEY, JSON.stringify({ name: n, lines })); } catch (e) {}
     vlog(`${got} phone lines${n ? " with " + n + "'s name" : ""} fetched (${why})`); act("step", `${got} phone line${got === 1 ? "" : "s"}${n ? " with " + n + "'s name" : ""} fetched (${why}): the phone keeps them for a dead spot or a slow reply`); }
   decodeNamed();

@@ -92,8 +92,9 @@ function applyEvidence(action, data, name) {
   const lines = G.live ? evidenceLines() : []; // nothing said yet in this call (or a typed test): nothing to check against, except a $0
   const ctx = { asked: typeof askedBefore === "function" ? askedBefore() : "", askedSubst: !!(V && V.action === "interaction" && V.askedSubst) };
   const dropped = [], trio = {};
+  const pre = voiceRule(action).prefilled || [];
   A.fields.forEach(f => {
-    if (f.fixed) return;
+    if (f.fixed || pre.includes(f.k)) return; /* prefilled from the record (VOICE_RULES): not subject to the officer-said rule */
     const v = data[f.k]; if (v === null || v === undefined || v === "") return;
     const zero = f.type === "money" && !(toNum(v) > 0); if (!zero && !lines.length) return;
     // already on the form from an earlier turn, or the app's own prefill (the interaction trio only when the officer's words put it there: an unticked box is not evidence)

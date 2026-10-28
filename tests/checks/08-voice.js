@@ -7,14 +7,14 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   let r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin" });
   ok(r.still_needed && r.still_needed.some(x => /Email or mobile/.test(x)), "Ara was not asked for an email or mobile");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
-  ok(/mobile number/.test(r.status), "Ara was not asked for the mobile too");
+  ok(/mobile number/.test(r.ask_exactly || r.next || ""), "Ara was not asked for the mobile too: " + JSON.stringify(r));
   // the rating an opportunity will need is asked right away, by the app's own line (Carverhill, Oct 25); then the rest of the details are offered
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(r.field === "capacity" && /Maya's capacity rating, which an opportunity needs/.test(r.ask_exactly || ""), "the rating wasn't asked for after the email: " + JSON.stringify(r));
   ok((await p.textContent("#f_capacity option:checked")).trim() === "No rating set", "the rating does not default to No rating set");
   await said(p, "C.");
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C" });
-  ok(r.field === "howMet" && /Let's take the next step: a few optional details for Maya, one at a time\. Say move on to skip any, or tap "Save contact" any time\. Next field: how you met Maya\. Fill it in, or move on\?$/.test(r.ask_exactly || ""), "the optional details didn't start after the rating, led by the app: " + JSON.stringify(r));
+  ok(r.choice === "saveOrOpt" && /That's everything the new contact form needs for Maya\. Save it, or add the optional details first\?$/.test(r.ask_exactly || ""), "the optional details didn't start after the rating, led by the app: " + JSON.stringify(r));
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org", capacity: "C", howMet: "Town hall" });
   ok(/tap/.test(r.status) && !/more details/.test(r.status) && !r.ask_exactly, "a question repeated: " + JSON.stringify(r));
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
@@ -172,7 +172,7 @@ test("Ara: a rating the officer never gave is dropped and the reply says so; han
   let r = await ara(p, "show_contact_draft", { first: "Barry", last: "Good", email: "bg@example.org", ally: false, dnc: false, capacity: "E" });
   const cap = await p.evaluate(() => V && V.data && V.data.capacity);
   ok(!cap, "the rating nobody gave stayed on the form: " + JSON.stringify(cap));
-  ok(/Left out of the form because the officer never said it: capacity rating/.test(r.status || ""), "Ara wasn't told the rating was left out (Oct 25: she read back her own E): " + JSON.stringify(r));
+  ok(/Left out of the form because the officer never said it: capacity rating/.test(r.status || r.next || ""), "Ara wasn't told the rating was left out (Oct 25: she read back her own E): " + JSON.stringify(r));
   await p.evaluate(() => { V = null; renderOverlay(); });
   await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 });
   const n = await p.evaluate(() => __sent.length);
@@ -206,6 +206,8 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   await p.evaluate(() => { V = null; renderOverlay(); const c = S.contacts.find(x => x.first === "Ken"); c.capacity = "B"; S.opps = S.opps.filter(o => o.contactId !== c.id); save(); });
   await said(p, "Yes, create an opportunity for Ken.");
   r = await ara(p, "show_opportunity_draft", { contact_name: "Ken Ito" });
+  ok(/Save it, or add the optional details first\?$/.test(r.ask_exactly || ""), "the opportunity form didn't offer its optional details: " + JSON.stringify(r)); // the policy's one question (Oct 28)
+  await said(p, "The details."); r = await ara(p, "optional_fields", { step: "start" });
   ok(/entity/.test(r.ask_exactly || ""), "the opportunity's optional questions didn't start with the entity: " + JSON.stringify(r));
   await said(p, "The Idaho entity."); r = await ara(p, "optional_fields", { step: "answer", value: "The Idaho entity" });
   await said(p, "The PAC."); r = await ara(p, "optional_fields", { step: "answer", value: "C.A. Idaho PAC" });
@@ -300,7 +302,7 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
   f = await forced(n0); i = await instr(n0);
-  ok(f.some(t => /^Sorry, I lost you for a moment\. New contact\. First name: Nora; Last name: Quist; Email: nora@example\.org[^]*Shall I save it\?$/.test(t)), "the read-back wasn't repeated by the app after the reconnect: " + JSON.stringify(f));
+  ok(f.some(t => /^Sorry, I lost you for a moment\. New contact: Nora Quist, email, nora@example\.org[^]*Save it, or change something\?$/.test(t)), "the read-back wasn't repeated by the app after the reconnect: " + JSON.stringify(f));
   ok(/has been read back in full and is waiting for the officer's yes to save it/.test(i), "Ara's instructions don't say the form is waiting for a yes: " + i.slice(-400));
   // a form with required fields still missing: Ara is guided as before, told what's still needed
   await p.evaluate(() => { V = null; G.saveCheck = null; renderOverlay && renderOverlay(); });
@@ -348,7 +350,7 @@ test("Ara: optional fields one at a time, filled in by the app (rating, how met,
   let r = await ara(p, "show_contact_draft", { first: "Jack", last: "Lantern", email: "jack@example.org", mobile: "(555) 010-0199" });
   ok(r.field === "capacity" && /which an opportunity needs/.test(r.ask_exactly || ""), "the rating wasn't asked first: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "skip" });
-  ok(r.field === "howMet" && /^No problem\. Let's take the next step: a few optional details for Jack, one at a time\. .*Next field: how you met Jack\. Fill it in, or move on\?$/.test(r.ask_exactly || ""), "skipping the rating didn't lead on to the other details: " + JSON.stringify(r));
+  ok(r.choice === "saveOrOpt" && /^No problem\. That's everything the new contact form needs for Jack\. Save it, or add the optional details first\?$/.test(r.ask_exactly || ""), "skipping the rating didn't lead on to the save-or-details question: " + JSON.stringify(r)); // the policy's one question (Oct 28)
   r = await ara(p, "optional_fields", { step: "back", field: "the rating" });
   ok(r.field === "capacity" && /Sure, back to that\. First, Jack's capacity rating\./.test(r.ask_exactly) && /(under \$5,000\. Which fits Jack|A to E: which fits Jack), or move on\?$/.test(r.ask_exactly), "going back to the rating didn't ask it with its bands (or the short A to E form once the bands were said): " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "answer", value: "D" });
@@ -413,7 +415,7 @@ test("Ara: an interaction report keeps the spoken summary (new contact)", async 
   for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   let r = await ara(p, "show_interaction_draft", { contact_name: "Jenny Arena", date: "2026-10-20", meetingType: "In person" });
-  ok(/summary parameter/.test(r.status), "Ara was not told where the summary goes: " + JSON.stringify(r));
+  ok(/summary parameter/.test(r.status || r.next || ""), "Ara was not told where the summary goes: " + JSON.stringify(r));
   r = await ara(p, "show_interaction_draft", { contact_name: "Jenny Arena", date: "2026-10-20", meetingType: "In person", notes: "Met Jenny for coffee; she is keen on the Pennsylvania program.", substantive: true });
   const v = await p.inputValue("#f_summary");
   ok(/coffee/.test(v), "the spoken summary is not in the Summary field");
@@ -663,7 +665,7 @@ test("Ara: sees opportunities closed this year, passes a question on after any y
   ok(await p.evaluate(() => /even when they ask for something else in the same breath: call pass_question_to_team first/.test(grokInstructions())), "Ara isn't told to pass a question on after a yes in other words");
   await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: "2026-10-21", meetingType: "Phone call", summary: "Talked at length about the spring gala and her new grandchild" });
   const rb = await p.evaluate(() => hfReadback());
-  ok(/Summary: noted/.test(rb) && !/grandchild/.test(rb), "the hands-free read-back still reads out the summary: " + rb);
+  ok(/summary noted/.test(rb) && !/grandchild/.test(rb), "the hands-free read-back still reads out the summary: " + rb);
 });
 test("Ara: a planned ask for an entity with a state campaign leaves the campaign blank so Ara asks for it", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -734,7 +736,7 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = "C"; S.opps.unshift({ id: "o_cult", contactId: c.id, name: "Okafor, James - 2026", stage: "Qualification", asks: [], fund: "C.A. Idaho C4", campaign: "Idaho", officer: OFFICER, participants: "", createdOn: todayISO() }); S.interactions.unshift({ id: "i_cult", contactId: c.id, date: todayISO(), type: "In person", summary: "Good talk.", substantive: true, kind: "interaction" }); save(); });
   await said(p, "I'm driving"); await p.waitForTimeout(900);
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
-  ok(/^Move James to Cultivation\? That means you, as the gift officer, believe they're ready to be pursued for a gift\. Shall I save it\?$/.test(r.read_back || ""), "the Cultivation read-back isn't the decision with its meaning: " + JSON.stringify(r));
+  ok(/^Move James to Cultivation\? That means you, as the gift officer, believe they're ready to be pursued for a gift\.$/.test(r.read_back || ""), "the Cultivation read-back isn't the decision with its meaning: " + JSON.stringify(r));
   await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved && /^James is now in Cultivation\. (Say undo if that's wrong\. )?The next step in the process to move James to Ask Planning is to add a planned ask\. Do you want to do that now, or something else\?$/.test(r.ask_exactly || ""), "the Cultivation save line isn't \"James is now in Cultivation\": " + JSON.stringify(r));
@@ -742,7 +744,7 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); const o = S.opps.find(o => o.id === "o_cult"); o.stage = "Qualification"; G.lastSaved = null; });
   await said(p, "Let's defer James's move, he's travelling until the new year, reconsider on January 15th.");
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Defer", reason: "Travelling until the new year", reconsiderOn: "2027-01-15" });
-  ok(/^Defer James's move to Cultivation, reason: Travelling until the new year, reconsider on Jan 15, 2027\. Shall I save it\?$/.test(r.read_back || ""), "the deferral read-back: " + JSON.stringify(r));
+  ok(/^Defer James's move to Cultivation, reason: Travelling until the new year, reconsider on Jan 15, 2027\. Save it, or change something\?$/.test(r.read_back || ""), "the deferral read-back: " + JSON.stringify(r));
   await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved && /^James's move to Cultivation is deferred until Jan 15, 2027\. /.test(r.ask_exactly || ""), "the deferral save line: " + JSON.stringify(r));
@@ -1057,7 +1059,7 @@ test("Awaiting answer (Oct 28): Ara explains the follow-up task is required and 
   await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: false });
   d = await p.evaluate(() => V.data);
-  ok(d.nextStep === want && d.nextDue === "2026-11-10" && /Next step \(creates one Task\): Follow up with/.test(r.ask_exactly || r.read_back || ""), "a bare yes didn't fill the suggested task before the read-back: " + JSON.stringify({ nextStep: d.nextStep, r }));
+  ok(d.nextStep === want && d.nextDue === "2026-11-10" && /next step, Follow up with/.test(r.ask_exactly || r.read_back || ""), "a bare yes didn't fill the suggested task before the read-back: " + JSON.stringify({ nextStep: d.nextStep, r }));
 });
 // Carverhill's Oct 28 11:51 AM call: "B. B." refused as a rating, his yes to Ara's own opportunity offer refused, a saved rating re-asked after a reconnect, the A to E ranges read twice
 test("Oct 28 11:51 AM call: a repeated letter rates, a yes to Ara's offer opens the form, a saved rating isn't re-asked, the ranges are read once", async (p) => {

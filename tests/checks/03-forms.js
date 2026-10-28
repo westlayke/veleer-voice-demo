@@ -110,7 +110,7 @@ test("New contact, new opportunity and the other forms show every field (no More
   await said(p, "Create an opportunity for Ana.");
   let r = await ara(p, "show_opportunity_draft", { contact_name: ready });
   ok(!(await p.isVisible("details.more")) && (await p.isVisible("#f_potential")) && (await p.isVisible("#f_notes")), "the new opportunity form still hides fields under More details");
-  ok(/one at a time/.test(r.ask_exactly || r.status || ""), "the opportunity's optional fields weren't offered: " + JSON.stringify(r));
+  ok(/Save it, or add the optional details first\?$/.test(r.ask_exactly || ""), "the opportunity's optional fields weren't offered: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "start" });
   ok(r.field === "fund", "the opportunity's first optional question wasn't the entity");
   r = await ara(p, "optional_fields", { step: "answer", value: "Citizens Alliance C3" });

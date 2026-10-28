@@ -84,7 +84,7 @@ function formAskedFor(action) {
   const ls = officerLines(3).filter(t => !/^((turn on |switch on |start |use )?(hands ?free|driving)( mode)?( on)?|(i'm|i am) driving( now)?)[.!]?$/.test(t.trim())); if (!ls.length) return true; // nothing said yet (or only "I'm driving"): a tap or typed flow
   if (ls.some(t => re.test(t))) return true;
   const last = ls[ls.length - 1], a = askedBefore(2) + " " + ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").toLowerCase(); // a yes to Ara offering that form counts; a yes to "shall I save it?" doesn't, even when the read-back names the form
-  return (hfYes(last) || /^(yes|yeah|yep|sure|ok|okay|please|go ahead|let's|lets|do it)\b/.test(last)) && re.test(a) && !/shall i save|save it\?|is that (right|correct)|ok to save|ready to save/.test(a);
+  return (hfYes(last) || /^(yes|yeah|yep|sure|ok|okay|please|go ahead|let's|lets|do it)\b/.test(last)) && re.test(a) && !/shall i save|save it\?|save it, or change|is that (right|correct)|ok to save|ready to save/.test(a);
 }
 function normCap(v) {
   if (v == null) return null; const t = String(v).trim(); if (!t) return null;

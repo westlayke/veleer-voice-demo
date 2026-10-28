@@ -134,7 +134,7 @@ function prefill(action, d, t) {
   if (["plan", "ask", "pledge", "cultivate", "gift", "payment"].includes(action)) out.forName = o ? o.name : "";
   if (action === "cultivate" && !out.decision) out.decision = "Move to Cultivation";
   if (action === "gift") { if (!out.fund) out.fund = (a && a.fund) || o.fund || ""; if (out.amount == null && a) out.amount = a.amount; if (!out.date) out.date = todayISO(); }
-  if (action === "payment") { if (out.amount == null && o.pledge) out.amount = o.pledge.firstAmount; if (!out.date) out.date = todayISO(); }
+  if (action === "payment") { if (out.amount == null && o.pledge) out.amount = o.pledge.firstAmount || o.pledge.amount; if (!out.date) out.date = todayISO(); } /* prefilled (VOICE_RULES): the agreed amount, never asked (Oct 28 4:41 PM call: it was dropped and asked again) */
   if (action === "interaction" || action === "ask" || action === "response") { if (!out.date) out.date = todayISO(); }
   if (action === "response") out.forName = o ? o.name : "";
   if (action === "opportunity") { out.name = `${c.last}, ${c.first} - ${YEAR}`; out.officer = OFFICER; }

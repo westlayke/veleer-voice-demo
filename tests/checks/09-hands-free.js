@@ -13,8 +13,8 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   ok(await p.isVisible(".cb-hf.on"), "the call bar does not show Hands-free on");
   r = await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
   // the app reads a finished draft back itself, as a scripted line, without waiting for Ara to call save_form (Oct 25: she said "Tap Confirm")
-  ok(r.saved === false && /Shall I save it\?$/.test(r.read_back) && /Send Ruth the board deck/.test(r.read_back) && !/Not saved|call save_form/.test(r.read_back), "no clean read-back from the finished draft: " + JSON.stringify(r));
-  ok(await p.evaluate(() => /Send Ruth the board deck.*Shall I save it\?$/.test((__sent.map(x => JSON.parse(x)).filter(x => x.item && x.item.type === "force_message").pop() || { item: { content: [{ text: "" }] } }).item.content[0].text)), "the read-back wasn't the app's own scripted line");
+  ok(r.saved === false && /Save it, or change something\?$/.test(r.read_back) && /Send Ruth the board deck/.test(r.read_back) && !/Not saved|call save_form/.test(r.read_back), "no clean read-back from the finished draft: " + JSON.stringify(r));
+  ok(await p.evaluate(() => /Send Ruth the board deck.*Save it, or change something\?$/.test((__sent.map(x => JSON.parse(x)).filter(x => x.item && x.item.type === "force_message").pop() || { item: { content: [{ text: "" }] } }).item.content[0].text)), "the read-back wasn't the app's own scripted line");
   ok(/HANDS-FREE MODE IS ON/.test(await p.evaluate(() => __sent.join(" "))), "Ara's instructions do not mention hands-free");
   ok(await p.isVisible("text=Say “yes” to save"), "the screen does not say it's waiting for a yes");
   // a "no" does not save
@@ -40,12 +40,7 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   await ara(p, "show_gift_draft", { contact_name: who, amount: 1000, date: "2026-10-22", method: "Check" });
   await ara(p, "save_form", { confirmed: false }); await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved === false && /the amount is \$1,000/.test(r.read_back), "no second check of the amount: " + JSON.stringify(r));
-  r = await ara(p, "save_form", { confirmed: true }, 2900); // the app waits a moment for the officer's words
-  ok(r.saved === false && /hasn't answered/.test(r.error), "saved without a second yes: " + JSON.stringify(r));
-  await said(p, "Yep, that's right.");
-  r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved === true, "gift not saved after the second yes: " + JSON.stringify(r));
+  ok(r.saved === true && !r.read_back, "the gift on a Commitment opportunity (amount from the pledge) should save on one yes: " + JSON.stringify(r)); // the policy (Oct 28): the second yes stays on gift and pledge, not on the routed payment
   // Needs attention asks the officer to check the hands-free save
   await said(p, "I've parked"); await p.waitForTimeout(300);
   ok(await p.isVisible(".cb-hf:not(.on)"), "hands-free did not turn off");
@@ -156,7 +151,7 @@ test("Oct 24 call fixes: email spelling, substantive asked and read back, edits 
   // optional questions: an entity answer while the amount is asked goes to the entity, back works, no read-back mid-way
   await said(p, "Create an opportunity for Pat.");
   let r = await ara(p, "show_opportunity_draft", { contact_name: "Pat Moss" });
-  ok(/one at a time/.test(r.ask_exactly || r.status || ""), "the opportunity draft didn't open: " + JSON.stringify(r) + JSON.stringify((await state(p)).contacts.filter(c => c.first === "Pat")));
+  ok(/Save it, or add the optional details first\?$/.test(r.ask_exactly || ""), "the opportunity draft didn't open: " + JSON.stringify(r) + JSON.stringify((await state(p)).contacts.filter(c => c.first === "Pat")));
   r = await ara(p, "optional_fields", { step: "start" });
   ok(r.field === "fund" && /entity/.test(r.ask_exactly) && !/ask exactly/i.test(r.ask_exactly), "the question isn't on its own: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "skip" });
@@ -180,7 +175,7 @@ test("Oct 24 call fixes: email spelling, substantive asked and read back, edits 
   r = await ara(p, "show_interaction_draft", { contact_name: "Pat Moss", substantive: false });
   await said(p, "I'm driving"); await p.waitForTimeout(900);
   r = await ara(p, "save_form", { confirmed: true });
-  ok(/Substantive: no/.test(r.read_back || ""), "the read-back doesn't say whether it was substantive: " + JSON.stringify(r));
+  ok(/not substantive/.test(r.read_back || ""), "the read-back doesn't say whether it was substantive: " + JSON.stringify(r));
   await said(p, "Yes."); r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved, "the report wasn't saved: " + JSON.stringify(r));
   // marking it substantive later needs a next step too
@@ -297,7 +292,7 @@ test("Hands-free: an interaction report is never read back without the substanti
   const today = await p.evaluate(() => todayISO());
   await said(p, "Make the ask, today."); // the officer answers the next-step question (Oct 25: a next step the officer never said is dropped)
   r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", nextStep: "Make the ask", nextDue: today });
-  ok(/Next step due: [A-Z][a-z]+ \d+, today\. Shall I save it\?$/.test(r.read_back || ""), "the read-back doesn't say the due date is today: " + JSON.stringify(r));
+  ok(/due [A-Z][a-z]+ \d+, today\. Save it, or change something\?$/.test(r.read_back || ""), "the read-back doesn't say the due date is today: " + JSON.stringify(r));
   ok(await p.evaluate((d) => dateSaid(d).endsWith("(today)"), today), "dateSaid has no day word");
 });
 
@@ -310,7 +305,7 @@ test("Hands-free: a yes to a read-back saves the form even when Ara opens anothe
   const today = await p.evaluate(() => todayISO()), n0 = await p.evaluate(() => S.interactions.length);
   await said(p, "I met James at the Halloween party, it was substantive, and I'll follow up with him today."); // said by the officer, so the fields are kept (Oct 25)
   let r = await ara(p, "show_interaction_draft", { contact_name: "James Okafor", date: today, meetingType: "Event", summary: "Met James at the Halloween party.", substantive: true, nextStep: "Follow up with James", nextDue: today });
-  ok(/Shall I save it\?$/.test(r.read_back || ""), "the finished report wasn't read back: " + JSON.stringify(r));
+  ok(/Save it, or change something\?$/.test(r.read_back || ""), "the finished report wasn't read back: " + JSON.stringify(r));
   await said(p, "Yes, let's go ahead and do that."); await p.waitForTimeout(200);
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
   const after = await p.evaluate(() => ({ n: S.interactions.length, form: V && V.action, hf: S.history[0] && S.history[0].hf, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | ") }));
@@ -341,7 +336,7 @@ test("Hands-free: when Ara reads a form back herself, in full, and the officer s
   await p.evaluate(() => { V.opt = null; recent("Ara", "New contact: Rita Moss, rita at example dot org. Shall I save it?"); }); // the mobile was left out (and Ara skipped the app's rating question)
   await said(p, "Yes");
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved === false && /Shall I save it\?$/.test(r.read_back || "") && !(await state(p)).contacts.some(c => c.last === "Moss"), "an incomplete read-back by Ara was accepted: " + JSON.stringify(r));
+  ok(r.saved === false && /Save it, or change something\?$/.test(r.read_back || "") && !(await state(p)).contacts.some(c => c.last === "Moss"), "an incomplete read-back by Ara was accepted: " + JSON.stringify(r));
 });
 test("Hands-free: a planned ask with no entity said is read back without one and the entity is asked (never the first in the list)", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);

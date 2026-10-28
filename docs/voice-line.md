@@ -273,3 +273,17 @@ starts at the same time, so time of day cannot favour one. Every engine is measu
 moment the officer's words are sent to the first sound of the reply), and the summary gives per-flow reply times with mean,
 standard deviation, median, 90th percentile, slowest and the count over 3 s.
 
+## Voice form policy (Oct 28)
+
+Every form's voice behaviour is declared in `VOICE_RULES` (core.js, after `ACTIONS`): `needsOneOf`, `askFirst`, `optional`
+(the ordered list of optional fields offered; an empty list means none), `groups`, `defaultOn`, `alwaysAsk`, `nextStepWhen`,
+`followUpWhen`, `requiredWhen`, `ownWords`, `secondYes`, `prefilled`, `noVoiceSave` and `routedFrom`. `voiceRule(action)` reads
+them. One engine in voiceforms.js walks every form from those declarations: `reqQuestion` scripts the first required question,
+`offerMore` offers the optional details once ("That's everything the <form> form needs for <who>. Save it, or add the optional
+details first?") and `optAsk`/`optStep` ask them one at a time with `optQuestion`/`optParse` by field type, `hfReadback` reads
+the form back short (values only, bare amounts and dates) and ends with `SAVE_Q` ("Save it, or change something?"), and a
+changed value is re-read on its own in `hfSave` ("Payment method, credit card. Save it, or change something?"). `draftTool`
+(aratools.js) settles the waiting form before it resolves a target unless the new form is `routedFrom` the old one (Record gift
+in Commitment routes to the payment form), refuses a second form with "The <form> form is waiting on your yes. Save it, change
+something, or drop it?", and applies `requiredWhen`, `needsOneOf`, `askFirst` and `prefilled` generically. No voice code
+branches on a form name; drafts.js keeps the per-form data layer.
