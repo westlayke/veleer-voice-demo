@@ -2,14 +2,14 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
-   "date": "",
+   "date": "Oct 28, 1:16 PM",
    "change": "Preview: the first time a reply is slow the phone says the recorded \"Ara's taking a moment.\" again instead of a beep; the soft tick only repeats after it. The recording had left with the reset to release 1.0.",
    "area": "Ara, connection",
    "requestedBy": "Carverhill",
    "why": "Oct 28, 12:59 PM ET: \"I hear lots of beeps when connectivity is low, and in past I thought I would hear recording of something like 'Ara needs a moment'\""
   },
   {
-   "date": "",
+   "date": "Oct 28, 1:16 PM",
    "change": "Preview: cancelling Record the response after opening it from a task on the Tasks list returns to the Tasks list (a save still stays on the opportunity).",
    "area": "Tasks, Opportunities",
    "requestedBy": "Carverhill",
