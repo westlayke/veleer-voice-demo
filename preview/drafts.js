@@ -114,12 +114,14 @@ function askOutcome(o, c, a, d, lead) {
     o.pledge = { outright: true, amount: yes.amount, fund: yes.fund, confirmedBy: "Ask accepted", confirmedDate: d.date, installments: 1, frequency: "One payment", firstAmount: yes.amount, firstDue: due, payments: [], status: "Current" };
     o.stage = "Commitment"; c.status = "Investor";
     log(`Outright gift of ${money(yes.amount)} agreed at the ask. Moved to Commitment`, ids); }
-  if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: d.nextStep, due: d.nextDue, done: false });
+  if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: d.nextStep, due: d.nextDue, done: false, askCheck: r === "Awaiting" });
   if (yes) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: `Follow up on agreed ${outright ? "gift" : "pledge"}: ${money(yes.amount)}`, due: addDays(d.date || todayISO(), PLEDGE_FOLLOWUP_DAYS), done: false, auto: true });
   let note = "";
   if (r === "Awaiting") { const due = addDays(d.date || todayISO(), ASK_CHECK_DAYS);
-    if (!S.tasks.some(k => k.oppId === o.id && askCheckTask(k))) { S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: `Check on the answer to the ${money(a.amount)} ask`, due, done: false, auto: true }); log(`Task added: check on the answer to the ${money(a.amount)} ask by ${fmtDate(due)}`, ids); }
-    note = `A task to check on ${c.first}'s answer by ${fmtDate(due)} was added.`; }
+    if (d.nextStep) { log(`Task added: ${d.nextStep} by ${fmtDate(d.nextDue)} (the follow-up on this ask)`, ids); note = `The task "${d.nextStep}" by ${fmtDate(d.nextDue)} is the follow-up on this ask.`; }
+    else { const had = S.tasks.find(k => k.oppId === o.id && askCheckTask(k));
+      if (had) note = `The task "${had.text}" by ${fmtDate(had.due)} is the follow-up on this ask.`;
+      else { S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: `Check on the answer to the ${money(a.amount)} ask`, due, done: false, auto: true }); log(`Task added: check on the answer to the ${money(a.amount)} ask by ${fmtDate(due)}`, ids); note = `A task to check on ${c.first}'s answer by ${fmtDate(due)} was added.`; } } }
   else { const had = S.tasks.filter(k => k.oppId === o.id && askCheckTask(k)).length; doneAskCheckTasks(o); if (had) note = "The task to check on the answer is marked done."; }
   return note;
 }

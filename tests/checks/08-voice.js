@@ -995,4 +995,28 @@ test("Carverhill's Ruth call (Oct 28): \"change the amount of the ask\" is the a
   ok(/^record \w+'s answer$/.test(line), "the next-step line still carries a day count: " + JSON.stringify(line));
 });
 
+test("Awaiting answer (Oct 28): Ara explains the follow-up task is required and suggests the words; the officer's yes fills it; hands-free asks the same way", async (p) => {
+  await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; G.cmdAt = 0; paintCall(); });
+  await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(x => x.stage !== "Closed"); o.stage = "Ask Planning"; o.asks = [{ fund: "Citizens Alliance C3", campaign: "National", amount: 5800, askType: "Outright", status: "Planned", plannedDate: "2026-10-23" }]; delete o.pledge; S.tasks = S.tasks.filter(t => t.oppId !== o.id); window.__who = (() => { const c = S.contacts.find(c => c.id === o.contactId); return [c.first + " " + c.last, c.first]; })(); });
+  const [name, first] = await p.evaluate(() => window.__who);
+  await said(p, `Let's record the ask for ${name}. It was in person yesterday. He's going to think about it.`);
+  let r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-27", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it." });
+  const want = `Follow up with ${first} to get an answer on the ask`;
+  ok(r.field === "nextStep" && (r.ask_exactly || "").includes(`needs a follow-up task, which becomes a Task for you. I suggest "${want}", due in 14 days, on Nov 10. Shall I use that, or do you want different words?`) && /nextDue 2026-11-10/.test(r.next || ""), "the app didn't ask the follow-up question with the suggested words: " + JSON.stringify(r));
+  await said(p, "Yes, use that.");
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-27", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextStep: want, nextDue: "2026-11-10" });
+  let d = await p.evaluate(() => V.data);
+  ok(d.nextStep === want && d.nextDue === "2026-11-10" && !r.still_needed, "the officer's yes didn't keep the suggested task (the evidence rule dropped Ara's words?): " + JSON.stringify({ nextStep: d.nextStep, nextDue: d.nextDue, still: r.still_needed }));
+  // hands-free: the app asks the same question itself at the read-back, and a bare yes fills the task
+  await p.evaluate(() => { V = null; G.recent = []; G.hands = true; renderOverlay(); });
+  await said(p, `Record the ask for ${name}, in person yesterday, awaiting his answer, he'll talk to his wife.`);
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-27", meetingType: "In person", response: "Awaiting", summary: "He'll talk to his wife." });
+  ok(r.field === "nextStep" && /needs a follow-up task, which becomes a Task for you\. I suggest "Follow up with \w+ to get an answer on the ask", due in 14 days, on Nov 10\. Shall I use that, or do you want different words\?$/.test(r.ask_exactly || ""), "hands-free didn't ask with the suggestion: " + JSON.stringify(r));
+  await said(p, "Yes.");
+  r = await ara(p, "save_form", { confirmed: false });
+  d = await p.evaluate(() => V.data);
+  ok(d.nextStep === want && d.nextDue === "2026-11-10" && /Next step \(creates one Task\): Follow up with/.test(r.ask_exactly || r.read_back || ""), "a bare yes didn't fill the suggested task before the read-back: " + JSON.stringify({ nextStep: d.nextStep, r }));
+});
+
 };

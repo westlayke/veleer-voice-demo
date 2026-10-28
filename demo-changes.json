@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 11:55 AM",
+   "change": "Preview: when an ask is recorded as Awaiting, Ara now explains that a follow-up task to get the answer is required and suggests the words \"Follow up with <first name> to get an answer on the ask\", due in 14 days; the officer says yes or gives their own words, and that task becomes the next step on the form (its text on the Tasks list opens Record the response). No second \"Check on the answer\" task is added when a next step is given. Hands-free asks the same way.",
+   "area": "Ara, Opportunities",
+   "requestedBy": "Carverhill",
+   "why": "Oct 28, 11:15 AM ET: \"update the script ara plays when the ask is being recorded with status awaiting answer, have Ara explain that a task to follow up to get an answer is required and have Ara suggest language like 'follow up with (prospect first name) to get an answer on the ask'\""
+  },
+  {
    "date": "Oct 28, 11:14 AM",
    "change": "Preview: the ask follow-up task now comes 14 days after the ask date, not 30 (existing check tasks moved to the new date); \"change the amount of the ask\" or \"the ask was for $X\" on the ask form now changes the Amount asked instead of landing in the agreed amount (a counter figure still goes to Agreed); Ara's next-step line after an awaiting ask no longer carries the waiting-day count (\"record James's answer (1 day)\").",
    "area": "Opportunities, Ara",

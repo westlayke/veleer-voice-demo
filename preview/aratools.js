@@ -316,8 +316,13 @@ function draftTool(callId, name, data) {
   if (tool.action === "ask" && data.agreedAmount != null && data.amount == null && data.response !== "Countered" && ASK_AMOUNT_RE.test(officerLines(2).join(" "))) {
     data.amount = data.agreedAmount; delete data.agreedAmount; vlog(`${name}: agreedAmount ${data.amount} moved to amount: the officer changed the amount asked`);
     (data._moved = data._moved || []).push(`The officer changed the amount asked, so ${money(data.amount)} is now the Amount asked (not an agreed amount).`); }
+  // the app suggested the follow-up wording and the officer said yes: that wording counts as said (the evidence rule would otherwise drop words Ara spoke)
+  let followKeep = null;
+  if (tool.action === "ask" && V && V.action === "ask" && V.askedFollow) { const s = followUpSuggestion(target), last = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9);
+    if (last && hfYes(last) && (!String(data.nextStep || "").trim() || data.nextStep === s.text)) { followKeep = { nextStep: s.text, nextDue: data.nextDue || s.due }; delete data.nextStep; delete data.nextDue; vlog(`${name}: follow-up task "${s.text}" by ${s.due}: the officer said yes to the app's suggestion`); } }
   // every value must trace to the officer's words, a $0 amount, an invented rating and the interaction report's substantive flag, next step and outcome included (evidence.js)
   applyEvidence(tool.action, data, name).forEach(x => (data._dropped = data._dropped || []).push(x));
+  if (followKeep) Object.assign(data, followKeep);
   // the voice model doesn't send texting permitted on a new contact (seen Oct 24: eight tries, never sent): take it from the officer's own words
   if ((tool.action === "contact" || tool.action === "editContact") && data.permText === undefined) { const t = officerSaidTexting(); if (t !== null) { data.permText = t; vlog(`${name}: texting ${t ? "permitted" : "not permitted"}, from the officer's words`); } }
   if ((tool.action === "interaction" || tool.action === "ask") && !String(data.summary || "").trim() && !(V && V.action === tool.action && V.data && String(V.data.summary || "").trim())) {
@@ -361,7 +366,8 @@ function draftTool(callId, name, data) {
   if ((tool.action === "contact" || tool.action === "editContact") && empty(d.email) && empty(d.mobile)) missing.push(noEmail && !noMobile ? "Mobile number (the officer said there is no email, so ask only for the mobile)" : noMobile && !noEmail ? "Email address (the officer said there is no mobile, so ask only for the email)" : "Email or mobile");
   if (stateNote) { missing.unshift(`Entity of interest (${stateNote.trim()})`); stateNote = ""; } // the entity isn't a required field, but the officer asked for one in that state
   if (oppNeedsCampaign(tool.action, d)) missing.push(`Campaign of interest (${d.fund} can be ${campaignsFor(d.fund).join(" or ")}: ask which)`); // Carverhill: always ask the campaign when there is a choice
-  if ((needsNextStep(tool.action, d, target) || (tool.action === "ask" && d.response && d.response !== "Declined")) && (empty(d.nextStep) || empty(d.nextDue))) missing.push("Next step and its due date (a substantive interaction needs one, and it becomes a Task for the officer: explain that in one sentence, then ask whether they want to set it now and, if so, what it is and when it's due; never suggest a step, a date or a way of contacting anyone, the officer decides)");
+  if (awaitingAsk(tool.action, d) && (empty(d.nextStep) || empty(d.nextDue))) { const s = followUpSuggestion(target); V.askedFollow = true; missing.push(`Next step and its due date (an ask still waiting for its answer needs a follow-up task, which becomes a Task for the officer: say so in one sentence, then suggest exactly these words: "${s.text}", due in ${ASK_CHECK_DAYS} days, on ${fmtDate(s.due)}, and ask whether to use that or different words. If they say yes, call this tool with nextStep "${s.text}" and nextDue ${s.due}; if they give their own words or date, use those)`); }
+  else if ((needsNextStep(tool.action, d, target) || (tool.action === "ask" && d.response && d.response !== "Declined")) && (empty(d.nextStep) || empty(d.nextDue))) missing.push("Next step and its due date (a substantive interaction needs one, and it becomes a Task for the officer: explain that in one sentence, then ask whether they want to set it now and, if so, what it is and when it's due; never suggest a step, a date or a way of contacting anyone, the officer decides)");
   // a new contact: ask once for the other of email/mobile, then once about the optional fields (the app drives this so it never gets skipped)
   // the officer just said a phone number, but this update didn't carry it (Oct 27 spoken run: Grok's call for the mobile turn had no mobile, so the app asked again)
   const saidDigits = (tool.action === "contact" || tool.action === "editContact") && empty(d.mobile) && data.mobile === undefined ? officerSaidDigits() : "";
@@ -377,6 +383,9 @@ function draftTool(callId, name, data) {
     if (empty(d.capacity) && !V.askedCap && !V.opt) { V.askedCap = true; V.opt = { done: [], only: "capacity" }; optAsk(callId, droppedNeeded(["capacity rating"]).length ? notCaught(["capacity rating"]) : undefined); return; }
     if (!V.askedOptional && !V.opt) { offerMore(callId); return; }
   }
+  // only the follow-up task is left on an awaiting ask: the app asks it in its own words, with the suggested wording (Carverhill, Oct 28)
+  if (awaitingAsk(tool.action, d) && missing.length === 1 && /follow-up task/.test(missing[0])) { const s = followUpSuggestion(target);
+    toolReply(callId, { ok: true, button: A.saveLabel, field: "nextStep", ask_exactly: FOLLOW_Q(target), next: `If the officer says yes, call this tool with nextStep "${s.text}" and nextDue ${s.due}; if they give their own words or date, use those.${droppedNote}${movedNote}` }); return; }
   if (tool.action === "opportunity" && !missing.length && !V.askedOptional && !V.opt) { offerMore(callId); return; }
   // hands-free: a finished draft is read back by the app straight away, instead of waiting for Ara to call save_form (Oct 25: she said "Tap Confirm" instead)
   if (!missing.length && G.hands && tool.action !== "meeting") { hfSave(callId, { confirmed: false }); return; }

@@ -55,7 +55,7 @@ const PAY_METHODS = ["Check", "Credit card", "Bank transfer", "Wire", "Stock", "
 const PLEDGE_FOLLOWUP_DAYS = 10; // demo default; the guide's pledge reminder interval is still open with the customer
 const ASK_CHECK_DAYS = 14; // a setting: an ask still waiting for its answer gets a task to check on it within this many days (Carverhill, Oct 28: 30, then 14 the same day)
 const ASK_CHECK_RE = /^Check on the answer to the /; // the text of that task; a recorded response, pledge or gift marks it done
-const askCheckTask = (t) => !!t && !t.done && ASK_CHECK_RE.test(t.text || "") && !!t.oppId;
+const askCheckTask = (t) => !!t && !t.done && (t.askCheck || ASK_CHECK_RE.test(t.text || "")) && !!t.oppId;
 const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
 const MIC = '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
 const mic = (s) => MIC.replace(/SZ/g, s);

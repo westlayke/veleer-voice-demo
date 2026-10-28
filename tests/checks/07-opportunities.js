@@ -204,9 +204,12 @@ test("Oct 28 ask follow-up: an awaiting ask creates the 14-day check task, its t
     await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   }
   let st = await state(p); const oid = (n) => st.opps.find(o => o.stage !== "Closed" && st.contacts.find(c => c.id === o.contactId && c.first + " " + c.last === n));
-  const o1 = oid(who), o2 = oid(other), check = (o) => st.tasks.find(k => k.oppId === o.id && /^Check on the answer to the \$5,000 ask$/.test(k.text));
-  ok(o1.stage === "Ask Made" && o1.asks[0].status === "Made" && check(o1) && !check(o1).done && check(o1).due === "2026-11-04", "an awaiting ask didn't get its Check on the answer task due 14 days on: " + JSON.stringify(st.tasks.filter(k => k.oppId === o1.id)));
-  ok(/Task added: check on the answer to the \$5,000 ask by Nov 4/.test((await p.evaluate(() => document.body.innerText))), "History doesn't state the task was added");
+  // the officer's next step on an awaiting ask is the follow-up task itself (one task, linked to Record the response); with no next step the app adds "Check on the answer" 14 days on
+  const o1 = oid(who), o2 = oid(other), check = (o) => st.tasks.find(k => k.oppId === o.id && k.askCheck && k.text === "Send the proposal");
+  ok(o1.stage === "Ask Made" && o1.asks[0].status === "Made" && check(o1) && !check(o1).done && check(o1).due === "2026-10-25" && !st.tasks.some(k => k.oppId === o1.id && /^Check on the answer/.test(k.text)), "an awaiting ask's next step isn't its one follow-up task: " + JSON.stringify(st.tasks.filter(k => k.oppId === o1.id)));
+  ok(/Task added: Send the proposal by Oct 25 \(the follow-up on this ask\)/.test((await p.evaluate(() => document.body.innerText))), "History doesn't state the task was added");
+  const auto = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(x => x.stage === "Ask Made"), c = S.contacts.find(x => x.id === o.contactId), a = latestAsk(o); const keep = S.tasks; S.tasks = S.tasks.filter(k => k.oppId !== o.id); const out = askOutcome(o, c, a, { response: "Awaiting", date: "2026-10-21" }, "Ask recorded") + " | " + JSON.stringify(S.tasks.filter(k => k.oppId === o.id && /^Check on the answer/.test(k.text)).map(k => [k.text, k.due])); S.tasks = keep; return out; });
+  ok(/A task to check on \w+'s answer by Nov 4 was added\. \| \[\["Check on the answer to the \$5,000 ask","2026-11-04"\]\]/.test(auto), "without a next step the app didn't add the 14-day check task: " + auto);
   // Tasks list: the task's text is a link that opens the opportunity with Record the response over it, Response focused
   await tab(p, "Tasks"); await p.waitForTimeout(300);
   const link = p.locator(`.trow[data-tid="${check(o1).id}"] .ttext .lnk[data-form=response]`);
