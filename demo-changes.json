@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 1:49 PM",
+   "change": "Preview: after a lock or background switch, the app starts the sound and mic afresh once before giving up on them, and when the call still has to end the Carry on card says why (\"Your phone kept the sound paused after it came back\", \"kept the microphone muted\", \"closed the app while it was locked\"). A paused conversation is also kept on the phone, so a page the phone discarded while locked still offers Carry on on the next open. Unsent activity-log rows are kept on the phone and sent by the next page, and sent at once when the page hides, so the end of a call is no longer lost.",
+   "area": "Connection, Carry on, activity log",
+   "requestedBy": "Carverhill",
+   "why": "Oct 28, 1:33 PM ET: \"app went into background but carry on dialog came up. Late I think\"; plan approved \"Make the changes\" 1:37 PM"
+  },
+  {
    "date": "Oct 28, 1:25 PM",
    "change": "Preview: a \"yes\" or \"save it\" repeated within 8 seconds of a hands-free save is taken as the same answer: it no longer cancels Ara's save confirmation, and a second save call in that window tells Ara to confirm once (never \"checking on that save\").",
    "area": "Ara, hands-free",

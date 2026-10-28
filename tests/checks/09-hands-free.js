@@ -208,10 +208,14 @@ test("Oct 24 call fixes: the phone pausing the sound doesn't end the call, and C
   await said(p, "I'm driving"); await p.waitForTimeout(900);
   await p.evaluate(() => G.ctx.suspend()); await p.waitForTimeout(1500);
   ok(await p.evaluate(() => G.live && G.ctx.state === "running" && !G.soundPausedAt), "the call ended or the sound didn't come back after a short pause");
-  await p.evaluate(() => { G.ctx.resume = () => Promise.resolve(); return G.ctx.suspend(); });
+  await p.evaluate(() => { const AC = window.AudioContext; window.__heldAC2 = AC; window.AudioContext = class extends AC { constructor() { super(); this.resume = () => Promise.resolve(); super.suspend(); } }; G.ctx.resume = () => Promise.resolve(); return G.ctx.suspend(); });
   await p.waitForTimeout(7000);
+  // Oct 28: one fresh start of the sound and mic first; the phone keeps that one held too, so the call ends with the reason on the card
+  ok(await p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).some(a => /^Starting the sound and mic afresh after the sound stayed paused/.test(a.text))), "no fresh start of the sound before giving up");
+  await p.waitForFunction(() => !G.live, null, { timeout: 6000 }).catch(() => {});
   ok(await p.evaluate(() => !G.live), "the call didn't end when the sound stayed paused");
-  ok(await p.isVisible("#rsmGo"), "no Carry on after the sound stayed paused");
+  ok(await p.isVisible("#rsmGo") && /kept the sound/.test(await p.evaluate(() => document.getElementById("modal").innerText)), "no Carry on with the reason after the sound stayed paused: " + await p.evaluate(() => document.getElementById("modal").innerText.slice(0, 200)));
+  await p.evaluate(() => { window.AudioContext = window.__heldAC2; });
   await p.tap("#rsmGo"); await p.waitForTimeout(1500);
   ok(await p.evaluate(() => G.live && G.hands), "hands-free was lost after Carry on");
   ok(await p.evaluate(() => __sent.join(" ").includes("Hands-free mode is still on")), "Ara wasn't told hands-free is still on");
@@ -220,11 +224,11 @@ test("Oct 24 call fixes: the phone pausing the sound doesn't end the call, and C
 test("Carry on with the phone's sound held (Oct 27): the app waits and says so instead of letting Ara talk unheard, and repeats her line when the sound is back", async (p) => {
   await signIn(p);
   await said(p, "I'm driving"); await p.waitForTimeout(900);
-  await p.evaluate(() => { G.ctx.resume = () => Promise.resolve(); return G.ctx.suspend(); });
-  await p.waitForTimeout(7000);
-  ok(await p.isVisible("#rsmGo"), "no Carry on card after the sound stayed paused");
   // the phone keeps the sound engine from running after the tap (iOS "interrupted"): every new engine starts held until released
   await p.evaluate(() => { const AC = window.AudioContext; window.__heldAC = AC; window.AudioContext = class extends AC { constructor() { super(); const real = this.resume.bind(this); this.resume = () => Promise.resolve(); this.__release = () => { this.resume = real; return real(); }; super.suspend(); } }; });
+  await p.evaluate(() => { G.ctx.resume = () => Promise.resolve(); return G.ctx.suspend(); });
+  await p.waitForFunction(() => !G.live, null, { timeout: 14000 }).catch(() => {});
+  ok(await p.isVisible("#rsmGo"), "no Carry on card after the sound stayed paused");
   const logAt = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text));
   await p.tap("#rsmGo"); await p.waitForTimeout(3500);
   ok(await p.evaluate(() => G.live && G.ctx && G.ctx.state !== "running" && G.soundPausedAt > 0), "the call didn't wait for the held sound: " + JSON.stringify(await p.evaluate(() => ({ live: G.live, state: G.ctx && G.ctx.state, paused: G.soundPausedAt }))));
@@ -382,5 +386,19 @@ test("Hands-free greeting (Oct 27): the first calls say hands-free is on and how
   // a phone past its first three calls hears the short line; the call-bar tap flips the label back
   ok(await p.evaluate(() => { S.settings.hfGreeted = 3; G.hands = true; return /^Hi \w+, I'm \w+, hands-free is on\. What would you like to do\?$/.test(helloLine(S.settings.userName)); }), "the later greeting isn't the short line");
   ok(await p.evaluate(() => { G.hands = false; return /^Hi \w+, I'm \w+, what would you like to do\?$/.test(helloLine(S.settings.userName)); }), "the tap-mode greeting mentions hands-free");
+});
+// Oct 28: the phone discarded the page while the conversation was paused at a lock; the next page offers Carry on and says why
+test("A page the phone closed while a conversation was paused offers Carry on on the next open, with the reason", async (p) => {
+  await signIn(p);
+  await p.evaluate(() => localStorage.setItem("resumeKeep", JSON.stringify({ at: Date.now() - 20000, lines: ["Ara: What's the last name?", "Officer: Smith"], draft: "x", where: "", what: "New contact", hands: true, plain: "Your phone closed the app while it was locked." })));
+  await p.reload(); await p.waitForTimeout(1500);
+  const txt = await p.evaluate(() => document.getElementById("modal").innerText);
+  ok(await p.isVisible("#rsmGo") && /closed the app while it was locked/.test(txt) && /“New contact” form went with it/.test(txt), "the kept conversation wasn't offered with the reason: " + txt.slice(0, 200));
+  ok(await p.evaluate(() => !localStorage.getItem("resumeKeep")), "the kept copy wasn't cleared once offered");
+  await p.tap("#rsmGo"); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => G.live && G.hands && __sent.join(" ").includes("Officer: Smith")), "Carry on from the kept copy didn't start with the last lines");
+  await p.evaluate(() => endCall());
+  // a normal call start or end leaves nothing kept behind
+  ok(await p.evaluate(() => !localStorage.getItem("resumeKeep")), "a kept copy survived a normal end");
 });
 };

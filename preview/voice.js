@@ -342,6 +342,11 @@ const canTalk = () => !!tokenUrl();
 /* Activity log: each conversation's words (what the officer said, Grok's replies, the steps Grok took) go to the Worker,
    which saves them with this phone's random ID, the name given, and the rough location Cloudflare sees. Told to the user in the welcome popup and Settings. */
 const ACT = { ready: null, q: [], timer: null };
+// Unsent log rows also sit in the phone's storage until the key holder has them (Oct 28: the end of a call was lost when iOS discarded the locked page), and the queue is sent at once when the page hides
+const ACT_KEY = "actPending";
+function actPending(fn) { let rows = []; try { rows = JSON.parse(localStorage.getItem(ACT_KEY) || "[]"); } catch (e) {} const out = fn(rows) || rows; try { localStorage.setItem(ACT_KEY, JSON.stringify(out.slice(-400))); } catch (e) {} }
+function actRestore() { actPending(rows => { if (rows.length) { ACT.q.push(...rows.map(r => ({ ...r, tries: 0 }))); vlog(`${rows.length} log rows kept from the last page are being sent`); clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, 1500); } return rows; }); }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && ACT.q.length) { clearTimeout(ACT.timer); flushAct(); } });
 function deviceId() {
   if (!S.settings.deviceId) { S.settings.deviceId = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + "-" + uid() + uid()); save(); }
   return S.settings.deviceId;
@@ -362,7 +367,8 @@ async function demoChanges() {
 }
 function act(role, text, sess) {
   if (!text) return; const session = sess || G.session || visitId();
-  ACT.q.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session }); // the id lets the key holder drop a batch that arrives twice (Oct 25: a resent batch doubled 20 s of log)
+  const row = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session }; // the id lets the key holder drop a batch that arrives twice (Oct 25: a resent batch doubled 20 s of log)
+  ACT.q.push(row); actPending(rows => { rows.push(row); });
   clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, role === "end" ? 0 : 4000);
 }
 // what was in a form when Save was tapped, for the activity log (the privacy notice says so)
@@ -381,13 +387,13 @@ function formLogNotice() {
   document.body.appendChild(bar);
 }
 async function flushAct() {
-  if (!ACT.q.length || !(await logReady())) { if (ACT.ready === false) ACT.q = []; return; }
+  if (!ACT.q.length || !(await logReady())) { if (ACT.ready === false) { ACT.q = []; actPending(() => []); } return; }
   const bySession = {}; ACT.q.splice(0).forEach(e => (bySession[e.session] = bySession[e.session] || []).push(e));
   Object.entries(bySession).forEach(([session, events]) => {
     const tries = events[0].tries || 0;
     fetch(tokenUrl().replace(/\/$/, "") + "/log", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE },
       body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, tries, ...e }) => e) }) })
-      .then(r => { if (!r.ok && r.status !== 401) throw new Error(String(r.status)); })
+      .then(r => { if (!r.ok && r.status !== 401) throw new Error(String(r.status)); const sent = new Set(events.map(e => e.id)); actPending(rows => rows.filter(x => !sent.has(x.id))); })
       .catch(() => { if (tries >= 5) return; events.forEach(e => { e.tries = tries + 1; }); ACT.q.unshift(...events); clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, 5000); }); // a batch lost to a bad patch of signal is sent again (Oct 25)
   });
 }
@@ -538,7 +544,7 @@ async function openAudio() {
   // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
   ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") soundPaused(ctx); };
   const mine = (tr) => G.stream && G.stream.getAudioTracks().includes(tr); // a mic replaced after a lock no longer speaks for the call
-  stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && mine(tr) && G.status !== "Connecting…") micMuted(tr); }; tr.onended = () => { if (G.live && mine(tr)) interrupted("mic ended"); }; });
+  stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && mine(tr) && G.status !== "Connecting…") micMuted(tr); }; tr.onended = () => { if (G.live && mine(tr)) interrupted("mic ended", "Your phone took the microphone away (a call, Siri or the recording dialog)."); }; });
   const srcNode = ctx.createMediaStreamSource(stream);
   const onPcm = (f32) => {
     if (G.ctx !== ctx) return;
@@ -615,7 +621,7 @@ async function startCall(opening) {
   if (navigator.audioSession) vlog("audio session: " + navigator.audioSession.type);
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
   if (!G.keepRecent) { G.recent = []; G.saves = []; G.convId = null; } G.keepRecent = false;
-  G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; G.rangesSaid = false; act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
+  G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; G.rangesSaid = false; G.audioRetried = false; dropResume(); act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     const warm = typeof takeWarm === "function" ? takeWarm() : null; /* a line that started opening when the mic button was first touched (Oct 28) */
     G.t0 = Date.now(); G.heardAt = 0; G.passReady = !!TOK.p || !!warm;
@@ -655,11 +661,18 @@ function draftSummary() {
   const need = (A.fields || []).filter(f => f.req && (!V.data || V.data[f.k] === undefined || V.data[f.k] === "")).map(f => f.label);
   return `The "${A.title}" form${who ? ` for ${who}` : ""} is still open on screen, not saved yet. Filled in so far: ${have.join("; ") || "nothing"}.${need.length ? ` Still needed: ${need.join(", ")}.` : ""}`;
 }
-function interrupted(why) {
+const RESUME_KEY = "resumeKeep";
+const resumeInfo = (plain) => ({ at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), where: (typeof formPosition === "function" && formPosition() || {}).where || "", what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "", hands: !!G.hands, plain: plain || "" });
+// a copy of the cut-off conversation on the phone: a page the phone discarded (while locked) can still offer Carry on; cleared when a call ends or starts normally
+function keepResume(plain) { try { localStorage.setItem(RESUME_KEY, JSON.stringify(resumeInfo(plain))); } catch (e) {} }
+function dropResume() { try { localStorage.removeItem(RESUME_KEY); } catch (e) {} }
+function restoreResume() { let r = null; try { r = JSON.parse(localStorage.getItem(RESUME_KEY) || "null"); } catch (e) {} dropResume(); if (!r || Date.now() - r.at > 30 * 60e3 || !r.lines || !r.lines.length) return false;
+  r.lost = r.what; r.what = ""; r.draft = ""; r.where = ""; G.resume = r; act("step", `The last page was closed by the phone while a conversation was paused (${Math.round((Date.now() - r.at) / 1000)} s ago): offering Carry on`); resumeModal(); return true; }
+function interrupted(why, plain) {
   if (!G.live || G.interrupting) return; G.interrupting = true;
   vlog("conversation interrupted: " + why);
-  G.resume = { at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), where: (typeof formPosition === "function" && formPosition() || {}).where || "", what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "", hands: !!G.hands };
-  endCall("interrupted: " + why); G.interrupting = false; G.hiddenAt = 0;
+  G.resume = resumeInfo(plain);
+  endCall("interrupted: " + why); G.interrupting = false; G.hiddenAt = 0; keepResume(plain);
   if (document.visibilityState === "visible") resumeModal(); else G.endedByLock = true;
 }
 function resumeModal() {
@@ -669,9 +682,9 @@ function resumeModal() {
   h.innerHTML = `<div class="scrim center"><div class="wmodal" role="dialog" aria-modal="true" aria-labelledby="rsmTitle">
     <span class="wl-mic">${mic(22)}</span>
     <h2 id="rsmTitle">Your conversation was interrupted</h2>
-    <p>A call, an alarm or the phone locking cut it off.${r.what ? ` Your “${esc(r.what)}” form is still here, not saved.` : ""} ${esc(botName())} can pick up where you left off.</p>
+    <p>${r.plain ? esc(r.plain) : "A call, an alarm or the phone locking cut it off."}${r.what ? ` Your “${esc(r.what)}” form is still here, not saved.` : r.lost ? ` Your “${esc(r.lost)}” form went with it and will need filling in again.` : ""} ${esc(botName())} can pick up where you left off.</p>
     <button class="btn blue" id="rsmGo">${mic(16)} Carry on</button><button class="btn quiet" id="rsmX">Not now</button></div></div>`;
-  document.getElementById("rsmX").onclick = () => { G.resume = null; h.innerHTML = ""; };
+  document.getElementById("rsmX").onclick = () => { G.resume = null; dropResume(); h.innerHTML = ""; };
   document.getElementById("rsmGo").onclick = () => { h.innerHTML = ""; const r2 = G.resume; G.resume = null; G.recent = r2.lines.slice(); G.keepRecent = true; G.keepHands = r2.hands; startCall(resumeLine(r2)); };
 }
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " + (r.where ? r.where + " " : "") : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
@@ -681,7 +694,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; G.lastBot = ""; G.lastBotAt = 0; G.unheard = null; G.unheardResp = 0; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (!/^interrupted/.test(why || "")) dropResume(); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "")); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; G.lastBot = ""; G.lastBotAt = 0; G.unheard = null; G.unheardResp = 0; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }

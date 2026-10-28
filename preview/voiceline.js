@@ -152,7 +152,7 @@ function openSocket(token, first, second, warm) {
     vlog("connection closed " + (ev && ev.code));
     const opened = !!G.lastMsg && G.status !== "Connecting…";
     netLog(`Voice line closed (code ${ev && ev.code}${ev && ev.reason ? ", " + String(ev.reason).slice(0, 120) : ""})${opened ? "" : " before it opened"}`);
-    if (document.visibilityState === "hidden") { if (G.hiddenAt) { lockPause("the line closed by itself"); return; } interrupted("connection closed while away"); return; } // locked: the line reopens when the app is back
+    if (document.visibilityState === "hidden") { if (G.hiddenAt) { lockPause("the line closed by itself"); return; } interrupted("connection closed while away", "The connection closed while the app was in the background."); return; } // locked: the line reopens when the app is back
     if (!opened && ws.resumed) { G.convId = null; act("step", "Couldn't pick up the same conversation: opening a new one"); reconnect("the conversation couldn't be picked up"); return; }
     if (!opened && !G.drops && !G.lockResume) { endCall("couldn't connect"); toast(`Couldn't connect to ${PROV().name} voice. Try again in a moment.`); return; }
     if (opened && G.drops && Date.now() - (G.openedAt || 0) > STABLE_MS) { vlog("the line had been up a while: reconnect count starts afresh"); G.drops = 0; }
@@ -330,18 +330,19 @@ function appHidden() {
       if (paused) { act("step", `App hidden for ${s} s: reopening the line on the same conversation`); lockResume(); } else act("step", "App hidden for " + s + " s, then back (line still open)");
       return; }
     if (!G.lockPaused && Date.now() - G.hiddenAt > LOCK_CLOSE_MS) lockPause();
-    if (Date.now() - G.hiddenAt > LOCK_MAX_MS) { clearInterval(tick); G.hiddenAt = 0; G.lockPaused = 0; G.endedByLock = true; interrupted("app hidden for " + Math.round(LOCK_MAX_MS / 60000) + " minutes"); }
+    if (Date.now() - G.hiddenAt > LOCK_MAX_MS) { clearInterval(tick); G.hiddenAt = 0; G.lockPaused = 0; G.endedByLock = true; interrupted("app hidden for " + Math.round(LOCK_MAX_MS / 60000) + " minutes", `The app was in the background for ${Math.round(LOCK_MAX_MS / 60000)} minutes, longer than a paused conversation is kept.`); }
   }, 500);
 }
 function lockPause(why) { // close the line while the phone is locked; the conversation is kept on xAI for RESUME_MS
   if (G.lockPaused) return; G.lockPaused = Date.now(); G.status = "Paused (phone locked)"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.retriedAt = 0; G.dropNext = false;
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); clearTimeout(G.forceTimer); G.forced = null; G.pendingForce = null; stopPlayback();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries(); paintCall();
+  if (typeof keepResume === "function") keepResume("Your phone closed the app while it was locked."); /* Oct 28: the page was discarded during a lock and the card came up on a fresh page with no explanation */
   netLog(why ? `Voice line closed while the phone was locked (${why}): it reopens when the app is back` : `Phone locked: voice line closed after ${((Date.now() - G.hiddenAt) / 1000).toFixed(1)} s (nothing is charged while the phone is locked); the conversation is kept for ${RESUME_MS / 60000} minutes`);
 }
 async function lockResume() { // the app is back: reopen the line on the same conversation, no tone, no "line dropped" recording
   if (!G.live || G.ws) return;
-  G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.stalled = false; paintCall();
+  G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.stalled = false; G.audioRetried = false; paintCall();
   if (typeof restartAudio === "function") await restartAudio(); // iOS brings the sound back on the earpiece after a lock: a fresh start puts it on the speaker again (Carverhill, Oct 26)
   if (G.live && typeof keepAwake === "function") keepAwake(); // the wake lock was released at the lock: ask for it again
   if (!G.live || G.ws || !G.lockResume) return;
@@ -357,17 +358,28 @@ function soundPaused(ctx, limit = SOUND_BACK_MS) { // limit: how long to wait fo
     if (!G.soundPausedAt) { clearInterval(tick); return; }
     if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); if (typeof soundBack === "function") soundBack(); return; }
     if (document.visibilityState === "visible") ctx.resume().catch(() => {});
-    if (Date.now() - G.soundPausedAt > hiddenLimit(limit)) { clearInterval(tick); G.soundPausedAt = 0; interrupted("audio " + ctx.state + ", sound didn't come back"); }
+    if (Date.now() - G.soundPausedAt > hiddenLimit(limit)) { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(0); G.soundPausedAt = 0;
+      if (audioRetry(`after the sound stayed paused for ${s} s`)) return; /* one fresh start before giving up (Oct 28: the card came up after the unlock wait) */
+      interrupted("audio " + ctx.state + ", sound didn't come back", "Your phone kept the sound paused after it came back."); }
   }, 500);
 }
 // the same for the mic: an iPhone mutes it for a moment (seen Oct 24, 4 s into a call); end only if it stays muted
+// one fresh start of the sound and mic when the phone keeps either held after it is visible again; a second time in the same call the call ends
+function audioRetry(why) {
+  if (G.audioRetried || document.visibilityState !== "visible" || typeof restartAudio !== "function") return false;
+  G.audioRetried = true; act("step", `Starting the sound and mic afresh ${why}`);
+  restartAudio(why).then(ok => { if (!ok && G.live) interrupted("sound and mic couldn't be started afresh " + why, "Your phone kept the sound and microphone after it came back."); });
+  return true;
+}
 function micMuted(tr) {
   if (G.micMutedAt) return; G.micMutedAt = Date.now(); vlog("mic muted by the phone"); netLog("Mic muted by the phone");
   const tick = setInterval(() => {
     if (!G.live || !G.stream || !G.stream.getAudioTracks().includes(tr)) { clearInterval(tick); G.micMutedAt = 0; return; }
     if (!G.micMutedAt) { clearInterval(tick); return; }
     if (!tr.muted) { clearInterval(tick); const s = ((Date.now() - G.micMutedAt) / 1000).toFixed(1); G.micMutedAt = 0; act("step", "Mic muted by the phone for " + s + " s, then came back"); return; }
-    if (Date.now() - G.micMutedAt > hiddenLimit(MIC_BACK_MS)) { clearInterval(tick); G.micMutedAt = 0; interrupted("mic muted, didn't come back in " + Math.round(MIC_BACK_MS / 1000) + " s"); }
+    if (Date.now() - G.micMutedAt > hiddenLimit(MIC_BACK_MS)) { clearInterval(tick); G.micMutedAt = 0;
+      if (audioRetry(`after the mic stayed muted for ${Math.round(MIC_BACK_MS / 1000)} s`)) return;
+      interrupted("mic muted, didn't come back in " + Math.round(MIC_BACK_MS / 1000) + " s", "Your phone kept the microphone muted."); }
   }, 500);
 }
 

@@ -20,6 +20,12 @@ test("Activity log records opening the app and taps outside a conversation", asy
   const ev = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
   ok(ev.filter(x => /^open: Opened the app \(build /.test(x)).length === 1, "opening the app was not logged exactly once: " + ev.slice(0, 4).join(" | "));
   ok(ev.some(x => /^tap: .*Contacts/.test(x)) && ev.some(x => /^tap: .*Abernathy/.test(x)), "taps were not sent to the activity log: " + ev.slice(0, 6).join(" | "));
+  // sent rows leave the phone's storage; a row the key holder never got is kept there and sent by the next page (Oct 28: a locked page was discarded with the end of a call)
+  ok(await p.evaluate(() => { const sent = new Set(__logs.flatMap(b => b.events.map(e => e.id))); return sent.size > 0 && !JSON.parse(localStorage.getItem("actPending") || "[]").some(r => sent.has(r.id)); }), "sent rows stayed in the phone's storage: " + await p.evaluate(() => String(localStorage.getItem("actPending")).slice(0, 300)));
+  await p.evaluate(() => { localStorage.setItem("actPending", JSON.stringify([{ id: "kept1", at: new Date().toISOString(), role: "step", text: "A row kept from the discarded page", session: "x-kept" }])); });
+  await p.reload(); await p.waitForTimeout(4600);
+  const ev2 = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
+  ok(ev2.some(x => x === "step: A row kept from the discarded page") && await p.evaluate(() => JSON.parse(localStorage.getItem("actPending") || "[]").length === 0), "a kept row wasn't sent by the next page: " + ev2.slice(-3).join(" | "));
 });
 test("Activity log records what is in a form when Save is tapped", async (p) => {
   await signIn(p);
