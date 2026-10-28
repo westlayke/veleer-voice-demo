@@ -52,6 +52,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 } # 22: the officer voice uses the built-in WebSocket
       - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - if: inputs.spoken == '1'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg # mixes each recorded conversation into an mp3
       - uses: actions/cache@v4
         if: inputs.spoken == '1'
         with:
@@ -71,6 +73,12 @@ jobs:
           SPOKEN: ${{ inputs.spoken }}
           NOISE: ${{ inputs.noise }}
         run: node tests/ara-consistency/run.js
+      - uses: actions/upload-artifact@v4 # spoken runs: the sound clips on their own (one conversation per flow, officer + Ara + noise, with transcripts), to download from the run page and listen to
+        if: always() && inputs.spoken == '1'
+        with:
+          name: spoken-clips-${{ matrix.provider }}
+          path: tests/ara-consistency/results/clips/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -15,6 +15,8 @@ const DIAG = process.env.DIAG === "1"; // print every conversation's voice log (
 // (0.1 is about a car at speed; 0 = quiet). The reply time then runs from the end of the officer's speech to the first sound of the reply.
 const SPOKEN = process.env.SPOKEN === "1", NOISE = SPOKEN ? Number(process.env.NOISE || 0) : 0, OFFICER_VOICE = process.env.OFFICER_VOICE || "rex";
 const { officerAudio } = require("./officer-voice");
+const RECORD = SPOKEN ? Number(process.env.RECORD == null ? 1 : process.env.RECORD) : 0; // spoken runs: keep the first RECORD conversations of each flow as a sound clip (officer, Ara, noise) with a transcript, to listen to end to end
+const { execFileSync } = require("child_process");
 const ANSWERS = ["Yes.", "No.", "Move on.", "Neither.", "No, that's all for now.", "Today.", "Collect the check from her.", "Yes, collect the check from her, due today.", "Yes, it was."]; // every line the pretend officer can answer with, besides the flows' own
 const ENGINES = { grok: { name: "Grok (xAI)", key: "ARA_CONSISTENCY_KEY", host: /api\.x\.ai/, perMin: 0.08 }, openai: { name: "OpenAI (gpt-realtime-2.1)", key: "OPENAI_CONSISTENCY_KEY", host: /api\.openai\.com/, perMin: 0.10 },
   gemini: { name: "Gemini (gemini-3.8-live)", key: "GEMINI_CONSISTENCY_KEY", host: /generativelanguage\.googleapis\.com/, perMin: 0.03 } };
@@ -109,7 +111,7 @@ async function converse(browser, base, flow, n) {
         if (noise > 0) { const n = mctx.createBuffer(1, 24000 * 4, 24000), d = n.getChannelData(0); let last = 0, sq = 0; for (let i = 0; i < d.length; i++) { last = 0.97 * last + 0.03 * (Math.random() * 2 - 1); d[i] = last; sq += last * last; }
           const rms = Math.sqrt(sq / d.length); for (let i = 0; i < d.length; i++) d[i] = d[i] / rms * 0.3; /* a dull, car-like rumble, normalised so NOISE is its level: 0.1 = rms 0.03 */
           const src = mctx.createBufferSource(); src.buffer = n; src.loop = true; const g = mctx.createGain(); g.gain.value = noise; src.connect(g).connect(dst); src.start(); }
-        window.__mic = { ctx: mctx, dst, played: 0 };
+        window.__mic = { ctx: mctx, dst, played: 0 }; window.__ara = []; // Ara's audio as it arrives, kept for the clip: [at, base64 pcm] with [at, null] marking each new reply
         navigator.mediaDevices.getUserMedia = async () => dst.stream;
         window.__speak = (b64) => new Promise((res) => { mctx.resume(); const bin = atob(b64), n = bin.length >> 1, buf = mctx.createBuffer(1, n, 24000), d = buf.getChannelData(0);
           for (let i = 0; i < n; i++) { const v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); d[i] = (v >= 0x8000 ? v - 0x10000 : v) / 32768; }
@@ -119,7 +121,7 @@ async function converse(browser, base, flow, n) {
       window.__drops = []; window.__vlog = []; const vt0 = Date.now(); const realV = vlog; vlog = function (text) { if (/: dropped |: left out /.test(String(text))) window.__drops.push(String(text)); if (window.__vlog.length < 900) window.__vlog.push(((Date.now() - vt0) / 1000).toFixed(1) + " " + String(text).slice(0, 220)); return realV.apply(this, arguments); }; // the evidence rule's Voice log lines, and the whole voice log for a diagnostic run (DIAG=1)
       const tapSend = (proto) => { const real = proto.send; proto.send = function (d) { try { const t = String(d); if (!t.includes('"input_audio_buffer.append"') && !t.includes('"realtimeInput"')) window.__tap("sent", t); } catch (x) {} return real.call(this, d); }; };
       tapSend(WebSocket.prototype); if (typeof GeminiSocket !== "undefined") tapSend(GeminiSocket.prototype); // what the app sends, as app events (Gemini's raw frames carry no type and are ignored by the tap)
-      const realOn = onEvent; onEvent = function (e) { try { window.__tap("got", /audio\.delta$/.test(e.type) ? '{"type":"audio.delta"}' : JSON.stringify(e)); } catch (x) {} return realOn.apply(this, arguments); };
+      const realOn = onEvent; onEvent = function (e) { try { if (window.__ara && (e.type === "response.created" || /audio\.delta$/.test(e.type) && e.delta)) window.__ara.push([Date.now(), e.type === "response.created" ? null : e.delta]); window.__tap("got", /audio\.delta$/.test(e.type) ? '{"type":"audio.delta"}' : JSON.stringify(e)); } catch (x) {} return realOn.apply(this, arguments); };
       S.settings.speed = 1.3; S.settings.provider = window.__provider; save(); // Ara talks faster (her words are the same), so each conversation costs less line time
       window.__officer = (text) => {
         send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
@@ -129,6 +131,7 @@ async function converse(browser, base, flow, n) {
       document.querySelectorAll(".scrim").forEach(s => s.remove());
       startCall(null);
     }, { prov: PROVIDER, spoken: SPOKEN, noise: NOISE });
+    conv.record = SPOKEN && n <= RECORD; if (!conv.record) await p.evaluate(() => { window.__ara = null; });
     const settle = async () => { // until Ara has finished her turn and the app has nothing more to say
       const t0 = Date.now(); let quietSince = 0;
       while (Date.now() - t0 < TURN_WAIT_MS && !stopAll) {
@@ -164,6 +167,7 @@ async function converse(browser, base, flow, n) {
       conv.turns.push({ say, at, after: last.slice(0, 300) });
       if (SPOKEN) { // the line plays into the microphone; the engine hears it, decides when the officer has finished and answers on its own
         const pcm = voices[say]; if (!pcm) { conv.errors.push("no voice for: " + say); break; }
+        if (conv.record) (conv.officer = conv.officer || []).push({ at: Date.now(), text: say, pcm });
         const ms = await p.evaluate((b) => window.__speak(b), pcm.toString("base64"));
         conv.askedAt = Date.now(); conv.turns[conv.turns.length - 1].spokenMs = Math.round(ms);
         await p.waitForTimeout(1500); // the engine's silence wait before it decides the officer has finished
@@ -174,6 +178,7 @@ async function converse(browser, base, flow, n) {
       if (flow.saved.test((await p.evaluate(() => window.__acts.filter(a => a.role === "saved").map(a => a.text))).join("\n"))) doneAt = Date.now(); // the task is done: Ara's answer to the save was heard, so hang up
     }
     conv.cut = stopAll;
+    if (conv.record) { await p.waitForTimeout(1500); conv.araAudio = await p.evaluate(() => window.__ara || []); conv.endAt = Date.now(); } /* Ara's last words */
     conv.hands = await p.evaluate(() => !!G.hands);
     await p.evaluate(() => { try { endCall("test done"); } catch (e) {} });
     await p.waitForTimeout(300);
@@ -187,6 +192,37 @@ async function converse(browser, base, flow, n) {
   convLines.forEach(l => { if (!l.closed) l.closed = Date.now(); conv.lineMs += l.closed - l.opened; });
   conv.cost = conv.lineMs / 60000 * PER_MIN + conv.items * PER_ITEM;
   return conv;
+}
+
+// ---------- the clip: officer, Ara and the noise on one timeline (spoken runs, the first conversation of each flow) ----------
+const CLIP_RATE = 24000, CLIPS = path.join(OUT, "clips");
+const FFMPEG = (() => { try { execFileSync("ffmpeg", ["-version"], { stdio: "ignore" }); return "ffmpeg"; } catch (e) { return null; } })();
+function writeClip(conv) {
+  if (!conv.record || !(conv.officer || []).length) return null;
+  const replies = []; let cur = null; // Ara's audio grouped per reply: [at, null] starts one, chunks follow
+  (conv.araAudio || []).forEach(([at, d]) => { if (d == null) { cur = { at: 0, chunks: [] }; replies.push(cur); return; } if (!cur) { cur = { at: 0, chunks: [] }; replies.push(cur); } if (!cur.at) cur.at = at; cur.chunks.push(Buffer.from(d, "base64")); });
+  const ara = replies.filter(r => r.at && r.chunks.length).map(r => ({ at: r.at, pcm: Buffer.concat(r.chunks) }));
+  const t0 = Math.min(...conv.officer.map(o => o.at), ...ara.map(a => a.at)) - 500, end = (conv.endAt || Date.now()) + 300;
+  const total = Math.ceil((end - t0) / 1000 * CLIP_RATE), out = new Float32Array(total);
+  const put = (pcm, atMs, gain, untilMs) => { let n = pcm.length >> 1; if (untilMs) n = Math.min(n, Math.max(0, Math.floor((untilMs - atMs) / 1000 * CLIP_RATE))); const o = Math.floor((atMs - t0) / 1000 * CLIP_RATE); for (let i = 0; i < n && o + i < total; i++) if (o + i >= 0) out[o + i] += pcm.readInt16LE(i * 2) / 32768 * gain; };
+  if (NOISE > 0) { let last = 0, sq = 0; const nz = new Float32Array(total); for (let i = 0; i < total; i++) { last = 0.97 * last + 0.03 * (Math.random() * 2 - 1); nz[i] = last; sq += last * last; } const rms = Math.sqrt(sq / total); for (let i = 0; i < total; i++) out[i] += nz[i] / rms * 0.3 * NOISE; } /* the same rumble the engine heard under the officer */
+  conv.officer.forEach(o => put(o.pcm, o.at, 0.9));
+  ara.forEach((a, i) => { const next = ara[i + 1], cut = next && next.at < a.at + a.pcm.length / 2 / CLIP_RATE * 1000 ? next.at : 0; put(a.pcm, a.at, 1, cut); }); /* a reply still playing when the next starts is cut there, as the app cuts it */
+  let peak = 0; for (let i = 0; i < total; i++) peak = Math.max(peak, Math.abs(out[i]));
+  const g = peak > 0.98 ? 0.98 / peak : 1, wav = Buffer.alloc(44 + total * 2);
+  wav.write("RIFF", 0); wav.writeUInt32LE(36 + total * 2, 4); wav.write("WAVEfmt ", 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(CLIP_RATE, 24); wav.writeUInt32LE(CLIP_RATE * 2, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(total * 2, 40);
+  for (let i = 0; i < total; i++) wav.writeInt16LE(Math.round(Math.max(-1, Math.min(1, out[i] * g)) * 32767), 44 + i * 2);
+  fs.mkdirSync(CLIPS, { recursive: true });
+  const name = `${PROVIDER}-${conv.flow}-${conv.n}-${NOISE ? "car-noise" : "quiet"}`, wavFile = path.join(CLIPS, name + ".wav");
+  fs.writeFileSync(wavFile, wav);
+  let file = wavFile;
+  if (FFMPEG) { try { execFileSync(FFMPEG, ["-v", "error", "-y", "-i", wavFile, "-codec:a", "libmp3lame", "-b:a", "48k", path.join(CLIPS, name + ".mp3")]); fs.unlinkSync(wavFile); file = path.join(CLIPS, name + ".mp3"); } catch (e) { console.log("clip: ffmpeg failed, keeping the wav: " + String(e.message).split("\n")[0]); } }
+  const stamp = (at) => { const s = (at - t0) / 1000; return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`; };
+  const pieces = conv.officer.map(o => ({ at: o.at, who: "Officer", text: o.text })).concat(conv.replies.filter(r => r.text).map(r => ({ at: r.at, who: "Ara", text: r.text.trim() }))).sort((a, b) => a.at - b.at);
+  const md = `# ${ENGINE.name}: ${conv.flow} #${conv.n} (${NOISE ? "car noise " + NOISE : "quiet"})\n\nRecorded ${conv.started}; ${(total / CLIP_RATE).toFixed(0)} s. The officer is Grok's ${OFFICER_VOICE} voice; Ara's replies are the engine's own audio as the app received it. Saved: ${conv.saved.map(s => s.text).join(" | ") || "nothing"}.\n\n| Time | Who | Said |\n|---|---|---|\n` + pieces.map(x => `| ${stamp(x.at)} | ${x.who} | ${x.text.replace(/\|/g, "/").replace(/\n/g, " ")} |`).join("\n") + "\n";
+  fs.writeFileSync(path.join(CLIPS, name + ".md"), md);
+  return path.basename(file);
 }
 
 // ---------- scoring against Ara's rules ----------
@@ -279,6 +315,8 @@ function report(convs, extra) {
       const c = await converse(browser, base, flow, n); running--;
       c.failed = !c.replies.some(r => r.text); if (c.cut) console.log(`(conversation ${c.flow} #${c.n} was cut off by the budget and is left out of the scores)`); else if (!c.failed) { c.score = score(c, flow); fails = 0; } else if (++fails >= 3) { stopAll = true; console.log("Three conversations in a row got no answer from Grok: stopping. " + c.errors.slice(0, 2).join("; ")); }
       convs.push(c);
+      try { const clip = writeClip(c); if (clip) console.log("CLIP " + clip + " (" + ((c.endAt - (c.officer[0].at)) / 1000).toFixed(0) + " s)"); } catch (e) { console.log("clip failed: " + e.message.slice(0, 200)); }
+      c.araAudio = null; c.officer = null; /* the audio is on disk now */
       if (!firstLogged && c.replies.length) { firstLogged = true; console.log("MILESTONE first-grok-reply: " + JSON.stringify(c.replies[0].text.slice(0, 200))); }
       progress(c, convs.length).catch(() => {});
       console.log(`${convs.length}. ${c.flow} #${c.n}: ${c.turns.length} turns, ${(c.lineMs / 1000).toFixed(0)} s, $${c.cost.toFixed(3)}, saved: ${c.saved.map(s => s.text).join(" | ") || "nothing"}${c.errors.length ? ", errors: " + c.errors.slice(0, 2).join("; ") : ""}  [total $${spent().toFixed(3)}]`);
