@@ -216,6 +216,10 @@ test("Oct 28 ask follow-up: an awaiting ask creates the 14-day check task, its t
   ok(await p.locator(`.trow[data-tid="${check(o1).id}"] .ttext .ftext[data-form=response]`).count() === 1 && /Response: Awaiting/.test(await link.evaluate(e => e.textContent)), "the check task's text isn't tappable or the field chip doesn't show Response: Awaiting");
   ok(await link.count() === 1, "the check task's text isn't a link to the response form");
   await link.first().tap(); await p.waitForTimeout(500);
+  // cancel takes the officer back to the Tasks list they came from (Oct 28); then open it again for the rest of the check
+  await p.tap("#overlay [data-act=close]"); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => S.screen === "tasks" && !V), "cancelling the form opened from a task didn't return to the Tasks list");
+  await link.first().tap(); await p.waitForTimeout(500);
   ok(await p.evaluate(() => S.screen === "opp") && (await state(p)).sel.opp === o1.id, "the task link didn't land on the opportunity");
   ok(await p.evaluate(() => /Record the response/.test(document.getElementById("overlay").textContent)), "the Record the response form isn't open");
   ok(await p.evaluate(() => document.activeElement && document.activeElement.id === "f_response"), "the Response field isn't focused: " + (await p.evaluate(() => document.activeElement && document.activeElement.id)));

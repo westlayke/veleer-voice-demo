@@ -229,8 +229,9 @@ function openForm(action, cid, item) {
   if (target.gate) { oppGate(target.gate); return; }
   if (target.error) { toast(plainErr(target.error)); return; }
   if (target.route) action = target.route;
-  if (action === "response" && target.opp && !(S.screen === "opp" && S.sel.opp === target.opp.id)) { S.sel.opp = target.opp.id; S.screen = "opp"; save(); render(); } // the task's link lands on the opportunity, with the form over it
-  V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true }; renderOverlay(); spookyCue("creak");
+  let backTo = null; // Oct 28 (Carverhill): a form opened from the Tasks list goes back there on cancel; a save stays on the record
+  if (action === "response" && target.opp && !(S.screen === "opp" && S.sel.opp === target.opp.id)) { backTo = S.screen === "tasks" ? "tasks" : null; S.sel.opp = target.opp.id; S.screen = "opp"; save(); render(); } // the task's link lands on the opportunity, with the form over it
+  V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true, backTo }; renderOverlay(); spookyCue("creak");
   if (action === "response") focusField(document.getElementById("f_response")); // straight to the field the officer came for
   if (G.live) guide(`The officer opened the ${ACTIONS[action].title} form${target.contact ? " for " + nameOf(target.contact) : ""} by tapping. In a few words, say you see it and that they can tell you the details (you fill it in with ${toolFor(action)}).`);
 }
@@ -291,7 +292,7 @@ function renderOverlay() {
 }
 document.getElementById("overlay").addEventListener("click", (e) => {
   const a = e.target.closest("[data-act]"); if (!a) return;
-  if (a.dataset.act === "close") { V = null; renderOverlay(); }
+  if (a.dataset.act === "close") { const back = V && V.backTo; V = null; renderOverlay(); if (back) go(back); }
   else if (a.dataset.act === "voicefill") voiceFill();
   else if (a.dataset.act === "save") saveDraft();
 });

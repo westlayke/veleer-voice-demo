@@ -2,6 +2,20 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "",
+   "change": "Preview: the first time a reply is slow the phone says the recorded \"Ara's taking a moment.\" again instead of a beep; the soft tick only repeats after it. The recording had left with the reset to release 1.0.",
+   "area": "Ara, connection",
+   "requestedBy": "Carverhill",
+   "why": "Oct 28, 12:59 PM ET: \"I hear lots of beeps when connectivity is low, and in past I thought I would hear recording of something like 'Ara needs a moment'\""
+  },
+  {
+   "date": "",
+   "change": "Preview: cancelling Record the response after opening it from a task on the Tasks list returns to the Tasks list (a save still stays on the opportunity).",
+   "area": "Tasks, Opportunities",
+   "requestedBy": "Carverhill",
+   "why": "Oct 28, 1:05 PM ET: \"cancelling out of the 'response' dialog after invoking it from the task should take you back to the task, but it does not\""
+  },
+  {
    "date": "Oct 28, 12:18 PM",
    "change": "Preview: fixes from Carverhill's 11:51 AM call. A repeated letter (\"B. B.\") or a bare letter right after the rating question counts as the officer's rating; a transcript the service sends several times as it grows is kept as one line, so a yes to Ara's own offer (\"create an opportunity?\") opens the form; after a reconnect Ara is pointed at the officer's latest words and never back to a saved item, and a rating already saved answers \"already B\" instead of re-asking; the A to E ranges are read once per call and later rating questions are the short \"A to E\" form, so they can be cut in on.",
    "area": "Ara",

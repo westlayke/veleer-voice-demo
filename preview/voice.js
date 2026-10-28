@@ -714,7 +714,7 @@ function formCommand(t) {
   if (!words.length || words.some(w => w !== "C" && w !== "R")) return null;
   return words.includes("R") ? "restart" : "cancel";
 }
-function cancelForm() { const what = ACTIONS[V.action].title; V = null; renderOverlay(); return what; }
+function cancelForm() { const what = ACTIONS[V.action].title, back = V.backTo; V = null; renderOverlay(); if (back) go(back); return what; }
 function restartForm() { V.history = []; V.data = prefill(V.action, {}, V.target); V.fromVoice = new Set(); V.askedOther = V.askedOptional = false; V.opt = null; renderOverlay(); return ACTIONS[V.action].title; }
 function voiceCommand(text) {
   const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim().replace(/^((please|okay|ok|um|uh|hey|ara|so) )+/, "").replace(/ please$/, "");
