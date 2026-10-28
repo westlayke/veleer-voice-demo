@@ -76,7 +76,7 @@ phone locked.
 
 `reconnect(why)` runs the same sequence whatever the signal:
 
-1. **Give up?** If nothing has been heard from xAI for `NO_LINE_GIVE_UP_MS` (5 minutes), the call ends: `voiceUnavailable`
+1. **Give up?** If nothing has been heard from xAI for `NO_LINE_GIVE_UP_MS` (8 minutes), the call ends: `voiceUnavailable`
    logs it, plays the down tone, keeps the form and the last lines for Carry on, and shows "The voice service isn't
    answering. Your form is still here." The count of tries no longer ends a call (a driveway dead spot took four).
 2. **Mark the line down.** Status "Reconnecting…", any playing audio stopped, pending asks and timers cleared, the old
@@ -87,7 +87,7 @@ phone locked.
    (15 s), before trying.
 5. **Get a voice pass.** `getToken()` uses the pass prefetched during the call if it is fresh, else mints one.
    `mintToken` is time-limited (`TOKEN_WAIT_MS` 6 s): one fetch hung for 89 s on October 25 and the call hung with it.
-   On failure, try again every `TOKEN_RETRY_MS` (2 s) until `DOWN_GIVE_UP_MS` (5 minutes) or a definite refusal
+   On failure, try again every `TOKEN_RETRY_MS` (2 s) until `DOWN_GIVE_UP_MS` (8 minutes) or a definite refusal
    (bad code, service error), which ends the call as in step 1.
 6. **Open the socket**, with the saved `conversation_id` so the conversation resumes. On open: session configuration
    is sent again, `downEnd(true)` stops the phone's lines and plays "You're back with Ara." if the line was down 5 s or
@@ -107,6 +107,11 @@ call's own audio output (`playLine`, `sayLocal`). The phone's built-in speech is
   every `SAY_REPEAT_LATER_MS` (30 s) so a long dead spot does not nag.
 - When the line is back: "You're back with Ara.", unless a status line is still playing (it is cut instead) or the
   drop lasted under 5 s.
+- With the officer's name (Oct 28, for a colleague's 8-minute dead spot): the same three lines, plus six "still trying" lines
+  said in turn ("Still trying, Pat. I'm not giving up on you.", "Hang in there, Pat. I'll keep knocking until Ara answers." ...),
+  are made by the key holder's `/tts` in the phone's stand-in voice (`NAMED_LINES`, `prepNamedLines`) when the name is entered,
+  when the app opens and when a line opens, and kept on the phone (`localStorage` `namedLines:v1`, decoded into `namedBuf`),
+  so they play in a dead spot. Without them (first open with no signal) the stock recordings play. `downSay(kind)` picks the line.
 - Short tones: a drop tone on the first drop, a soft tick every `TICK_MS` while waiting for a slow reply or reconnecting
   (until the spoken line takes over), a down tone when the call gives up.
 
@@ -214,7 +219,7 @@ and the form hand-off are step rows. These rows are what the dead-spot counts in
 ## Tests
 
 `tests/checks/08-voice.js` and `09-hands-free.js` drive the reconnect path with a pretend socket: closing the line,
-the token retry loop, the 5-minute give-up, the phone's spoken lines, the form-position hand-off and the scripted-line
+the token retry loop, the 8-minute give-up, the phone's spoken lines, the form-position hand-off and the scripted-line
 fallback. `tests/ara-consistency/record-reconnect.js` records a real conversation with the browser taken offline
 during a read-back and produces a sound clip of the whole sequence (`clips/reconnect-clip.mp3`).
 

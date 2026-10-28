@@ -604,7 +604,7 @@ test("Ara: when Grok goes silent after the app asks for a reply, the app asks on
   ok(await p.evaluate(() => __ws !== __ws1) && await creates() >= c1, "a silent reply on a slow line didn't go straight to a fresh line");
   ok(/on a slow line \(test request \d+ ms\): fresh line/.test(await logged()), "the slow-line reconnect wasn't logged");
 });
-test("Ara: a dropped voice line reconnects and picks up where it left off; it keeps reconnecting past 3 tries, and only 5 minutes without a working line ends the call", async (p) => {
+test("Ara: a dropped voice line reconnects and picks up where it left off; it keeps reconnecting past 3 tries, and only 8 minutes without a working line ends the call", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   await p.evaluate(() => recent(botName(), "Which entity is the ask for?"));
@@ -623,13 +623,16 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; it ke
   await p.waitForFunction(() => window.__ws !== window.__ws1, null, { timeout: 12000 }); await p.waitForTimeout(300);
   // 5 minutes without a word (Carverhill, Oct 25: a 3-minute dead spot in the driveway outlasted the old 2-minute limit by 5 s)
   await p.evaluate(() => { G.lastMsg = Date.now() - 200000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1200);
-  ok(await p.evaluate(() => G.live), "3 minutes without a word ended the call; the limit is 5 minutes");
+  ok(await p.evaluate(() => G.live), "3 minutes without a word ended the call; the limit is 8 minutes");
   await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 12000 }); await p.waitForTimeout(300);
-  await p.evaluate(() => { G.lastMsg = Date.now() - 310000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
+  await p.evaluate(() => { G.lastMsg = Date.now() - 400000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(600);
+  ok(await p.evaluate(() => G.live), "6.7 minutes without a word ended the call; the limit is 8 minutes (Carverhill, Oct 28: an 8-minute dead spot)");
+  await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 12000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { G.lastMsg = Date.now() - 490000; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
   const out = await p.evaluate(() => ({ live: G.live, spoke: window.__spoke || "", log: ACT.q.map(a => a.text).join(" | ") + __logs.map(l => JSON.stringify(l)).join(" ") }));
   ok(!out.live && out.spoke === "", "after the tries ran out the call didn't end, or the phone's built-in speech was used (never allowed since Oct 25): " + out.spoke);
   ok(await p.isVisible("text=The voice service isn't answering"), "the screen doesn't say the voice service isn't answering");
-  ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 5 minutes without a working line/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
+  ok(/Voice line closed \(code 1006\)/.test(out.log) && /online/.test(out.log) && /unavailable after 8 minutes without a working line/.test(out.log) && /Conversation ended \(voice service unavailable\)/.test(out.log), "the drop, the connection reading or the reason the call ended weren't logged");
 });
 test("Ara: no reply at the first tick on a slow line gets a fresh line at once, and a new line that won't open gets a second line alongside", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -1091,5 +1094,31 @@ test("Oct 28 11:51 AM call: a repeated letter rates, a yes to Ara's offer opens 
   await said(p, "Yes."); await said(p, "Yes."); await said(p, "Yes.");
   const opp = await ara(p, "show_opportunity_draft", { contact_name: name });
   ok(opp.opened !== false && !/hasn't asked for/.test(opp.error || "") && await p.evaluate(() => !!(V && V.action === "opportunity")), "the yes to Ara's own offer didn't open the opportunity form: " + JSON.stringify(opp));
+});
+
+test("Reconnect lines with the officer's name (Oct 28): fetched once from the key holder and kept on the phone, said in turn while the line is down, the stock recordings when the phone has none", async (p) => {
+  await signIn(p, "Pat"); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  // the fetch: one request per line, in the stand-in voice, stored under the name; a reply that isn't audio is not kept
+  await p.evaluate(() => { window.__tts = []; const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/tts/.test(String(u))) { const b = JSON.parse(o.body); __tts.push(b); return Promise.resolve(new Response(new Uint8Array([1, 2, 3, 4]), { status: 200, headers: { "Content-Type": "audio/mpeg" } })); } return f(u, o); };
+    localStorage.removeItem("namedLines:v1"); Object.keys(namedRaw).forEach(k => delete namedRaw[k]); });
+  await p.evaluate(() => prepNamedLines("test")); await p.waitForTimeout(400);
+  const fetched = await p.evaluate(() => ({ n: __tts.length, voices: [...new Set(__tts.map(b => b.voice))], texts: __tts.map(b => b.text), stored: JSON.parse(localStorage.getItem("namedLines:v1") || "null"), log: ACT.q.map(a => a.text).join(" | ") }));
+  ok(fetched.n === 8 && fetched.voices.join() === "leo" && fetched.texts[0] === "The line dropped, Pat. Reconnecting you to Ara." && fetched.texts.includes("Still trying, Pat. I'm not giving up on you.") && fetched.texts.includes("Hang in there, Pat. I'll keep knocking until Ara answers.") && fetched.texts[7] === "You're back with Ara, Pat.", "the named lines weren't fetched as expected: " + JSON.stringify(fetched.texts));
+  ok(fetched.stored && fetched.stored.name === "Pat" && Object.keys(fetched.stored.lines).length === 8 && /8 reconnect lines with Pat's name fetched \(test\)/.test(fetched.log), "the lines weren't kept on the phone under the name: " + JSON.stringify(fetched.stored && Object.keys(fetched.stored.lines).length) + " " + fetched.log.slice(-200));
+  await p.evaluate(() => { __tts.length = 0; }); await p.evaluate(() => prepNamedLines("again")); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => __tts.length === 0), "the lines were fetched a second time although the phone has them");
+  // with the lines decoded, the dropped line and the still-trying lines come with the name, in turn; back too
+  const saidLines = (log) => (log.match(/The phone said \(recording\): "[^"]*"/g) || []).map(x => x.replace(/^[^"]*"/, "").replace(/"$/, ""));
+  await p.evaluate(() => { namedTexts("Pat").forEach(t => { namedBuf[t] = G.ctx.createBuffer(1, 240, 24000); }); G.live = true; G.downAt = Date.now() - 6000; G.downN = 0; downSay("dropped"); downSay("still"); downSay("still"); downSay("still"); });
+  await p.waitForTimeout(150); await p.evaluate(() => downEnd(true)); /* a status line still playing would be cut instead */
+  let said = saidLines(await p.evaluate(() => ACT.q.map(a => a.text).join(" | ")));
+  ok(said.join("|") === "The line dropped, Pat. Reconnecting you to Ara.|Still trying, Pat. I'm not giving up on you.|Hang in there, Pat. I'll keep knocking until Ara answers.|No signal yet, Pat, but I'm as determined as ever.|You're back with Ara, Pat.", "the named lines weren't said in turn: " + JSON.stringify(said));
+  // a phone without the named lines falls back to the stock recordings
+  await p.evaluate(() => { Object.keys(namedBuf).forEach(k => delete namedBuf[k]); ACT.q.length = 0; G.downAt = Date.now() - 6000; G.downN = 0; downSay("dropped"); downSay("still"); });
+  await p.waitForTimeout(150); await p.evaluate(() => { G.lineEndAt = 0; downEnd(true); }); /* as if the recording had finished */
+  said = saidLines(await p.evaluate(() => ACT.q.map(a => a.text).join(" | ")));
+  ok(said.join("|") === "The line dropped. Reconnecting you to Ara.|Still trying to reconnect.|You're back with Ara.", "without the named lines the stock recordings weren't used: " + JSON.stringify(said));
+  // the give-up is 8 minutes (an 8-minute dead spot, Carverhill Oct 28)
+  ok(await p.evaluate(() => NO_LINE_GIVE_UP_MS === 480000 && DOWN_GIVE_UP_MS === 480000), "the give-up isn't 8 minutes");
 });
 };

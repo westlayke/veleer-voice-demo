@@ -12,7 +12,7 @@ const LINE_TEST_MS = 3000;                   // how long a line test (a tiny req
 const SLOW_LINE_MS = 2000;                   // a line test slower than this is a slow line: open a fresh one rather than ask Grok again
 const STALL_SLOW_MS = 2500;                  // while the officer is talking, a line test slower than this counts as a stall
 const MAX_DROPS = 3;                         // reconnect tries shown in the log as "n of 3"; the call no longer ends by count (Oct 25: a driveway dead spot took 4)
-const NO_LINE_GIVE_UP_MS = 300000;           // the call ends only after this long without a word from the voice service, while the phone keeps reconnecting (5 minutes, Carverhill Oct 25: a 3-minute driveway dead spot outlasted the old 2-minute limit by 5 s)
+const NO_LINE_GIVE_UP_MS = 480000;           // the call ends only after this long without a word from the voice service, while the phone keeps reconnecting (8 minutes, Carverhill Oct 28: a colleague's 8-minute dead spot; 5 minutes from Oct 25: a 3-minute driveway dead spot outlasted the old 2-minute limit by 5 s)
 const RECONNECT_DELAYS = [0, 1000, 4000, 10000]; // wait before reconnect try 1, 2, 3, spread out so a short dead spot can pass
 const OFFLINE_WAIT_MS = 15000;               // when the phone says it's offline, wait up to this long for it to come back
 const SECOND_LINE_MS = 5000;                 // a new line not open after this long gets a second one alongside
@@ -27,12 +27,40 @@ const REPLAY_MS = 20000;                     // a tool call repeated this soon a
 const LATE_FORCE_MS = 25000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long
 const TOKEN_WAIT_MS = 6000;                  // a voice pass that takes longer counts as failed (Oct 25: one took 89 s, the next never came back and the call hung)
 const TOKEN_RETRY_MS = 2000;                 // between tries for a voice pass while the line is down
-const DOWN_GIVE_UP_MS = 300000;              // a line down this long (no voice pass to be had) ends the call with the phone's spoken notice (5 minutes, as above)
+const DOWN_GIVE_UP_MS = 480000;              // a line down this long (no voice pass to be had) ends the call with the phone's spoken notice (8 minutes, as above)
 const SAY_DOWN_MS = 5000, SAY_STILL_MS = 12000, SAY_REPEAT_MS = 10000; // the phone's own spoken lines while the line is down (Carverhill, Oct 25)
 const SAY_SLOW_AFTER_MS = 60000, SAY_REPEAT_LATER_MS = 30000; // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (a long dead spot shouldn't nag)
 const downRepeatMs = () => Date.now() - (G.downAt || Date.now()) >= SAY_SLOW_AFTER_MS ? SAY_REPEAT_LATER_MS : SAY_REPEAT_MS;
 const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect."]; // recorded in sounds/ (line-dropped, still-trying, line-back): the phone's own speech is silent during a call on an iPhone (Oct 25)
 const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3", slow: "ara-slow.mp3" }, lineRaw = {}, lineBuf = {};
+// the same lines with the officer's name, in the phone's stand-in voice, made by the key holder's text-to-speech while the phone has signal and kept on the
+// phone (Carverhill, Oct 28: a colleague driving an 8-minute dead spot should hear her name and that the app isn't giving up); the recordings above are the fallback
+const NAMED_LINES = {
+  dropped: (n) => `The line dropped, ${n}. Reconnecting you to Ara.`,
+  still: [(n) => `Still trying, ${n}. I'm not giving up on you.`, (n) => `Hang in there, ${n}. I'll keep knocking until Ara answers.`, (n) => `No signal yet, ${n}, but I'm as determined as ever.`,
+    (n) => `Still at it, ${n}. A dead spot won't beat us.`, (n) => `Not there yet, ${n}. I'll keep trying for as long as it takes.`, (n) => `Still trying, ${n}. I won't give up before the signal does.`],
+  back: (n) => `You're back with Ara, ${n}.`,
+};
+const NAMED_VOICE = "leo", NAMED_KEY = "namedLines:v1", namedRaw = {}, namedBuf = {};
+const officerFirst = () => { const n = String((typeof S !== "undefined" && S.settings && S.settings.userName) || "").trim().split(/\s+/)[0] || ""; return n ? n[0].toUpperCase() + n.slice(1) : ""; };
+const namedTexts = (n) => [NAMED_LINES.dropped(n), ...NAMED_LINES.still.map(f => f(n)), NAMED_LINES.back(n)];
+const namedText = (kind, i) => { const n = officerFirst(); if (!n) return ""; return kind === "still" ? NAMED_LINES.still[i % NAMED_LINES.still.length](n) : NAMED_LINES[kind] ? NAMED_LINES[kind](n) : ""; };
+const b64buf = (s) => { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < u.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
+const bufb64 = (b) => { const u = new Uint8Array(b); let s = ""; for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); };
+function namedLoad() { let st = null; try { st = JSON.parse(localStorage.getItem(NAMED_KEY) || "null"); } catch (e) {} if (!st || st.name !== officerFirst() || !st.lines) return; Object.entries(st.lines).forEach(([t, b]) => { if (!namedRaw[t]) { try { namedRaw[t] = b64buf(b); } catch (e) {} } }); }
+function decodeNamed() { const c = G.ctx; if (!c) return; Object.entries(namedRaw).forEach(([t, b]) => { if (!namedBuf[t] && b) c.decodeAudioData(b.slice(0)).then(buf => { namedBuf[t] = buf; }).catch(() => {}); }); }
+// fetched once per name (the key holder keeps each line 30 days, so the second phone with the same name waits on nobody), never while a line is down
+async function prepNamedLines(why) {
+  const n = officerFirst(); if (!n || G.namedBusy || G.downAt || !navigator.onLine) return; namedLoad();
+  const want = namedTexts(n).filter(t => !namedRaw[t]); if (!want.length) { decodeNamed(); return; }
+  G.namedBusy = true; let got = 0;
+  for (const t of want) { try { const r = await fetch(tokenUrl() + "/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: t, voice: NAMED_VOICE }), signal: AbortSignal.timeout(15000) });
+    if (!r.ok || !/audio/.test(r.headers.get("content-type") || "")) continue; const b = await r.arrayBuffer(); if (b.byteLength) { namedRaw[t] = b; got++; } } catch (e) {} }
+  G.namedBusy = false;
+  if (got) { const lines = {}; namedTexts(n).forEach(t => { if (namedRaw[t]) lines[t] = bufb64(namedRaw[t]); }); try { localStorage.setItem(NAMED_KEY, JSON.stringify({ name: n, lines })); } catch (e) {}
+    vlog(`${got} reconnect lines with ${n}'s name fetched (${why})`); act("step", `${got} reconnect line${got === 1 ? "" : "s"} with ${n}'s name fetched (${why}): the phone keeps them for a dead spot`); }
+  decodeNamed();
+}
 const LOC_FRESH_MS = 120000;                // a position older than this is not written into a connection row
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;
@@ -132,7 +160,7 @@ function openSocket(token, first, second, warm) {
     if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws; G.lockResume = false;
     sessUpdate(sessionCfg()); sendExtras(); if (G.drops && P.replay) replayRecent(); if (typeof first === "function") first(); else guide(first);
-    downEnd(true); G.openedAt = Date.now(); linePrep();
+    downEnd(true); G.openedAt = Date.now(); linePrep(); setTimeout(() => prepNamedLines("line open"), 4000);
     if (ws.resumed) { netLog("Picked up the same conversation"); G.resumedAt = Date.now(); }
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"}${ws.warmed ? ", line warmed on touch" : ""})`);
@@ -227,26 +255,34 @@ function linePrep() { // fetch and decode the recorded lines, so they can play t
   Object.entries(LINE_FILES).forEach(([k, f]) => { if (!lineRaw[k]) lineRaw[k] = fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + f).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); });
   const c = G.ctx; if (!c) return;
   Object.keys(LINE_FILES).forEach(k => { if (lineBuf[k]) return; lineRaw[k].then(b => b && c.decodeAudioData(b.slice(0))).then(buf => { if (buf) lineBuf[k] = buf; }).catch(() => {}); });
+  namedLoad(); decodeNamed();
 }
-function playLine(kind) { // through the call's own sound, which the phone keeps open during a conversation
-  const c = G.ctx; if (!c || c.state !== "running" || !lineBuf[kind]) return false;
-  try { const src = c.createBufferSource(), g = c.createGain(); g.gain.value = 1; src.buffer = lineBuf[kind]; src.connect(g); g.connect(c.destination); src.start(c.currentTime + 0.02); G.lineSrc = src; G.lineEndAt = Date.now() + lineBuf[kind].duration * 1000 + 50; return true; } catch (e) { return false; }
+function playBuf(buf) { // through the call's own sound, which the phone keeps open during a conversation
+  const c = G.ctx; if (!c || c.state !== "running" || !buf) return false;
+  try { const src = c.createBufferSource(), g = c.createGain(); g.gain.value = 1; src.buffer = buf; src.connect(g); g.connect(c.destination); src.start(c.currentTime + 0.02); G.lineSrc = src; G.lineEndAt = Date.now() + buf.duration * 1000 + 50; return true; } catch (e) { return false; }
 }
-function sayLocal(text, kind) {
+const playLine = (kind) => playBuf(lineBuf[kind]);
+function sayLocal(text, kind, named) {
   // only ever a recording through the call's own sound: the phone's built-in speech is never used (Oct 25: an iOS "Audio Recording / Stop audio recording?" dialog appeared after it spoke, muting the mic and ending the call)
-  const how = kind && playLine(kind) ? "recording" : "";
+  // named: the same line with the officer's name, when the phone has it; else the stock recording
+  const own = named && namedBuf[named] && playBuf(namedBuf[named]); if (own) text = named;
+  const how = own || (kind && playLine(kind)) ? "recording" : "";
   if (how) { act("step", `The phone said (${how}): "${text}"`); vlog(`phone said (${how}): ${text}`); } else vlog(`status line not played (sound not running): ${text}`);
   return !!how;
 }
+function downSay(kind) { // the dropped line, then the still-trying lines in turn (each with the officer's name when the phone has them)
+  if (kind === "still") { const i = G.downN || 0; G.downN = i + 1; return sayLocal(DOWN_LINES[1], "still", namedText("still", i)); }
+  return sayLocal(DOWN_LINES[0], "dropped", namedText("dropped"));
+}
 function downStart() {
-  if (G.downAt) return; G.downAt = Date.now(); linePrep();
-  const again = () => { if (!G.live || !G.downAt) return; sayLocal(DOWN_LINES[1], "still"); G.downTimer = setTimeout(again, downRepeatMs()); };
-  G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; sayLocal(DOWN_LINES[0], "dropped"); G.downTimer = setTimeout(again, SAY_STILL_MS - SAY_DOWN_MS); }, SAY_DOWN_MS);
+  if (G.downAt) return; G.downAt = Date.now(); G.downN = 0; linePrep();
+  const again = () => { if (!G.live || !G.downAt) return; downSay("still"); G.downTimer = setTimeout(again, downRepeatMs()); };
+  G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; downSay("dropped"); G.downTimer = setTimeout(again, SAY_STILL_MS - SAY_DOWN_MS); }, SAY_DOWN_MS);
 }
 function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;
   const cut = G.lineEndAt && Date.now() < G.lineEndAt; // a status recording still playing is stopped so it can't overlap Ara (Oct 25 call)
   if (cut) { try { G.lineSrc && G.lineSrc.stop(); } catch (e) {} act("step", "The phone's status line was cut short: the line came back"); } G.lineSrc = null; G.lineEndAt = 0;
-  if (G.downAt) { vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && !cut && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back"); }
+  if (G.downAt) { vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && !cut && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back", namedText("back")); }
   G.downAt = 0; }
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {

@@ -206,6 +206,7 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
     if (!v) { const er = document.getElementById("wlErr"); if (er) er.hidden = false; if (el) el.focus(); return; }
     const isNew = v !== (S.settings.userName || "");
     S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.settings.seenFormLog = true; S.screen = "home"; save(); welcomeModal(); render(); window.scrollTo(0, 0);
+    if (typeof prepNamedLines === "function") setTimeout(() => prepNamedLines("name entered"), 2500); /* the reconnect lines with this name, while there is signal */
     if (isNew && !G.live) startCall(greetLine(v)); } }); // a newly entered name starts the conversation with the standard greeting
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "wlName") { e.preventDefault(); const b = document.querySelector("[data-act4=welcome-ok]"); if (b) b.click(); } }); // the keyboard Go key starts too
 document.addEventListener("click", (e) => { if (e.target.closest("[data-act5=typename]")) { WELCOME_FULL = true; welcomeModal(); setTimeout(() => { const el = document.getElementById("wlName"); if (el) el.focus(); }, 50); } });
