@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 2:41 PM",
+   "change": "Preview: when the phone closes the app in the middle of a call without a word (iOS did this twice on Oct 28, both times seconds after a reconnect), the next open logs \"The last call ended without the app noticing\" against that call, with the last thing logged before it, and offers Carry on with the reason \"Your phone closed the app in the middle of the conversation.\" Every log row keeps a copy of the call on the phone for this.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Go through my last call log - heard a beep and then the app ended\" (2:36 PM): the 1:56 PM and 2:35 PM calls both ended with nothing logged; agreed to add the breadcrumb (\"Go\", 2:38 PM)"
+  },
+  {
    "date": "Oct 28, 2:30 PM",
    "change": "Preview: every rating line is said by the app itself with the letter and the full range (\"Rate Fall B, $100,000 to $250,000?\", \"Fall is rated B, $100,000 to $250,000\", \"already rated B, ...\"). After every save, and after a rating, the app says the next step in the process in its own words (\"The next step in the process to move Fall to Cultivation is to log a substantive interaction. Do you want to do that now, or something else?\") instead of Ara asking an open \"what would you like to do?\". \"What's the next step?\" gets the same line for the contact on screen (new say_next_step tool) instead of the whole process tour.",
    "area": "Voice",

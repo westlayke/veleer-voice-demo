@@ -401,4 +401,19 @@ test("A page the phone closed while a conversation was paused offers Carry on on
   // a normal call start or end leaves nothing kept behind
   ok(await p.evaluate(() => !localStorage.getItem("resumeKeep")), "a kept copy survived a normal end");
 });
+test("A page the phone closed in the middle of a call (no end logged) is noticed on the next open: the silent end is logged against that call and Carry on is offered", async (p) => {
+  await signIn(p); await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  await said(p, "Let's add a task for Ruth."); await p.evaluate(() => act("step", "breadcrumb check"));
+  const kept = await p.evaluate(() => { const r = JSON.parse(localStorage.getItem("resumeKeep") || "null"); return r && { killed: r.killed, same: r.session === G.session, last: r.last, lines: r.lines.length }; });
+  ok(kept && kept.killed && kept.same && /breadcrumb check/.test(kept.last) && kept.lines > 0, "the live call isn't kept on the phone with its session and last row: " + JSON.stringify(kept));
+  const oldSession = await p.evaluate(() => G.session);
+  await p.reload(); await p.waitForTimeout(1500);
+  const txt = await p.evaluate(() => document.getElementById("modal").innerText);
+  ok(await p.isVisible("#rsmGo") && /closed the app in the middle of the conversation/.test(txt), "the cut-off call wasn't offered as Carry on: " + txt.slice(0, 200));
+  await p.waitForTimeout(4600);
+  const batch = (await p.evaluate(() => __logs)).find(b => b.events.some(e => /ended without the app noticing/.test(e.text)));
+  ok(batch && batch.session === oldSession && batch.events.some(e => /after "step: breadcrumb check"/.test(e.text)), "the silent end wasn't logged against the cut-off call: " + JSON.stringify(batch && { session: batch.session, old: oldSession }));
+  await p.tap("#rsmX"); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => !localStorage.getItem("resumeKeep")), "the kept copy stayed after Not now");
+});
 };

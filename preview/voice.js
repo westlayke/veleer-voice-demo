@@ -371,6 +371,7 @@ function act(role, text, sess) {
   if (!text) return; const session = sess || G.session || visitId();
   const row = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), at: new Date().toISOString(), role, text: String(text).slice(0, 4000), session }; // the id lets the key holder drop a batch that arrives twice (Oct 25: a resent batch doubled 20 s of log)
   ACT.q.push(row); actPending(rows => { rows.push(row); });
+  if (G.live && G.session && role !== "end" && !G.lockPaused && document.visibilityState === "visible") keepResume(KILLED_PLAIN, `${role}: ${row.text.slice(0, 120)}`); // a copy of the call in case the phone closes the page without a word
   clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, role === "end" ? 0 : 4000);
 }
 // what was in a form when Save was tapped, for the activity log (the privacy notice says so)
@@ -664,12 +665,18 @@ function draftSummary() {
   return `The "${A.title}" form${who ? ` for ${who}` : ""} is still open on screen, not saved yet. Filled in so far: ${have.join("; ") || "nothing"}.${need.length ? ` Still needed: ${need.join(", ")}.` : ""}`;
 }
 const RESUME_KEY = "resumeKeep";
-const resumeInfo = (plain) => ({ at: Date.now(), lines: (G.recent || []).slice(), draft: draftSummary(), where: (typeof formPosition === "function" && formPosition() || {}).where || "", what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "", hands: !!G.hands, plain: plain || "" });
+const resumeInfo = (plain, last) => ({ at: Date.now(), session: G.session || "", lines: (G.recent || []).slice(), draft: draftSummary(), where: (typeof formPosition === "function" && formPosition() || {}).where || "", what: V && ACTIONS[V.action] ? ACTIONS[V.action].title : "", hands: !!G.hands, plain: plain || "", killed: !!last, last: last ? String(last).slice(0, 160) : "" });
+// the phone closed the page in the middle of a call (iOS, Oct 28, twice right after a reconnect): nothing logs the end, so every log row keeps a copy of the call;
+// the next open logs the silent end against that call and offers Carry on
+const KILLED_PLAIN = "Your phone closed the app in the middle of the conversation.";
 // a copy of the cut-off conversation on the phone: a page the phone discarded (while locked) can still offer Carry on; cleared when a call ends or starts normally
-function keepResume(plain) { try { localStorage.setItem(RESUME_KEY, JSON.stringify(resumeInfo(plain))); } catch (e) {} }
+function keepResume(plain, last) { try { localStorage.setItem(RESUME_KEY, JSON.stringify(resumeInfo(plain, last))); } catch (e) {} }
 function dropResume() { try { localStorage.removeItem(RESUME_KEY); } catch (e) {} }
 function restoreResume() { let r = null; try { r = JSON.parse(localStorage.getItem(RESUME_KEY) || "null"); } catch (e) {} dropResume(); if (!r || Date.now() - r.at > 30 * 60e3 || !r.lines || !r.lines.length) return false;
-  r.lost = r.what; r.what = ""; r.draft = ""; r.where = ""; G.resume = r; act("step", `The last page was closed by the phone while a conversation was paused (${Math.round((Date.now() - r.at) / 1000)} s ago): offering Carry on`); resumeModal(); return true; }
+  r.lost = r.what; r.what = ""; r.draft = ""; r.where = ""; G.resume = r;
+  if (r.killed) act("step", `The last call ended without the app noticing: the phone closed the page ${Math.round((Date.now() - r.at) / 1000)} s ago, after "${r.last}". Offering Carry on`, r.session || undefined); /* logged against the cut-off call */
+  else act("step", `The last page was closed by the phone while a conversation was paused (${Math.round((Date.now() - r.at) / 1000)} s ago): offering Carry on`);
+  resumeModal(); return true; }
 function interrupted(why, plain) {
   if (!G.live || G.interrupting) return; G.interrupting = true;
   vlog("conversation interrupted: " + why);
