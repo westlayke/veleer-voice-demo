@@ -188,6 +188,8 @@ async function converse(browser, base, flow, n) {
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
     conv.drops = await p.evaluate(() => window.__drops || []);
     if (DIAG) conv.vlog = await p.evaluate(() => window.__vlog || []);
+    // the engine closing the line with a reason (code 1011 "prepayment credits are depleted" on Gemini, Oct 28, which two runs reported only as "no answer") is an error of this conversation
+    (await p.evaluate(() => (window.__vlog || []).filter(l => /Voice line closed \(code (?!1000\b)\d+/.test(l)))).slice(0, 2).forEach(l => conv.errors.push("line: " + l.replace(/^.*Voice line closed /, "").slice(0, 200)));
     conv.saved = conv.acts.filter(a => a.role === "saved").map(a => ({ text: a.text, at: a.at }));
   } catch (e) { conv.errors.push("run: " + e.message.slice(0, 300)); }
   conv.forced = sentForced;
@@ -316,7 +318,7 @@ function report(convs, extra) {
     while (!stopAll && started < MAX_CONVS && spent() + (running + 1) * avg() * 1.1 <= BUDGET) {
       const flow = flows[started % flows.length], n = Math.floor(started / flows.length) + 1; started++; running++;
       const c = await converse(browser, base, flow, n); running--;
-      c.failed = !c.replies.some(r => r.text); if (c.cut) console.log(`(conversation ${c.flow} #${c.n} was cut off by the budget and is left out of the scores)`); else if (!c.failed) { c.score = score(c, flow); fails = 0; } else if (++fails >= 3) { stopAll = true; console.log("Three conversations in a row got no answer from Grok: stopping. " + c.errors.slice(0, 2).join("; ")); }
+      c.failed = !c.replies.some(r => r.text); if (c.cut) console.log(`(conversation ${c.flow} #${c.n} was cut off by the budget and is left out of the scores)`); else if (!c.failed) { c.score = score(c, flow); fails = 0; } else if (++fails >= 3) { stopAll = true; console.log("Three conversations in a row got no answer from " + ENGINE.name + ": stopping. " + c.errors.slice(0, 2).join("; ")); }
       convs.push(c);
       try { const clip = writeClip(c); if (clip) console.log("CLIP " + clip + " (" + ((c.endAt - (c.officer[0].at)) / 1000).toFixed(0) + " s)"); } catch (e) { console.log("clip failed: " + e.message.slice(0, 200)); }
       c.araAudio = null; c.officer = null; /* the audio is on disk now */
@@ -334,7 +336,7 @@ function report(convs, extra) {
   const total = spent(), okN = convs.filter(c => !c.failed).length, per = okN ? total / okN : 0;
   const extra = `Budget for this run: $${BUDGET}. Spent (estimate): $${total.toFixed(3)}. Per conversation: $${per.toFixed(3)}, so $2 buys about ${per ? Math.floor(2 / per) : "?"} and $10 about ${per ? Math.floor(10 / per) : "?"} conversations.`;
   const failed = convs.filter(c => c.failed).length;
-  const { md, rows, byFlow } = report(convs.filter(c => !c.failed && !c.cut), extra + (failed ? ` ${failed} conversation(s) got no answer from Grok and are left out of the scores.` : ""));
+  const { md, rows, byFlow } = report(convs.filter(c => !c.failed && !c.cut), extra + (failed ? ` ${failed} conversation(s) got no answer from ${ENGINE.name} and are left out of the scores${(() => { const e = convs.filter(c => c.failed).flatMap(c => c.errors).find(x => /^line: /.test(x)); return e ? " (" + e + ")" : ""; })()}.` : ""));
   fs.writeFileSync(path.join(OUT, "summary.md"), md);
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify({ budget: BUDGET, spent: total, perConversation: per, conversations: convs.length, rows, byFlow }, null, 1));
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
