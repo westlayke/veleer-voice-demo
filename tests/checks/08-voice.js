@@ -1132,5 +1132,8 @@ test("Reconnect lines with the officer's name (Oct 28): fetched once from the ke
   await p.evaluate(() => { ACT.q.length = 0; idleStart(); });
   ok(await p.evaluate(() => G.idleEnding && !!G.idleTimer && ACT.q.some(a => a.text === 'The phone said (recording): "I\'ll hang up for now. Your form stays on the screen."') && !G.forced), "the hang-up line with a form open wasn't the phone's own recording: " + JSON.stringify(await p.evaluate(() => ACT.q.map(a => a.text))));
   await p.evaluate(() => { clearTimeout(G.idleTimer); G.idleEnding = false; G.idleAt = 0; V = null; });
+  // Ara's audio arriving while a phone line still plays is queued until the line ends (no overlap)
+  const q = await p.evaluate(() => { G.lineEndAt = Date.now() + 1500; G.playHead = 0; const t0 = G.ctx.currentTime; playPcm(new Int16Array(2400)); const d = G.playHead - 0.1 - t0; G.lineEndAt = 0; G.playHead = 0; return d; });
+  ok(q > 1.4 && q < 2.2, "Ara's audio wasn't held until the phone's line had finished: started " + q.toFixed(2) + " s out");
 });
 };

@@ -466,7 +466,9 @@ function playPcm(i16) {
   const buf = G.ctx.createBuffer(1, i16.length, 24000), ch = buf.getChannelData(0);
   for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 32768;
   const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.out || G.ctx.destination);
-  const at = Math.max(G.ctx.currentTime + 0.02, G.playHead); src.start(at); G.playHead = at + buf.duration;
+  // Ara's audio is queued on the phone's clock: it waits for a phone line still playing ("Still waiting on Ara.") so the two never overlap (Carverhill, Oct 28)
+  const lineEnd = G.lineEndAt && G.lineEndAt > Date.now() ? G.ctx.currentTime + (G.lineEndAt - Date.now()) / 1000 + 0.15 : 0;
+  const at = Math.max(G.ctx.currentTime + 0.02, G.playHead, lineEnd); src.start(at); G.playHead = at + buf.duration;
   if (G.respAudio) { if (G.respAudio.t0 == null) G.respAudio.t0 = at; G.respAudio.end = G.playHead; } /* where this reply's audio sits on the clock, for a truncate on interruption */
   const cap = G.caps && G.caps[G.caps.length - 1]; if (cap) { if (cap.t0 == null) cap.t0 = at; cap.t1 = G.playHead; }
   G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
