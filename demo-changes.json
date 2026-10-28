@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 12:05 PM",
+   "change": "Preview: on the Tasks list, a task that opens a field on a record now shows a chip under its text naming the field and its value now (\"Response: Awaiting ›\"); tapping the chip or the task text opens Record the response on the opportunity. The generic Edit link on every task row is now a muted pencil, so blue is reserved for \"opens a field\". Option A + B from the task-row mockups.",
+   "area": "Tasks",
+   "requestedBy": "Carverhill",
+   "why": "Oct 28, 11:25 AM ET: \"provide a better visual cue on the task list to show a user they can link directly to a form field on an opportunity or contact record and edit it by clicking from the task\"; 11:46 AM: \"Implement a + b recommended on preview\""
+  },
+  {
    "date": "Oct 28, 11:55 AM",
    "change": "Preview: when an ask is recorded as Awaiting, Ara now explains that a follow-up task to get the answer is required and suggests the words \"Follow up with <first name> to get an answer on the ask\", due in 14 days; the officer says yes or gives their own words, and that task becomes the next step on the form (its text on the Tasks list opens Record the response). No second \"Check on the answer\" task is added when a next step is given. Hands-free asks the same way.",
    "area": "Ara, Opportunities",

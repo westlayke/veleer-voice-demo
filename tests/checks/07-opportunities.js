@@ -212,7 +212,8 @@ test("Oct 28 ask follow-up: an awaiting ask creates the 14-day check task, its t
   ok(/A task to check on \w+'s answer by Nov 4 was added\. \| \[\["Check on the answer to the \$5,000 ask","2026-11-04"\]\]/.test(auto), "without a next step the app didn't add the 14-day check task: " + auto);
   // Tasks list: the task's text is a link that opens the opportunity with Record the response over it, Response focused
   await tab(p, "Tasks"); await p.waitForTimeout(300);
-  const link = p.locator(`.trow[data-tid="${check(o1).id}"] .ttext .lnk[data-form=response]`);
+  const link = p.locator(`.trow[data-tid="${check(o1).id}"] .fchip[data-form=response]`);
+  ok(await p.locator(`.trow[data-tid="${check(o1).id}"] .ttext .ftext[data-form=response]`).count() === 1 && /Response: Awaiting/.test(await link.evaluate(e => e.textContent)), "the check task's text isn't tappable or the field chip doesn't show Response: Awaiting");
   ok(await link.count() === 1, "the check task's text isn't a link to the response form");
   await link.first().tap(); await p.waitForTimeout(500);
   ok(await p.evaluate(() => S.screen === "opp") && (await state(p)).sel.opp === o1.id, "the task link didn't land on the opportunity");

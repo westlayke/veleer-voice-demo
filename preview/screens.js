@@ -614,11 +614,18 @@ function setTaskStatus(t, st, until) {
   save(); render(); return () => { Object.assign(t, before); save(); render(); };
 }
 const checkSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+// A task that opens a field on a record shows the field and its value now as a chip (Carverhill, Oct 28); the task text is plain and tappable too
+const FORM_IC = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="2" width="9" height="12" rx="1.5"/><path d="M4.5 6h4M4.5 9h2.5"/><path d="M12.8 7.2l1.6 1.6L10 13.2H8.4v-1.6z"/></svg>';
+const PEN = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M11.5 2.5l2 2L6 12H4v-2z"/><path d="M2 14h12"/></svg>';
+function fieldChip(t) {
+  const o = oppById(t.oppId), a = o && latestAsk(o), v = !a || a.status === "Made" ? "Awaiting" : a.status;
+  return `<button type="button" class="fchip" data-form="response" data-cid="${t.contactId}" data-item="${t.oppId}" aria-label="Response: ${esc(v)}. Record the response">${FORM_IC}Response: <b>${esc(v)}</b> ${CHEV}</button>`;
+}
 function taskRow(t, showWhere) {
   const st = taskStatus(t), al = taskAlert(t);
   return `<div class="trow${st === "done" ? " isdone" : ""}" data-tid="${t.id}" data-name="${esc((t.text + " " + nameOf(contactById(t.contactId)) + " " + taskWhere(t)).toLowerCase())}"><div class="tacts"><button type="button" class="ta-wait" data-tk-wait="${t.id}">Waiting</button><button type="button" class="ta-done" data-tk-done="${t.id}">Done</button></div>
     <div class="row tmain"><button type="button" class="tcheck${st === "done" ? " on" : ""}" data-tk-done="${t.id}" aria-label="${st === "done" ? "Mark not done" : "Mark done"}">${st === "done" ? checkSvg : ""}</button>
-    <div class="t">${alertPill(al)}<div class="ttext${al ? " na-do" : ""}">${askCheckTask(t) ? `<span class="lnk" data-form="response" data-cid="${t.contactId}" data-item="${t.oppId}" role="button" tabindex="0">${esc(t.text)}</span>` : esc(t.text)}</div><div class="s">${st === "done" ? "Done" + (t.doneOn ? " " + fmtDate(t.doneOn) : "") : st === "waiting" ? (t.due ? "Check back " + fmtDate(t.due) : "Waiting") : t.due ? "Due " + fmtDate(t.due) : "No due date"}${showWhere ? " · " + esc(taskWhere(t)) : t.oppId ? " · on the opportunity" : ""}${st === "done" ? "" : ` · <button type="button" class="rowedit inl" data-form="editTask" data-cid="${t.contactId}" data-item="${t.id}" aria-label="Edit task">Edit</button>`}</div></div>
+    <div class="t">${alertPill(al)}<div class="ttext${al ? " na-do" : ""}">${askCheckTask(t) ? `<span class="ftext" data-form="response" data-cid="${t.contactId}" data-item="${t.oppId}" role="button" tabindex="0">${esc(t.text)}</span>` : esc(t.text)}</div>${askCheckTask(t) ? fieldChip(t) : ""}<div class="s">${st === "done" ? "Done" + (t.doneOn ? " " + fmtDate(t.doneOn) : "") : st === "waiting" ? (t.due ? "Check back " + fmtDate(t.due) : "Waiting") : t.due ? "Due " + fmtDate(t.due) : "No due date"}${showWhere ? " · " + esc(taskWhere(t)) : t.oppId ? " · on the opportunity" : ""}${st === "done" ? "" : ` · <button type="button" class="rowedit inl pen" data-form="editTask" data-cid="${t.contactId}" data-item="${t.id}" aria-label="Edit task" title="Edit task">${PEN}</button>`}</div></div>
     <button type="button" class="tstat s-${st}" data-tk-stat="${t.id}" aria-label="Status: ${TSTAT[st]}. Change">${TSTAT[st]}<svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div></div>`;
 }
 // Create opportunity tapped for a contact who isn't ready: list what must be true, ticked or not, and what's left to do
