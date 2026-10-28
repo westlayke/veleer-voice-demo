@@ -2,7 +2,7 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
-   "date": "Oct 28, 12:05 PM",
+   "date": "Oct 28, 11:57 AM",
    "change": "Preview: on the Tasks list, a task that opens a field on a record now shows a chip under its text naming the field and its value now (\"Response: Awaiting ›\"); tapping the chip or the task text opens Record the response on the opportunity. The generic Edit link on every task row is now a muted pencil, so blue is reserved for \"opens a field\". Option A + B from the task-row mockups.",
    "area": "Tasks",
    "requestedBy": "Carverhill",
