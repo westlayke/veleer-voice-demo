@@ -53,7 +53,7 @@ const NO_NEXT_STEP = ["Not interested", "Referred elsewhere"];
 const RESPONSES = ["Awaiting", "Accepted", "Countered", "Declined"];
 const PAY_METHODS = ["Check", "Credit card", "Bank transfer", "Wire", "Stock", "Other"];
 const PLEDGE_FOLLOWUP_DAYS = 10; // demo default; the guide's pledge reminder interval is still open with the customer
-const ASK_CHECK_DAYS = 30; // a setting: an ask still waiting for its answer gets a task to check on it within this many days (Carverhill, Oct 28)
+const ASK_CHECK_DAYS = 14; // a setting: an ask still waiting for its answer gets a task to check on it within this many days (Carverhill, Oct 28: 30, then 14 the same day)
 const ASK_CHECK_RE = /^Check on the answer to the /; // the text of that task; a recorded response, pledge or gift marks it done
 const askCheckTask = (t) => !!t && !t.done && ASK_CHECK_RE.test(t.text || "") && !!t.oppId;
 const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
@@ -278,6 +278,8 @@ const MIGRATIONS = [
     const old = S.tasks.find(t => t.oppId === o.id && !t.done && /pledge decision/.test(t.text || ""));
     if (old) old.text = `Check on the answer to the ${money(a.amount)} ask`;
     else if (!S.tasks.some(t => t.oppId === o.id && askCheckTask(t))) S.tasks.unshift({ id: uid(), contactId: o.contactId, oppId: o.id, text: `Check on the answer to the ${money(a.amount)} ask`, due: addDays(a.askedOn || todayISO(), ASK_CHECK_DAYS), done: false, auto: true }); }); },
+  // 8 (Oct 28): check-on-the-answer tasks made under the 30-day rule move to 14 days after the ask
+  (S) => { (S.tasks || []).forEach(t => { if (!askCheckTask(t) || t.done) return; const o = (S.opps || []).find(x => x.id === t.oppId), a = o && latestAsk(o); if (!a || !a.askedOn) return; const due = addDays(a.askedOn, ASK_CHECK_DAYS); if (t.due > due) t.due = due; }); },
 ];
 const DATA_VERSION = MIGRATIONS.length;
 // phones saved before versioning have no number and run every step once (each step is safe to repeat)

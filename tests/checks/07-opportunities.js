@@ -192,7 +192,7 @@ test("Ken's last gift gives its year once, and a defer reason ending in a full s
   ok(h && /board meeting\. Reconsider on/.test(h) && !/\.\./.test(h), "the defer reason is wrong in History: " + h);
 });
 
-test("Oct 28 ask follow-up: an awaiting ask creates the 30-day check task, its text links to the response field, the answer or a gift marks it done", async (p) => {
+test("Oct 28 ask follow-up: an awaiting ask creates the 14-day check task, its text links to the response field, the answer or a gift marks it done", async (p) => {
   await signIn(p);
   // two open opportunities with a planned ask; the ask is recorded with the answer still to come
   const [who, other] = await p.evaluate(() => { const S = window.__demo.state, open = S.opps.filter(o => o.stage !== "Closed").slice(0, 2);
@@ -205,8 +205,8 @@ test("Oct 28 ask follow-up: an awaiting ask creates the 30-day check task, its t
   }
   let st = await state(p); const oid = (n) => st.opps.find(o => o.stage !== "Closed" && st.contacts.find(c => c.id === o.contactId && c.first + " " + c.last === n));
   const o1 = oid(who), o2 = oid(other), check = (o) => st.tasks.find(k => k.oppId === o.id && /^Check on the answer to the \$5,000 ask$/.test(k.text));
-  ok(o1.stage === "Ask Made" && o1.asks[0].status === "Made" && check(o1) && !check(o1).done && check(o1).due === "2026-11-20", "an awaiting ask didn't get its Check on the answer task due 30 days on: " + JSON.stringify(st.tasks.filter(k => k.oppId === o1.id)));
-  ok(/Task added: check on the answer to the \$5,000 ask by Nov 20/.test((await p.evaluate(() => document.body.innerText))), "History doesn't state the task was added");
+  ok(o1.stage === "Ask Made" && o1.asks[0].status === "Made" && check(o1) && !check(o1).done && check(o1).due === "2026-11-04", "an awaiting ask didn't get its Check on the answer task due 14 days on: " + JSON.stringify(st.tasks.filter(k => k.oppId === o1.id)));
+  ok(/Task added: check on the answer to the \$5,000 ask by Nov 4/.test((await p.evaluate(() => document.body.innerText))), "History doesn't state the task was added");
   // Tasks list: the task's text is a link that opens the opportunity with Record the response over it, Response focused
   await tab(p, "Tasks"); await p.waitForTimeout(300);
   const link = p.locator(`.trow[data-tid="${check(o1).id}"] .ttext .lnk[data-form=response]`);
@@ -248,6 +248,6 @@ test("Oct 28 ask follow-up: an awaiting ask creates the 30-day check task, its t
   // a phone with an older ask still awaiting gets the task from the data upgrade, and the example task takes the standard wording
   const mig = await p.evaluate(() => { const st = { opps: [{ id: "o1", contactId: "c1", stage: "Ask Made", asks: [{ amount: 30000, status: "Made", askedOn: "2026-09-30" }] }, { id: "o2", contactId: "c2", stage: "Ask Made", asks: [{ amount: 8000, status: "Made", askedOn: "2026-10-10" }] }], tasks: [{ id: "t1", oppId: "o1", contactId: "c1", text: "Follow up on Ken's pledge decision", due: "2026-10-24", done: false }], contacts: [] };
     MIGRATIONS[6](st); return st.tasks.map(t => [t.oppId, t.text, t.due]); });
-  ok(mig.length === 2 && mig[0][1] === "Check on the answer to the $8,000 ask" && mig[0][2] === "2026-11-09" && mig[1][1] === "Check on the answer to the $30,000 ask" && mig[1][2] === "2026-10-24", "the data upgrade didn't add or rename the check tasks: " + JSON.stringify(mig));
+  ok(mig.length === 2 && mig[0][1] === "Check on the answer to the $8,000 ask" && mig[0][2] === "2026-10-24" && mig[1][1] === "Check on the answer to the $30,000 ask" && mig[1][2] === "2026-10-24", "the data upgrade didn't add or rename the check tasks: " + JSON.stringify(mig));
 });
 };

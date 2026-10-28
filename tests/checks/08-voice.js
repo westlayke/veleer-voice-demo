@@ -974,4 +974,25 @@ test("Ara: a tool call that lands before the officer's transcript waits for it (
   ok(await p.evaluate(() => VLOG.some(l => /show_interaction_draft: held \d+ ms for the officer's transcript \(it didn't come\)$/.test(l))), "the give-up was not logged");
 });
 
+test("Carverhill's Ruth call (Oct 28): \"change the amount of the ask\" is the amount asked, not an agreed amount, and the next-step line has no day count", async (p) => {
+  await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; G.cmdAt = 0; paintCall(); });
+  await said(p, "Let's go record the ask for Ruth Abernathy. It was an in-person meeting.");
+  let r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", date: "2026-10-28", meetingType: "In person" });
+  ok(r.ok && (await p.evaluate(() => V && V.action === "ask")), "the ask form didn't open: " + JSON.stringify(r));
+  await said(p, "Well, she accepted, but can we change the amount of the ask? It was for 75,000 dollars.");
+  r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", date: "2026-10-28", meetingType: "In person", response: "Accepted", agreedAmount: 75000, summary: "Ruth accepted the ask in person." });
+  const d = await p.evaluate(() => V.data);
+  ok(d.amount === 75000 && !d.agreedAmount, "the changed ask amount landed in Agreed instead of Amount asked: " + JSON.stringify({ amount: d.amount, agreedAmount: d.agreedAmount }));
+  ok(/\$75,000 is now the Amount asked/.test(r.status || ""), "Ara wasn't told the amount moved: " + JSON.stringify(r.status));
+  // a genuine counter figure stays an agreed amount
+  await said(p, "Actually she countered at 50,000.");
+  r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", date: "2026-10-28", meetingType: "In person", response: "Countered", agreedAmount: 50000, summary: "Ruth countered." });
+  const d2 = await p.evaluate(() => V.data);
+  ok(d2.amount === 75000 && d2.agreedAmount === 50000, "a counter figure was moved out of Agreed: " + JSON.stringify({ amount: d2.amount, agreedAmount: d2.agreedAmount }));
+  // the spoken next step for an ask awaiting its answer carries no "(N days)"
+  const line = await p.evaluate(() => { const o = S.opps.find(x => x.stage === "Ask Made" && latestAsk(x) && latestAsk(x).status === "Made"); return o ? nextStep(o).line : "none"; });
+  ok(/^record \w+'s answer$/.test(line), "the next-step line still carries a day count: " + JSON.stringify(line));
+});
+
 };
