@@ -321,7 +321,7 @@ test("Hands-free: a yes to a read-back saves the form even when Ara opens anothe
   ok(await p.evaluate(() => V && V.action === "cultivate"), "the Cultivation form didn't open after the officer's yes to Ara's offer: " + JSON.stringify(r));
   // the Cultivation decision read back, no yes yet: another form has to wait
   r = await ara(p, "save_form", { confirmed: false });
-  ok(/Moving James to Cultivation means you, as the gift officer/.test(r.read_back || ""), "the Cultivation read-back lacks its explanation: " + JSON.stringify(r));
+  ok(/^Move James to Cultivation\? That means you, as the gift officer/.test(r.read_back || ""), "the Cultivation read-back lacks its explanation: " + JSON.stringify(r));
   r = await ara(p, "show_task_draft", { contact_name: "James Okafor", text: "Call James" });
   ok(r.ok === false && /waiting for the officer's yes; it is NOT saved/.test(r.error || "") && (await p.evaluate(() => V && V.action === "cultivate")), "another form opened over an unsettled read-back: " + JSON.stringify(r));
 });

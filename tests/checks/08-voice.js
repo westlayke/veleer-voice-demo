@@ -731,7 +731,56 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = "C"; S.opps.unshift({ id: "o_cult", contactId: c.id, name: "Okafor, James - 2026", stage: "Qualification", asks: [], fund: "C.A. Idaho C4", campaign: "Idaho", officer: OFFICER, participants: "", createdOn: todayISO() }); S.interactions.unshift({ id: "i_cult", contactId: c.id, date: todayISO(), type: "In person", summary: "Good talk.", substantive: true, kind: "interaction" }); save(); });
   await said(p, "I'm driving"); await p.waitForTimeout(900);
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
-  ok(/^Moving James to Cultivation means you, as the gift officer, believe they're ready to be pursued for a gift\. Move to Cultivation\? for James Okafor/.test(r.read_back || ""), "the Cultivation read-back doesn't explain the decision: " + JSON.stringify(r));
+  ok(/^Move James to Cultivation\? That means you, as the gift officer, believe they're ready to be pursued for a gift\. Shall I save it\?$/.test(r.read_back || ""), "the Cultivation read-back isn't the decision with its meaning: " + JSON.stringify(r));
+  await said(p, "Yes.");
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved && /^James is now in Cultivation\. (Say undo if that's wrong\. )?The next step in the process to move James to Ask Planning is to add a planned ask\. Do you want to do that now, or something else\?$/.test(r.ask_exactly || ""), "the Cultivation save line isn't \"James is now in Cultivation\": " + JSON.stringify(r));
+  // a deferral reads back and saves as what it is
+  await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); const o = S.opps.find(o => o.id === "o_cult"); o.stage = "Qualification"; G.lastSaved = null; });
+  await said(p, "Let's defer James's move, he's travelling until the new year, reconsider on January 15th.");
+  r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Defer", reason: "Travelling until the new year", reconsiderOn: "2027-01-15" });
+  ok(/^Defer James's move to Cultivation, reason: Travelling until the new year, reconsider on Jan 15, 2027\. Shall I save it\?$/.test(r.read_back || ""), "the deferral read-back: " + JSON.stringify(r));
+  await said(p, "Yes.");
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved && /^James's move to Cultivation is deferred until Jan 15, 2027\. /.test(r.ask_exactly || ""), "the deferral save line: " + JSON.stringify(r));
+});
+test("Carverhill's Bugs call (Oct 28): \"in-person\" is in person; \"a follow-up in seven days\" keeps the date the officer gave; a three-word echo isn't the scripted line; a replayed tool call after a pick-up isn't done twice", async (p) => {
+  await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; G.cmdAt = 0; paintCall(); });
+  await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(x => x.stage !== "Closed"); o.stage = "Ask Planning"; o.asks = [{ fund: "Citizens Alliance C3", campaign: "National", amount: 50000, askType: "Outright", status: "Planned", plannedDate: "2026-10-28" }]; delete o.pledge; S.tasks = S.tasks.filter(t => t.oppId !== o.id); window.__who = (() => { const c = S.contacts.find(c => c.id === o.contactId); return [c.first + " " + c.last, c.first]; })(); });
+  const [name, first] = await p.evaluate(() => window.__who);
+  await said(p, `Let's record the ask for ${name}.`);
+  let r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28" });
+  await said(p, "In-person.");
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person" });
+  let d = await p.evaluate(() => V.data);
+  ok(d.meetingType === "In person" && !/Left out/.test(r.status || ""), "\"In-person.\" (with the hyphen) was not taken as the type: " + JSON.stringify({ type: d.meetingType, status: r.status }));
+  await said(p, "He's going to think about it and talk to his wife.");
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it." });
+  ok(/due in 14 days, on Nov 11/.test(r.ask_exactly || ""), "the suggestion didn't offer 14 days when no date was given: " + JSON.stringify(r));
+  await said(p, "How about if it's a follow-up in seven days?");
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextDue: "2026-11-04" });
+  d = await p.evaluate(() => V.data);
+  ok(d.nextDue === "2026-11-04" && !/Left out/.test(r.status || "") && /due on Nov 4 as you said/.test(r.ask_exactly || ""), "the officer's seven days was dropped or the suggestion ignored it: " + JSON.stringify({ due: d.nextDue, r }));
+  await said(p, "Yes, use that.");
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextStep: `Follow up with ${first} to get an answer on the ask`, nextDue: "2026-11-04" });
+  d = await p.evaluate(() => V.data);
+  ok(d.nextDue === "2026-11-04" && d.nextStep === `Follow up with ${first} to get an answer on the ask` && !r.still_needed, "the yes didn't keep the task with the officer's date: " + JSON.stringify({ step: d.nextStep, due: d.nextDue, still: r.still_needed }));
+  // a short echo of the officer ("For the date.") shares words with the read-back but isn't Ara saying it: the scripted line stays pending
+  await p.evaluate(() => { window.__noAutoForce = true; forceSay("Interaction report, the ask for Bugs Bunny. Date: Oct 28, today; Type: In person; Amount asked: $50,000; Response: Awaiting; Next step due: Nov 4. Shall I save it?"); });
+  await p.waitForTimeout(300);
+  await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "For the date." }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); G.audioSamples = 30000; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  const f = await p.evaluate(() => ({ pending: !!G.forced, late: !!G.lateForced, log: ACT.q.map(a => a.text).join(" | ") }));
+  ok(f.pending && !f.late && /Ara answered on her own while the scripted line was still to come/.test(f.log), "a three-word echo was taken for the scripted read-back (its real telling would then be cut): " + JSON.stringify(f));
+  await p.evaluate(() => { G.forced = null; G.lateForced = null; window.__noAutoForce = false; });
+  // the voice service replays its last tool call when the conversation is picked up after a drop: the same call, identical, is not done again
+  await p.evaluate(() => { G.resumedAt = Date.now(); });
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextStep: `Follow up with ${first} to get an answer on the ask`, nextDue: "2026-11-04" });
+  ok(r.ok === false && /already handled before the line dropped/.test(r.error || "") && /Every required field of the "Interaction report · the ask" form is in|form has been read back|still needs/.test(r.error || ""), "the replayed call wasn't refused with where the form stands: " + JSON.stringify(r));
+  ok(/came again after the line was picked up/.test(await p.evaluate(() => ACT.q.map(a => a.text).join(" | "))), "the replay wasn't logged");
+  await p.evaluate(() => { G.resumedAt = 0; });
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextStep: `Follow up with ${first} to get an answer on the ask`, nextDue: "2026-11-04", amount: 50000 });
+  ok(r.ok !== false, "a different call after the replay window was refused: " + JSON.stringify(r));
 });
 test("Ara: guidance sent while a scripted line is pending tells her not to say that line herself", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);

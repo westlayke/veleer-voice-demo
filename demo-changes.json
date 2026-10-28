@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 3:33 PM",
+   "change": "Preview: from the 2:47 PM (Chrome) and 3:03 PM calls. (1) The Move to Cultivation decision is read back as the decision with its meaning (\"Move Bugs to Cultivation? That means you, as the gift officer, believe they're ready to be pursued for a gift. Shall I save it?\") and saved as \"Bugs is now in Cultivation.\" (a deferral: \"Bugs's move to Cultivation is deferred until Jan 15\"), not \"Decision: Move to Cultivation\" / \"Decision recorded\". (2) \"In-person\" with a hyphen now counts as In person (the type was dropped twice with \"I didn't catch the type from you\"). (3) A tool call the voice service replays after the conversation is picked up (identical to one made before the drop) is not done again; it reopened the interaction form with the saved report's type. (4) \"A follow-up in seven days\" keeps the date the officer gave, and the follow-up suggestion then says \"due on Nov 4 as you said\" instead of 14 days. (5) A short echo of the officer (\"For the date.\") no longer counts as Ara saying the scripted read-back, which had the real read-back cut off as a late copy (then \"are you there?\" three times). (6) No cancel is sent to the voice service when nothing is being generated (\"Cancellation failed\" noise).",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Look at my last call, quite good with one enhancement request related to the move to cultivation\" (3:02 PM); \"Just had a good call look at the log\" (3:17 PM); Go at 3:23 PM"
+  },
+  {
    "date": "Oct 28, 2:55 PM",
    "change": "Preview: the copy of unsent log rows and of the live call is written to the phone's storage at most every 2 seconds (and at once when the app hides) instead of on every log row. Since the 1:49 PM build wrote on every row, several a second while the officer talks, every call (1:51, 2:32 and 2:45 PM) died without a word, each time while Ara was speaking; the writes are the one thing those calls shared, so they are the first suspect.",
    "area": "Voice",

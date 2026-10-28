@@ -23,6 +23,7 @@ const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has
 const EARLY_PING_MS = 2500;                  // the early line test's limit
 const RESUME_MS = 25 * 60000;               // a line reopened within this long picks up the same conversation on xAI (kept 30 minutes)
 const FORCE_WAIT_MS = 8000;                  // a scripted line that hasn't started by now is said by Ara instead (3 s was too short on a slow line, Oct 25; 5 s still fell back 5 times in the 4:42 PM call, lines then played late)
+const REPLAY_MS = 20000;                     // a tool call repeated this soon after a picked-up conversation, identical to one made before the drop, is the service replaying it (Oct 28)
 const LATE_FORCE_MS = 25000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long
 const TOKEN_WAIT_MS = 6000;                  // a voice pass that takes longer counts as failed (Oct 25: one took 89 s, the next never came back and the call hung)
 const TOKEN_RETRY_MS = 2000;                 // between tries for a voice pass while the line is down
@@ -132,7 +133,7 @@ function openSocket(token, first, second, warm) {
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws; G.lockResume = false;
     sessUpdate(sessionCfg()); sendExtras(); if (G.drops && P.replay) replayRecent(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep();
-    if (ws.resumed) netLog("Picked up the same conversation");
+    if (ws.resumed) { netLog("Picked up the same conversation"); G.resumedAt = Date.now(); }
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"}${ws.warmed ? ", line warmed on touch" : ""})`);
     netLog(`Voice line open in ${Date.now() - t0} ms${ws.warmed ? " (warmed on touch)" : ""}${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops})` : ""}`);
@@ -392,7 +393,7 @@ function forceSay(text, then, fallback, waited = 0) {
   if (!waited) G.pendingForce = text;
   if ((replyBusy() || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
   // the reply just finished already said it (the engine answered the tool result with the question itself): no second copy (OpenAI, Oct 27: "What's the first name?" three times)
-  if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && wordOverlap(sameWords(G.lastBot), sameWords(text)) >= 0.6) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
+  if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text))) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
   G.forced = { text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;
   if (PROV().forceItem) send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
   else { G.forced.viaReply = true; G.createAt = Date.now(); forceByReply(text); } /* an engine without force_message is asked to say it in a reply of its own: a reply request like any other, so the next one waits for it */
@@ -406,11 +407,14 @@ function forcedEvent(t) {
     const said = sameWords(G.bot || ""), want = sameWords(f.text);
     if (said.length >= 12 && !want.startsWith(said.slice(0, 40)) && !said.startsWith(want.slice(0, 40))) {
       // Ara answered on her own (to the tool result) and the app took that for the scripted line starting (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
-      if (f.viaReply && wordOverlap(said, want) >= 0.6) { G.forced = null; G.lastForcedText = f.text; act("step", `${PROV().name} said the scripted line in its own words`); if (f.then) setTimeout(() => guide(f.then), 0); return; } /* no late copy is coming on this engine */
-      if (wordOverlap(said, want) >= 0.6) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
+      if (f.viaReply && saidLine(said, want)) { G.forced = null; G.lastForcedText = f.text; act("step", `${PROV().name} said the scripted line in its own words`); if (f.then) setTimeout(() => guide(f.then), 0); return; } /* no late copy is coming on this engine */
+      if (saidLine(said, want)) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
       else { f.started = false; act("step", "Ara answered on her own while the scripted line was still to come"); clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(g.fallback); } }, FORCE_WAIT_MS); }
       return; }
     G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => guide(f.then), 0); }
 }
+// did Ara say the scripted line in her own words? Most of the shorter line's words shared, and enough of them: a three-word echo
+// ("For the date.") shares "the" and "date" with an 18 s read-back and is not that read-back (Oct 28: the real read-back was then cut as a late copy)
+function saidLine(said, want) { const n = said.split(" ").filter(Boolean).length, w = want.split(" ").filter(Boolean).length; return wordOverlap(said, want) >= 0.6 && n >= Math.min(8, Math.ceil(w / 2)); }
 // how much two lines share, as a fraction of the shorter one's words
 function wordOverlap(a, b) { const A = new Set(a.split(" ").filter(Boolean)), B = new Set(b.split(" ").filter(Boolean)); if (!A.size || !B.size) return 0; let n = 0; A.forEach(w => { if (B.has(w)) n++; }); return n / Math.min(A.size, B.size); }

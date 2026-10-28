@@ -44,7 +44,8 @@ const OPTION_WORDS = {
   dnc: { true: /\bdo not contact\b|\bdon't contact\b|\bno contact\b|\bnever contact\b/, false: /\bcontact\b/ },
   permText: { true: /\btext/, false: /\btext/ }
 };
-const DATE_WORDS = /\bin (a|an|one|two|three|four|five|six|\d+|a few|a couple of|several) (day|week|month|year)s?\b|\b(a|one|two|three|\d+) (day|week|month|year)s? (from|out|later|ahead)\b|\b(today|tomorrow|yesterday|tonight|this|next|last|coming|end of|beginning of|mid|early|late|week|weekend|month|year|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|first|second|third|fourth|fifth|tenth|fifteenth|twentieth|thirtieth|christmas|thanksgiving|halloween|new year|on the|by the|the \d+(st|nd|rd|th)?|\d+(st|nd|rd|th)|\d+\/\d+|\d{4})\b/;
+const COUNT_WORDS = "a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fourteen|fifteen|twenty|thirty|sixty|ninety|\\d+";
+const DATE_WORDS = new RegExp(`\\bin (${COUNT_WORDS}|a few|a couple of|several) (day|week|month|year)s?\\b|\\b(${COUNT_WORDS}) (day|week|month|year)s? (from|out|later|ahead|time)\\b|` + String.raw`\b(today|tomorrow|yesterday|tonight|this|next|last|coming|end of|beginning of|mid|early|late|week|weekend|month|year|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|first|second|third|fourth|fifth|tenth|fifteenth|twentieth|thirtieth|christmas|thanksgiving|halloween|new year|on the|by the|the \d+(st|nd|rd|th)?|\d+(st|nd|rd|th)|\d+\/\d+|\d{4})\b`);
 // every officer line of this call, lower case
 function evidenceLines() { return (G.recent || []).filter(l => l.startsWith("Officer: ")).map(l => l.slice(9).toLowerCase().replace(/[’‘]/g, "'")); }
 // did the officer say this amount, in digits or words ("25,000", "25k", "twenty-five thousand", "ten grand")?
@@ -79,7 +80,7 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
   if (f.k === "fund") return entitySaid(v, lines);
   if (f.k === "campaign") { const c = campaignsFor(data.fund || ""); if (c.length === 1 && c[0] === v) return true; if (v === "National") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all); return all.includes(String(v).toLowerCase()); }
   if (f.type === "bool" && !v) return null; // false is the default, nothing to prove
-  if (OPTION_WORDS[f.k]) { const re = OPTION_WORDS[f.k][String(v)]; return re ? re.test(all) : null; } // an option the form doesn't offer is left to the form
+  if (OPTION_WORDS[f.k]) { const re = OPTION_WORDS[f.k][String(v)]; return re ? re.test(all) || re.test(all.replace(/-/g, " ")) : null; } // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)
   if (f.type === "money") return amountSaid(v, lines);
   if (f.type === "date") { const iso = normDate(v); if (iso && iso === todayISO()) return true; return DATE_WORDS.test(all) || /\d/.test(all); }
   if (f.type === "select" || f.type === "bool") return false; // an option with no words of its own: only the officer's own tap sets it

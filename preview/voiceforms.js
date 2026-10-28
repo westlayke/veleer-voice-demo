@@ -2,8 +2,10 @@
 // Filling and saving forms by voice: optional fields one at a time, hands-free saves, and the check of hands-free saves (loaded after aratools.js)
 // Optional fields, one at a time (Oct 24, after testers found the one long list hard to follow): the app asks each question and fills in each answer itself
 // an ask still waiting for its answer: the next step is the follow-up task, and the app suggests the words (Carverhill, Oct 28 11:15 AM)
-const followUpSuggestion = (t) => { const first = t && t.contact ? t.contact.first : "them", d = (V && V.data && V.data.date) || todayISO(), due = addDays(d, ASK_CHECK_DAYS); return { text: `Follow up with ${first} to get an answer on the ask`, due }; };
-const FOLLOW_Q = (t) => { const s = followUpSuggestion(t); return `An ask that's still waiting for an answer needs a follow-up task, which becomes a Task for you. I suggest "${s.text}", due in ${ASK_CHECK_DAYS} days, on ${fmtDate(s.due)}. Shall I use that, or do you want different words?`; };
+// the due date is the officer's own when they gave one ("a follow-up in seven days", Oct 28), else ASK_CHECK_DAYS on from the ask
+const followUpSuggestion = (t, own) => { const first = t && t.contact ? t.contact.first : "them", d = (V && V.data && V.data.date) || todayISO(), said = normDate(own || (V && V.data && V.data.nextDue) || ""); return { text: `Follow up with ${first} to get an answer on the ask`, due: said || addDays(d, ASK_CHECK_DAYS), own: !!said }; };
+const dueSaid = (s) => s.own ? `due on ${fmtDate(s.due)} as you said` : `due in ${ASK_CHECK_DAYS} days, on ${fmtDate(s.due)}`;
+const FOLLOW_Q = (t) => { const s = followUpSuggestion(t); return `An ask that's still waiting for an answer needs a follow-up task, which becomes a Task for you. I suggest "${s.text}", ${dueSaid(s)}. Shall I use that, or do you want different words?`; };
 const awaitingAsk = (action, d) => action === "ask" && d && d.response === "Awaiting";
 const SUBST_Q = "Was it a substantive interaction, one that moved the relationship forward?";
 // the officer's yes or no to the substantive question, from their last line (Grok sometimes doesn't pass it on)
@@ -115,10 +117,10 @@ function grokSaved(action, r, d = {}) {
   (G.saves = G.saves || []).push(line); G.savedAt = Date.now(); G.savedLine = line; recent("App", "Saved: " + line); // a reconnect after this must not save it again
   const next = nextStepLine(c, !!closed), undo = G.hfTry && !G.undoSaid;
   G.lastSaved = { who: who || "the same record", contactId: c ? c.id : null, next: `say exactly: "${next}"`, at: Date.now() }; // a drop with no form open comes back to this person (Carverhill, Oct 25)
-  const spoken = [moodLine(action, d), savedShort(action, who) + closed, undo ? "Say undo if that's wrong." : "", r && r.note ? r.note : "", next].filter(Boolean).join(" ");
+  const spoken = [moodLine(action, d), savedShort(action, who, d) + closed, undo ? "Say undo if that's wrong." : "", r && r.note ? r.note : "", next].filter(Boolean).join(" ");
   whenIdle("instr");
   if (G.hfTry) { if (undo) G.undoSaid = true; // the undo reminder once per conversation: every save repeating it got tiresome (Oct 24)
-    G.hfTry.force = spoken; G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} Say in a few words that it's saved (for example "${savedShort(action, who)}")${r && r.note ? `, then state (don't ask) "${r.note}"` : ""}, then carry on.`; return; }
+    G.hfTry.force = spoken; G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} Say in a few words that it's saved (for example "${savedShort(action, who, d)}")${r && r.note ? `, then state (don't ask) "${r.note}"` : ""}, then carry on.`; return; }
   G.saveAck = { at: Date.now(), action, who, next: `say exactly: "${next}"` };
   act("step", "The app says the save and the next step itself"); forceSay(spoken);
 }
@@ -131,7 +133,10 @@ function saveAckCheck(text) {
   act("step", "Ara missed the tapped save: told her again"); vlog("Ara missed the tapped save: told her again");
   guide(`Correction: the officer already tapped ${ACTIONS[a.action].saveLabel} and it IS saved (${ACTIONS[a.action].saved.toLowerCase()}${a.who ? " for " + a.who : ""}). Don't ask them to tap it. Say in a few words that you see it's saved, then ${a.next}`);
 }
-const savedShort = (action, who) => `${ACTIONS[action].saved}${who ? " for " + who.split(" ")[0] : ""}.`;
+const savedShort = (action, who, d = {}) => {
+  const first = who ? who.split(" ")[0] : "";
+  if (action === "cultivate" && first) return d.decision === "Defer" ? `${first}'s move to Cultivation is deferred${d.reconsiderOn ? " until " + dateSaid(d.reconsiderOn).replace(/ \((today|tomorrow|yesterday)\)$/, "") : ""}.` : `${first} is now in Cultivation.`; /* Carverhill, Oct 28: "Decision recorded for Y" said nothing */
+  return `${ACTIONS[action].saved}${who ? " for " + first : ""}.`; };
 // the next step in the process for a contact, word for word: said after every save and whenever the officer asks what's next
 const NEXT_Q = " Do you want to do that now, or something else?";
 function nextStepLine(c, closed) {
@@ -184,8 +189,11 @@ function setHandsFree(on) {
 // what Ara reads back before saving: the form, who it's for, and each filled-in field (long text cut short)
 function hfReadback() {
   const A = ACTIONS[V.action], d = readDraft(), who = V.target && V.target.contact ? nameOf(V.target.contact) : "";
-  // the Cultivation decision gets its meaning first (Carverhill, Oct 25)
-  const lead = V.action === "cultivate" && d.decision !== "Defer" && who ? `Moving ${who.split(" ")[0]} to Cultivation means you, as the gift officer, believe they're ready to be pursued for a gift. ` : "";
+  // the Cultivation decision is read back as the decision itself, with its meaning (Carverhill, Oct 25 and Oct 28: not "Decision: Move to Cultivation")
+  if (V.action === "cultivate" && who) { const first = who.split(" ")[0];
+    if (d.decision === "Defer") return `Defer ${first}'s move to Cultivation${String(d.reason || "").trim() ? ", reason: " + String(d.reason).trim().replace(/[.\s]+$/, "") : ""}${d.reconsiderOn ? ", reconsider on " + dateSaid(d.reconsiderOn).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1") : ""}.`;
+    return `Move ${first} to Cultivation? That means you, as the gift officer, believe they're ready to be pursued for a gift.`; }
+  const lead = "";
   const parts = A.fields.filter(f => !f.fixed).map(f => { const v = d[f.k];
     if (v === null || v === undefined || v === "") return "";
     if (f.k === "substantive") return `Substantive: ${v ? "yes" : "no"}`; // always said: it decides whether the opportunity can move on
