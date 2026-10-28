@@ -97,30 +97,30 @@ function optStep(callId, data) {
   const heard = k === "capacity" ? `Rating ${v} is on the form.` : k === "permText" ? (v ? "Texting is now permitted on the form." : "Texting stays off.") : k === "flags" ? (v.ally || v.dnc ? `${[v.ally && "Ally - Do Not Solicit", v.dnc && "Do Not Contact"].filter(Boolean).join(" and ")} is now on the form.` : "Neither flag is set.") : k === "potential" ? `${money(v)} is on the form.` : k === "fund" ? (campaignsFor(v).length === 1 ? `${v} is on the form, with the National campaign, its only campaign.` : `${v} is on the form.`) : k === "campaign" ? `The ${v} campaign is on the form.` : "That's on the form.";
   optAsk(callId, heard);
 }
-// a few words of human reaction to what was just saved (good news, a setback), said before Ara confirms the save
-function savedMood(action, d) {
-  if (action === "pledge") return `Open with a short, warm congratulation such as "Congrats!", "Nice job!" or "Well done!" (pick one, vary it).`;
-  if (action === "payment" || action === "gift") return `Open by celebrating in a few happy words, such as "Woohoo, money in the door!" or "That's a win, nice work!" (vary it).`;
-  if (action === "ask" && d.response === "Accepted") return `Open with a short, delighted reaction, such as "Yes! That's fantastic news." (vary it).`;
-  if (action === "ask" && d.response === "Countered") return `Open with a short upbeat note that a counter is still progress, such as "A counter is still a yes in the making." (vary it).`;
-  if (action === "ask" && d.response === "Declined") return `Open with a few words of genuine sympathy, such as "Ah, that's a shame." Keep it kind and brief, no forced cheer.`;
-  if (action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) return `Open with a short friendly reaction, such as "Sounds like a good meeting!" (vary it).`;
+// a few words of human reaction to what was just saved (good news, a setback), at the start of the save line
+function moodLine(action, d) {
+  if (action === "pledge") return "Congrats!";
+  if (action === "payment" || action === "gift") return "Woohoo, money in the door!";
+  if (action === "ask") return d.response === "Accepted" ? "Yes! That's fantastic news." : d.response === "Countered" ? "A counter is still a yes in the making." : d.response === "Declined" ? "Ah, that's a shame." : "";
+  if (action === "interaction" && d.substantive && !NO_NEXT_STEP.includes(d.outcome)) return "Sounds like a good meeting!";
   return "";
 }
+// After a save the app says the line itself, word for word: the save, the undo reminder (once per conversation), any note, then the next
+// step in the process (Carverhill, Oct 28: never an open "what do you want to do?", and Ara's own wording dropped things)
 function grokSaved(action, r, d = {}) {
   if (!G.live) return;
-  const who = r && r.contact ? nameOf(r.contact) : "";
-  const hasOpp = r && r.contact && openOpp(r.contact.id);
+  const c = r && r.contact, who = c ? nameOf(c) : "";
   const o = r && r.opp, closed = o && o.stage === "Closed" ? ` The opportunity is now Closed ${o.closed}.` : "";
   const line = `${ACTIONS[action].saved}${who ? " for " + who : ""}${closed ? " (Closed " + o.closed + ")" : ""}`;
   (G.saves = G.saves || []).push(line); G.savedAt = Date.now(); G.savedLine = line; recent("App", "Saved: " + line); // a reconnect after this must not save it again
-  G.lastSaved = { who: who || "the same record", next: nextAsk(r, closed), at: Date.now() }; // a drop with no form open comes back to this person (Carverhill, Oct 25)
-  const hint = action === "contact" ? `for example log a meeting with ${who} or create an opportunity` : action === "interaction" ? (hasOpp ? (hasOpp.stage === "Qualification" ? "for example move the opportunity to Cultivation if it's ready, or log another meeting" : hasOpp.stage === "Cultivation" ? "for example plan an ask or log another meeting" : "for example add a task or log another meeting") : "for example create an opportunity or log another meeting") : "";
+  const next = nextStepLine(c, !!closed), undo = G.hfTry && !G.undoSaid;
+  G.lastSaved = { who: who || "the same record", contactId: c ? c.id : null, next: `say exactly: "${next}"`, at: Date.now() }; // a drop with no form open comes back to this person (Carverhill, Oct 25)
+  const spoken = [moodLine(action, d), savedShort(action, who) + closed, undo ? "Say undo if that's wrong." : "", r && r.note ? r.note : "", next].filter(Boolean).join(" ");
   whenIdle("instr");
-  if (G.hfTry) { const undo = !G.undoSaid; G.undoSaid = true; // the undo reminder once per conversation: every save repeating it got tiresome (Oct 24)
-    G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Say"} in a few words that it's saved (for example "${savedShort(action, who)}")${undo ? `, then "Say undo if that's wrong."` : ""}${r && r.note ? `, then state (don't ask) "${r.note}"` : ""}, then ${nextAsk(r, closed)}`; return; }
-  G.saveAck = { at: Date.now(), action, who, next: `${r && r.note ? `first state, without asking, "${r.note}" Then ` : ""}${nextAsk(r, closed, hint)}` };
-  guide(`The officer just tapped ${ACTIONS[action].saveLabel} and the app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} ${savedMood(action, d) ? savedMood(action, d) + " Then say" : "Start by saying"} out loud that you saw the save, in a few words (for example "I see ${savedShort(action, who).replace(/\.$/, "").toLowerCase()}."), even if the officer has started talking; then ${r && r.note ? `state, without asking, "${r.note}" Then ` : ""}${nextAsk(r, closed, hint)}`);
+  if (G.hfTry) { if (undo) G.undoSaid = true; // the undo reminder once per conversation: every save repeating it got tiresome (Oct 24)
+    G.hfTry.force = spoken; G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} Say in a few words that it's saved (for example "${savedShort(action, who)}")${r && r.note ? `, then state (don't ask) "${r.note}"` : ""}, then carry on.`; return; }
+  G.saveAck = { at: Date.now(), action, who, next: `say exactly: "${next}"` };
+  act("step", "The app says the save and the next step itself"); forceSay(spoken);
 }
 // "Planned ask saved for Jen." (the item's name once, not "Saved: Planned ask saved")
 // a tapped save Ara talked past (Oct 24: the officer said "uh, yes" right after tapping, and Ara answered "go ahead and tap it"):
@@ -132,11 +132,21 @@ function saveAckCheck(text) {
   guide(`Correction: the officer already tapped ${ACTIONS[a.action].saveLabel} and it IS saved (${ACTIONS[a.action].saved.toLowerCase()}${a.who ? " for " + a.who : ""}). Don't ask them to tap it. Say in a few words that you see it's saved, then ${a.next}`);
 }
 const savedShort = (action, who) => `${ACTIONS[action].saved}${who ? " for " + who.split(" ")[0] : ""}.`;
-// after a save, offer the contact's one next step (the same one the record's Next: line shows), or just ask what's next
-function nextAsk(r, closed, hint) {
-  const c = r && r.contact, n = !closed && c && typeof journeyNext === "function" ? journeyNext(c) : null;
-  if (n && n.line && !/^(nothing|deferred)/.test(n.line)) return `offer that next step in your own words, for example "Next is to ${n.line}. Want to do that now?" (one short question, nothing about stopping).`;
-  return `ask what's next in a few words, for example "What's next?"${hint ? " (if they're unsure: " + hint + ")" : ""} (one short question, nothing about stopping).`;
+// the next step in the process for a contact, word for word: said after every save and whenever the officer asks what's next
+const NEXT_Q = " Do you want to do that now, or something else?";
+function nextStepLine(c, closed) {
+  if (!c) return "What would you like to do next?";
+  if (closed) return `That completes the process for ${c.first}. What would you like to do next?`;
+  const o = openOpp(c.id), n = o ? nextStep(o) : null;
+  if (o) {
+    if (!n) return `What would you like to do next for ${c.first}?`;
+    if (/^deferred/.test(n.line)) return `${c.first}'s move to Cultivation is ${n.line}. What would you like to do next?`;
+    if (/^confirm the move/.test(n.line)) return `The next step in the process is to confirm ${c.first}'s move to Cultivation.${NEXT_Q}`;
+    return `The next step in the process to move ${c.first} to ${n.to} is to ${n.line.replace(/ \((.*?)\)/g, ", $1")}.${NEXT_Q}`; }
+  if (c.dnc) return `${c.first} is marked Do Not Contact, so there's no next step. What would you like to do next?`;
+  if (c.ally) return `${c.first} is an Ally - Do Not Solicit, so there's no next step. What would you like to do next?`;
+  if (!c.capacity) return `The next step in the process to move ${c.first} to Qualification is to set a capacity rating.${NEXT_Q}`;
+  return `The next step in the process to move ${c.first} to Qualification is to create an opportunity.${NEXT_Q}`;
 }
 document.addEventListener("click", (e) => { const a = e.target.closest("[data-act3]"); if (!a) return;
   if (a.dataset.act3 === "end") endCall("officer tapped End");
@@ -222,7 +232,8 @@ async function hfSave(callId, data, lead) {
     toolReply(callId, { ok: true, saved: false, read_back: `Just to be sure, the amount is ${money(readDraft().amount)}. Is that right?`, next: "Money gets a second check; the app said read_back aloud. After the officer's yes, call save_form again with confirmed true." }); return; }
   const r = hfCommit();
   if (!r.ok) { toolReply(callId, { ok: false, saved: false, error: `Not saved. ${r.err} Ask for what's missing in one short question, update the draft, then read it back again.` }); return; }
-  toolReply(callId, { ok: true, saved: true, say: r.say || `Say in a few words that it's saved, then ask "What's next?"` });
+  if (r.force) toolReply(callId, { ok: true, saved: true, said: "The app said the save and the next step itself; wait for the officer's answer.", ask_exactly: r.force });
+  else toolReply(callId, { ok: true, saved: true, say: r.say || `Say in a few words that it's saved, then ask "What's next?"` });
 }
 // Ara read the form back herself (against her rules) and the officer said yes to it: it counts when every filled-in field is in her words
 function araReadBack() {
@@ -241,7 +252,7 @@ function hfCommit() {
   const r = G.hfTry; G.hfTry = null; G.saveCheck = null;
   if (V && V.action === action) { paintCall(); const el = document.getElementById("draftErr"); return { ok: false, err: r.msg || (el && el.textContent) || "The form isn't complete." }; }
   S.history.slice(0, S.history.length - before).forEach(x => { x.hf = true; }); save(); render(); paintCall();
-  act("step", "hands-free save: " + A.saved); return { ok: true, say: r.say, saved: A.saved };
+  act("step", "hands-free save: " + A.saved); return { ok: true, say: r.say, force: r.force, saved: A.saved };
 }
 // a form read back and waiting for the officer's yes, when Ara moves on to another form instead of calling save_form
 // (Oct 25: "Yes, let's go ahead" to an interaction report's read-back became show_cultivation_decision, and the report was lost)

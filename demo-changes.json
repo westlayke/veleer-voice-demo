@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 2:30 PM",
+   "change": "Preview: every rating line is said by the app itself with the letter and the full range (\"Rate Fall B, $100,000 to $250,000?\", \"Fall is rated B, $100,000 to $250,000\", \"already rated B, ...\"). After every save, and after a rating, the app says the next step in the process in its own words (\"The next step in the process to move Fall to Cultivation is to log a substantive interaction. Do you want to do that now, or something else?\") instead of Ara asking an open \"what would you like to do?\". \"What's the next step?\" gets the same line for the contact on screen (new say_next_step tool) instead of the whole process tour.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"when reading options like rating she should read the whole option text including the letters in the capacity ratings\" and \"when we finish a step in the process she should not ask an open ended 'what do you want to do?' But instead should say 'the next step in the process to move to step (appropriate next step) is to do (whatever it is), do you want to do that now or something else?'\" (Oct 28, 2:00 PM)"
+  },
+  {
    "date": "Oct 28, 1:49 PM",
    "change": "Preview: after a lock or background switch, the app starts the sound and mic afresh once before giving up on them, and when the call still has to end the Carry on card says why (\"Your phone kept the sound paused after it came back\", \"kept the microphone muted\", \"closed the app while it was locked\"). A paused conversation is also kept on the phone, so a page the phone discarded while locked still offers Carry on on the next open. Unsent activity-log rows are kept on the phone and sent by the next page, and sent at once when the page hides, so the end of a call is no longer lost.",
    "area": "Connection, Carry on, activity log",

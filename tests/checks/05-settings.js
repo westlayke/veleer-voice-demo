@@ -33,7 +33,7 @@ test("Activity log records what is in a form when Save is tapped", async (p) => 
   await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
   await p.tap("[data-form=task]"); await p.waitForTimeout(300);
   await p.fill("#f_text", "Mail the gala invitation"); await p.fill("#f_due", "2026-11-30");
-  await p.tap("[data-act=save]"); await p.waitForTimeout(4600);
+  await p.tap("[data-act=save]"); await p.waitForFunction(() => __logs.some(b => b.events.some(e => e.role === "form")), null, { timeout: 15000 }).catch(() => {}); /* the batch goes 4 s after the last row, and the scripted save line adds rows */
   const ev = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
   ok(ev.some(x => /^form: New task \(opened by tapping\)\. .*Task: Mail the gala invitation; Due date: 2026-11-30/.test(x)), "the saved form was not logged: " + ev.filter(x => x.startsWith("form")).join(" | "));
 });

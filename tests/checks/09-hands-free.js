@@ -27,7 +27,7 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   // read back again, then yes saves it
   await said(p, "Yeah, I don't think you needed to say that, but yes, save it.");
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved === true && /undo/.test(r.say), "not saved after yes: " + JSON.stringify(r));
+  ok(r.saved === true && /undo/.test(r.ask_exactly), "not saved after yes: " + JSON.stringify(r));
   let st = await state(p);
   ok(st.tasks.some(t => t.text === "Send Ruth the board deck"), "task missing after the hands-free save");
   ok(st.history[0].hf === true, "History does not mark the save hands-free");
@@ -138,10 +138,10 @@ test("Hands-free: after a save Ara says the undo line once per call, never 'Save
   const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage !== "Closed"); const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
   const saveTask = async (text) => { await said(p, `Add a task for ${who}: ${text.toLowerCase()}, due November 30.`); await ara(p, "show_task_draft", { contact_name: who, text, due: "2026-11-30" }); await ara(p, "save_form", { confirmed: false }); await said(p, "Yes, save it."); return ara(p, "save_form", { confirmed: true }); };
   const a = await saveTask("Send the board deck"), b = await saveTask("Send the agenda");
-  ok(a.saved && /Say undo/.test(a.say), "the first save has no undo line: " + JSON.stringify(a));
-  ok(b.saved && !/Say undo/.test(b.say), "the second save repeats the undo line: " + JSON.stringify(b));
-  ok(![a.say, b.say].some(s => /Saved: /.test(s)), "a save line still starts with 'Saved:': " + a.say);
-  ok(/Next is to .*Want to do that now\?/.test(a.say), "the save line doesn't offer the next step: " + a.say);
+  ok(a.saved && /Say undo/.test(a.ask_exactly), "the first save has no undo line: " + JSON.stringify(a));
+  ok(b.saved && b.ask_exactly && !/Say undo/.test(b.ask_exactly), "the second save repeats the undo line: " + JSON.stringify(b));
+  ok(![a.ask_exactly, b.ask_exactly].some(s => /Saved: /.test(s)), "a save line still starts with 'Saved:': " + a.ask_exactly);
+  ok(/^Task added for \w+\. Say undo if that's wrong\. The next step in the process (to move \w+ to [\w ]+ is|is to confirm \w+'s move) to .*\. Do you want to do that now, or something else\?$/.test(a.ask_exactly), "the save line isn't the scripted save plus next step: " + a.ask_exactly);
   ok(await p.evaluate(() => !grokInstructions().includes("whether to stop")), "Ara's instructions still ask whether to stop");
 });
 
@@ -196,8 +196,8 @@ test("Oct 24 call fixes: email spelling, substantive asked and read back, edits 
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   const st = await state(p);
   ok(st.tasks.some(t => t.text === "Send the New Hampshire plan") && st.interactions.some(i => i.substantive && /New Hampshire/.test(i.summary)), "the edit didn't save substantive with its task");
-  // Ara talked past the tapped save: the app tells her again
-  ok(await p.evaluate(() => __sent.join(" ").includes("just tapped Save changes")), "no notice of the tapped save");
+  // the tapped save is said by the app itself, with the next step
+  ok(await p.evaluate(() => __sent.join(" ").includes("Changes saved for Pat. The next step in the process")), "the app didn't say the tapped save and the next step");
   await p.evaluate(() => { G.saveAck = Object.assign(G.saveAck || {}, { at: Date.now() - 1000 }); [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Go ahead and tap it." }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForTimeout(300);
   ok(await p.evaluate(() => __sent.join(" ").includes("Correction: the officer already tapped Save changes")), "Ara wasn't told again about the save she missed");
@@ -316,7 +316,7 @@ test("Hands-free: a yes to a read-back saves the form even when Ara opens anothe
   const after = await p.evaluate(() => ({ n: S.interactions.length, form: V && V.action, hf: S.history[0] && S.history[0].hf, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | ") }));
   ok(after.n === n0 + 1 && !after.form && /saved the Interaction report form before the next one opened/.test(after.log) && /refused: the officer hasn't asked for the Move to Cultivation\? form/.test(after.log), "the yes didn't save the report, or the unasked Cultivation form opened anyway (Oct 25: a form opens only on the officer's word): " + JSON.stringify(after));
   ok(await p.evaluate(() => __sent.some(s => s.includes("The officer's yes saved the Interaction report form first"))), "Ara wasn't told the report was saved first");
-  await p.evaluate(() => recent(botName(), "Next is to confirm the move to Cultivation. Want to do that now?")); await said(p, "Yes.");
+  await p.evaluate(() => recent(botName(), "The next step in the process is to confirm James's move to Cultivation. Do you want to do that now, or something else?")); await said(p, "Yes.");
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
   ok(await p.evaluate(() => V && V.action === "cultivate"), "the Cultivation form didn't open after the officer's yes to Ara's offer: " + JSON.stringify(r));
   // the Cultivation decision read back, no yes yet: another form has to wait

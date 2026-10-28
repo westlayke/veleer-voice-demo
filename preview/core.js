@@ -48,6 +48,8 @@ const dateSaid = (iso) => { const w = dayWord(iso); return fmtDate(iso) + (w ? `
 const ENTITIES_BY_STATE = () => { const by = {}; FUNDS.forEach(f => { const st = ENTITY_STATE[f] || "National"; (by[st] = by[st] || []).push(f); }); return Object.entries(by).map(([st, fs]) => `${st}: ${fs.join(", ")}`).join("; "); };
 const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
 const CAPACITY_LIST = Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", "); // "A = $250k and up, B = ..." for Ara
+const CAPACITY_LONG = { A: "$250,000 and up", B: "$100,000 to $250,000", C: "$25,000 to $100,000", D: "$5,000 to $25,000", E: "under $5,000" }; // a rating is always spoken as its letter then its range in full (Carverhill, Oct 28)
+const capSaid = (r) => `${r}, ${CAPACITY_LONG[r]}`;
 const OUTCOMES = ["Interested, continue cultivation", "Ask made", "Ask accepted", "Not now, revisit", "Not interested", "Referred elsewhere"];
 const NO_NEXT_STEP = ["Not interested", "Referred elsewhere"];
 const RESPONSES = ["Awaiting", "Accepted", "Countered", "Declined"];

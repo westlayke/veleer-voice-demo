@@ -19,27 +19,36 @@ const TOOL_HANDLERS = {
     if (V && V.action === "contact") { const nm = norm(data.contact_name || ""), d = readDraft();
       const hit = (x) => !!norm(x) && nm.includes(norm(x));
       if (!nm || hit(d.first) || hit(d.last) || !findContacts(data.contact_name).length) {
-        if (!r) { askRating(callId); return; }
+        if (!r) { askRating(callId, d.first || "this contact"); return; }
         d.capacity = r; V.data = d; V.fromVoice.add("capacity"); renderOverlay();
-        toolReply(callId, { ok: true, on_draft: true, say: `The rating ${r} (${CAPACITY[r]}) is on the New contact form now. It saves with the contact when they tap "${ACTIONS.contact.saveLabel}". Say so briefly, then carry on.` }); return; } }
+        toolReply(callId, { ok: true, on_draft: true, say: `The rating ${capSaid(r)} is on the New contact form now. It saves with the contact when they tap "${ACTIONS.contact.saveLabel}". Say "Rating ${capSaid(r)}, is on the form.", with the letter, then carry on.` }); return; } }
     // that contact's Edit form is open: the rating goes on the form, otherwise the form keeps showing (and would save back) the old one
     if (V && V.action === "editContact" && V.target.contact) { const ec = V.target.contact, nm = norm(data.contact_name || "");
       if (!nm || nm.includes(norm(ec.first)) || nm.includes(norm(ec.last))) {
-        if (!r) { askRating(callId); return; }
+        if (!r) { askRating(callId, ec.first); return; }
         const d = readDraft(); d.capacity = r; V.data = d; V.fromVoice.add("capacity"); renderOverlay();
-        toolReply(callId, { ok: true, on_draft: true, saved: false, say: `The rating ${r} (${CAPACITY[r]}) is on ${ec.first}'s Edit contact form now. It is NOT saved yet: ask them to check it and tap "${ACTIONS.editContact.saveLabel}".` }); return; } }
+        toolReply(callId, { ok: true, on_draft: true, saved: false, say: `The rating ${capSaid(r)} is on ${ec.first}'s Edit contact form now. It is NOT saved yet: say "Rating ${capSaid(r)}, is on the form.", with the letter, and ask them to check it and tap "${ACTIONS.editContact.saveLabel}".` }); return; } }
     const t = resolveTarget("interaction", data.contact_name || "");
     if (t.error) { toolReply(callId, { ok: false, error: t.error }); return; }
-    if (!r) { askRating(callId); return; }
     const c = t.contact, was = c.capacity;
-    if (was === r) { toolReply(callId, { ok: true, saved: true, already: true, contact: nameOf(c), rating: `${r} (${CAPACITY[r]})`, say: `${c.first} is already rated ${r}. Say so in a few words and move on; never ask about the rating again.` }); return; } /* Oct 28: a resumed line re-asked a saved rating */
+    if (!r) { askRating(callId, c.first); return; }
+    if (was === r) { toolReply(callId, { ok: true, saved: true, already: true, contact: nameOf(c), rating: capSaid(r), said: "The app said this itself; never ask about the rating again.", ask_exactly: `${c.first} is already rated ${capSaid(r)}. ${nextStepLine(c)}` }); return; } /* Oct 28: a resumed line re-asked a saved rating */
     // a rating the officer never said (Oct 25: "Let's take the next step" became "Rate Joseph A?"): the app asks them instead
-    if (!data.confirmed && !officerRated()) { vlog(`${name}: rating ${r} not from the officer; asking`); toolReply(callId, { ok: false, saved: false, error: "The officer hasn't said a rating; the app is asking them which. After the answer, call set_capacity_rating again with that rating.", ask_exactly: G.rangesSaid ? `What's ${c.first}'s capacity rating, A to E?` : OPT_STEPS.contact[0].q(c.first, false).replace(/^First, .*? capacity rating\./, `What's ${c.first}'s capacity rating?`) }); return; }
+    if (!data.confirmed && !officerRated()) { vlog(`${name}: rating ${r} not from the officer; asking`); toolReply(callId, { ok: false, saved: false, error: "The officer hasn't said a rating; the app is asking them which. After the answer, call set_capacity_rating again with that rating.", ask_exactly: rateQ(c.first) }); return; }
     S.sel.contact = c.id; if (S.screen !== "contact") go("contact"); else render();
-    if (!data.confirmed) { toolReply(callId, { ok: true, contact: nameOf(c), now: was ? `${was} (${CAPACITY[was]})` : "not rated", will_become: `${r} (${CAPACITY[r]})`, say: `Ask in one short sentence: "Rate ${c.first} ${r}, ${CAPACITY[r]}?" Wait for yes before calling again with confirmed true.` }); return; }
+    // the app says the rating lines itself, letter then range in full (Carverhill, Oct 28: Ara's own wording dropped the letter)
+    if (!data.confirmed) { toolReply(callId, { ok: true, contact: nameOf(c), now: was ? capSaid(was) : "not rated", will_become: capSaid(r), said: "The app asked the officer this itself. After their yes, call set_capacity_rating again with confirmed true.", ask_exactly: `Rate ${c.first} ${capSaid(r)}?` }); return; }
     c.capacity = r; log(`Capacity rated ${r} (${CAPACITY[r]})`, { contactId: c.id }); save(); render(); toast(`${nameOf(c)}: capacity ${r} · ${CAPACITY[r]}`);
-    const g = resolveTarget("opportunity", nameOf(c));
-    toolReply(callId, { ok: true, saved: true, say: `Confirm in one short sentence that it's saved.${!g.error ? " They can now have an opportunity: offer to create one if the officer was trying to." : ""}` }); return;
+    toolReply(callId, { ok: true, saved: true, rating: capSaid(r), said: "The app said the save and the next step itself; wait for the officer's answer.", ask_exactly: `${c.first} is rated ${capSaid(r)}. ${nextStepLine(c)}` }); return;
+  },
+  // "What's the next step?" for a contact or opportunity: the app says it, word for word (Carverhill, Oct 28)
+  say_next_step(callId, data, name) {
+    let c = null;
+    if (data.contact_name) { const t = resolveTarget("interaction", data.contact_name); if (t.error) { toolReply(callId, { ok: false, error: t.error }); return; } c = t.contact; }
+    else { const o = S.screen === "opp" ? oppById(S.sel.opp) : null;
+      c = (V && V.target && V.target.contact) || (S.screen === "contact" && contactById(S.sel.contact)) || (o && contactById(o.contactId)) || (G.lastSaved && G.lastSaved.contactId && contactById(G.lastSaved.contactId)) || null; }
+    if (!c) { toolReply(callId, { ok: false, error: "No contact is open. Ask which contact or opportunity they mean, then call say_next_step with the name." }); return; }
+    act("step", `${name}: ${nameOf(c)}`); toolReply(callId, { ok: true, contact: nameOf(c), said: "The app said the next step itself; wait for the officer's answer.", ask_exactly: nextStepLine(c) });
   },
   set_task_status(callId, data, name) {
     const words = (data.task || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 2 && !["the", "and", "for", "task", "with", "about"].includes(w));

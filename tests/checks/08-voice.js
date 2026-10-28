@@ -404,7 +404,7 @@ test("Ara has a friendly personality and congratulates the officer when a pledge
   const n = await p.evaluate(() => __sent.length);
   await p.tap("[data-act=save]"); await p.waitForTimeout(500);
   const sent = await p.evaluate((n) => __sent.slice(n).join(" "), n);
-  ok(/Pledge recorded/.test(sent) && /Congrats/.test(sent) && /Well done/.test(sent), "Ara was not told to congratulate the officer");  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.instructions).map(e => e.session.instructions).pop());
+  ok(/force_message/.test(sent) && /Congrats! Pledge recorded/.test(sent), "the save line doesn't open with a congratulation: " + sent.slice(-300));  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.instructions).map(e => e.session.instructions).pop());
   ok(/## Voice & Communication Style\n- Speak warmly and briefly/.test(instr) && /Friendly, upbeat and a little playful/.test(instr) && /Never joke about investors/.test(instr), "Ara has no personality section");
 });
 test("Ara: setting a capacity rating asks first, then saves", async (p) => {
@@ -419,7 +419,7 @@ test("Ara: setting a capacity rating asks first, then saves", async (p) => {
   ok(!none.saved && /What's Omar's capacity rating(\? A is \$250,000 and up|, A to E\?)/.test(none.ask_exactly || "") && !(await state(p)).contacts.find(c => c.id === c0.id).capacity, "a rating the officer never said wasn't asked for: " + JSON.stringify(none));
   await said(p, "Let's make him a D.");
   const ask = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: false });
-  ok(/Rate/.test(ask.say) && !(await state(p)).contacts.find(c => c.id === c0.id).capacity, "saved before yes: " + JSON.stringify(ask));
+  ok(/^Rate Omar D, \$5,000 to \$25,000\?$/.test(ask.ask_exactly || "") && !(await state(p)).contacts.find(c => c.id === c0.id).capacity, "saved before yes: " + JSON.stringify(ask));
   const yes = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: true });
   ok(yes.saved && (await state(p)).contacts.find(c => c.id === c0.id).capacity === "D", "not saved after yes");
 });
@@ -742,10 +742,10 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   // a rating the officer never said is asked for, not proposed
   await said(p, "Let's take the next step.");
   r = await ara(p, "set_capacity_rating", { contact_name: "Ruth Abernathy", rating: "A", confirmed: false });
-  ok((r.ok === false || r.already) && (/What's Ruth's capacity rating\? A is \$250,000 and up/.test(r.ask_exactly || "") || (r.already && /already rated/.test(r.say || ""))), "an invented rating wasn't turned into the question: " + JSON.stringify(r));
+  ok((r.ok === false || r.already) && (/What's Ruth's capacity rating\? A is \$250,000 and up/.test(r.ask_exactly || "") || (r.already && /already rated/.test(r.ask_exactly || ""))), "an invented rating wasn't turned into the question: " + JSON.stringify(r));
   await said(p, "Let's do C.");
   r = await ara(p, "set_capacity_rating", { contact_name: "Ruth Abernathy", rating: "C", confirmed: false });
-  ok(r.ok && /Rate Ruth C/.test(r.say || ""), "a rating the officer did say was refused: " + JSON.stringify(r));
+  ok(r.ok && /^Rate Ruth C, \$25,000 to \$100,000\?$/.test(r.ask_exactly || ""), "a rating the officer did say wasn't asked with the letter and the range: " + JSON.stringify(r));
   // the Cultivation read-back opens with what the decision means
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = "C"; S.opps.unshift({ id: "o_cult", contactId: c.id, name: "Okafor, James - 2026", stage: "Qualification", asks: [], fund: "C.A. Idaho C4", campaign: "Idaho", officer: OFFICER, participants: "", createdOn: todayISO() }); S.interactions.unshift({ id: "i_cult", contactId: c.id, date: todayISO(), type: "In person", summary: "Good talk.", substantive: true, kind: "interaction" }); save(); });
   await said(p, "I'm driving"); await p.waitForTimeout(900);
@@ -797,7 +797,7 @@ test("Ara: a drop with no form open comes back to the person just worked on, and
   // the line drops with no form open: Ara carries on with Nora, never "anyone else" (Carverhill, Oct 25)
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1200);
   const line = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && /Sorry, I lost you/.test(e.response.instructions)).map(e => e.response.instructions).pop() || "");
-  ok(/You were working on Nora Quist: after the sorry line, offer that next step in your own words, for example "Next is to create an opportunity for Nora/.test(line) && /Never ask whether they want to work on someone else/.test(line), "the reconnect line doesn't carry on with Nora: " + line.slice(0, 600));
+  ok(/You were working on Nora Quist: after the sorry line, say exactly: "The next step in the process to move Nora to Qualification is to create an opportunity\. Do you want to do that now, or something else\?"/.test(line) && /Never ask whether they want to work on someone else/.test(line), "the reconnect line doesn't carry on with Nora: " + line.slice(0, 600));
 });
 test("Ara: Move to Cultivation is refused while the criteria are missing, by voice and at the save", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -1041,11 +1041,11 @@ test("Oct 28 11:51 AM call: a repeated letter rates, a yes to Ara's offer opens 
   await said(p, "B"); await said(p, "B"); await said(p, "B. B.");
   ok((await p.evaluate(() => officerLines(3))).join("|") === "b. b.", "the growing transcript piled up as several officer lines: " + (await p.evaluate(() => officerLines(3))).join("|"));
   const bb = await ara(p, "set_capacity_rating", { contact_name: name, rating: "B", confirmed: false });
-  ok(/Rate Horatio B/.test(bb.say || "") && !bb.ask_exactly, "\"B. B.\" wasn't taken as the officer's rating: " + JSON.stringify(bb));
+  ok(/^Rate Horatio B, \$100,000 to \$250,000\?$/.test(bb.ask_exactly || ""), "\"B. B.\" wasn't taken as the officer's rating: " + JSON.stringify(bb));
   // a bare letter right after Ara's rating question counts too
   await p.evaluate(() => { recent("Ara", "What's Horatio's capacity rating, A to E?"); }); await said(p, "C.");
   const c = await ara(p, "set_capacity_rating", { contact_name: name, rating: "C", confirmed: false });
-  ok(/Rate Horatio C/.test(c.say || ""), "a bare letter after the rating question wasn't taken: " + JSON.stringify(c));
+  ok(/^Rate Horatio C, \$25,000 to \$100,000\?$/.test(c.ask_exactly || ""), "a bare letter after the rating question wasn't taken: " + JSON.stringify(c));
   // a later rating question is short
   await said(p, "Let's take the next step."); await said(p, "What else is there?"); await said(p, "Go on.");
   const again = await ara(p, "set_capacity_rating", { contact_name: name, rating: "A", confirmed: false });
@@ -1054,7 +1054,7 @@ test("Oct 28 11:51 AM call: a repeated letter rates, a yes to Ara's offer opens 
   ok(yes.saved && (await state(p)).contacts.find(x => x.id === c0.id).capacity === "B", "not saved after yes");
   // the resumed line asks about the saved rating again: the app answers "already B" instead of asking
   const already = await ara(p, "set_capacity_rating", { contact_name: name, rating: "B", confirmed: false });
-  ok(already.already && /already rated B/.test(already.say || "") && !already.ask_exactly, "a saved rating was re-asked: " + JSON.stringify(already));
+  ok(already.already && /^Horatio is already rated B, \$100,000 to \$250,000\. The next step in the process to move Horatio to Qualification is to create an opportunity\. Do you want to do that now, or something else\?$/.test(already.ask_exactly || ""), "a saved rating was re-asked, or the line lacks the letter, range and next step: " + JSON.stringify(already));
   ok(/latest words were "b\."/.test(await p.evaluate(() => reconnectLine(false))), "the reconnect guidance doesn't point Ara at the officer's latest words");
   // Ara offers the opportunity, the officer says yes (sent three times as the transcript grows): the form opens
   await p.evaluate(() => { G.lastSaved = { at: Date.now(), who: "Horatio Alger", next: "" }; recent("Ara", "It's saved. Would you like to create an opportunity for him?"); });
