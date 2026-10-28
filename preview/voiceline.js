@@ -25,7 +25,7 @@ const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has
 const EARLY_PING_MS = 2500;                  // the early line test's limit
 const RESUME_MS = 25 * 60000;               // a line reopened within this long picks up the same conversation on xAI (kept 30 minutes)
 const FORCE_WAIT_MS = 8000;                  // a scripted line that hasn't started by now is said by Ara instead (3 s was too short on a slow line, Oct 25; 5 s still fell back 5 times in the 4:42 PM call, lines then played late)
-const REPLAY_MS = 20000;                     // a tool call repeated this soon after a picked-up conversation, identical to one made before the drop, is the service replaying it (Oct 28)
+const REPLAY_MS = 20000, REPLAY_BEFORE_MS = 90000; // ...and only when the earlier call came within 90 s before the drop                     // a tool call repeated this soon after a picked-up conversation, identical to one made before the drop, is the service replaying it (Oct 28)
 const LATE_FORCE_MS = 90000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long (25 s until Oct 28 4:12 PM: Ara took 29 s and the officer heard the line twice)
 const TOKEN_WAIT_MS = 6000;                  // a voice pass that takes longer counts as failed (Oct 25: one took 89 s, the next never came back and the call hung)
 const TOKEN_RETRY_MS = 2000;                 // between tries for a voice pass while the line is down
@@ -58,10 +58,11 @@ function decodeNamed() { const c = G.ctx; if (!c) return; Object.entries(namedRa
 async function prepNamedLines(why) {
   const n = officerFirst(); if (G.namedBusy || G.downAt || !navigator.onLine) return; namedLoad();
   const want = namedTexts(n).filter(t => !namedRaw[t]); if (!want.length) { decodeNamed(); return; }
-  G.namedBusy = true; let got = 0;
-  for (const t of want) { try { const r = await fetch(tokenUrl() + "/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: t, voice: NAMED_VOICE }), signal: AbortSignal.timeout(15000) });
-    if (!r.ok || !/audio/.test(r.headers.get("content-type") || "")) continue; const b = await r.arrayBuffer(); if (b.byteLength) { namedRaw[t] = b; got++; } } catch (e) {} }
+  G.namedBusy = true; let got = 0, fail = "";
+  for (const t of want) { try { const r = await fetch(tokenUrl() + "/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE }, body: JSON.stringify({ text: t, voice: NAMED_VOICE }), signal: AbortSignal.timeout(15000) }); /* the demo code too: without it the key holder refused every line (Oct 28, never fetched on any phone) */
+    if (!r.ok || !/audio/.test(r.headers.get("content-type") || "")) { fail = "answer " + r.status; continue; } const b = await r.arrayBuffer(); if (b.byteLength) { namedRaw[t] = b; got++; } } catch (e) { fail = e && e.name === "TimeoutError" ? "no answer in 15 s" : "no connection"; } }
   G.namedBusy = false;
+  if (!got && fail) act("step", `Phone lines not fetched (${why}): ${fail}; the stock recordings stand in`);
   if (got) { const lines = {}; namedTexts(n).forEach(t => { if (namedRaw[t]) lines[t] = bufb64(namedRaw[t]); }); try { localStorage.setItem(NAMED_KEY, JSON.stringify({ name: n, lines })); } catch (e) {}
     vlog(`${got} phone lines${n ? " with " + n + "'s name" : ""} fetched (${why})`); act("step", `${got} phone line${got === 1 ? "" : "s"}${n ? " with " + n + "'s name" : ""} fetched (${why}): the phone keeps them for a dead spot or a slow reply`); }
   decodeNamed();
@@ -285,7 +286,7 @@ function downSay(kind) { // the dropped line, then the still-trying lines in tur
   return sayLocal(DOWN_LINES[0], "dropped", namedText("dropped"));
 }
 function downStart() {
-  if (G.downAt) return; G.downAt = Date.now(); G.downN = 0; linePrep();
+  if (G.downAt) return; G.downAt = G.lastDropAt = Date.now(); G.downN = 0; G.slowSaid = false; linePrep();
   const again = () => { if (!G.live || !G.downAt) return; downSay("still"); G.downTimer = setTimeout(again, downRepeatMs()); };
   G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; downSay("dropped"); G.downTimer = setTimeout(again, SAY_STILL_MS - SAY_DOWN_MS); }, SAY_DOWN_MS);
 }
@@ -326,7 +327,7 @@ function askReply(guidance) {
     const again = () => { if (!G.live || !G.qCreate) return; if (replyBusy()) { G.qTimer = setTimeout(again, 200); return; } flushQueued(); }; G.qTimer = setTimeout(again, 200); /* waits for the first request to report started (or CREATE_WAIT_MS); zeroing G.createAt after 500 ms sent the second too soon and OpenAI refused it (Oct 27, 7:03 PM run) */
     vlog("reply request held: one at a time on " + PROV().name); return; }
   G.createAt = Date.now();
-  send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now(); G.slowSaid = false;
+  send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now(); /* G.slowSaid is cleared when a reply starts, not on a re-ask: "Ara's taking a moment" once per wait, then "Still waiting on Ara" (Oct 28 4:41 PM call: it repeated every 9 s) */
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
   G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
   // no reply at the first tick: test the line then, so a bad line gets a fresh one about 9 s sooner (seen Oct 24: 13 s to notice)

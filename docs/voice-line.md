@@ -110,12 +110,16 @@ call's own audio output (`playLine`, `sayLocal`). The phone's built-in speech is
 - With the officer's name (Oct 28, for a colleague's 8-minute dead spot): the same three lines, plus six "still trying" lines
   said in turn ("Still trying, Pat. I'm not giving up on you.", "Hang in there, Pat. I'll keep knocking until Ara answers." ...),
   are made by the key holder's `/tts` in the phone's stand-in voice (`NAMED_LINES`, `prepNamedLines`) when the name is entered,
-  when the app opens and when a line opens, and kept on the phone (`localStorage` `namedLines:v1`, decoded into `namedBuf`),
+  when the app opens and when a line opens, and kept on the phone (`localStorage` `namedLines:v2`, decoded into `namedBuf`),
   so they play in a dead spot. Without them (first open with no signal) the stock recordings play. `downSay(kind)` picks the line.
+  The fetch carries the demo code like every other call to the key holder; a fetch that gets nothing logs "Phone lines not fetched".
 - While a reply from Ara is outstanding: "Ara's taking a moment." at `TICK_MS`, then "Still waiting on Ara." every
   `STILL_WAIT_MS` (10 s) until she answers (a phone line made like the named ones; a soft tick when the phone has none).
+  "Taking a moment" is said once per wait: a re-ask of the same reply does not restart it (`G.slowSaid` clears when a reply starts).
 - Quiet hang-up: `idleMs()` is 12 s, 30 s hands-free, and `IDLE_FORM_MS` (60 s) with a form open; the service's own idle
-  event is ignored while the phone still allows quiet. The goodbye is the phone's own line ("I'll hang up for now. Your form
+  event is ignored while the phone still allows quiet, but the check-in the service starts on its own within 5 s of that
+  event is dropped (`G.dropIdle`), so no filler line plays over the open form. A tool call repeated after a pick-up counts as a
+  replay only when the earlier call came within `REPLAY_BEFORE_MS` (90 s) before the drop. The goodbye is the phone's own line ("I'll hang up for now. Your form
   stays on the screen." with a form open), else Ara is asked to say it.
 - Short tones: a drop tone on the first drop, a soft tick every `TICK_MS` while waiting for a slow reply or reconnecting
   (until the spoken line takes over), a down tone when the call gives up.

@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 5:20 PM",
+   "change": "Preview: three connection fixes from the 4:41 PM call (21 minutes, 19 reconnects). (1) A tool call repeated after a picked-up conversation counts as a replay only when the earlier call came within 90 s before the drop (a yes to the gift had been refused as a replay of a save 7 minutes earlier). (2) When the phone ignores the voice service's idle timer because a form is open, the check-in the service starts on its own is dropped, so no filler line plays over the form. (3) The phone's named reconnect lines now carry the demo code (the key holder had refused every fetch, silently, on every phone) and a failed fetch is logged; \"Ara's taking a moment\" is said once per wait, then \"Still waiting on Ara\" every 10 s, instead of restarting on each re-ask.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Check out that marathon session, let me know if you have any suggestions\" (5:03 PM); \"Yes\" to building the three connection fixes now, ahead of the form policy (5:16 PM)."
+  },
+  {
    "date": "Oct 28, 4:27 PM",
    "change": "Preview: from the 4:12 PM call (the service took 20 to 29 s a reply and the call hung up with the ask-result form open). (1) While Ara is slow, after \"Ara's taking a moment\" the phone says \"Still waiting on Ara\" every 10 seconds until she answers, so there is no long silence. (2) With a form open the quiet allowance before hanging up is 60 seconds (was 30), and the goodbye is a phone line that always plays: \"I'll hang up for now. Your form stays on the screen.\" (3) An after-save line Ara says late is no longer heard a second time from the app (the duplicate cut now lasts 90 seconds, not 25). The two new phone lines are fetched and kept like the named reconnect lines. (4) Ara's audio arriving while a phone line is still playing is held until the line ends, so the two never overlap.",
    "area": "Voice",
