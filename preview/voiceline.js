@@ -64,7 +64,7 @@ async function mintToken(limit = TOKEN_WAIT_MS) {
 }
 // Grok bills for every minute a conversation is open, so hang up after 12 seconds with no talking and no taps
 const idleMs = () => G.hands ? IDLE_HF_MS : IDLE_MS;
-function idleCheck() {
+function idleCheck() { if (typeof keepAlive === "function") keepAlive();
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
   // Oct 27 (Carverhill), back on Oct 28 after the 1.0 reset dropped it: a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
   if (G.live && G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();

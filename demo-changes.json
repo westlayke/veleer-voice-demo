@@ -2,8 +2,8 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
-   "date": "Oct 28, 2:41 PM",
-   "change": "Preview: when the phone closes the app in the middle of a call without a word (iOS did this twice on Oct 28, both times seconds after a reconnect), the next open logs \"The last call ended without the app noticing\" against that call, with the last thing logged before it, and offers Carry on with the reason \"Your phone closed the app in the middle of the conversation.\" Every log row keeps a copy of the call on the phone for this.",
+   "date": "Oct 28, 2:45 PM",
+   "change": "Preview: when the phone closes the app in the middle of a call without a word (iOS did this twice on Oct 28, both times seconds after a reconnect), the next open logs \"The last call ended without the app noticing\" against that call, with the last thing logged before it, and offers Carry on with the reason \"Your phone closed the app in the middle of the conversation.\" Every log row keeps a copy of the call on the phone for this. The copy is refreshed every 2 seconds, so the log row says to within 2 seconds when the page died and how long after the last logged event.",
    "area": "Voice",
    "requestedBy": "Carverhill",
    "why": "\"Go through my last call log - heard a beep and then the app ended\" (2:36 PM): the 1:56 PM and 2:35 PM calls both ended with nothing logged; agreed to add the breadcrumb (\"Go\", 2:38 PM)"
