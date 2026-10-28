@@ -1,0 +1,40 @@
+name: Publish spoken clips
+# Takes the sound clips a spoken consistency run uploaded (artifacts spoken-clips-<engine>) and commits them to clips/spoken/<run id>/
+# on main with a listen-to page, so they can be played with a tap (GitHub Pages serves them). Run by hand after a spoken run.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "The spoken consistency run's id (from its page on GitHub)"
+        required: true
+      title:
+        description: "Title for the listen-to page"
+        default: "Spoken test clips"
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Fetch the clips
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dir="clips/spoken/${{ inputs.run_id }}"; mkdir -p "$dir"
+          gh run download "${{ inputs.run_id }}" --pattern "spoken-clips-*" --dir /tmp/clips
+          find /tmp/clips -type f \( -name "*.mp3" -o -name "*.wav" -o -name "*.md" \) -exec cp {} "$dir"/ \;
+          ls -l "$dir"
+          node tools/clips-page.js "$dir" "${{ inputs.title }}"
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add clips/spoken
+          git commit -m "Spoken test clips from run ${{ inputs.run_id }} [skip ci]" -m "Committed by the Publish spoken clips workflow so the conversations can be played with a tap."
+          git push
+          echo "LISTEN https://westlayke.github.io/veleer-voice-demo/clips/spoken/${{ inputs.run_id }}/"
