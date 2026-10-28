@@ -11,7 +11,7 @@ const SHORT_LABEL = { substantive: "substantive", nextStep: "next step", outcome
 // the officer talked about a rating in their last three lines ("rate him a C", "she gives about $10,000 a year", "C." after hearing the choices)
 function ratedIn(lines) {
   return lines.slice(-3).map(t => t.toLowerCase().trim()).some(t => /\b(capacity|rating|rated|rate them|rate her|rate him)\b/.test(t) || /\$\s?\d|\b\d+\s?(k|thousand|million)\b|\b(thousand|million|grand)\b|\b(donat\w*|gives?|gave|giving)\b.*\b(dollars?|a year|annually)\b|\bunder (five|5)\b/.test(t)
-    || /^(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)[.!]?( please)?[.!]?$/.test(t.replace(/^(it's|its|make it|let's say|lets say|say|um|uh|okay|ok)[, ]+/, ""))
+    || /^((a|b|c|d|e|bee|be|see|sea|cee|dee|ee)[.!,]?( please)?[.!]?\s*){1,3}$/.test(t.replace(/^(it's|its|make it|let's say|lets say|say|um|uh|okay|ok)[, ]+/, "")) /* "B. B." (Oct 28: said twice, refused) */
     || /\b(let's do|lets do|go with|i'd say|i would say|make (it|him|her|them)|set (it|him|her|them)( to| at)?|put (him|her|them) (at|as|down as)|rate (him|her|them)( as| at)?)\s+(an? )?(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)\b/.test(t)); // "Let's do C." after hearing the choices (Oct 25)
 }
 // did the officer say whether it was substantive (the word itself, or a yes/no to a question that used it)? Oct 25 consistency run: Grok marked 2 of 6 reports substantive on its own

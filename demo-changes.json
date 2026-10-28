@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 12:18 PM",
+   "change": "Preview: fixes from Carverhill's 11:51 AM call. A repeated letter (\"B. B.\") or a bare letter right after the rating question counts as the officer's rating; a transcript the service sends several times as it grows is kept as one line, so a yes to Ara's own offer (\"create an opportunity?\") opens the form; after a reconnect Ara is pointed at the officer's latest words and never back to a saved item, and a rating already saved answers \"already B\" instead of re-asking; the A to E ranges are read once per call and later rating questions are the short \"A to E\" form, so they can be cut in on.",
+   "area": "Ara",
+   "requestedBy": "Carverhill",
+   "why": "Oct 28, 11:58 AM ET: \"was unable to interrupt Ara at the end... And other issues too\"; plan approved \"Go\" 12:01 PM"
+  },
+  {
    "date": "Oct 28, 11:57 AM",
    "change": "Preview: on the Tasks list, a task that opens a field on a record now shows a chip under its text naming the field and its value now (\"Response: Awaiting ›\"); tapping the chip or the task text opens Record the response on the opportunity. The generic Edit link on every task row is now a muted pencil, so blue is reserved for \"opens a field\". Option A + B from the task-row mockups.",
    "area": "Tasks",

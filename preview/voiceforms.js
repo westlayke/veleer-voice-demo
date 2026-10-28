@@ -10,9 +10,12 @@ const SUBST_Q = "Was it a substantive interaction, one that moved the relationsh
 function officerSubstantive() { const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9); if (!t) return null;
   if (/\b(not|no|wasn't|isn't)\b/i.test(t) && !/\bbut yes\b/i.test(t)) return false; return hfYes(t) || /\bsubstantive\b/i.test(t) ? true : null; }
 const OPT_OFFER = `The required details are in. Before anything else, ask exactly this: "Would you like to add more details? I can take you through them one at a time." If yes, call optional_fields with step start. If no, ask them to check the draft and tap the button.`;
+// the A to E ranges are read out once per call; after that the question is short, so it can be cut in on (Oct 28: the long line was said twice and couldn't be interrupted)
+const CAP_RANGES = "A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000.";
+const capRanges = (who) => G.rangesSaid ? ` A to E: which fits ${who}, or move on?` : ` ${CAP_RANGES} Which fits ${who}, or move on?`; /* the flag is set when the ranges are actually spoken (forceSay), since lines are also built for prefetch */
 const OPT_STEPS = {
   contact: [
-    { k: "capacity", q: (who, next) => `${next ? `Next, ${who}'s capacity rating, which an opportunity needs.` : `First, ${who}'s capacity rating.`} A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000. Which fits ${who}, or move on?` },
+    { k: "capacity", q: (who, next) => `${next ? `Next, ${who}'s capacity rating, which an opportunity needs.` : `First, ${who}'s capacity rating.`}${capRanges(who)}` },
     { k: "howMet", q: (who) => `Next field: how you met ${who}. Fill it in, or move on?` },
     { k: "permText", when: (d) => !!String(d.mobile || "").trim(), q: (who) => `Next field: is it OK to text ${who} on their mobile? Yes, no, or move on?` },
     { k: "permSource", when: (d) => !!d.permText, q: (who) => `Next field: how ${who} agreed to texts. Fill it in, or move on?` },

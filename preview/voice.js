@@ -18,7 +18,7 @@ function spelledWords() {
   const out = []; lines.forEach(t => (spellPrep(t).match(/(?<![A-Za-z'’])(?:[A-Za-z][.,-]?\s+){2,}[A-Za-z]\b\.?/g) || []).forEach(m => { const w = m.replace(/[^A-Za-z]/g, ""); if (w.length >= 3) out.push(w); }));
   return out;
 }
-function officerRated() { return ratedIn(officerLines(3)); } // the matcher lives in evidence.js (Oct 28 tidy-up); this wrapper serves set_capacity_rating
+function officerRated() { if (ratedIn(officerLines(3))) return true; const last = officerLines(1)[0] || ""; return /^[a-e][.!]?$/.test(last.trim()) && /\b(rating|capacity|a through e|a to e)\b/.test(askedBefore(1)); } /* a letter alone answers the rating question (Oct 28) */ // the matcher lives in evidence.js (Oct 28 tidy-up); this wrapper serves set_capacity_rating
 // the officer's last words turn texting on or off ("texting is permitted", "you can text him", "no texts"), or null if they didn't mention texting
 function officerSaidTexting() {
   const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9).toLowerCase().replace(/[’‘]/g, "'");
@@ -82,7 +82,7 @@ function formAskedFor(action) {
   if (!(G.lastSaved && Date.now() - G.lastSaved.at < 120000)) return true; // the rule bites where the problem was: moving on to another form right after a save
   const ls = officerLines(3).filter(t => !/^((turn on |switch on |start |use )?(hands ?free|driving)( mode)?( on)?|(i'm|i am) driving( now)?)[.!]?$/.test(t.trim())); if (!ls.length) return true; // nothing said yet (or only "I'm driving"): a tap or typed flow
   if (ls.some(t => re.test(t))) return true;
-  const last = ls[ls.length - 1], a = askedBefore(2); // a yes to Ara offering that form counts; a yes to "shall I save it?" doesn't, even when the read-back names the form
+  const last = ls[ls.length - 1], a = askedBefore(2) + " " + ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").toLowerCase(); // a yes to Ara offering that form counts; a yes to "shall I save it?" doesn't, even when the read-back names the form
   return (hfYes(last) || /^(yes|yeah|yep|sure|ok|okay|please|go ahead|let's|lets|do it)\b/.test(last)) && re.test(a) && !/shall i save|save it\?|is that (right|correct)|ok to save|ready to save/.test(a);
 }
 function normCap(v) {
@@ -614,7 +614,7 @@ async function startCall(opening) {
   if (navigator.audioSession) vlog("audio session: " + navigator.audioSession.type);
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
   if (!G.keepRecent) { G.recent = []; G.saves = []; G.convId = null; } G.keepRecent = false;
-  G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
+  G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; G.rangesSaid = false; act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     const warm = typeof takeWarm === "function" ? takeWarm() : null; /* a line that started opening when the mic button was first touched (Oct 28) */
     G.t0 = Date.now(); G.heardAt = 0; G.passReady = !!TOK.p || !!warm;
@@ -643,7 +643,10 @@ function helloLine(name) {
 }
 /* ---------- interrupted conversations: a phone call, timer, Siri or locking the phone cuts the mic and speaker ---------- */
 // keep the last few lines said, so a new conversation can pick up where the old one stopped
-function recent(who, text) { (G.recent = G.recent || []).push(`${who}: ${String(text).slice(0, 300)}`); if (G.recent.length > 8) G.recent.shift(); }
+function recent(who, text) { const r = (G.recent = G.recent || []), line = `${who}: ${String(text).slice(0, 300)}`, last = r[r.length - 1] || "";
+  const grow = (a, b) => { const x = a.toLowerCase().replace(/[^a-z0-9@$ ]/g, " ").replace(/\s+/g, " ").trim(), y = b.toLowerCase().replace(/[^a-z0-9@$ ]/g, " ").replace(/\s+/g, " ").trim(); return y.startsWith(x) || x.startsWith(y); };
+  if (who === "Officer" && last.startsWith("Officer: ") && grow(last.slice(9), String(text))) { r[r.length - 1] = line; return; } /* the service sends a transcript several times as it grows (Oct 28): keep one entry */
+  r.push(line); if (r.length > 8) r.shift(); }
 function draftSummary() {
   if (!V || !ACTIONS[V.action]) return "";
   const A = ACTIONS[V.action], t = V.target || {}, who = t.contact ? nameOf(t.contact) : "";

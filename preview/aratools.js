@@ -32,8 +32,9 @@ const TOOL_HANDLERS = {
     if (t.error) { toolReply(callId, { ok: false, error: t.error }); return; }
     if (!r) { askRating(callId); return; }
     const c = t.contact, was = c.capacity;
+    if (was === r) { toolReply(callId, { ok: true, saved: true, already: true, contact: nameOf(c), rating: `${r} (${CAPACITY[r]})`, say: `${c.first} is already rated ${r}. Say so in a few words and move on; never ask about the rating again.` }); return; } /* Oct 28: a resumed line re-asked a saved rating */
     // a rating the officer never said (Oct 25: "Let's take the next step" became "Rate Joseph A?"): the app asks them instead
-    if (!data.confirmed && !officerRated()) { vlog(`${name}: rating ${r} not from the officer; asking`); toolReply(callId, { ok: false, saved: false, error: "The officer hasn't said a rating; the app is asking them which. After the answer, call set_capacity_rating again with that rating.", ask_exactly: OPT_STEPS.contact[0].q(c.first, false).replace(/^First, .*? capacity rating\./, `What's ${c.first}'s capacity rating?`) }); return; }
+    if (!data.confirmed && !officerRated()) { vlog(`${name}: rating ${r} not from the officer; asking`); toolReply(callId, { ok: false, saved: false, error: "The officer hasn't said a rating; the app is asking them which. After the answer, call set_capacity_rating again with that rating.", ask_exactly: G.rangesSaid ? `What's ${c.first}'s capacity rating, A to E?` : OPT_STEPS.contact[0].q(c.first, false).replace(/^First, .*? capacity rating\./, `What's ${c.first}'s capacity rating?`) }); return; }
     S.sel.contact = c.id; if (S.screen !== "contact") go("contact"); else render();
     if (!data.confirmed) { toolReply(callId, { ok: true, contact: nameOf(c), now: was ? `${was} (${CAPACITY[was]})` : "not rated", will_become: `${r} (${CAPACITY[r]})`, say: `Ask in one short sentence: "Rate ${c.first} ${r}, ${CAPACITY[r]}?" Wait for yes before calling again with confirmed true.` }); return; }
     c.capacity = r; log(`Capacity rated ${r} (${CAPACITY[r]})`, { contactId: c.id }); save(); render(); toast(`${nameOf(c)}: capacity ${r} · ${CAPACITY[r]}`);
