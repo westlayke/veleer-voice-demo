@@ -1,6 +1,9 @@
 // Test bot for the Citizens VCRM demo: taps through the app like a person and plays Ara's
 // side of a conversation with a pretend voice line (no xAI calls, no cost).
 // Run: node tests/bot.js            (tests preview-flow.html and a smoke test of index.html; JOBS=1 runs one check at a time; a failed check gets one more try on its own)
+//      JOBS=4 node tests/bot.js     (4 checks side by side, the default; the whole suite takes about 3 minutes on a 4-core machine)
+//      SHARD=2/3 node tests/bot.js  (only every third check, starting at the second: the GitHub workflow runs the three shards on three machines at once)
+//      ONLY=substring node tests/bot.js   (only the checks whose name contains it: what a preview build runs; the whole suite runs before a go-live)
 //      PAGE=index.html node tests/bot.js   (full run against the live page)
 // The checks themselves are in tests/checks/, one file per area; this file is the runner and its helpers.
 const http = require("http"), fs = require("fs"), path = require("path");
@@ -74,7 +77,9 @@ for (const f of fs.readdirSync(path.join(__dirname, "checks")).filter(f => f.end
   const args = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--autoplay-policy=no-user-gesture-required"]; // a silent pretend microphone
   browser = await chromium.launch(Object.assign({ args }, process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : fs.existsSync("/opt/pw-browsers/chromium") ? { executablePath: "/opt/pw-browsers/chromium" } : {}));
   fs.mkdirSync(OUT, { recursive: true });
-  const run = tests.filter(t => PAGE === "preview-flow.html" || !t.opts.page || t.opts.always).filter(t => !process.env.ONLY || t.name.includes(process.env.ONLY));
+  const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD || ""), part = shard ? Number(shard[1]) : 1, parts = shard ? Number(shard[2]) : 1;
+  if (shard && !(part >= 1 && part <= parts)) { console.log("SHARD must be k/n with 1 <= k <= n"); process.exit(2); }
+  const run = tests.filter(t => PAGE === "preview-flow.html" || !t.opts.page || t.opts.always).filter(t => !process.env.ONLY || t.name.includes(process.env.ONLY)).filter((t, i) => i % parts === part - 1);
   // checks run side by side (JOBS at a time, default 6) in separate browser windows; results print in the usual order
   let failed = 0; const lines = new Array(run.length); let next = 0, printed = 0; const done = new Array(run.length);
   const flush = () => { while (printed < run.length && done[printed]) console.log(done[printed++]); };
@@ -88,15 +93,16 @@ for (const f of fs.readdirSync(path.join(__dirname, "checks")).filter(f => f.end
   }
   // longest checks first (times from the last run on this machine), so no window is left with a long check at the end
   const DUR = path.join(OUT, "durations.json"); let dur = {}; try { dur = JSON.parse(fs.readFileSync(DUR, "utf8")); } catch (e) {}
+  const names = new Set(tests.map(t => t.name)); Object.keys(dur).forEach(k => { if (!names.has(k)) delete dur[k]; }); // times of checks that no longer exist are dropped
   const order = run.map((t, i) => i).sort((a, b) => (dur[run[b].name] || 5000) - (dur[run[a].name] || 5000));
-  // 6 at a time is about 30% faster than 4 on a 4-core machine but now and then a timing-sensitive check fails under the load:
-  // a check that fails is run again on its own afterwards, and only a second failure counts
-  const jobs = Math.max(1, Number(process.env.JOBS) || 6), took = {};
+  // 4 at a time on a 4-core machine: the whole suite in about 3 minutes with no second tries (Oct 28); 6 is a little faster but
+  // now and then a timing-sensitive check fails under the load. A check that fails is run again on its own afterwards, and only a second failure counts
+  const jobs = Math.max(1, Number(process.env.JOBS) || 4), took = {};
   await Promise.all(Array.from({ length: Math.min(jobs, run.length) }, async () => { while (next < run.length) { const i = order[next++], t0 = Date.now(); await one(i); took[run[i].name] = Date.now() - t0; } }));
   try { fs.writeFileSync(DUR, JSON.stringify(Object.assign(dur, took))); } catch (e) {}
   for (const i of fails.sort((a, b) => a - b)) await one(i, true);
   for (let i = printed; i < run.length; i++) if (done[i]) console.log(done[i]);
-  const summary = `${run.length - failed} of ${run.length} checks passed on ${PAGE}` + (failed ? `, ${failed} failed` : "") + (fails.length ? ` (${fails.length} needed a second try)` : "");
+  const summary = `${run.length - failed} of ${run.length} checks passed on ${PAGE}${shard ? ` (shard ${part} of ${parts})` : ""}` + (failed ? `, ${failed} failed` : "") + (fails.length ? ` (${fails.length} needed a second try)` : "");
   console.log("\n" + summary);
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Test bot: ${summary}\n\n\`\`\`\n${lines.join("\n")}\n\`\`\`\n`);
   await browser.close(); server.close(); process.exit(failed ? 1 : 0);

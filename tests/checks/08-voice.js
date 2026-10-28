@@ -407,22 +407,6 @@ test("Ara has a friendly personality and congratulates the officer when a pledge
   ok(/force_message/.test(sent) && /Congrats! Pledge recorded/.test(sent), "the save line doesn't open with a congratulation: " + sent.slice(-300));  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session.instructions).map(e => e.session.instructions).pop());
   ok(/## Voice & Communication Style\n- Speak warmly and briefly/.test(instr) && /Friendly, upbeat and a little playful/.test(instr) && /Never joke about investors/.test(instr), "Ara has no personality section");
 });
-test("Ara: setting a capacity rating asks first, then saves", async (p) => {
-  await signIn(p);
-  await ara(p, "show_contact_draft", { first: "Omar", last: "Reyes", email: "omar@example.org", mobile: "(555) 010-0177" });
-  for (let i = 0; i < 3 && !(await p.isVisible("[data-act=save]")); i++) await p.waitForTimeout(200);
-  await p.tap("[data-act=save]"); await p.waitForTimeout(400);
-  const c0 = (await state(p)).contacts.find(c => c.first === "Omar"), name = "Omar Reyes";
-  ok(c0 && !c0.capacity, "test contact not added unrated");
-  // a rating the officer never mentioned is not proposed: the app asks them for it (Oct 25: Ara invented an A)
-  const none = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: false });
-  ok(!none.saved && /What's Omar's capacity rating(\? A is \$250,000 and up|, A to E\?)/.test(none.ask_exactly || "") && !(await state(p)).contacts.find(c => c.id === c0.id).capacity, "a rating the officer never said wasn't asked for: " + JSON.stringify(none));
-  await said(p, "Let's make him a D.");
-  const ask = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: false });
-  ok(/^Rate Omar D, \$5,000 to \$25,000\?$/.test(ask.ask_exactly || "") && !(await state(p)).contacts.find(c => c.id === c0.id).capacity, "saved before yes: " + JSON.stringify(ask));
-  const yes = await ara(p, "set_capacity_rating", { contact_name: name, rating: "D", confirmed: true });
-  ok(yes.saved && (await state(p)).contacts.find(c => c.id === c0.id).capacity === "D", "not saved after yes");
-});
 test("Ara: an interaction report keeps the spoken summary (new contact)", async (p) => {
   await signIn(p);
   await ara(p, "show_contact_draft", { first: "Jenny", last: "Arena", email: "jenny@example.org", mobile: "(555) 010-0123" });
@@ -721,14 +705,11 @@ test("Ara: \"he handed me the check\" records the ask as Accepted, and a new ask
   ok(await p.inputValue("#f_response") === "Accepted", "a check handed over wasn't read as Accepted");
 });
 
-test("Ara: her instructions list the entities by state, so she can't invent one", async (p) => {
-  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 });
-  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.session && e.session.instructions).map(e => e.session.instructions).at(-1));
-  ok(/Pennsylvania: C\.A\. Pennsylvania C4, C\.A\. Pennsylvania State PAC[;.]/.test(instr) && /Never name any other/.test(instr), "the entities by state aren't in Ara's instructions");
-});
 
 test("Ara: an entity comes from the state the officer names, a rating is never invented, and the Cultivation decision is explained", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.session && e.session.instructions).map(e => e.session.instructions).at(-1));
+  ok(/Pennsylvania: C\.A\. Pennsylvania C4, C\.A\. Pennsylvania State PAC[;.]/.test(instr) && /Never name any other/.test(instr), "the entities by state aren't in Ara's instructions");
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = c.capacity || "C"; save(); });
   // one entity in that state: filled in; several: exactly those are named
   await said(p, "Let's pick the New Hampshire entity.");

@@ -119,7 +119,7 @@ test("Opportunity: an unrated contact gets the checklist, not the form (voice an
   await tab(p, "Home");
   ok(await p.isVisible("text=Noor meets every requirement"), "Needs attention does not list Noor as ready");
 });
-test("Opportunity: Next step panel on the record and a Next: line in the list", async (p) => {
+test("Guided flow: a Next: line in the list, one Next block on each record (stepper, panel, blue button), the save shown in it, and checklists that explain", async (p) => {
   await signIn(p); await tab(p, "Opportunities");
   ok(await p.isVisible(".row:has-text('Ken Ito') .nextline"), "the list has no Next: line for Ken");
   ok(/record Ken's answer/.test(await p.textContent(".row:has-text('Ken Ito') .nextline")), "Ken's Next: line is wrong");
@@ -128,10 +128,6 @@ test("Opportunity: Next step panel on the record and a Next: line in the list", 
   ok(await p.locator(".nextp li").count() === 3, "Qualification should list three steps");
   const btns = await p.evaluate(() => [...document.querySelectorAll(".nextblk button")].map(b => b.textContent.trim()));
   ok(btns.length === 1 && /Move to Cultivation/.test(btns[0]), "a ready opportunity should offer one next step, Move to Cultivation: " + JSON.stringify(btns));
-});
-test("Guided flow: one Next block on each record (stepper, Next: line, blue button), the save shown in it, and checklists that explain", async (p) => {
-  await signIn(p); await tab(p, "Opportunities");
-  await p.tap(".row:has-text('James Okafor')"); await p.waitForTimeout(400);
   ok(await p.locator(".track div").count() === 7 && /Qualif/.test(await p.textContent(".track div.on")), "the stepper does not mark Qualification as the current stage");
   ok(/^Next: /.test(await p.textContent(".nextblk .stepnext")) && await p.locator("main >> text=/^Next/").count() === 1, "the record should say Next once, in its Next block");
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "National", plannedDate: "2026-12-01", amount: 50000 });

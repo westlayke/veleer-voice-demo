@@ -69,15 +69,6 @@ test("Ending a conversation with a form open brings back the voice button, keepi
   const start = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" "));
   ok(/Coffee with Ken/.test(start), "the new conversation was not told what is already on the form");
 });
-test("Every form shows all its fields, with no More details fold", async (p) => {
-  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Ito, Ken"); await p.waitForTimeout(300);
-  for (const a of ["interaction", "meeting", "task", "pledge"]) {
-    await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap(`[data-qa=${a}]`); await p.waitForTimeout(300);
-    const r = await p.evaluate(() => ({ fold: !!document.querySelector("#overlay details"), title: document.querySelector("#overlay h3") && document.querySelector("#overlay h3").textContent }));
-    ok(r.title && !r.fold, `${a}: ${r.title ? "fields are still folded under More details" : "the form did not open"}`);
-    await p.tap("[data-act=close]"); await p.waitForTimeout(200);
-  }
-});
 test("An interaction report shows the contact's saved capacity rating", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Add a contact"); await p.waitForTimeout(300);
   await p.fill("#f_first", "Lee"); await p.fill("#f_last", "Park"); await p.fill("#f_email", "lee.park@example.org");
@@ -105,7 +96,7 @@ test("Log a meeting will not save without its required fields", async (p) => {
   await p.tap("[data-act=save]"); await p.waitForTimeout(300);
   ok((await state(p)).interactions.length === before, "an empty interaction report was saved");
 });
-test("New contact and new opportunity forms show every field, and Ara offers the opportunity's optional fields", async (p) => {
+test("New contact, new opportunity and the other forms show every field (no More details fold), and Ara offers the opportunity's optional fields", async (p) => {
   await signIn(p);
   await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); }); // this check starts in tap mode; hands-free is on by default since Oct 25
   await ara(p, "show_contact_draft", { first: "Ana", last: "Ruiz" });
@@ -130,6 +121,15 @@ test("New contact and new opportunity forms show every field, and Ara offers the
   ok(r.done && /tap/.test(r.status), "stop didn't end the questions");
   r = await ara(p, "show_opportunity_draft", { contact_name: ready, potential: 50000 });
   ok(/tap/.test(r.status) && !/one at a time/.test(r.status), "the optional-fields question repeated");
+  // the other forms have no More details fold either (the open opportunity draft is closed first, then the call ended so the tab bar is plain)
+  await p.tap("[data-act=close]").catch(() => {}); await p.evaluate(() => { try { endCall(); } catch (e) {} }); await p.waitForTimeout(400); await p.evaluate(() => { const m = document.getElementById("modal"); if (m) m.innerHTML = ""; });
+  await tab(p, "Contacts"); await p.tap("text=Ito, Ken"); await p.waitForTimeout(300);
+  for (const a of ["interaction", "meeting", "task", "pledge"]) {
+    await p.tap("header.top .addbtn"); await p.waitForTimeout(250); await p.tap(`[data-qa=${a}]`); await p.waitForTimeout(300);
+    const r = await p.evaluate(() => ({ fold: !!document.querySelector("#overlay details"), title: document.querySelector("#overlay h3") && document.querySelector("#overlay h3").textContent }));
+    ok(r.title && !r.fold, `${a}: ${r.title ? "fields are still folded under More details" : "the form did not open"}`);
+    await p.tap("[data-act=close]"); await p.waitForTimeout(200);
+  }
 });
 test("Interaction report: Next step is a three-line box, and Summary and Next step have no field mics", async (p) => {
   await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(300);
