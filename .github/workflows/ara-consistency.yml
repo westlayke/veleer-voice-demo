@@ -50,7 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+        with: { node-version: 22 } # 22: the officer voice uses the built-in WebSocket
       - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
       - uses: actions/cache@v4
         if: inputs.spoken == '1'
