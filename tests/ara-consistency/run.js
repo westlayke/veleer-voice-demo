@@ -122,7 +122,7 @@ async function converse(browser, base, flow, n) {
       const tapSend = (proto) => { const real = proto.send; proto.send = function (d) { try { const t = String(d); if (!t.includes('"input_audio_buffer.append"') && !t.includes('"realtimeInput"')) window.__tap("sent", t); } catch (x) {} return real.call(this, d); }; };
       tapSend(WebSocket.prototype); if (typeof GeminiSocket !== "undefined") tapSend(GeminiSocket.prototype); // what the app sends, as app events (Gemini's raw frames carry no type and are ignored by the tap)
       const realOn = onEvent; onEvent = function (e) { try { if (window.__ara && (e.type === "response.created" || /audio\.delta$/.test(e.type) && e.delta)) window.__ara.push([Date.now(), e.type === "response.created" ? null : e.delta]); window.__tap("got", /audio\.delta$/.test(e.type) ? '{"type":"audio.delta"}' : JSON.stringify(e)); } catch (x) {} return realOn.apply(this, arguments); };
-      S.settings.speed = 1.3; S.settings.provider = window.__provider; save(); // Ara talks faster (her words are the same), so each conversation costs less line time
+      S.settings.speed = spoken ? 1 : 1.3; S.settings.provider = window.__provider; save(); // typed runs: Ara talks faster (her words are the same) so each conversation costs less line time; spoken runs keep her normal speed, so the clips sound as the officer would hear them (Gemini ignores the setting either way)
       window.__officer = (text) => {
         send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
         onEvent({ type: "conversation.item.input_audio_transcription.completed", transcript: text }); // what the app sees when speech is transcribed
