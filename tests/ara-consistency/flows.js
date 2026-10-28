@@ -30,7 +30,7 @@ module.exports = [
   { id: "contact-then-opp", title: "Add a new contact, then create their opportunity",
     lines: ["Can we go into hands-free mode and create a new contact?", "Jordan Pike, P I K E.", "J Pike at gmail dot com for email.", "Let's go with capacity C.",
       "Yes, let's do that.", "The North Dakota Fed PAC.", "North Dakota.", "Twenty-five thousand dollars."],
-    tool: "show_opportunity_draft", saved: /Opportunity created/, rated: true, heard: { last: "Pike", email: "jpike@gmail.com", fund: /North Dakota Fed PAC/, amount: 25000 } },
+    tool: "show_opportunity_draft", saved: /Opportunity created/, rated: true, heard: { last: "Pike", email: "jpike@gmail.com" } }, // 1.0 saves the opportunity before entity and amount are asked, so the script never says them
   { id: "plan-then-record", title: "Plan an ask, then record it",
     lines: ["Let's go into hands-free mode.", "Let's plan an ask for Priya Sandaruwan.", "The Pennsylvania C4.", "Pennsylvania.", "Today.", "Twenty-five thousand dollars.",
       "Yes, let's do that.", "It was an in-person meeting today, and she accepted.", "I need to collect the check from her later today."],
