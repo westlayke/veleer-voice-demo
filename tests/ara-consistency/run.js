@@ -15,6 +15,9 @@ const DIAG = process.env.DIAG === "1"; // print every conversation's voice log (
 // (0.1 is about a car at speed; 0 = quiet). The reply time then runs from the end of the officer's speech to the first sound of the reply.
 const SPOKEN = process.env.SPOKEN === "1", NOISE = SPOKEN ? Number(process.env.NOISE || 0) : 0, OFFICER_VOICE = process.env.OFFICER_VOICE || "rex";
 const { officerAudio } = require("./officer-voice");
+// TURN='{"threshold":0.7,"silence_duration_ms":600}' tries turn-detection settings (the app's window.__turn), MIC_HP=<Hz> a high-pass filter on the mic
+// (window.__micHp): both for the car-noise question of Oct 28 (Grok's reply time doubled in noise). Blank = the app's own defaults.
+const TURN = process.env.TURN ? JSON.parse(process.env.TURN) : null, MIC_HP = Number(process.env.MIC_HP || 0);
 const RECORD = SPOKEN ? Number(process.env.RECORD == null ? 1 : process.env.RECORD) : 0; // spoken runs: keep the first RECORD conversations of each flow as a sound clip (officer, Ara, noise) with a transcript, to listen to end to end
 const { execFileSync } = require("child_process");
 const ANSWERS = ["Yes.", "No.", "Move on.", "Neither.", "No, that's all for now.", "Today.", "Collect the check from her.", "Yes, collect the check from her, due today.", "Yes, it was."]; // every line the pretend officer can answer with, besides the flows' own
@@ -105,7 +108,7 @@ async function converse(browser, base, flow, n) {
   try {
     await p.goto(base + "preview-flow.html"); await p.waitForTimeout(800);
     await p.tap("text=I'd rather type my name"); await p.fill("#wlName", "Dana"); await p.tap("text=Start"); await p.waitForTimeout(600);
-    await p.evaluate(({ prov, spoken, noise }) => { window.__provider = prov;
+    await p.evaluate(({ prov, spoken, noise, turn, micHp }) => { window.__provider = prov; if (turn) window.__turn = turn; if (micHp) window.__micHp = micHp;
       if (spoken) { // the microphone is a stream this script plays the officer's lines into (plus a steady noise), through the app's own capture path
         const mctx = new AudioContext({ sampleRate: 24000 }), dst = mctx.createMediaStreamDestination();
         if (noise > 0) { const n = mctx.createBuffer(1, 24000 * 4, 24000), d = n.getChannelData(0); let last = 0, sq = 0; for (let i = 0; i < d.length; i++) { last = 0.97 * last + 0.03 * (Math.random() * 2 - 1); d[i] = last; sq += last * last; }
@@ -130,7 +133,7 @@ async function converse(browser, base, flow, n) {
       };
       document.querySelectorAll(".scrim").forEach(s => s.remove());
       startCall(null);
-    }, { prov: PROVIDER, spoken: SPOKEN, noise: NOISE });
+    }, { prov: PROVIDER, spoken: SPOKEN, noise: NOISE, turn: TURN, micHp: MIC_HP });
     conv.record = SPOKEN && n <= RECORD; if (!conv.record) await p.evaluate(() => { window.__ara = null; });
     const settle = async () => { // until Ara has finished her turn and the app has nothing more to say
       const t0 = Date.now(); let quietSince = 0;
@@ -281,7 +284,7 @@ function report(convs, extra) {
   const rows = table(convs), money = (x) => "$" + x.toFixed(2);
   const byFlow = {}; convs.forEach(c => { const f = byFlow[c.flow] = byFlow[c.flow] || { n: 0, saved: 0, cost: 0, min: 0 }; f.n++; f.cost += c.cost; f.min += c.lineMs / 60000; if (c.score && c.score.task_saved && !c.score.task_saved.broke) f.saved++; });
   const fw = convs.flatMap(c => c.firstMs || []).sort((x, y) => x - y), pct = (q) => fw.length ? (fw[Math.min(fw.length - 1, Math.floor(q * fw.length))] / 1000).toFixed(2) + " s" : "n/a";
-  let md = `# Ara consistency run: ${ENGINE.name}${SPOKEN ? " (spoken" + (NOISE ? ", noise " + NOISE : ", quiet") + ")" : ""}\n\n${extra}${SPOKEN ? "\n\nThe officer's lines were spoken into the microphone (Grok's " + OFFICER_VOICE + " voice" + (NOISE ? ", with car-like noise at level " + NOISE : ", no noise") + "); reply time runs from the end of the officer's speech." : ""}\n\nConversations: ${convs.length}. Estimated cost: ${money(convs.reduce((a, c) => a + c.cost, 0))} (${(convs.reduce((a, c) => a + c.lineMs, 0) / 60000).toFixed(1)} min of open line at $${PER_MIN}/min + ${convs.reduce((a, c) => a + c.items, 0)} items at $${PER_ITEM}).\n\nFirst sound of a reply after the officer's words (${fw.length} turns): median ${pct(0.5)}, 90th percentile ${pct(0.9)}, slowest ${pct(1)}, over 3 s: ${fw.filter(x => x > 3000).length}.\n\n`;
+  let md = `# Ara consistency run: ${ENGINE.name}${SPOKEN ? " (spoken" + (NOISE ? ", noise " + NOISE : ", quiet") + ")" : ""}\n\n${extra}${SPOKEN ? "\n\nThe officer's lines were spoken into the microphone (Grok's " + OFFICER_VOICE + " voice" + (NOISE ? ", with car-like noise at level " + NOISE : ", no noise") + "); reply time runs from the end of the officer's speech." + (TURN ? " Turn detection: " + JSON.stringify(TURN) + "." : "") + (MIC_HP ? " Mic high-pass: " + MIC_HP + " Hz." : "") : ""}\n\nConversations: ${convs.length}. Estimated cost: ${money(convs.reduce((a, c) => a + c.cost, 0))} (${(convs.reduce((a, c) => a + c.lineMs, 0) / 60000).toFixed(1)} min of open line at $${PER_MIN}/min + ${convs.reduce((a, c) => a + c.items, 0)} items at $${PER_ITEM}).\n\nFirst sound of a reply after the officer's words (${fw.length} turns): median ${pct(0.5)}, 90th percentile ${pct(0.9)}, slowest ${pct(1)}, over 3 s: ${fw.filter(x => x > 3000).length}.\n\n`;
   md += `## Rule breaks\n\n| Rule | Checked | Broken | Rate |\n|---|---:|---:|---:|\n` + rows.map(r => `| ${r.rule} | ${r.checked} | ${r.broken} | ${r.rate}% |`).join("\n") + "\n\n";
   md += `## By flow\n\n| Flow | Conversations | Ended saved | Avg cost | Avg minutes |\n|---|---:|---:|---:|---:|\n` + Object.entries(byFlow).map(([k, f]) => `| ${k} | ${f.n} | ${f.saved} | ${money(f.cost / f.n)} | ${(f.min / f.n).toFixed(2)} |`).join("\n") + "\n\n";
   // reply time by flow: mean, standard deviation, median, 90th percentile (Carverhill, Oct 27: "compare standard deviation on response times too")

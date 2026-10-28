@@ -480,7 +480,18 @@ function sendExtras() {
   send({ type: "session.update", session: { resumption: { enabled: true } } });
   send({ type: "session.update", session: { replace: SAY_AS } });
   send({ type: "session.update", session: { audio: Object.assign({}, sessionCfg().audio, { input: Object.assign({}, sessionCfg().audio.input, { transcription: transcriptionCfg() }) }) } });
+  if (turnTuned()) { vlog("turn detection " + JSON.stringify(turnDetection())); send({ type: "session.update", session: { turn_detection: turnDetection() } }); }
 }
+// Turn detection: when a silence ends the officer's turn and how loud the mic must be to count as speech. The engine's own defaults,
+// unless the harness sets window.__turn (consistency runs trying settings against car noise, Oct 28: Grok's reply time doubled in a
+// car because its turn detection waits for a silence the rumble never gives). xAI documents only the type, so the extra fields go
+// in their own session.update (sendExtras), where a refusal costs nothing else; OpenAI takes them in the session body.
+const TURN_DEFAULT = { type: "server_vad" };
+const turnDetection = () => Object.assign({}, TURN_DEFAULT, window.__turn || {});
+const turnTuned = () => Object.keys(window.__turn || {}).length > 0;
+// A high-pass filter on the microphone before capture (Hz, 0 = none): car rumble sits below the voice, so cutting it leaves the
+// officer's words and gives the engine the silence it waits for. Off unless the harness sets window.__micHp; a setting if it helps.
+const micHighPass = () => Number(window.__micHp || 0);
 const sessionCfg = () => ({ voice: providerVoice(), instructions: sentInstructions(), turn_detection: { type: "server_vad" }, tools: toolDefs(),
   audio: { input: { format: { type: "audio/pcm", rate: 24000 } }, output: { format: { type: "audio/pcm", rate: 24000 }, speed: talkSpeed() * (spookyMode() ? 0.9 : 1) } } }); // spooky mode: a touch slower, like a haunted-house host
 const speedName = (v) => SPEED_NAMES[nearSpeed(v)].toLowerCase();
@@ -525,7 +536,8 @@ async function openAudio() {
     };
     if (worklet) { G.node = new AudioWorkletNode(ctx, "cap"); G.node.port.onmessage = (ev) => onPcm(ev.data); }
     else { G.node = ctx.createScriptProcessor(4096, 1, 1); G.node.onaudioprocess = (ev) => onPcm(new Float32Array(ev.inputBuffer.getChannelData(0))); }
-    srcNode.connect(G.node);
+    if (micHighPass() > 0) { const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = micHighPass(); hp.Q.value = 0.7; srcNode.connect(hp).connect(G.node); vlog(`mic high-pass ${micHighPass()} Hz`); }
+    else srcNode.connect(G.node);
     const mute = ctx.createGain(); mute.gain.value = 0; G.node.connect(mute).connect(ctx.destination);
     return true;
 }
@@ -534,6 +546,10 @@ async function openAudio() {
 // waits this long for it; if it is still held, the officer is told on screen and the call waits (soundPaused, with a longer limit),
 // and the line Ara says meanwhile is said again once the sound is back (soundBack).
 const SOUND_START_MS = 2000, SOUND_HELD_MS = 30000;
+// OpenAI's transcript of the officer's turn often arrives after its tool call (spoken runs, Oct 27: the evidence rule then judged
+// the fields against words it had not received and dropped a rating and a meeting type the officer had said). A tool call that
+// lands between the end of the officer's speech and the transcript waits for it, this long at most.
+const HEARD_WAIT_MS = 2000;
 async function soundRunning(ms) {
   const ctx = G.ctx, t0 = Date.now();
   while (G.live && G.ctx === ctx && ctx.state !== "running" && Date.now() - t0 < ms) { try { await ctx.resume(); } catch (e) {} await new Promise(r => setTimeout(r, 100)); }
@@ -756,14 +772,14 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.heardWait = null; G.lastHeard = { text: e.transcript, n: G.heardN }; act("user", e.transcript); recent("Officer", e.transcript); voiceCommand(e.transcript);
     if (typeof heardAsk === "function" && heardAsk(e.transcript)) guide("The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."); }
   if (G.forced) forcedEvent(t, e);
   if (t === "response.done" && G.bot && G.unheardResp === G.respSeq) G.unheard = G.bot; /* said into a paused sound engine: said again when it is back */
   if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall(); }
-  else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; paintCall(); }
+  else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…"; G.heardWait = { n: G.heardN || 0, at: Date.now() }; paintCall(); } /* the transcript of this turn is still to come: a tool call before it waits (onTool) */
   else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)
     G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
@@ -819,9 +835,13 @@ function whenIdle(kind) {
 }
 // The app's answer to a tool call. Only data goes back in the tool result; anything about what to say next rides with the reply request
 // (per-response instructions), and a line to be said word for word (a question, a read-back) is spoken by the app's scripted line instead.
+// Every refusal gives the engine a way out (Oct 27 spoken runs: Gemini asked the same question seven times after a refusal it could
+// not act on). The tool's own error says what to do; this line covers the case where it can't be done at all.
+const ESCAPE = "If you can't do what this asks, tell the officer in one short sentence what's needed or that it can't be done that way, then ask what they'd like to do next. Don't call the same tool again with the same words.";
 function toolReply(callId, out, speak = true) {
   const { say, status, instructions, ask_exactly, read_back, ...data } = out || {};
   if (ask_exactly) data.asked = ask_exactly; if (read_back) data.read_back = read_back;
+  if (data.ok === false && !ask_exactly && !read_back && !data.next) data.next = ESCAPE;
   send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(data) } });
   const line = ask_exactly || read_back;
   if (line) { forceSay(line); return; } // the scripted line is the turn: no reply request after it

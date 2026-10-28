@@ -29,6 +29,12 @@ on:
       noise:
         description: "Spoken runs: car-like noise level under the voice (0 = quiet, 0.1 = a car at speed)"
         default: "0"
+      turn:
+        description: "Turn-detection settings to try, as JSON (blank = the app's defaults), e.g. {\"threshold\":0.7,\"silence_duration_ms\":600}"
+        default: ""
+      mic_hp:
+        description: "High-pass filter on the mic in Hz (0 = none), e.g. 120 to cut car rumble"
+        default: "0"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -72,6 +78,8 @@ jobs:
           DIAG: ${{ inputs.diag }}
           SPOKEN: ${{ inputs.spoken }}
           NOISE: ${{ inputs.noise }}
+          TURN: ${{ inputs.turn }}
+          MIC_HP: ${{ inputs.mic_hp }}
         run: node tests/ara-consistency/run.js
       - uses: actions/upload-artifact@v4 # spoken runs: the sound clips on their own (one conversation per flow, officer + Ara + noise, with transcripts), to download from the run page and listen to
         if: always() && inputs.spoken == '1'

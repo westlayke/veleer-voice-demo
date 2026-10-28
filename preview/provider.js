@@ -30,7 +30,7 @@ const providerVoice = () => { const P = PROV(); return P.voices.includes(S.setti
 function providerSession(cfg) {
   if (provider() !== "openai") return cfg;
   return { type: "realtime", model: OPENAI_MODEL, output_modalities: ["audio"], instructions: cfg.instructions, tools: cfg.tools, tool_choice: "auto",
-    audio: { input: { format: { type: "audio/pcm", rate: 24000 }, turn_detection: { type: "server_vad" }, transcription: { model: "gpt-4o-transcribe", language: "en" } },
+    audio: { input: { format: { type: "audio/pcm", rate: 24000 }, turn_detection: turnDetection(), transcription: { model: "gpt-4o-transcribe", language: "en" } },
       output: { format: { type: "audio/pcm", rate: 24000 }, voice: providerVoice(), speed: cfg.audio && cfg.audio.output ? cfg.audio.output.speed : 1 } } };
 }
 // a partial session update (new instructions, a new speed): OpenAI wants the session type on every update

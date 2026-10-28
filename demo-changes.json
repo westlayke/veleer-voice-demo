@@ -1,185 +1,624 @@
 {
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
- {"date": "Oct 27, 7:07 PM", "change": "Preview: OpenAI engine, a held reply request now waits until the first one has reported started (it used to go out after half a second regardless, and OpenAI refused it when the first took longer). Nothing changes for Grok or Gemini. 120 checks.", "area": "Voice: engines (OpenAI)", "requestedBy": "Carverhill", "why": "Carverhill, Oct 27 6:44 PM ET: \"Do another diagnostic run or two on OpenAI\"; the 7:03 PM run's voice log showed the refusal happening 0.5 s after the hold."},
- {"date": "Oct 27, 6:49 PM", "change": "Preview: Carry on when the phone still holds the sound. A call's start (mic tap or Carry on) now waits for the phone's sound engine to run before Ara speaks; if the phone keeps it (after a switch to another app, iOS can leave the page's sound interrupted), the screen says so and the call waits up to 30 s instead of 6 s; a line Ara says while the sound is paused is said again once the sound is back. 120 checks.", "area": "Voice: connection", "requestedBy": "Carverhill", "why": "Carverhill's 6:16 PM ET call, Oct 27: the app went to the background, he tapped Carry on, Ara came back on the line but the phone played nothing and the mic stayed muted (\"Build it in preview\", 6:41 PM)."},
- {"date": "Oct 27, 6:28 PM", "change": "Preview: OpenAI engine, second step. Every reply request on OpenAI goes through one gate, scripted lines included (a scripted line used to race the tool-result request and be refused); a scripted line OpenAI refuses goes again as a scripted line after the running reply; a question Ara has just asked in her own words is not sent again as the app's scripted copy (\"What's the first name?\" was heard two to four times at the start of every contact). The consistency runner no longer counts a tool-only reply as a wordless one. Nothing changes for Grok or Gemini. 119 checks.", "area": "Voice: engines (OpenAI)", "requestedBy": "Carverhill", "why": "Carverhill, Oct 27 6:21 PM ET: \"Fix the adapter as you propose and rerun OpenAI test\", after the OpenAI check run (5 of 6 saved, 3 refused requests, repeated opening question)."},
- {"date": "Oct 27, 6:08 PM", "change": "Preview: OpenAI engine fixes from comparison run 1. One reply request at a time on OpenAI (a second waits for the first to finish; a request OpenAI refuses because one is already running goes again afterwards instead of being lost); a finished reply with no words is treated as silence, not a dead line (the app asks once more with the officer's own words quoted, and never opens a fresh line for it); OpenAI's rules say to call the tool first with no preamble. Nothing changes for Grok or Gemini. 119 checks.", "area": "Voice: engines (OpenAI)", "requestedBy": "Carverhill", "why": "Run 1 of the engine comparison (Oct 27, 5:38 PM ET): OpenAI saved 5 of 19 fair conversations because the app read its refused requests and empty replies as a dropped line and reconnected; \"make the openai fixes and test it to see if it's fixed, and then report back\""},
- {"date": "Oct 27, 5:55 PM", "change": "Preview: the greeting says hands-free is on. On a phone's first three calls Ara opens with \"Hi Dana, I'm Ara. Hands-free is on, so you don't need to look at your phone: I'll read each form back and save it when you say yes. What would you like to do?\"; after that, \"Hi Dana, I'm Ara, hands-free is on. What would you like to do?\". The call-bar button now reads \"Turn hands-free off\" while it is on and \"Turn hands-free on\" while it is off, so a tap can't flip it by accident. 119 checks.", "area": "Voice: greeting, hands-free", "requestedBy": "Carverhill", "why": "A tester's Oct 27 3:13 PM call: nobody told her hands-free was on, so she tapped Save and then tapped the Hands-free button, which turned it off. \"maybe we have ara announce at the start that she's in handsfree mode so 'you don't have to look at your phone'?\"; \"yes build on the preview with the usual checks\""},
- {"date": "Oct 27, 5:26 PM", "change": "Preview: a third voice engine, Google Gemini Live (gemini-3.8-live), for the provider comparison. Gemini speaks its own wire format, so a translating socket in the app turns the app's events into Gemini's and back: the microphone is resampled to 16 kHz, Gemini's audio and transcripts come back as the app's usual events, Ara's tool calls and the app's guidance travel in Gemini's tool messages, and a \"go away\" from Gemini reconnects with its session handle. The key holder mints a short-lived Gemini token. The consistency run now runs the engines side by side (one job per engine, started together, so time of day cannot favour one), measures every engine the same way from the app's own taps, and reports reply times per flow with mean, standard deviation, median, 90th percentile, slowest and the count over 3 s. Nothing changes for Grok. 118 checks.", "area": "Voice: engines; consistency run", "requestedBy": "Carverhill", "why": "\"I would like us to run the OpenAI, grok, and Gemini tests starting at same time so there is no time of day difference\"; \"compare standard deviation on response times too - capture that for each category of call for each engine\""},
- {"date": "Oct 27, 5:10 PM", "change": "Preview: a second voice engine, OpenAI Realtime (gpt-realtime-2.1), for the provider comparison. Settings > Voice engine on the preview page (hidden on live; Grok stays the default): the key holder mints an OpenAI pass, the socket, session body and voice list follow the engine, a scripted line is asked for word for word in a reply of its own (OpenAI has no force line), and after a drop the last eight lines are replayed into the new session as text (no conversation resumption). The consistency run takes a provider input and now reports the first sound of a reply after the officer's words (median, 90th percentile, slowest). The key holder also answers GET /providers with which engine keys exist, and a \"Which keys are set\" workflow does the same for GitHub. Nothing changes for Grok.", "area": "Voice: engines", "requestedBy": "Carverhill", "why": "\"Let's begin preparing to run the same harness but with two new providers - Google and OpenAI voice engines\"; \"give me the links to where I setup a Google and OpenAI voice api key - I want to run those tests\""},
- {"date": "Oct 27, 4:22 PM", "change": "Preview reset to release 1.0 (the Oct 26, 8:31 PM ET live build) plus the Oct 26 8:48 PM visitor-sound fix, which goes live with this build. Everything else since 1.0 (the Oct 27 morning call fixes, the phone's own voice lines, app-only forms, the line cache and the Oct 27 3:07 PM fixes) is set aside on the branch rnd-app-voice-forms in the repository; the test harness, the consistency run and the Worker stay on main. 1.0 is the golden master.", "area": "Release", "requestedBy": "Carverhill", "why": "\"I am not seeing the ROI on testing this approach further\": the app-speaks-the-forms approach moved the problems (no interruption of read-backs, questions asked twice) rather than removing them; \"let's do that\" to option A (preview identical to production), \"put the visitor sound fix back into preview please, and then to production if it passes our tests\""},
- {"date": "Oct 27, 3:07 PM", "change": "Preview: fixes from Jim's 2:26 PM ET call (plan reviewed by Carverhill first). (1) The audio of every line the app says is kept by the key holder (Cloudflare KV, 30 days): the first phone to need a line waits on xAI text-to-speech, every later fetch of the same words in the same voice is instant. (2) A line not back in 2.5 s gets a second request alongside, and the first to answer plays (five fetches in the call took 8 to 10 s). (3) The campaign question for every entity is fetched ahead when the entity is asked; the after-save line waits 10 s like a form line. (4) No double question: when Ara's side answer already ends with the form's question the app doesn't ask it again, and Ara is told never to end with it. (5) \"Are you there?\" inside a form is answered by the app alone (\"I'm here.\" and the pending question); \"where were we?\" and \"what are we filling out?\" get the form's name, what it still needs and the question. (6) The save-or-details answer needs a clear word; a question or an \"okay\" inside a longer sentence is no longer a save. (7) A yes or no that Grok puts into the summary or next step is thrown out and the field keeps what it had (the report had saved with Summary \"Yes.\"). (8) A next step without a date gets \"When is it due?\" alone. (9) A reconnect or unlock with a form open names the form before the pending question. (10) Every text-to-speech fetch is its own activity-log row (time, cached or xAI, whether the second request won) and the conversation's end row sums them up, so the voice's latency can be compared with Grok's.", "area": "Voice: forms, lines, key holder", "requestedBy": "Carverhill", "why": "\"Look at latest log and tell me your proposed changes\" (Jim's 2:26 PM call: \"both you and Ara asked me to save it, one after the other\", \"asking multiple questions at the same time\"); \"Go\"; \"log xai text to speech response times separately so we can see if using it has introduced more problems with latency\""},
-    {"date": "Oct 27, 2:20 PM", "change": "Preview: app-only forms. While a form is open the app asks every question itself, in its own voice: the required fields first, one at a time and in form order (\"New contact. What's an email address or mobile number for Jordan?\"), then \"That's everything the form needs. Shall I save it, or add the optional details first?\", then the optional details one at a time, then the read-back. Ara only turns the officer's words into tool calls inside a form; if she starts to speak to an answer, the reply is cut and the app asks its question again; a side question (\"what does substantive mean?\") is left to Ara and the app asks again after her answer. \"What's next\" with a form open names exactly what is still needed. The app's lines are fetched ahead when a form opens and cached, and the app waits up to 10 s for its own line inside a form before Ara's force line takes over. Settings has a switch for the app's voice: Leo (a different voice, the default) or the same voice as Ara. 124 checks; harness 13 of 16 walks clean locally, the three misses being harness expectations written for the old flow.", "area": "Voice: forms", "requestedBy": "Carverhill", "why": "His decision after the 1:14 PM ET call (two voices, the form said to be waiting on an answer five times): \"Ok let's build it in preview, but can we still recognize when a user asks a side question and leverage ara's ai there?\" (Oct 27, 1:32 PM ET); the switch: \"Can you add a separate switch so I can toggle between Leo and Ara in settings without a new build being required?\" (1:37 PM ET)."},
-    {"date": "Oct 27, 12:50 PM", "change": "Preview: a reply from Grok that arrives as words only is still flagged by the heard check when the phone's own line follows within a second (the newer line used to drop the older line's check), so a silent reply reaches the \"Are you there?\" readings (found by harness run 3c).", "area": "Voice: heard check", "requestedBy": "Carverhill", "why": "Plan posted after harness run 3c; \"Go\" (Oct 27, 12:44 PM ET)."},
-    {"date": "Oct 27, 12:18 PM", "change": "Preview: a scripted line (a question or read-back) still waiting for its turn when its form is saved is dropped instead of playing after the save line. Found by the test harness (run 3b, Words without voice): the stale read-back made the next \"yes\" read as an answer to \"Shall I save it?\", and the Cultivation form was refused.", "area": "Voice: scripted lines", "requestedBy": "Carverhill", "why": "Plan posted after harness run 3b; \"Go\" (Oct 27, 12:10 PM ET)."},
-    {"date": "Oct 27, 11:26 AM", "change": "Preview: fixes from the 10:21 AM ET call (plan reviewed by Carverhill first) and the stand-in voice. (1) Every line the app says itself (scripted questions, read-backs, the reconnect line, the save acknowledgement) is spoken by the app in its own stand-in voice, xAI's \"leo\", so the officer can tell the app from Ara; Grok's force line in Ara's voice is the fallback when the audio doesn't arrive within 4 s. The four fixed recordings (line dropped, still trying, back, Ara's taking a moment) are the release 1.0 ones in the Kokoro voice with their old wording. (2) Every optional question says it is optional and how to skip it or save the form. (3) A rating (or other optional answer) that arrives through the draft tool during the optional questions is acknowledged (\"Rating B is on the form.\") before the next question. (4) A question passed to the project team, or a process question, while a form is open comes straight back to the form's pending question; never \"what would you like to do next\". (5) The note to Grok after \"no mobile\" no longer reads as a line to say. (6) \"What's next\" on a complete form reads it back instead of saying it has everything it needs. Also from the test harness (run 2): an invented potential amount on an opportunity is now left out like every other amount; the no-reply watchdog is armed again when the officer spoke while the app's own line was still to come.", "area": "Voice: scripted lines, optional fields, forms", "requestedBy": "Carverhill", "why": "\"Go on the new preview build including 5, but make the voice when we stand in be the old voice so I can tell when stand in by the app is occurring\" (Oct 27, 10:43 AM ET), after the 10:21 AM ET call review."},
-    {"date": "Oct 27, 10:11 AM", "change": "Preview: fixes from the 9:38 AM ET call (plan reviewed by Carverhill first). (1) A process question about moving to Cultivation gets the app's own rule first (a capacity rating and a substantive interaction are required), plus two new FAQ entries on it. (2) \"What's next\" or a process question asked while a form is open is answered in the app's words with what the form still needs, then saving it; Ara's rules say the same. (3) A reply that starts with the same words as the line Ara just said within 20 s is cut before it plays; the doubled-reply guard now watches the officer's transcribed words, not the voice detector. (4) The \"say I'm here and repeat your line\" prompt is dropped when Grok already answered the officer's \"Are you there?\" herself. (5) The heard check measures the phone's own audio for lines the app says in Ara's voice.", "area": "Voice (preview)", "requestedBy": "Carverhill", "why": "\"Another challenging call\"; \"Build on preview\". In-call notes: make a substantive interaction a requirement before Cultivation (it already is; the FAQ answer was wrong); \"you said twice, it isn't covered in this proof of concept\"; a generic event for the user asking for the next step while filling out a form, with the answer always the actions necessary to complete the form and save it."},
-    {"date": "Oct 27, 9:37 AM", "change": "Preview: fixes from the 9:21 AM ET call. The optional-field repeat guard no longer throws out a long answer because the one-letter rating \"C\" is inside it (a short last answer only counts as a repeat when said again word for word), so \"He met her at the Halloween party\" fills How we met instead of being asked again. The phone's \"Give me a moment.\" recording waits until Ara's own sound has ended instead of speaking over her. The same pending question forced after a second drop in a row says \"Sorry, the line dropped again. I'm still waiting on this: ...\" instead of repeating the first sorry line.", "area": "Voice (preview)", "requestedBy": "Carverhill", "why": "\"Look at the log, not a good one. Ara asked me 4 or 5 times \"how did you meet Veronica?\".\" In-call notes: \"the local Ara voice spoke over the real Ara voice\"; \"the how we met question for a new contact keeps being asked repeatedly even after it's been answered\"."},
-    {"date": "Oct 27, 9:17 AM", "change": "Preview: a hands-free save is acknowledged by the app itself, in Ara's voice. The moment after \"Yes\" to a read-back (where Grok took up to 20 s on Oct 27) the app says the saved line, the one-time undo reminder and the next step itself (\"Contact saved for Valerie. Say undo if that's wrong. Next is to create an opportunity for Valerie. Want to do that now?\"), spoken by xAI text-to-speech in the same Ara voice through the Worker's new /tts route; Grok is told what was said and waits for the answer. If the audio doesn't arrive within 2.5 s, Grok says it as before. While the phone plays one of its own lines, the microphone is muted to Grok and the officer can talk over it.", "area": "Voice", "requestedBy": "Carverhill", "why": "\"Yes build it please\" (to the offer of the app speaking the save line itself in Ara's voice, after \"19.8 seconds is a long time\")"},
-    {"date": "Oct 27, 9:08 AM", "change": "Preview: the phone's own spoken lines are in Ara's voice. The four status lines the phone plays itself (line dropped, still trying, back, give me a moment) are recorded with xAI text-to-speech in the same \"ara\" voice Grok uses, by a workflow (\"Record Ara's lines\", tools/ara-lines.json), replacing the earlier recordings in another voice. The lines are first person now: \"Sorry, the line dropped. I'm reconnecting.\", \"Still trying to reconnect.\", \"I'm back.\", \"Give me a moment.\"", "area": "Voice", "requestedBy": "Carverhill", "why": "\"Any way to have the app use Aras voice to ask? Disconcerting to hear a different voice?\""},
-    {"date": "Oct 27, 8:19 AM", "change": "Preview: from the Oct 27 7:50 AM driveway call. What the officer said while the line was down is replayed to Ara from the phone's own mic buffer once the line is back (the last 40 s of the mic are kept; from Ara's last word to the reconnect, clear speech only, up to 30 s; the phone's status recordings go as silence), so they don't repeat themselves; if the replay brings no reply in 7 s, or nothing clear was said, the app says \"Sorry, I lost you for a moment. Could you say that again?\" itself. \"Move on\" to a later question is no longer taken as \"no mobile\" (the mobile question is over once anything else happens, or after 90 s). No \"Ara's taking a moment\" while reconnecting (it overlapped \"The line dropped\"). Ara ends a reply that finishes something with a question about what's next.", "area": "Voice", "requestedBy": "Carverhill", "why": "\"Take a look at my last call log including my idea to always have you cache a copy of my last words so you can send to Ara when the app reconnects with her, that way I don't have to repeat myself when she comes back\"; in the call: \"you should always ask me what I wanna do next\" and \"Ara seemed to not hear what I said last, and she should tell me that\""},
-    {"date": "Oct 27, 7:47 AM", "change": "Preview: fixes from the Oct 27 11:21 AM preview call. A spelled last name replaces Ara's own spelling (\"B, B A I L E Y\" had become Bbailey; a false-start letter is dropped); \"No\" to the mobile question moves the New contact form on to the capacity rating itself (the form had stalled until \"save it\"); the first slow reply says \"Ara's taking a moment.\" (a recording) instead of the ping, which only repeats after it, and no ping while reconnecting; a turn with no reply started within 6 s gets a reply request (36 s of silence seen); \"What's the next step for X?\" comes from the app's journey rules (new get_next_step tool, 38 tools) instead of Ara's reading of the records; an opportunity blocked only by a missing capacity rating has the app ask the rating itself and reopen the opportunity once it is saved.", "area": "Voice", "requestedBy": "Carverhill", "why": "\"Take a look at my latest preview call log. Lots of issues\", and his three notes in the call: a verbal cue instead of the low-connectivity pings; keep leading the user to the next step; when guiding, say the contact needs a capacity rating and take them down that path"},
-    {
-      "date": "Oct 26, 11:12 PM",
-      "change": "Preview: Ara responsiveness, items 1-4 of the Oct 27 review. The app logs how long Ara's first word takes after the officer stops (a log row when over 3 s, and a per-call summary on the Conversation ended row); a save or screen change no longer re-sends Ara's whole instructions, the Right now section rides with her next reply instead; the tool definitions were trimmed (32.4 KB to 28.6 KB per turn); Ara keeps to one short sentence per turn unless a read-back, briefing or list was asked for. Items 5-6 (silence window, earlier greeting) wait for the new timing numbers.",
-      "area": "Voice",
-      "requestedBy": "Carverhill",
-      "why": "\"Can you review the code for any refactoring or optimizations we could make to make Ara more responsive / faster to reply\", then \"Go\" for items 1-4"
-    },
-    {
-      "date": "Oct 26, 8:48 PM",
-      "change": "Preview: visitors were silent after the app had been in the background (iOS leaves their sound engine interrupted for good). On coming back, and on the next tap, an engine that won't resume within a second is thrown away and the next tap starts a fresh one.",
-      "area": "Visitors (themes)",
-      "requestedBy": "Carverhill",
-      "why": "\"After app goes into background, when you come back, visitors make no sounds\""
-    },
-    {
-      "date": "Oct 26, 8:14 PM",
-      "change": "Live: the call-review changes of 8:14 PM (status read-back with person and due date, entity and campaign from the planned ask, task status FAQ, task counts first and one person's tasks, task choices and shorter next-step offers, show_visitor tool, wording). Hey Ara start-up address stays preview-only.",
-      "area": "Voice, Tasks, Opportunities, FAQ",
-      "requestedBy": "Carverhill",
-      "why": "\"Make it live\""
-    },
-    {
-      "date": "Oct 26, 8:14 PM",
-      "change": "Preview, from the review of the Oct 26 7:01 PM call: a status change is read back with the task, the person and the due date; an opportunity takes its entity and campaign from the planned ask, and Ara reads a blank entity, campaign or potential as Not set; Process FAQ entry for task status choices; a long task list gives counts first and one person's tasks can be asked for; Ara offers the choices after reading a task and keeps next-step offers short while you work a list; new show_visitor tool (owls on demand, 37 tools); \"We'll fill in the form together\" wording.",
-      "area": "Voice, Tasks, Opportunities, FAQ",
-      "requestedBy": "Carverhill",
-      "why": "\"Can you listen to my last couple of interactions with Ara and come up with a recommendation\" then \"Why not do them all except make a note to put 4 in backlog\""
-    },
-    {
-      "date": "Oct 26, 8:14 PM",
-      "change": "Backlog, not built: notes on a Task (Kevin wanted to note when a check was collected while marking the task done; tasks have no note field). Would add a Note field, by voice too; maps to the SpiceCRM Task description; a guide change.",
-      "area": "Tasks (backlog)",
-      "requestedBy": "Carverhill",
-      "why": "\"make a note to put 4 in backlog for us to think further about\""
-    },
-    {
-      "date": "Oct 26, 6:57 PM",
-      "change": "Live: the skeleton plays Carverhill's laugh-only recording (skeleton-laugh.mp3, 2.8 s) 4 visits in 5 and his full line every fifth visit, together with the 6:47 PM visitor changes (no visitor twice running, pumpkin sometimes drops from the top). Hey Ara start-up address stays preview-only.",
-      "area": "Visitors (spooky mode)",
-      "requestedBy": "Carverhill",
-      "why": "\"use this laugh only audio file 4 out of every 5 times he appears\" and \"if it passes the tests on preview just take it live\""
-    },
-    {
-      "date": "Oct 26, 6:47 PM",
-      "change": "Preview: visitors never come twice running (the picker skips the last one, in every theme). The pumpkin drops from the top half the time, bounces along the bottom and rolls off left; the other half it rolls along the bottom as before.",
-      "area": "Visitors (themes)",
-      "requestedBy": "Carverhill",
-      "why": "\"Can you make it so none of the visitors can play twice in a row... Also can you have pumpkin sometime come from top and go to bottom?\""
-    },
-    {
-      "date": "Oct 26, 6:21 PM",
-      "change": "Live: the skeleton visitor in spooky mode (original drawing; walks to mid screen, nods his skull and waves while Carverhill's recording plays, then walks off). The Hey Ara start-up address stays preview-only.",
-      "area": "Visitors (spooky mode)",
-      "requestedBy": "Carverhill",
-      "why": "\"Make it live\""
-    },
-    {
-      "date": "Oct 26, 6:21 PM",
-      "change": "Preview: the skeleton's skull now nods on its own when he stops (32 degrees over 1.6 s); the faint whole-body tilt is gone.",
-      "area": "Visitors (spooky mode)",
-      "requestedBy": "Carverhill",
-      "why": "\"He does not tip his skull, but he does wave\""
-    },
-    {
-      "date": "Oct 26, 6:14 PM",
-      "change": "Preview: the skeleton visitor walks to mid screen, stops, plays his recording while he tips his skull and waves, then walks off (12 s in all).",
-      "area": "Visitors (spooky mode)",
-      "requestedBy": "Carverhill",
-      "why": "\"Can you have him get to mid screen, pause, play audio, then move off screen\""
-    },
-    {
-      "date": "Oct 26, 6:07 PM",
-      "change": "Preview: the skeleton visitor plays Carverhill's recording (skeleton.mp3, 5.5 s, ElevenLabs) as he walks across the screen, instead of the cackle.",
-      "area": "Visitors (spooky mode)",
-      "requestedBy": "Carverhill",
-      "why": "\"can you have the skeleton visitor play this mp3 as he goes across the screen\""
-    },
-    {
-      "date": "Oct 26, 5:28 PM",
-      "change": "Preview: a skeleton visitor in spooky mode. He strolls in along the bottom, stops, tips his skull, waves with a cackle and strolls off. An original drawing (the licensed character's photo stays out of the public app).",
-      "area": "Visitors (spooky mode)",
-      "requestedBy": "Carverhill",
-      "why": "Asked whether the Jack Skellington image could be used, then \"go ahead and add him in to the preview!\""
-    },
-    {"date": "Oct 26, 11:17 AM", "change": "Finding, no code change: the screen wake lock holds in the app added to the home screen (a live call ran past a 30 s Auto-Lock; 14 of the 18 Oct 25 calls ran past 3 minutes) but not in the preview opened from a link in Safari, which locked at 30 s every time. The lock = pause build stays as a safety net for locks iOS does anyway. To test the preview the same way, add it to the home screen too.", "area": "Connection"},
-    {"date": "Oct 26, 11:00 AM", "change": "Live 11:00 AM: a call no longer ends itself at the unlock (the fresh sound start had cleared the mic wait while the old mic's timer still ran: \"mic muted, didn't come back in 45 s\" five seconds after a lock, 10:53 AM). The fresh-start-into-every-call experiment is taken out: both 10:52 and 10:53 AM calls still locked 30 s after the tap. Lock = pause and the speaker fix held in all three locks of those calls.", "area": "Connection"},
-    {"date": "Oct 26, 10:49 AM", "change": "Taken out at 11:00 AM, an experiment: a few seconds into every call, at a quiet moment, the app starts its sound and mic afresh once (the same fresh start that follows a lock), and after any lock it asks for the screen wake lock again. In the 10:39 AM test the phone stopped locking the screen for the rest of the call after the first fresh start, so this may keep the screen on from the start.", "area": "Connection"},
-    {"date": "Oct 26, 10:38 AM", "change": "Live 11:00 AM: after the phone unlocks, the app starts its sound and mic afresh before the line reopens, so Ara comes back on the speaker the call started on (iOS had brought her back on the earpiece after the lock). If the phone refuses the fresh start, the old sound and mic stay.", "area": "Connection"},
-    {"date": "Oct 26, 10:16 AM", "change": "Live 11:00 AM: lock = pause. When the phone locks (the page goes hidden) the app closes the voice line 3 s later, so nothing is charged while the phone sits locked, keeps the conversation, and reopens the same conversation by itself the moment the app is back, asking the pending question again, with no drop tone and no Carry on tap (as after a dead spot). Hidden longer than 25 minutes, the call ends with the Carry on card. Replaces the 10:02 AM 45 s wait: the 10:06 AM test showed a locked iPhone mutes the mic and pauses the sound anyway, so an open line only cost money.", "area": "Connection"},
-    {"date": "Oct 26, 10:02 AM", "change": "Superseded by the 10:16 AM lock = pause: when the phone locks (the page goes hidden) the app keeps the voice line for 45 s and logs what the phone does to the sound and mic, ending the call only if the page stays hidden; the sound and mic waits stretch to the same limit while hidden. Until now the call ended the moment the phone locked (the 9:55 AM pocket test with Auto-Lock at 30 s ended at the lock with the Carry on card, though the screen wake lock had been granted).", "area": "Connection"},
-    {"date": "Oct 26, 9:43 AM", "change": "Live 11:00 AM: when a conversation can't start because the key holder refuses a voice pass, the end row in the activity log carries the reason (\"couldn't start: service_429\"), not just \"Conversation ended\" (four silent ends at 9:37 AM).", "area": "Log"},
-    {"date": "Oct 26, 9:27 AM", "change": "Live 11:00 AM, from the 9:03 AM driveway call: (1) a mic muted by the phone now keeps the call for 45 s instead of 6 s, because iOS puts up an \"Audio Recording / Stop audio recording?\" dialog when the phone locks during a call and the mic is back only after Cancel; whether the screen wake lock was granted, refused or released is logged. (2) An entity said over two lines (\"the Idaho entity\" then \"the PAC\") now counts as said; it was dropped as unsaid and the opportunity's own entity (Citizens Alliance C3) stayed on the planned ask and was saved. A required entity with nothing to prefill now shows Not set instead of the first entity in the list. (3) \"Let's go add an ask\" opens the planned ask form (it was refused as not asked for). (4) The next action in Cultivation is named as the button is, Add planned ask.", "area": "Connection, Rules, Voice"},
-    {"date": "Oct 26, 7:01 AM", "change": "Live 7:18 AM: the search box on Contacts, Opportunities and Tasks takes the theme's panel colour. In spooky mode it stayed white (Carverhill's screenshot).", "area": "Spooky mode, Screens"},
-    {"date": "Oct 25, 10:32 PM", "change": "Preview only: a \"Hey Ara\" start-up address. The app's address ending in #call opens straight onto one big mic (one tap and the conversation starts; the phone only turns the mic on after a tap). Settings has the address with a Copy button and the four iPhone steps: a Shortcut that opens the address, a Vocal Shortcut \"Hey Ara\" that runs it, allowed when locked. On a first visit the welcome shows instead. The open is logged as \"Opened with the Hey Ara start-up address\".", "area": "Voice, Settings"},
-    {"date": "Oct 25, 6:40 PM", "change": "Editing a task by name: the exact text wins, otherwise the task sharing the most words (the person's name doesn't count). Until now any one shared word made two tasks \"match\" and the app asked which one, even with the exact words (three bug reports from the 5:57 PM call).", "area": "Tasks, Voice"},
-    {"date": "Oct 25, 6:40 PM", "change": "Scripted lines: when Ara answers on her own while a scripted line is still to play, the app no longer takes her reply for the line starting; if she said much the same thing, the late copy is cut. The task status question (\"Mark X as done?\") is a scripted line, so she doesn't announce it and then ask it. New Needs attention filter hands_free lists the hands-free saves still to be checked.", "area": "Voice, Hands-free"},
-    {"date": "Oct 25, 5:35 PM", "change": "The app tracks where a form process stands (an optional question pending, a read-back waiting for a yes, the substantive question, or which required fields are missing). After a reconnect it puts that in Ara's instructions and asks the pending question itself as a scripted line; Carry on hands over the same position.", "area": "Voice line, Hands-free"},
-    {"date": "Oct 25, 5:40 PM", "change": "Heard check: for every line Ara says the phone records the voice audio received, the sound it produced (an analyser on the speaker path) and what the mic heard while it played; a line that fails a reading is logged (\"Ara's line may not have been heard: ...\"). \"Are you there?\" logs those readings for her last line, wakes the sound if the phone paused it, and Ara repeats the line word for word.", "area": "Voice line, Log"},
-    {"date": "Oct 25, 5:40 PM", "change": "Scripted lines get 8 s to start before Ara says them herself (was 5 s; five lines fell back in the 4:42 PM call and then played late), and the fallback tells her to say the exact words. A form left open from an earlier conversation is in Right now, so a new conversation knows about it. Log events carry an id and the key holder stores a batch that arrives twice only once (the 4:55 PM log had 20 s of rows doubled).", "area": "Voice line, Log"},
-    {"date": "Oct 25, 5:05 PM", "change": "The dead-spot limit is 5 minutes (Carverhill's choice; it was 10 minutes for twenty minutes, and 2 before that).", "area": "Voice line"},
-    {"date": "Oct 25, 4:55 PM", "change": "In a dead spot the app keeps reconnecting for up to 10 minutes (was 2) and picks the conversation back up by itself when the signal returns; after the first minute down, \"Still trying to reconnect\" is said every 30 s instead of every 10 s.", "area": "Voice line"},
-    {"date": "Oct 25, 4:35 PM", "change": "A source check guards against a // comment that swallows code on its line (it failed six checks once today): tools/lint-comments.js runs before every publish and as a suite check, which also makes sure every app script parses.", "area": "Tests"},
-  {"date": "2026-10-25", "change": "Hands-free is now on from the start of every conversation, for everyone: the assistant reads each finished form back and saves it on the officer's yes, without any tapping. Saying \"I've parked\" or that you'll tap yourself turns it off for that conversation. Also from the 3:50 PM walk: when the assistant offers the next form in two sentences (\"We were about to decide on moving Sandy to Cultivation.\" then \"Want to do that now?\"), a yes now opens the form; the guard used to read only the last sentence and refused three times.", "area": "Hands-free, Rules"},
-  {"date": "2026-10-25", "change": "From the 3:38 PM walk: a fresh line that didn't open within 10 seconds made the app give up after one try, because the two-minute rule counted from the start of the call while the new line was opening. The clock now runs from when the voice service was last heard, so the app keeps reconnecting through a dead spot.", "area": "Connection"},
-  {"date": "2026-10-25", "change": "The phone's built-in speech is no longer used at all. An iOS \"Audio Recording / Stop audio recording?\" dialog appeared over the app today, muting the mic and ending the call; the first time was within a second of the phone's own voice saying the voice service wasn't answering. Status lines are recordings played through the call's own sound, and the not-answering message is shown on screen instead of spoken.", "area": "Connection"},
-  {"date": "2026-10-25", "change": "The evidence rule is now checked exhaustively by the app's own test run: every form, every pick-list option, flag, amount and date (634 cases), each dropped when unsaid and kept in several ordinary phrasings. The table found and fixed three gaps: \"in two weeks\" (and similar) counts as a date, \"half a million\" as an amount, and the Event and Email meeting types have word lists.", "area": "Rules, Tests"},
-  {"date": "2026-10-25", "change": "Preview only: general evidence rule. Every value the voice model puts on a form must be traceable to the officer's own words in the call (amounts in digits or words, entity names, everyday words for each pick-list option, the flag's own word, something date-like for dates). A value with no evidence is left off the form, written in the Voice log, and named to the assistant as left out so she asks instead of reading back a guess. Free text (names, email, summary, notes) is not checked.", "area": "Rules"},
-  {"date": "2026-10-25", "change": "Found by the Ara consistency run: the voice model sent an amount of zero on a planned ask, the read-back said $0 and it saved. A money field of $0 now counts as missing: the app leaves it blank, tells the assistant to ask for the real amount, and Save asks for it.", "area": "Rules, Forms"},
-  {"date": "2026-10-25", "change": "From the 12:41 PM call (five team notes): the campaign question is asked and an entity-worded answer no longer fills it; a repeated optional answer after a dropped line is ignored instead of filled in; the assistant explains that a next step becomes a Task and asks whether to set it, never suggesting the step, date or way of contacting; the call shows Speaking only while sound is actually playing; the phone's own status recording is cut short when the line comes back (no more talking over Ara); and within two minutes of a save a new form opens only on the officer's word, otherwise the assistant offers it in one question first.", "area": "Rules, Forms, Connection"},
-  {"date": "2026-10-25", "change": "From the 12:18 PM driveway call: the call no longer hangs up after 3 reconnects; while the phone is online it keeps reconnecting (with the spoken \"still trying\" line) and gives up only after 2 minutes without a word from the voice service. When the app drops a capacity rating the officer never gave, the assistant is told, so she can't read it back. Asking for hands-free together with a task no longer gets \"What would you like to do?\". The Interested outcome is kept only when the officer calls the person interested, keen, positive and so on (consistency rerun: 1 of 10 kept on the word \"interest\" in passing).", "area": "Connection, Rules"},
-  {"date": "2026-10-25", "change": "Preview only: an interaction report keeps only what the officer said. If the voice model marks it substantive, picks an outcome or invents a next step the officer never gave, the app leaves those out, tells the assistant so, and asks the substantive question and the next step itself (found by the Ara consistency run: 2 of 6 reports marked substantive by the model, one with an invented next step).", "area": "Rules"},
-  {"date": "2026-10-25", "change": "Settings has a switch, off by default, to record the phone's location (to about 10 metres) in the notes about the voice line dropping, reconnecting or ending; the activity page links each spot to a map; the privacy notice says so.", "area": "Connection"},
-  {"date": "2026-10-25", "change": "Preview only, from the 10:02 AM call: the reconnect lines are recordings played through the call's own sound (the phone's speech is silent during a call on an iPhone), with \"You're back with Ara.\" when the line returns; when Ara reads a form back herself in full and the officer says yes, the app saves instead of reading it back again; the optional details are led, not offered (\"Let's take the next step: a few optional details...\"), each field asked as \"Fill it in, or move on?\"; a rating said before the questions start is taken; \"move on\" or \"no\" to a fill-in field skips it; the next-step question says a substantive interaction needs one and suggests an example; after a drop with no form open Ara carries on with the person just worked on; a quiet line that is dead gets a fresh line; a line up for 20 s starts the reconnect count afresh.", "area": "Voice"},
-  {"date": "2026-10-25", "change": "Preview only: Settings > Version shows the build stamp as written (iPhone showed Invalid Date).", "area": "Settings"},
-  {"date": "2026-10-25", "change": "Preview only, from the 9:06 AM call: a reconnect can no longer hang on fetching a voice pass (each try is limited to 6 s and tried again every 2 s for up to 2 minutes; one took 89 s and the next never came back, so the officer had to end the call); while the line is down the phone itself says \"The line dropped. Reconnecting you to Ara.\" at 5 s, \"Still trying to reconnect.\" at 12 s and every 10 s after; a yes to a read-back saves the form even if Ara opens another form instead of calling save_form, and another form waits while a read-back is unanswered; a move to Cultivation is refused at the save too when the criteria are missing; after a side question Ara repeats her open question in full; activity log batches that fail to send are sent again; the \"Opened the app\" row names the build.", "area": "Voice"},
-  {"date": "2026-10-25", "change": "Preview only, from the 8:25 AM call: a new contact is asked its capacity rating before the other optional details (an opportunity needs it), and \"Would you like to add more details?\" comes after; Ara's rules say the app reads the form back and asks \"Shall I save it?\", so she never does it herself; the app asks for a rating when the officer hasn't said one (no invented ratings); naming a state (New Hampshire) picks its only entity, or lists just that state's entities; moving to Cultivation is explained first (the gift officer believes the contact is ready to be pursued for a gift); while a scripted line is pending Ara is told not to say it herself; a late scripted line is cut only when the first telling was heard.", "area": "Voice"},
-  {"date": "2026-10-25", "change": "Preview only, from the 7:54 AM call: the app itself asks whether an interaction was substantive (its own spoken question) and never reads a report back without the answer; in hands-free mode the app reads a finished form back as soon as it is complete, without waiting for Ara to ask (she had said \"Tap Confirm\"); the hands-free line carries its own follow-up question so Ara no longer goes quiet after it; dates are given with today/tomorrow/yesterday so a same-day due date is not called tomorrow; a scripted line that starts late after Ara already said it is cut instead of being heard twice (and scripted lines now get 5 s to start).", "area": "Voice"},
-  {"date": "2026-10-25", "change": "Ara works the way xAI's speech-to-speech 3.0 service expects: her instructions are rewritten as short sections and bullets (same rules, easier to follow, so fewer stray asides and shorter read-outs); the app's guidance now travels with each reply request instead of being planted in the conversation as if the officer had said it, so she can no longer read it aloud; lines that must be said word for word (optional-field questions, hands-free read-backs, cancel, undo, go back, the greeting, the hang-up line) are spoken exactly by the app's scripted line; tool results carry only data; and every new reply or instruction update waits until her previous audio has finished playing, which ends the cut-off sentences after form steps.", "area": "Voice"},
-  {"date": "2026-10-25", "change": "Preview only, using more of xAI's voice features: a dropped line or Carry on picks up the same conversation on xAI (kept 30 minutes, tool calls included) instead of a summary; the speech recognizer is told to listen for US English and up to 100 key words (contact names, entities, stages); Ara says C.A. as Citizens Alliance and PAC as pack; the hands-free line is spoken word for word by xAI, then Ara carries on (if xAI doesn't play it, Ara says it).", "area": "Voice"},
-  {"date": "2026-10-24", "change": "Preview only: on a computer screen the call bar's background band no longer covers the mic at the top of the left menu during a conversation, and in spooky mode the cobwebs sit in the top corners of the page instead of floating in the middle.", "area": "Screens"},
-  {"date": "2026-10-24", "change": "Preview only: the rolling pumpkin plays the opening of Bach's Toccata and Fugue in D minor (the first 7 seconds of the recording Carverhill sent) as it crosses the screen. It used to be silent.", "area": "Spooky mode"},
-  {"date": "2026-10-24", "change": "Preview only: the owl now hoots with a real owl recording (from tunetank.com) instead of the phone-made hoot, both the owl that comes by in spooky mode and the \"Tap me to hear me hoot!\" owl.", "area": "Spooky mode"},
-  {"date": "2026-10-24", "change": "Preview only: turning hands-free on or off mid-form, Ara now says \"Hands-free is on. I'll read back all the information on the form and save it when you say yes.\" and then carries straight on with the form's next question (she used to stop and wait). A mic the phone mutes for a moment no longer ends the call; it waits up to 6 seconds for it to come back.", "area": "Voice"},
-  {"date": "2026-10-24", "change": "Fixes from a test call: when the iPhone briefly pauses the app's sound (a notification, Siri, another app) the call stays open for up to 6 seconds while the sound comes back, instead of ending; hands-free stays on after Carry on; if Ara talks past a tapped save the app tells her again; every interaction report asks whether it was substantive and the read-back says so; marking a saved report substantive needs a next step and its due date (creates a task); \"it's J B\" in an email is no longer read as S J B; in the optional questions the officer can go back to a question, an entity named at the amount question goes to the entity, Ara no longer reads the app's instructions aloud and can't jump to the read-back early; after a Carry on Ara never says something on the open form is saved.", "area": "Voice"},
-  {"date": "2026-10-25", "change": "Preview only: after a save Ara says in a few words that it's saved (no more \"Saved: task saved\"), mentions undo only after the first hands-free save of a conversation, and ends by offering the next step (\"Next is to record the ask. Want to do that now?\") or asking \"What's next?\". She no longer asks whether to stop.", "area": "Voice"},
-  {"date": "2026-10-24", "change": "Preview only: on a computer screen (1000 pixels or wider) the tab bar becomes a left menu with the mic on top, Home shows Needs attention in a wide left column with the other panels on the right, and Opportunities shows the list beside the open opportunity. Phones are unchanged.", "area": "Screens"},
-  {"date": "2026-10-24", "change": "Behind the scenes: the code that keeps the voice line alive (reconnects, line tests, stall and quiet detection, asking Ara again) now lives in one place, with all its timings listed together. Nothing changes in how the app behaves.", "area": "Voice"},
-  {"date": "2026-10-24", "change": "Faster recovery on a bad line: if Ara hasn't started replying after 4 seconds, the app tests the line then and opens a fresh one if it is slow (it used to wait 13 seconds). If a new line hasn't opened after 5 seconds, a second one is tried alongside and the first to open is kept. After a reconnect Ara says sorry with no Halloween or Christmas aside and asks only the one question still pending. She passes a question to the project team after any yes, can see opportunities closed this year, and hands-free read-backs say \"Summary: noted\" instead of reading the summary out.", "area": "Voice"},
-  {"date": "2026-10-24", "change": "If the officer talks while the line is down, Ara asks them to say it again once she's back, instead of carrying on as if nothing was said. After a reconnect she answers \"Are you there?\" with a quick yes and carries on with the open form, without \"welcome back\" or \"what would you like to do\" (seen at 6:04 PM).", "area": "Voice"},
-  {"date": "2026-10-24", "change": "Tuned from the 5:52 PM drive: when Ara doesn't answer, the app tests the line first and on a slow line opens a fresh one right away instead of asking again (re-asks had piled up six late \"I'm here\"s); on a healthy line it asks once more, then opens a fresh line. A soft tick plays every 4 seconds while Ara is slow or the line is reconnecting. A new voice pass is fetched as soon as one is used, so a second drop reconnects fast (one took 15 s). Ara's instructions list the entities by state so she can't invent one (she offered a Pennsylvania Fed PAC, which doesn't exist).", "area": "Voice"},
-  {"date": "2026-10-24", "change": "More resilience from the 5:30 PM drive: a slow connection test no longer triggers a reconnect while the voice service is still sending (that caused an unneeded drop and 'Did you hear me?'); the quiet hang-up waits 30 seconds in hands-free mode, doesn't start while the officer's voice is on the mic, and is called off if the officer answers as it starts (Ara had said goodbye over 'October 24th'). A new opportunity whose entity has a state campaign always asks National or the state before the read-back.", "area": "Voice"},
-  {"date": "2026-10-24", "change": "Recovery for two more cases seen on a drive: a drop right after a hands-free save now tells Ara the save went through (she had tried to save again and said the form closed without saving), and a line that goes dead without closing is caught: if the officer is talking and nothing comes back for 5 seconds, or 12 seconds pass in quiet, the app tests the connection and reconnects instead of hanging up. Reconnect tries are spread over about 15 seconds, wait up to 15 seconds for the phone to come back online, and a line that doesn't open in 10 seconds counts as a failed try.", "area": "Voice"},
-  {"date": "2026-10-24", "change": "Steadier voice on a weak connection: a voice pass is kept ready during a call so a dropped line reconnects in a second or two; when Ara is slow a soft tick plays after 4 seconds and the app only asks again at 10 seconds; if she then answers twice, the second answer is cut off; each connection reading times a tiny test request. An ask answered with a check in hand or a yes saves as Accepted, and the ask's Response starts blank so Ara must ask.", "area": "Voice"},
-  {"date": "2026-10-24", "change": "When the voice line drops mid-conversation (for example while driving), the app reconnects up to 3 times and Ara picks up where she left off, repeating her last question. When Ara goes silent the app asks her up to 3 more times, then reconnects. If nothing works, the phone plays a short falling tone and says the voice service isn't answering, and the form stays open. Connection readings (online or offline, network type and speed where the phone reports them, time since the voice service last answered) and the reason each call ended now go in the activity log. A planned ask for an entity with a state campaign leaves Campaign blank so Ara asks for it.", "area": "Voice"},
-  {"date": "2026-10-24", "change": "When Ara goes silent after the app asks her to speak (no reply, or an empty or failed one), the app asks her once more instead of leaving the officer in silence until the 12-second hang-up. Silent replies and voice service errors now go in the activity log.", "area": "Voice"},
-    {"date": "2026-10-24", "change": "Ara understands entities said loosely (\"the C-3\", \"Idaho PAC\") and asks which one when it could be several; amounts in words (\"one hundred thousand\") are understood; a new opportunity now has a campaign of interest, asked when the entity has a state campaign (otherwise National is filled in) and carried to the planned ask.", "area": "Voice"},
-    {"date": "2026-10-24", "change": "Tidy-up with no change in behaviour: Ara's voice code split into three files, old screenshots and an unused logo removed, Settings wording for Christmas mode updated, owl test made sturdier.", "area": "Code"},
-    {"date": "2026-10-24", "change": "Opportunity record shows one next-step button: Move to Cultivation once every Qualification step is done, otherwise Log interaction (it used to show both).", "area": "Opportunities"},
-    {"date": "2026-10-24", "change": "Check your hands-free saves: each save now starts with the person's name, e.g. \"Ruth Abernathy's capacity rated B\" or \"Ruth Abernathy: Moved to Cultivation\".", "area": "Hands-free"},
-    {"date": "2026-10-24", "change": "Christmas mode now has a white background, with evergreen, Christmas red and gold touches (was a dark evergreen night).", "area": "Christmas"},
-    {"date": "2026-10-24", "change": "Fix links on Check your hands-free saves now name who or what they are for, e.g. \"Edit Ruth Abernathy's contact\" or \"Open the opportunity: Vasquez, Elena - 2026\".", "area": "Hands-free"},
-    {"date": "2026-10-24", "change": "After opening a fix link from Check your hands-free saves, Back (or closing or saving the form) returns to the check list.", "area": "Hands-free"},
-    {"date": "2026-10-24", "change": "Christmas mode can now be turned on any time (Settings, or say \"Christmas mode\"), not just in December. The Christmas visitors on their own still start December 1.", "area": "Christmas"},
-    {"date": "2026-10-24", "change": "Check your hands-free saves: each save now has a link to fix it (Edit the contact, Edit the report, Edit the task, Edit the planned ask, or Open the opportunity).", "area": "Hands-free"},
-    {"date": "2026-10-24", "change": "Christmas mode: Santa's \"Merry Christmas, ho ho ho\" is now a real recording, replacing the computer voice.", "area": "Christmas"},
-    {"date": "2026-10-24", "change": "Christmas mode: real sleigh bells (a recording) now play for the sleigh, reindeer, gifts and opening forms, replacing the made-up bell sound.", "area": "Christmas"},
-    {"date": "Oct 24, 2026", "change": "Interaction reports by voice: when Ara never sends the summary, the app now takes it from what the officer said when she asked what was talked about. A next-step due date that is really the meeting date is dropped. Answering \"neither\" to Ally or Do Not Contact no longer ticks both. The hands-free read-back no longer says \". .\" when a form has nothing else to read.", "area": "Voice"},
-    {"date": "Oct 24, 2026", "change": "Christmas mode sounds (preview): Santa now says \"Ho, ho, hoooo! Merry Christmas!\" in a natural voice, and the sleigh, reindeer, gifts and forms opening use fuller sleigh bell sounds. The old phone-made \"ho ho ho\", which sounded like an owl, is gone.", "area": "Christmas"},
-    {"date": "Oct 24, 2026", "change": "Christmas mode (try it on the preview now; in the app it is for December): say \"Christmas mode\" or use Settings. An evergreen look with snow along the header, pine trees, a wreath by the logo and a nativity scene on Home; snow, gifts, elves, reindeer, Santa's sleigh and a Christmas tree come by with their sounds; Santa asks for a tap so sounds can play; sleigh bells as a form opens, a chime on Save, Joy to the World and Santa's \"ho ho ho\" on Closed Won; Ara becomes a warm Christmas host. Only one of spooky mode and Christmas mode is on at a time.", "area": "Christmas"},
-    {"date": "Oct 24, 2026", "change": "Phones with Reduce Motion turned on now get the Halloween visitors and their sounds too (they fade in and out in one spot instead of moving across). Before, Reduce Motion hid them all, along with the tap-me owl.", "area": "Halloween"},
-    {"date": "Oct 24, 2026", "change": "In spooky mode Ara starts every conversation as the haunted-house host: \"Mwahaha... welcome to the haunted CRM. Hi Dana, I'm Ara, what would you like to do?\" After Carry on she says \"Welcome back to the haunted CRM\".", "area": "Halloween"},
-    {"date": "Oct 24, 2026", "change": "The Halloween owl now pops up every time the app opens until someone taps, since sounds stay silent until a tap. Before, he showed only once per phone.", "area": "Halloween"},
-    {"date": "Oct 24, 2026", "change": "First time the app opens in October, a big owl pops up saying \"Tap me to hear me hoot!\" so people know to touch the screen to turn on the Halloween sounds. It hoots when tapped and flies away. Shown once per phone.", "area": "Halloween"},
-  {"date": "Oct 24, 2026", "change": "Optional fields one at a time (preview): after a new contact's or new opportunity's required details, Ara asks \"Would you like to add more details? I can take you through them one at a time.\" The app then leads, one question each, and fills in each answer itself. For a contact: capacity rating (with the bands), how you met, texting permitted (only with a mobile) and how they agreed, then Ally or Do Not Contact (\"most people are neither\"). For an opportunity: entity, potential amount, notes. Say \"skip\" or \"that's enough\" at any point. Also fixed: texting permitted said by voice now reaches a new contact's form.", "area": "Voice"},
-  {"date": "Oct 24, 2026", "change": "Fix (preview): on iPhones, tapping during a conversation woke the Halloween sound engine, which could pause Ara's audio or mute the mic and end the conversation; it now rests during conversations. After Carry on, Ara no longer turns spooky mode on a second time and announces it again.", "area": "Voice"},
-  {"date": "Oct 24, 2026", "change": "Fix (preview): Halloween sounds play on iPhones again. The sound engine starts on the tap events an iPhone accepts and plays a silent blip, as at 7:27 AM, still without changing the phone's audio mode, so Ara stays audible.", "area": "Halloween"},
-  {"date": "Oct 24, 2026", "change": "Spooky mode (preview): an owl now visits too. It glides down to a perch near the top, blinks, hoots \"hoo, hoo-hoooo\" and flies off.", "area": "Halloween"},
-  {"date": "Oct 24, 2026", "change": "Fix (preview), second try: the page no longer changes the iPhone's audio mode at all, as before 7:27 AM, so Ara can be heard again. Halloween sounds may now be silent when the phone's silent switch is on.", "area": "Voice"},
-  {"date": "Oct 24, 2026", "change": "Fix (preview): Ara's voice was silent on iPhones since the Halloween sound fix at 7:27 AM, because the page asked the phone for plain playback. A conversation now asks for talk-and-listen audio, and the app goes back to normal when it ends.", "area": "Voice"},
-  {"date": "Oct 24, 2026", "change": "Spooky mode (preview): say \"spooky mode\" to Ara, or tick it in Settings, for a night look (orange and purple, cobwebs, a flickering candle by the logo), Ara as a slightly slower haunted-house host with spooky asides (facts and save rules unchanged), a creaking door when a form opens, thunder on Save, an organ sting and a cackle with bats on Closed Won, and a visitor every 15 to 20 seconds, now with bats. \"Normal mode\" turns it off; it ends by itself on Nov 1. Sounds never play during a conversation.", "area": "Halloween"},
+  {
+   "date": "Oct 27, 11:20 PM",
+   "change": "Preview: every tool refusal now ends with a way out for the engine (tell the officer what's needed or that it can't be done that way, ask what's next, don't call the same tool again), and the short refusals (no name, no phone number, Do Not Contact, unknown stage, no open opportunity, unknown tool, form changed) say what to do instead. 121 checks.",
+   "area": "Voice: engines (all)",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill, Oct 27 11:02 PM ET: \"implement changes 1 to 3 and then you move directly on to running the 30 tests again for each engine\"; in the spoken runs Gemini asked the same question seven times after a refusal it could not act on."
+  },
+  {
+   "date": "Oct 27, 11:20 PM",
+   "change": "Preview: a tool call that arrives between the end of the officer's speech and the engine's transcript of it now waits for the transcript, up to 2 s, before the form is checked, so the evidence rule judges the fields against what the officer just said. Logged as \"held N ms for the officer's transcript\". 121 checks.",
+   "area": "Voice: engines (OpenAI)",
+   "requestedBy": "Carverhill",
+   "why": "Same request; OpenAI sends its tool call before its transcript, and the evidence rule dropped a capacity rating and a meeting type the officer had said (3 of its 4 unsaved conversations in the quiet spoken run)."
+  },
+  {
+   "date": "Oct 27, 11:20 PM",
+   "change": "Preview: turn-detection settings (silence length, speech threshold) and a high-pass filter on the microphone can be set per consistency run (workflow inputs turn and mic_hp), to find what makes Grok answer sooner in car noise. Nothing changes on phones until a setting proves itself. 121 checks.",
+   "area": "Voice: engines (Grok)",
+   "requestedBy": "Carverhill",
+   "why": "Same request; Grok's reply time doubled in car noise (median 1.7 s to 3.9 s) because its turn detection waits for a silence the rumble never gives."
+  },
+  {
+   "date": "Oct 27, 7:07 PM",
+   "change": "Preview: OpenAI engine, a held reply request now waits until the first one has reported started (it used to go out after half a second regardless, and OpenAI refused it when the first took longer). Nothing changes for Grok or Gemini. 120 checks.",
+   "area": "Voice: engines (OpenAI)",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill, Oct 27 6:44 PM ET: \"Do another diagnostic run or two on OpenAI\"; the 7:03 PM run's voice log showed the refusal happening 0.5 s after the hold."
+  },
+  {
+   "date": "Oct 27, 6:49 PM",
+   "change": "Preview: Carry on when the phone still holds the sound. A call's start (mic tap or Carry on) now waits for the phone's sound engine to run before Ara speaks; if the phone keeps it (after a switch to another app, iOS can leave the page's sound interrupted), the screen says so and the call waits up to 30 s instead of 6 s; a line Ara says while the sound is paused is said again once the sound is back. 120 checks.",
+   "area": "Voice: connection",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill's 6:16 PM ET call, Oct 27: the app went to the background, he tapped Carry on, Ara came back on the line but the phone played nothing and the mic stayed muted (\"Build it in preview\", 6:41 PM)."
+  },
+  {
+   "date": "Oct 27, 6:28 PM",
+   "change": "Preview: OpenAI engine, second step. Every reply request on OpenAI goes through one gate, scripted lines included (a scripted line used to race the tool-result request and be refused); a scripted line OpenAI refuses goes again as a scripted line after the running reply; a question Ara has just asked in her own words is not sent again as the app's scripted copy (\"What's the first name?\" was heard two to four times at the start of every contact). The consistency runner no longer counts a tool-only reply as a wordless one. Nothing changes for Grok or Gemini. 119 checks.",
+   "area": "Voice: engines (OpenAI)",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill, Oct 27 6:21 PM ET: \"Fix the adapter as you propose and rerun OpenAI test\", after the OpenAI check run (5 of 6 saved, 3 refused requests, repeated opening question)."
+  },
+  {
+   "date": "Oct 27, 6:08 PM",
+   "change": "Preview: OpenAI engine fixes from comparison run 1. One reply request at a time on OpenAI (a second waits for the first to finish; a request OpenAI refuses because one is already running goes again afterwards instead of being lost); a finished reply with no words is treated as silence, not a dead line (the app asks once more with the officer's own words quoted, and never opens a fresh line for it); OpenAI's rules say to call the tool first with no preamble. Nothing changes for Grok or Gemini. 119 checks.",
+   "area": "Voice: engines (OpenAI)",
+   "requestedBy": "Carverhill",
+   "why": "Run 1 of the engine comparison (Oct 27, 5:38 PM ET): OpenAI saved 5 of 19 fair conversations because the app read its refused requests and empty replies as a dropped line and reconnected; \"make the openai fixes and test it to see if it's fixed, and then report back\""
+  },
+  {
+   "date": "Oct 27, 5:55 PM",
+   "change": "Preview: the greeting says hands-free is on. On a phone's first three calls Ara opens with \"Hi Dana, I'm Ara. Hands-free is on, so you don't need to look at your phone: I'll read each form back and save it when you say yes. What would you like to do?\"; after that, \"Hi Dana, I'm Ara, hands-free is on. What would you like to do?\". The call-bar button now reads \"Turn hands-free off\" while it is on and \"Turn hands-free on\" while it is off, so a tap can't flip it by accident. 119 checks.",
+   "area": "Voice: greeting, hands-free",
+   "requestedBy": "Carverhill",
+   "why": "A tester's Oct 27 3:13 PM call: nobody told her hands-free was on, so she tapped Save and then tapped the Hands-free button, which turned it off. \"maybe we have ara announce at the start that she's in handsfree mode so 'you don't have to look at your phone'?\"; \"yes build on the preview with the usual checks\""
+  },
+  {
+   "date": "Oct 27, 5:26 PM",
+   "change": "Preview: a third voice engine, Google Gemini Live (gemini-3.8-live), for the provider comparison. Gemini speaks its own wire format, so a translating socket in the app turns the app's events into Gemini's and back: the microphone is resampled to 16 kHz, Gemini's audio and transcripts come back as the app's usual events, Ara's tool calls and the app's guidance travel in Gemini's tool messages, and a \"go away\" from Gemini reconnects with its session handle. The key holder mints a short-lived Gemini token. The consistency run now runs the engines side by side (one job per engine, started together, so time of day cannot favour one), measures every engine the same way from the app's own taps, and reports reply times per flow with mean, standard deviation, median, 90th percentile, slowest and the count over 3 s. Nothing changes for Grok. 118 checks.",
+   "area": "Voice: engines; consistency run",
+   "requestedBy": "Carverhill",
+   "why": "\"I would like us to run the OpenAI, grok, and Gemini tests starting at same time so there is no time of day difference\"; \"compare standard deviation on response times too - capture that for each category of call for each engine\""
+  },
+  {
+   "date": "Oct 27, 5:10 PM",
+   "change": "Preview: a second voice engine, OpenAI Realtime (gpt-realtime-2.1), for the provider comparison. Settings > Voice engine on the preview page (hidden on live; Grok stays the default): the key holder mints an OpenAI pass, the socket, session body and voice list follow the engine, a scripted line is asked for word for word in a reply of its own (OpenAI has no force line), and after a drop the last eight lines are replayed into the new session as text (no conversation resumption). The consistency run takes a provider input and now reports the first sound of a reply after the officer's words (median, 90th percentile, slowest). The key holder also answers GET /providers with which engine keys exist, and a \"Which keys are set\" workflow does the same for GitHub. Nothing changes for Grok.",
+   "area": "Voice: engines",
+   "requestedBy": "Carverhill",
+   "why": "\"Let's begin preparing to run the same harness but with two new providers - Google and OpenAI voice engines\"; \"give me the links to where I setup a Google and OpenAI voice api key - I want to run those tests\""
+  },
+  {
+   "date": "Oct 27, 4:22 PM",
+   "change": "Preview reset to release 1.0 (the Oct 26, 8:31 PM ET live build) plus the Oct 26 8:48 PM visitor-sound fix, which goes live with this build. Everything else since 1.0 (the Oct 27 morning call fixes, the phone's own voice lines, app-only forms, the line cache and the Oct 27 3:07 PM fixes) is set aside on the branch rnd-app-voice-forms in the repository; the test harness, the consistency run and the Worker stay on main. 1.0 is the golden master.",
+   "area": "Release",
+   "requestedBy": "Carverhill",
+   "why": "\"I am not seeing the ROI on testing this approach further\": the app-speaks-the-forms approach moved the problems (no interruption of read-backs, questions asked twice) rather than removing them; \"let's do that\" to option A (preview identical to production), \"put the visitor sound fix back into preview please, and then to production if it passes our tests\""
+  },
+  {
+   "date": "Oct 27, 3:07 PM",
+   "change": "Preview: fixes from Jim's 2:26 PM ET call (plan reviewed by Carverhill first). (1) The audio of every line the app says is kept by the key holder (Cloudflare KV, 30 days): the first phone to need a line waits on xAI text-to-speech, every later fetch of the same words in the same voice is instant. (2) A line not back in 2.5 s gets a second request alongside, and the first to answer plays (five fetches in the call took 8 to 10 s). (3) The campaign question for every entity is fetched ahead when the entity is asked; the after-save line waits 10 s like a form line. (4) No double question: when Ara's side answer already ends with the form's question the app doesn't ask it again, and Ara is told never to end with it. (5) \"Are you there?\" inside a form is answered by the app alone (\"I'm here.\" and the pending question); \"where were we?\" and \"what are we filling out?\" get the form's name, what it still needs and the question. (6) The save-or-details answer needs a clear word; a question or an \"okay\" inside a longer sentence is no longer a save. (7) A yes or no that Grok puts into the summary or next step is thrown out and the field keeps what it had (the report had saved with Summary \"Yes.\"). (8) A next step without a date gets \"When is it due?\" alone. (9) A reconnect or unlock with a form open names the form before the pending question. (10) Every text-to-speech fetch is its own activity-log row (time, cached or xAI, whether the second request won) and the conversation's end row sums them up, so the voice's latency can be compared with Grok's.",
+   "area": "Voice: forms, lines, key holder",
+   "requestedBy": "Carverhill",
+   "why": "\"Look at latest log and tell me your proposed changes\" (Jim's 2:26 PM call: \"both you and Ara asked me to save it, one after the other\", \"asking multiple questions at the same time\"); \"Go\"; \"log xai text to speech response times separately so we can see if using it has introduced more problems with latency\""
+  },
+  {
+   "date": "Oct 27, 2:20 PM",
+   "change": "Preview: app-only forms. While a form is open the app asks every question itself, in its own voice: the required fields first, one at a time and in form order (\"New contact. What's an email address or mobile number for Jordan?\"), then \"That's everything the form needs. Shall I save it, or add the optional details first?\", then the optional details one at a time, then the read-back. Ara only turns the officer's words into tool calls inside a form; if she starts to speak to an answer, the reply is cut and the app asks its question again; a side question (\"what does substantive mean?\") is left to Ara and the app asks again after her answer. \"What's next\" with a form open names exactly what is still needed. The app's lines are fetched ahead when a form opens and cached, and the app waits up to 10 s for its own line inside a form before Ara's force line takes over. Settings has a switch for the app's voice: Leo (a different voice, the default) or the same voice as Ara. 124 checks; harness 13 of 16 walks clean locally, the three misses being harness expectations written for the old flow.",
+   "area": "Voice: forms",
+   "requestedBy": "Carverhill",
+   "why": "His decision after the 1:14 PM ET call (two voices, the form said to be waiting on an answer five times): \"Ok let's build it in preview, but can we still recognize when a user asks a side question and leverage ara's ai there?\" (Oct 27, 1:32 PM ET); the switch: \"Can you add a separate switch so I can toggle between Leo and Ara in settings without a new build being required?\" (1:37 PM ET)."
+  },
+  {
+   "date": "Oct 27, 12:50 PM",
+   "change": "Preview: a reply from Grok that arrives as words only is still flagged by the heard check when the phone's own line follows within a second (the newer line used to drop the older line's check), so a silent reply reaches the \"Are you there?\" readings (found by harness run 3c).",
+   "area": "Voice: heard check",
+   "requestedBy": "Carverhill",
+   "why": "Plan posted after harness run 3c; \"Go\" (Oct 27, 12:44 PM ET)."
+  },
+  {
+   "date": "Oct 27, 12:18 PM",
+   "change": "Preview: a scripted line (a question or read-back) still waiting for its turn when its form is saved is dropped instead of playing after the save line. Found by the test harness (run 3b, Words without voice): the stale read-back made the next \"yes\" read as an answer to \"Shall I save it?\", and the Cultivation form was refused.",
+   "area": "Voice: scripted lines",
+   "requestedBy": "Carverhill",
+   "why": "Plan posted after harness run 3b; \"Go\" (Oct 27, 12:10 PM ET)."
+  },
+  {
+   "date": "Oct 27, 11:26 AM",
+   "change": "Preview: fixes from the 10:21 AM ET call (plan reviewed by Carverhill first) and the stand-in voice. (1) Every line the app says itself (scripted questions, read-backs, the reconnect line, the save acknowledgement) is spoken by the app in its own stand-in voice, xAI's \"leo\", so the officer can tell the app from Ara; Grok's force line in Ara's voice is the fallback when the audio doesn't arrive within 4 s. The four fixed recordings (line dropped, still trying, back, Ara's taking a moment) are the release 1.0 ones in the Kokoro voice with their old wording. (2) Every optional question says it is optional and how to skip it or save the form. (3) A rating (or other optional answer) that arrives through the draft tool during the optional questions is acknowledged (\"Rating B is on the form.\") before the next question. (4) A question passed to the project team, or a process question, while a form is open comes straight back to the form's pending question; never \"what would you like to do next\". (5) The note to Grok after \"no mobile\" no longer reads as a line to say. (6) \"What's next\" on a complete form reads it back instead of saying it has everything it needs. Also from the test harness (run 2): an invented potential amount on an opportunity is now left out like every other amount; the no-reply watchdog is armed again when the officer spoke while the app's own line was still to come.",
+   "area": "Voice: scripted lines, optional fields, forms",
+   "requestedBy": "Carverhill",
+   "why": "\"Go on the new preview build including 5, but make the voice when we stand in be the old voice so I can tell when stand in by the app is occurring\" (Oct 27, 10:43 AM ET), after the 10:21 AM ET call review."
+  },
+  {
+   "date": "Oct 27, 10:11 AM",
+   "change": "Preview: fixes from the 9:38 AM ET call (plan reviewed by Carverhill first). (1) A process question about moving to Cultivation gets the app's own rule first (a capacity rating and a substantive interaction are required), plus two new FAQ entries on it. (2) \"What's next\" or a process question asked while a form is open is answered in the app's words with what the form still needs, then saving it; Ara's rules say the same. (3) A reply that starts with the same words as the line Ara just said within 20 s is cut before it plays; the doubled-reply guard now watches the officer's transcribed words, not the voice detector. (4) The \"say I'm here and repeat your line\" prompt is dropped when Grok already answered the officer's \"Are you there?\" herself. (5) The heard check measures the phone's own audio for lines the app says in Ara's voice.",
+   "area": "Voice (preview)",
+   "requestedBy": "Carverhill",
+   "why": "\"Another challenging call\"; \"Build on preview\". In-call notes: make a substantive interaction a requirement before Cultivation (it already is; the FAQ answer was wrong); \"you said twice, it isn't covered in this proof of concept\"; a generic event for the user asking for the next step while filling out a form, with the answer always the actions necessary to complete the form and save it."
+  },
+  {
+   "date": "Oct 27, 9:37 AM",
+   "change": "Preview: fixes from the 9:21 AM ET call. The optional-field repeat guard no longer throws out a long answer because the one-letter rating \"C\" is inside it (a short last answer only counts as a repeat when said again word for word), so \"He met her at the Halloween party\" fills How we met instead of being asked again. The phone's \"Give me a moment.\" recording waits until Ara's own sound has ended instead of speaking over her. The same pending question forced after a second drop in a row says \"Sorry, the line dropped again. I'm still waiting on this: ...\" instead of repeating the first sorry line.",
+   "area": "Voice (preview)",
+   "requestedBy": "Carverhill",
+   "why": "\"Look at the log, not a good one. Ara asked me 4 or 5 times \"how did you meet Veronica?\".\" In-call notes: \"the local Ara voice spoke over the real Ara voice\"; \"the how we met question for a new contact keeps being asked repeatedly even after it's been answered\"."
+  },
+  {
+   "date": "Oct 27, 9:17 AM",
+   "change": "Preview: a hands-free save is acknowledged by the app itself, in Ara's voice. The moment after \"Yes\" to a read-back (where Grok took up to 20 s on Oct 27) the app says the saved line, the one-time undo reminder and the next step itself (\"Contact saved for Valerie. Say undo if that's wrong. Next is to create an opportunity for Valerie. Want to do that now?\"), spoken by xAI text-to-speech in the same Ara voice through the Worker's new /tts route; Grok is told what was said and waits for the answer. If the audio doesn't arrive within 2.5 s, Grok says it as before. While the phone plays one of its own lines, the microphone is muted to Grok and the officer can talk over it.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Yes build it please\" (to the offer of the app speaking the save line itself in Ara's voice, after \"19.8 seconds is a long time\")"
+  },
+  {
+   "date": "Oct 27, 9:08 AM",
+   "change": "Preview: the phone's own spoken lines are in Ara's voice. The four status lines the phone plays itself (line dropped, still trying, back, give me a moment) are recorded with xAI text-to-speech in the same \"ara\" voice Grok uses, by a workflow (\"Record Ara's lines\", tools/ara-lines.json), replacing the earlier recordings in another voice. The lines are first person now: \"Sorry, the line dropped. I'm reconnecting.\", \"Still trying to reconnect.\", \"I'm back.\", \"Give me a moment.\"",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Any way to have the app use Aras voice to ask? Disconcerting to hear a different voice?\""
+  },
+  {
+   "date": "Oct 27, 8:19 AM",
+   "change": "Preview: from the Oct 27 7:50 AM driveway call. What the officer said while the line was down is replayed to Ara from the phone's own mic buffer once the line is back (the last 40 s of the mic are kept; from Ara's last word to the reconnect, clear speech only, up to 30 s; the phone's status recordings go as silence), so they don't repeat themselves; if the replay brings no reply in 7 s, or nothing clear was said, the app says \"Sorry, I lost you for a moment. Could you say that again?\" itself. \"Move on\" to a later question is no longer taken as \"no mobile\" (the mobile question is over once anything else happens, or after 90 s). No \"Ara's taking a moment\" while reconnecting (it overlapped \"The line dropped\"). Ara ends a reply that finishes something with a question about what's next.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Take a look at my last call log including my idea to always have you cache a copy of my last words so you can send to Ara when the app reconnects with her, that way I don't have to repeat myself when she comes back\"; in the call: \"you should always ask me what I wanna do next\" and \"Ara seemed to not hear what I said last, and she should tell me that\""
+  },
+  {
+   "date": "Oct 27, 7:47 AM",
+   "change": "Preview: fixes from the Oct 27 11:21 AM preview call. A spelled last name replaces Ara's own spelling (\"B, B A I L E Y\" had become Bbailey; a false-start letter is dropped); \"No\" to the mobile question moves the New contact form on to the capacity rating itself (the form had stalled until \"save it\"); the first slow reply says \"Ara's taking a moment.\" (a recording) instead of the ping, which only repeats after it, and no ping while reconnecting; a turn with no reply started within 6 s gets a reply request (36 s of silence seen); \"What's the next step for X?\" comes from the app's journey rules (new get_next_step tool, 38 tools) instead of Ara's reading of the records; an opportunity blocked only by a missing capacity rating has the app ask the rating itself and reopen the opportunity once it is saved.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Take a look at my latest preview call log. Lots of issues\", and his three notes in the call: a verbal cue instead of the low-connectivity pings; keep leading the user to the next step; when guiding, say the contact needs a capacity rating and take them down that path"
+  },
+  {
+   "date": "Oct 26, 11:12 PM",
+   "change": "Preview: Ara responsiveness, items 1-4 of the Oct 27 review. The app logs how long Ara's first word takes after the officer stops (a log row when over 3 s, and a per-call summary on the Conversation ended row); a save or screen change no longer re-sends Ara's whole instructions, the Right now section rides with her next reply instead; the tool definitions were trimmed (32.4 KB to 28.6 KB per turn); Ara keeps to one short sentence per turn unless a read-back, briefing or list was asked for. Items 5-6 (silence window, earlier greeting) wait for the new timing numbers.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Can you review the code for any refactoring or optimizations we could make to make Ara more responsive / faster to reply\", then \"Go\" for items 1-4"
+  },
+  {
+   "date": "Oct 26, 8:48 PM",
+   "change": "Preview: visitors were silent after the app had been in the background (iOS leaves their sound engine interrupted for good). On coming back, and on the next tap, an engine that won't resume within a second is thrown away and the next tap starts a fresh one.",
+   "area": "Visitors (themes)",
+   "requestedBy": "Carverhill",
+   "why": "\"After app goes into background, when you come back, visitors make no sounds\""
+  },
+  {
+   "date": "Oct 26, 8:14 PM",
+   "change": "Live: the call-review changes of 8:14 PM (status read-back with person and due date, entity and campaign from the planned ask, task status FAQ, task counts first and one person's tasks, task choices and shorter next-step offers, show_visitor tool, wording). Hey Ara start-up address stays preview-only.",
+   "area": "Voice, Tasks, Opportunities, FAQ",
+   "requestedBy": "Carverhill",
+   "why": "\"Make it live\""
+  },
+  {
+   "date": "Oct 26, 8:14 PM",
+   "change": "Preview, from the review of the Oct 26 7:01 PM call: a status change is read back with the task, the person and the due date; an opportunity takes its entity and campaign from the planned ask, and Ara reads a blank entity, campaign or potential as Not set; Process FAQ entry for task status choices; a long task list gives counts first and one person's tasks can be asked for; Ara offers the choices after reading a task and keeps next-step offers short while you work a list; new show_visitor tool (owls on demand, 37 tools); \"We'll fill in the form together\" wording.",
+   "area": "Voice, Tasks, Opportunities, FAQ",
+   "requestedBy": "Carverhill",
+   "why": "\"Can you listen to my last couple of interactions with Ara and come up with a recommendation\" then \"Why not do them all except make a note to put 4 in backlog\""
+  },
+  {
+   "date": "Oct 26, 8:14 PM",
+   "change": "Backlog, not built: notes on a Task (Kevin wanted to note when a check was collected while marking the task done; tasks have no note field). Would add a Note field, by voice too; maps to the SpiceCRM Task description; a guide change.",
+   "area": "Tasks (backlog)",
+   "requestedBy": "Carverhill",
+   "why": "\"make a note to put 4 in backlog for us to think further about\""
+  },
+  {
+   "date": "Oct 26, 6:57 PM",
+   "change": "Live: the skeleton plays Carverhill's laugh-only recording (skeleton-laugh.mp3, 2.8 s) 4 visits in 5 and his full line every fifth visit, together with the 6:47 PM visitor changes (no visitor twice running, pumpkin sometimes drops from the top). Hey Ara start-up address stays preview-only.",
+   "area": "Visitors (spooky mode)",
+   "requestedBy": "Carverhill",
+   "why": "\"use this laugh only audio file 4 out of every 5 times he appears\" and \"if it passes the tests on preview just take it live\""
+  },
+  {
+   "date": "Oct 26, 6:47 PM",
+   "change": "Preview: visitors never come twice running (the picker skips the last one, in every theme). The pumpkin drops from the top half the time, bounces along the bottom and rolls off left; the other half it rolls along the bottom as before.",
+   "area": "Visitors (themes)",
+   "requestedBy": "Carverhill",
+   "why": "\"Can you make it so none of the visitors can play twice in a row... Also can you have pumpkin sometime come from top and go to bottom?\""
+  },
+  {
+   "date": "Oct 26, 6:21 PM",
+   "change": "Live: the skeleton visitor in spooky mode (original drawing; walks to mid screen, nods his skull and waves while Carverhill's recording plays, then walks off). The Hey Ara start-up address stays preview-only.",
+   "area": "Visitors (spooky mode)",
+   "requestedBy": "Carverhill",
+   "why": "\"Make it live\""
+  },
+  {
+   "date": "Oct 26, 6:21 PM",
+   "change": "Preview: the skeleton's skull now nods on its own when he stops (32 degrees over 1.6 s); the faint whole-body tilt is gone.",
+   "area": "Visitors (spooky mode)",
+   "requestedBy": "Carverhill",
+   "why": "\"He does not tip his skull, but he does wave\""
+  },
+  {
+   "date": "Oct 26, 6:14 PM",
+   "change": "Preview: the skeleton visitor walks to mid screen, stops, plays his recording while he tips his skull and waves, then walks off (12 s in all).",
+   "area": "Visitors (spooky mode)",
+   "requestedBy": "Carverhill",
+   "why": "\"Can you have him get to mid screen, pause, play audio, then move off screen\""
+  },
+  {
+   "date": "Oct 26, 6:07 PM",
+   "change": "Preview: the skeleton visitor plays Carverhill's recording (skeleton.mp3, 5.5 s, ElevenLabs) as he walks across the screen, instead of the cackle.",
+   "area": "Visitors (spooky mode)",
+   "requestedBy": "Carverhill",
+   "why": "\"can you have the skeleton visitor play this mp3 as he goes across the screen\""
+  },
+  {
+   "date": "Oct 26, 5:28 PM",
+   "change": "Preview: a skeleton visitor in spooky mode. He strolls in along the bottom, stops, tips his skull, waves with a cackle and strolls off. An original drawing (the licensed character's photo stays out of the public app).",
+   "area": "Visitors (spooky mode)",
+   "requestedBy": "Carverhill",
+   "why": "Asked whether the Jack Skellington image could be used, then \"go ahead and add him in to the preview!\""
+  },
+  {
+   "date": "Oct 26, 11:17 AM",
+   "change": "Finding, no code change: the screen wake lock holds in the app added to the home screen (a live call ran past a 30 s Auto-Lock; 14 of the 18 Oct 25 calls ran past 3 minutes) but not in the preview opened from a link in Safari, which locked at 30 s every time. The lock = pause build stays as a safety net for locks iOS does anyway. To test the preview the same way, add it to the home screen too.",
+   "area": "Connection"
+  },
+  {
+   "date": "Oct 26, 11:00 AM",
+   "change": "Live 11:00 AM: a call no longer ends itself at the unlock (the fresh sound start had cleared the mic wait while the old mic's timer still ran: \"mic muted, didn't come back in 45 s\" five seconds after a lock, 10:53 AM). The fresh-start-into-every-call experiment is taken out: both 10:52 and 10:53 AM calls still locked 30 s after the tap. Lock = pause and the speaker fix held in all three locks of those calls.",
+   "area": "Connection"
+  },
+  {
+   "date": "Oct 26, 10:49 AM",
+   "change": "Taken out at 11:00 AM, an experiment: a few seconds into every call, at a quiet moment, the app starts its sound and mic afresh once (the same fresh start that follows a lock), and after any lock it asks for the screen wake lock again. In the 10:39 AM test the phone stopped locking the screen for the rest of the call after the first fresh start, so this may keep the screen on from the start.",
+   "area": "Connection"
+  },
+  {
+   "date": "Oct 26, 10:38 AM",
+   "change": "Live 11:00 AM: after the phone unlocks, the app starts its sound and mic afresh before the line reopens, so Ara comes back on the speaker the call started on (iOS had brought her back on the earpiece after the lock). If the phone refuses the fresh start, the old sound and mic stay.",
+   "area": "Connection"
+  },
+  {
+   "date": "Oct 26, 10:16 AM",
+   "change": "Live 11:00 AM: lock = pause. When the phone locks (the page goes hidden) the app closes the voice line 3 s later, so nothing is charged while the phone sits locked, keeps the conversation, and reopens the same conversation by itself the moment the app is back, asking the pending question again, with no drop tone and no Carry on tap (as after a dead spot). Hidden longer than 25 minutes, the call ends with the Carry on card. Replaces the 10:02 AM 45 s wait: the 10:06 AM test showed a locked iPhone mutes the mic and pauses the sound anyway, so an open line only cost money.",
+   "area": "Connection"
+  },
+  {
+   "date": "Oct 26, 10:02 AM",
+   "change": "Superseded by the 10:16 AM lock = pause: when the phone locks (the page goes hidden) the app keeps the voice line for 45 s and logs what the phone does to the sound and mic, ending the call only if the page stays hidden; the sound and mic waits stretch to the same limit while hidden. Until now the call ended the moment the phone locked (the 9:55 AM pocket test with Auto-Lock at 30 s ended at the lock with the Carry on card, though the screen wake lock had been granted).",
+   "area": "Connection"
+  },
+  {
+   "date": "Oct 26, 9:43 AM",
+   "change": "Live 11:00 AM: when a conversation can't start because the key holder refuses a voice pass, the end row in the activity log carries the reason (\"couldn't start: service_429\"), not just \"Conversation ended\" (four silent ends at 9:37 AM).",
+   "area": "Log"
+  },
+  {
+   "date": "Oct 26, 9:27 AM",
+   "change": "Live 11:00 AM, from the 9:03 AM driveway call: (1) a mic muted by the phone now keeps the call for 45 s instead of 6 s, because iOS puts up an \"Audio Recording / Stop audio recording?\" dialog when the phone locks during a call and the mic is back only after Cancel; whether the screen wake lock was granted, refused or released is logged. (2) An entity said over two lines (\"the Idaho entity\" then \"the PAC\") now counts as said; it was dropped as unsaid and the opportunity's own entity (Citizens Alliance C3) stayed on the planned ask and was saved. A required entity with nothing to prefill now shows Not set instead of the first entity in the list. (3) \"Let's go add an ask\" opens the planned ask form (it was refused as not asked for). (4) The next action in Cultivation is named as the button is, Add planned ask.",
+   "area": "Connection, Rules, Voice"
+  },
+  {
+   "date": "Oct 26, 7:01 AM",
+   "change": "Live 7:18 AM: the search box on Contacts, Opportunities and Tasks takes the theme's panel colour. In spooky mode it stayed white (Carverhill's screenshot).",
+   "area": "Spooky mode, Screens"
+  },
+  {
+   "date": "Oct 25, 10:32 PM",
+   "change": "Preview only: a \"Hey Ara\" start-up address. The app's address ending in #call opens straight onto one big mic (one tap and the conversation starts; the phone only turns the mic on after a tap). Settings has the address with a Copy button and the four iPhone steps: a Shortcut that opens the address, a Vocal Shortcut \"Hey Ara\" that runs it, allowed when locked. On a first visit the welcome shows instead. The open is logged as \"Opened with the Hey Ara start-up address\".",
+   "area": "Voice, Settings"
+  },
+  {
+   "date": "Oct 25, 6:40 PM",
+   "change": "Editing a task by name: the exact text wins, otherwise the task sharing the most words (the person's name doesn't count). Until now any one shared word made two tasks \"match\" and the app asked which one, even with the exact words (three bug reports from the 5:57 PM call).",
+   "area": "Tasks, Voice"
+  },
+  {
+   "date": "Oct 25, 6:40 PM",
+   "change": "Scripted lines: when Ara answers on her own while a scripted line is still to play, the app no longer takes her reply for the line starting; if she said much the same thing, the late copy is cut. The task status question (\"Mark X as done?\") is a scripted line, so she doesn't announce it and then ask it. New Needs attention filter hands_free lists the hands-free saves still to be checked.",
+   "area": "Voice, Hands-free"
+  },
+  {
+   "date": "Oct 25, 5:35 PM",
+   "change": "The app tracks where a form process stands (an optional question pending, a read-back waiting for a yes, the substantive question, or which required fields are missing). After a reconnect it puts that in Ara's instructions and asks the pending question itself as a scripted line; Carry on hands over the same position.",
+   "area": "Voice line, Hands-free"
+  },
+  {
+   "date": "Oct 25, 5:40 PM",
+   "change": "Heard check: for every line Ara says the phone records the voice audio received, the sound it produced (an analyser on the speaker path) and what the mic heard while it played; a line that fails a reading is logged (\"Ara's line may not have been heard: ...\"). \"Are you there?\" logs those readings for her last line, wakes the sound if the phone paused it, and Ara repeats the line word for word.",
+   "area": "Voice line, Log"
+  },
+  {
+   "date": "Oct 25, 5:40 PM",
+   "change": "Scripted lines get 8 s to start before Ara says them herself (was 5 s; five lines fell back in the 4:42 PM call and then played late), and the fallback tells her to say the exact words. A form left open from an earlier conversation is in Right now, so a new conversation knows about it. Log events carry an id and the key holder stores a batch that arrives twice only once (the 4:55 PM log had 20 s of rows doubled).",
+   "area": "Voice line, Log"
+  },
+  {
+   "date": "Oct 25, 5:05 PM",
+   "change": "The dead-spot limit is 5 minutes (Carverhill's choice; it was 10 minutes for twenty minutes, and 2 before that).",
+   "area": "Voice line"
+  },
+  {
+   "date": "Oct 25, 4:55 PM",
+   "change": "In a dead spot the app keeps reconnecting for up to 10 minutes (was 2) and picks the conversation back up by itself when the signal returns; after the first minute down, \"Still trying to reconnect\" is said every 30 s instead of every 10 s.",
+   "area": "Voice line"
+  },
+  {
+   "date": "Oct 25, 4:35 PM",
+   "change": "A source check guards against a // comment that swallows code on its line (it failed six checks once today): tools/lint-comments.js runs before every publish and as a suite check, which also makes sure every app script parses.",
+   "area": "Tests"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Hands-free is now on from the start of every conversation, for everyone: the assistant reads each finished form back and saves it on the officer's yes, without any tapping. Saying \"I've parked\" or that you'll tap yourself turns it off for that conversation. Also from the 3:50 PM walk: when the assistant offers the next form in two sentences (\"We were about to decide on moving Sandy to Cultivation.\" then \"Want to do that now?\"), a yes now opens the form; the guard used to read only the last sentence and refused three times.",
+   "area": "Hands-free, Rules"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "From the 3:38 PM walk: a fresh line that didn't open within 10 seconds made the app give up after one try, because the two-minute rule counted from the start of the call while the new line was opening. The clock now runs from when the voice service was last heard, so the app keeps reconnecting through a dead spot.",
+   "area": "Connection"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "The phone's built-in speech is no longer used at all. An iOS \"Audio Recording / Stop audio recording?\" dialog appeared over the app today, muting the mic and ending the call; the first time was within a second of the phone's own voice saying the voice service wasn't answering. Status lines are recordings played through the call's own sound, and the not-answering message is shown on screen instead of spoken.",
+   "area": "Connection"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "The evidence rule is now checked exhaustively by the app's own test run: every form, every pick-list option, flag, amount and date (634 cases), each dropped when unsaid and kept in several ordinary phrasings. The table found and fixed three gaps: \"in two weeks\" (and similar) counts as a date, \"half a million\" as an amount, and the Event and Email meeting types have word lists.",
+   "area": "Rules, Tests"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Preview only: general evidence rule. Every value the voice model puts on a form must be traceable to the officer's own words in the call (amounts in digits or words, entity names, everyday words for each pick-list option, the flag's own word, something date-like for dates). A value with no evidence is left off the form, written in the Voice log, and named to the assistant as left out so she asks instead of reading back a guess. Free text (names, email, summary, notes) is not checked.",
+   "area": "Rules"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Found by the Ara consistency run: the voice model sent an amount of zero on a planned ask, the read-back said $0 and it saved. A money field of $0 now counts as missing: the app leaves it blank, tells the assistant to ask for the real amount, and Save asks for it.",
+   "area": "Rules, Forms"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "From the 12:41 PM call (five team notes): the campaign question is asked and an entity-worded answer no longer fills it; a repeated optional answer after a dropped line is ignored instead of filled in; the assistant explains that a next step becomes a Task and asks whether to set it, never suggesting the step, date or way of contacting; the call shows Speaking only while sound is actually playing; the phone's own status recording is cut short when the line comes back (no more talking over Ara); and within two minutes of a save a new form opens only on the officer's word, otherwise the assistant offers it in one question first.",
+   "area": "Rules, Forms, Connection"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "From the 12:18 PM driveway call: the call no longer hangs up after 3 reconnects; while the phone is online it keeps reconnecting (with the spoken \"still trying\" line) and gives up only after 2 minutes without a word from the voice service. When the app drops a capacity rating the officer never gave, the assistant is told, so she can't read it back. Asking for hands-free together with a task no longer gets \"What would you like to do?\". The Interested outcome is kept only when the officer calls the person interested, keen, positive and so on (consistency rerun: 1 of 10 kept on the word \"interest\" in passing).",
+   "area": "Connection, Rules"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Preview only: an interaction report keeps only what the officer said. If the voice model marks it substantive, picks an outcome or invents a next step the officer never gave, the app leaves those out, tells the assistant so, and asks the substantive question and the next step itself (found by the Ara consistency run: 2 of 6 reports marked substantive by the model, one with an invented next step).",
+   "area": "Rules"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Settings has a switch, off by default, to record the phone's location (to about 10 metres) in the notes about the voice line dropping, reconnecting or ending; the activity page links each spot to a map; the privacy notice says so.",
+   "area": "Connection"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Preview only, from the 10:02 AM call: the reconnect lines are recordings played through the call's own sound (the phone's speech is silent during a call on an iPhone), with \"You're back with Ara.\" when the line returns; when Ara reads a form back herself in full and the officer says yes, the app saves instead of reading it back again; the optional details are led, not offered (\"Let's take the next step: a few optional details...\"), each field asked as \"Fill it in, or move on?\"; a rating said before the questions start is taken; \"move on\" or \"no\" to a fill-in field skips it; the next-step question says a substantive interaction needs one and suggests an example; after a drop with no form open Ara carries on with the person just worked on; a quiet line that is dead gets a fresh line; a line up for 20 s starts the reconnect count afresh.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Preview only: Settings > Version shows the build stamp as written (iPhone showed Invalid Date).",
+   "area": "Settings"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Preview only, from the 9:06 AM call: a reconnect can no longer hang on fetching a voice pass (each try is limited to 6 s and tried again every 2 s for up to 2 minutes; one took 89 s and the next never came back, so the officer had to end the call); while the line is down the phone itself says \"The line dropped. Reconnecting you to Ara.\" at 5 s, \"Still trying to reconnect.\" at 12 s and every 10 s after; a yes to a read-back saves the form even if Ara opens another form instead of calling save_form, and another form waits while a read-back is unanswered; a move to Cultivation is refused at the save too when the criteria are missing; after a side question Ara repeats her open question in full; activity log batches that fail to send are sent again; the \"Opened the app\" row names the build.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Preview only, from the 8:25 AM call: a new contact is asked its capacity rating before the other optional details (an opportunity needs it), and \"Would you like to add more details?\" comes after; Ara's rules say the app reads the form back and asks \"Shall I save it?\", so she never does it herself; the app asks for a rating when the officer hasn't said one (no invented ratings); naming a state (New Hampshire) picks its only entity, or lists just that state's entities; moving to Cultivation is explained first (the gift officer believes the contact is ready to be pursued for a gift); while a scripted line is pending Ara is told not to say it herself; a late scripted line is cut only when the first telling was heard.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Preview only, from the 7:54 AM call: the app itself asks whether an interaction was substantive (its own spoken question) and never reads a report back without the answer; in hands-free mode the app reads a finished form back as soon as it is complete, without waiting for Ara to ask (she had said \"Tap Confirm\"); the hands-free line carries its own follow-up question so Ara no longer goes quiet after it; dates are given with today/tomorrow/yesterday so a same-day due date is not called tomorrow; a scripted line that starts late after Ara already said it is cut instead of being heard twice (and scripted lines now get 5 s to start).",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Ara works the way xAI's speech-to-speech 3.0 service expects: her instructions are rewritten as short sections and bullets (same rules, easier to follow, so fewer stray asides and shorter read-outs); the app's guidance now travels with each reply request instead of being planted in the conversation as if the officer had said it, so she can no longer read it aloud; lines that must be said word for word (optional-field questions, hands-free read-backs, cancel, undo, go back, the greeting, the hang-up line) are spoken exactly by the app's scripted line; tool results carry only data; and every new reply or instruction update waits until her previous audio has finished playing, which ends the cut-off sentences after form steps.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Preview only, using more of xAI's voice features: a dropped line or Carry on picks up the same conversation on xAI (kept 30 minutes, tool calls included) instead of a summary; the speech recognizer is told to listen for US English and up to 100 key words (contact names, entities, stages); Ara says C.A. as Citizens Alliance and PAC as pack; the hands-free line is spoken word for word by xAI, then Ara carries on (if xAI doesn't play it, Ara says it).",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Preview only: on a computer screen the call bar's background band no longer covers the mic at the top of the left menu during a conversation, and in spooky mode the cobwebs sit in the top corners of the page instead of floating in the middle.",
+   "area": "Screens"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Preview only: the rolling pumpkin plays the opening of Bach's Toccata and Fugue in D minor (the first 7 seconds of the recording Carverhill sent) as it crosses the screen. It used to be silent.",
+   "area": "Spooky mode"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Preview only: the owl now hoots with a real owl recording (from tunetank.com) instead of the phone-made hoot, both the owl that comes by in spooky mode and the \"Tap me to hear me hoot!\" owl.",
+   "area": "Spooky mode"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Preview only: turning hands-free on or off mid-form, Ara now says \"Hands-free is on. I'll read back all the information on the form and save it when you say yes.\" and then carries straight on with the form's next question (she used to stop and wait). A mic the phone mutes for a moment no longer ends the call; it waits up to 6 seconds for it to come back.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Fixes from a test call: when the iPhone briefly pauses the app's sound (a notification, Siri, another app) the call stays open for up to 6 seconds while the sound comes back, instead of ending; hands-free stays on after Carry on; if Ara talks past a tapped save the app tells her again; every interaction report asks whether it was substantive and the read-back says so; marking a saved report substantive needs a next step and its due date (creates a task); \"it's J B\" in an email is no longer read as S J B; in the optional questions the officer can go back to a question, an entity named at the amount question goes to the entity, Ara no longer reads the app's instructions aloud and can't jump to the read-back early; after a Carry on Ara never says something on the open form is saved.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-25",
+   "change": "Preview only: after a save Ara says in a few words that it's saved (no more \"Saved: task saved\"), mentions undo only after the first hands-free save of a conversation, and ends by offering the next step (\"Next is to record the ask. Want to do that now?\") or asking \"What's next?\". She no longer asks whether to stop.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Preview only: on a computer screen (1000 pixels or wider) the tab bar becomes a left menu with the mic on top, Home shows Needs attention in a wide left column with the other panels on the right, and Opportunities shows the list beside the open opportunity. Phones are unchanged.",
+   "area": "Screens"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Behind the scenes: the code that keeps the voice line alive (reconnects, line tests, stall and quiet detection, asking Ara again) now lives in one place, with all its timings listed together. Nothing changes in how the app behaves.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Faster recovery on a bad line: if Ara hasn't started replying after 4 seconds, the app tests the line then and opens a fresh one if it is slow (it used to wait 13 seconds). If a new line hasn't opened after 5 seconds, a second one is tried alongside and the first to open is kept. After a reconnect Ara says sorry with no Halloween or Christmas aside and asks only the one question still pending. She passes a question to the project team after any yes, can see opportunities closed this year, and hands-free read-backs say \"Summary: noted\" instead of reading the summary out.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "If the officer talks while the line is down, Ara asks them to say it again once she's back, instead of carrying on as if nothing was said. After a reconnect she answers \"Are you there?\" with a quick yes and carries on with the open form, without \"welcome back\" or \"what would you like to do\" (seen at 6:04 PM).",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Tuned from the 5:52 PM drive: when Ara doesn't answer, the app tests the line first and on a slow line opens a fresh one right away instead of asking again (re-asks had piled up six late \"I'm here\"s); on a healthy line it asks once more, then opens a fresh line. A soft tick plays every 4 seconds while Ara is slow or the line is reconnecting. A new voice pass is fetched as soon as one is used, so a second drop reconnects fast (one took 15 s). Ara's instructions list the entities by state so she can't invent one (she offered a Pennsylvania Fed PAC, which doesn't exist).",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "More resilience from the 5:30 PM drive: a slow connection test no longer triggers a reconnect while the voice service is still sending (that caused an unneeded drop and 'Did you hear me?'); the quiet hang-up waits 30 seconds in hands-free mode, doesn't start while the officer's voice is on the mic, and is called off if the officer answers as it starts (Ara had said goodbye over 'October 24th'). A new opportunity whose entity has a state campaign always asks National or the state before the read-back.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Recovery for two more cases seen on a drive: a drop right after a hands-free save now tells Ara the save went through (she had tried to save again and said the form closed without saving), and a line that goes dead without closing is caught: if the officer is talking and nothing comes back for 5 seconds, or 12 seconds pass in quiet, the app tests the connection and reconnects instead of hanging up. Reconnect tries are spread over about 15 seconds, wait up to 15 seconds for the phone to come back online, and a line that doesn't open in 10 seconds counts as a failed try.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Steadier voice on a weak connection: a voice pass is kept ready during a call so a dropped line reconnects in a second or two; when Ara is slow a soft tick plays after 4 seconds and the app only asks again at 10 seconds; if she then answers twice, the second answer is cut off; each connection reading times a tiny test request. An ask answered with a check in hand or a yes saves as Accepted, and the ask's Response starts blank so Ara must ask.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "When the voice line drops mid-conversation (for example while driving), the app reconnects up to 3 times and Ara picks up where she left off, repeating her last question. When Ara goes silent the app asks her up to 3 more times, then reconnects. If nothing works, the phone plays a short falling tone and says the voice service isn't answering, and the form stays open. Connection readings (online or offline, network type and speed where the phone reports them, time since the voice service last answered) and the reason each call ended now go in the activity log. A planned ask for an entity with a state campaign leaves Campaign blank so Ara asks for it.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "When Ara goes silent after the app asks her to speak (no reply, or an empty or failed one), the app asks her once more instead of leaving the officer in silence until the 12-second hang-up. Silent replies and voice service errors now go in the activity log.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Ara understands entities said loosely (\"the C-3\", \"Idaho PAC\") and asks which one when it could be several; amounts in words (\"one hundred thousand\") are understood; a new opportunity now has a campaign of interest, asked when the entity has a state campaign (otherwise National is filled in) and carried to the planned ask.",
+   "area": "Voice"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Tidy-up with no change in behaviour: Ara's voice code split into three files, old screenshots and an unused logo removed, Settings wording for Christmas mode updated, owl test made sturdier.",
+   "area": "Code"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Opportunity record shows one next-step button: Move to Cultivation once every Qualification step is done, otherwise Log interaction (it used to show both).",
+   "area": "Opportunities"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Check your hands-free saves: each save now starts with the person's name, e.g. \"Ruth Abernathy's capacity rated B\" or \"Ruth Abernathy: Moved to Cultivation\".",
+   "area": "Hands-free"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Christmas mode now has a white background, with evergreen, Christmas red and gold touches (was a dark evergreen night).",
+   "area": "Christmas"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Fix links on Check your hands-free saves now name who or what they are for, e.g. \"Edit Ruth Abernathy's contact\" or \"Open the opportunity: Vasquez, Elena - 2026\".",
+   "area": "Hands-free"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "After opening a fix link from Check your hands-free saves, Back (or closing or saving the form) returns to the check list.",
+   "area": "Hands-free"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Christmas mode can now be turned on any time (Settings, or say \"Christmas mode\"), not just in December. The Christmas visitors on their own still start December 1.",
+   "area": "Christmas"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Check your hands-free saves: each save now has a link to fix it (Edit the contact, Edit the report, Edit the task, Edit the planned ask, or Open the opportunity).",
+   "area": "Hands-free"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Christmas mode: Santa's \"Merry Christmas, ho ho ho\" is now a real recording, replacing the computer voice.",
+   "area": "Christmas"
+  },
+  {
+   "date": "2026-10-24",
+   "change": "Christmas mode: real sleigh bells (a recording) now play for the sleigh, reindeer, gifts and opening forms, replacing the made-up bell sound.",
+   "area": "Christmas"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Interaction reports by voice: when Ara never sends the summary, the app now takes it from what the officer said when she asked what was talked about. A next-step due date that is really the meeting date is dropped. Answering \"neither\" to Ally or Do Not Contact no longer ticks both. The hands-free read-back no longer says \". .\" when a form has nothing else to read.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Christmas mode sounds (preview): Santa now says \"Ho, ho, hoooo! Merry Christmas!\" in a natural voice, and the sleigh, reindeer, gifts and forms opening use fuller sleigh bell sounds. The old phone-made \"ho ho ho\", which sounded like an owl, is gone.",
+   "area": "Christmas"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Christmas mode (try it on the preview now; in the app it is for December): say \"Christmas mode\" or use Settings. An evergreen look with snow along the header, pine trees, a wreath by the logo and a nativity scene on Home; snow, gifts, elves, reindeer, Santa's sleigh and a Christmas tree come by with their sounds; Santa asks for a tap so sounds can play; sleigh bells as a form opens, a chime on Save, Joy to the World and Santa's \"ho ho ho\" on Closed Won; Ara becomes a warm Christmas host. Only one of spooky mode and Christmas mode is on at a time.",
+   "area": "Christmas"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Phones with Reduce Motion turned on now get the Halloween visitors and their sounds too (they fade in and out in one spot instead of moving across). Before, Reduce Motion hid them all, along with the tap-me owl.",
+   "area": "Halloween"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "In spooky mode Ara starts every conversation as the haunted-house host: \"Mwahaha... welcome to the haunted CRM. Hi Dana, I'm Ara, what would you like to do?\" After Carry on she says \"Welcome back to the haunted CRM\".",
+   "area": "Halloween"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "The Halloween owl now pops up every time the app opens until someone taps, since sounds stay silent until a tap. Before, he showed only once per phone.",
+   "area": "Halloween"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "First time the app opens in October, a big owl pops up saying \"Tap me to hear me hoot!\" so people know to touch the screen to turn on the Halloween sounds. It hoots when tapped and flies away. Shown once per phone.",
+   "area": "Halloween"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Optional fields one at a time (preview): after a new contact's or new opportunity's required details, Ara asks \"Would you like to add more details? I can take you through them one at a time.\" The app then leads, one question each, and fills in each answer itself. For a contact: capacity rating (with the bands), how you met, texting permitted (only with a mobile) and how they agreed, then Ally or Do Not Contact (\"most people are neither\"). For an opportunity: entity, potential amount, notes. Say \"skip\" or \"that's enough\" at any point. Also fixed: texting permitted said by voice now reaches a new contact's form.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Fix (preview): on iPhones, tapping during a conversation woke the Halloween sound engine, which could pause Ara's audio or mute the mic and end the conversation; it now rests during conversations. After Carry on, Ara no longer turns spooky mode on a second time and announces it again.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Fix (preview): Halloween sounds play on iPhones again. The sound engine starts on the tap events an iPhone accepts and plays a silent blip, as at 7:27 AM, still without changing the phone's audio mode, so Ara stays audible.",
+   "area": "Halloween"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Spooky mode (preview): an owl now visits too. It glides down to a perch near the top, blinks, hoots \"hoo, hoo-hoooo\" and flies off.",
+   "area": "Halloween"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Fix (preview), second try: the page no longer changes the iPhone's audio mode at all, as before 7:27 AM, so Ara can be heard again. Halloween sounds may now be silent when the phone's silent switch is on.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Fix (preview): Ara's voice was silent on iPhones since the Halloween sound fix at 7:27 AM, because the page asked the phone for plain playback. A conversation now asks for talk-and-listen audio, and the app goes back to normal when it ends.",
+   "area": "Voice"
+  },
+  {
+   "date": "Oct 24, 2026",
+   "change": "Spooky mode (preview): say \"spooky mode\" to Ara, or tick it in Settings, for a night look (orange and purple, cobwebs, a flickering candle by the logo), Ara as a slightly slower haunted-house host with spooky asides (facts and save rules unchanged), a creaking door when a form opens, thunder on Save, an organ sting and a cackle with bats on Closed Won, and a visitor every 15 to 20 seconds, now with bats. \"Normal mode\" turns it off; it ends by itself on Nov 1. Sounds never play during a conversation.",
+   "area": "Halloween"
+  },
   {
    "date": "Oct 24, 2026",
    "change": "The + button and Settings swapped places: + now sits in the top-right corner, the easiest spot to reach with your thumb and where iPhone apps put their add button, with Settings just to its left.",

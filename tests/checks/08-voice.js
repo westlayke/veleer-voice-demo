@@ -836,4 +836,31 @@ test("Gemini voice engine (Oct 27): the setup message, transcripts and tool call
   await p.evaluate(() => { endCall(); S.settings.provider = "grok"; save(); });
 });
 
+
+test("Ara: a tool call that lands before the officer's transcript waits for it (OpenAI sends the call first), and goes ahead without it after 2 s", async (p) => {
+  await signIn(p);
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  const ev = (p, e) => p.evaluate((e) => __ws.onmessage({ data: JSON.stringify(e) }), e);
+  // the officer's speech ends, the engine's tool call arrives, and the transcript only 600 ms later: the meeting type must survive the evidence rule
+  await ev(p, { type: "input_audio_buffer.speech_started" }); await ev(p, { type: "input_audio_buffer.speech_stopped" });
+  await ev(p, { type: "response.function_call_arguments.done", call_id: "hold1", name: "show_interaction_draft", arguments: JSON.stringify({ contact_name: "Ken Ito", date: "2026-10-25", meetingType: "In person", summary: "Met Ken this morning; talked about the gala." }) });
+  await p.waitForTimeout(600);
+  ok(await p.evaluate(() => !V), "the form opened before the officer's transcript arrived");
+  await said(p, "I met Ken Ito this morning, we talked about the gala.");
+  await ev(p, { type: "response.done", response: { status: "completed" } }); await p.waitForTimeout(500);
+  let d = await p.evaluate(() => V && V.data);
+  ok(d && d.meetingType === "In person", "the meeting type the officer said was dropped (the call did not wait for the transcript): " + JSON.stringify(d && { meetingType: d.meetingType }));
+  ok(await p.evaluate(() => VLOG.some(l => /show_interaction_draft: held \d+ ms for the officer's transcript$/.test(l))), "the hold was not logged");
+  // no transcript at all: the call goes ahead after HEARD_WAIT_MS and the unsaid value is dropped as before
+  await p.evaluate(() => { V = null; renderOverlay(); });
+  await ev(p, { type: "input_audio_buffer.speech_started" }); await ev(p, { type: "input_audio_buffer.speech_stopped" });
+  await ev(p, { type: "response.function_call_arguments.done", call_id: "hold2", name: "show_interaction_draft", arguments: JSON.stringify({ contact_name: "Ken Ito", date: "2026-10-25", meetingType: "Phone call", summary: "Met Ken this morning; talked about the gala." }) });
+  await ev(p, { type: "response.done", response: { status: "completed" } });
+  await p.waitForTimeout(1500); ok(await p.evaluate(() => !V), "the call did not wait when no transcript came");
+  await p.waitForTimeout(1200);
+  d = await p.evaluate(() => V && V.data);
+  ok(d && !d.meetingType, "a meeting type the officer never said stayed on the form after the wait: " + JSON.stringify(d && { meetingType: d.meetingType }));
+  ok(await p.evaluate(() => VLOG.some(l => /show_interaction_draft: held \d+ ms for the officer's transcript \(it didn't come\)$/.test(l))), "the give-up was not logged");
+});
+
 };

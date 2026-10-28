@@ -4,7 +4,7 @@
 const TOOL_HANDLERS = {
   set_user_name(callId, data, name) {
     const v = String(data.first_name || "").trim().split(/\s+/)[0].replace(/\s+/g, " ").slice(0, 60);
-    if (!v) { toolReply(callId, { ok: false, error: "No name given." }); return; }
+    if (!v) { toolReply(callId, { ok: false, error: "No name given. Ask the officer who they mean." }); return; }
     // names are easy to mishear (Matt came through as "Eve"): read it back, spelled, and save only once they say yes
     if (data.confirmed !== true || !G.nameCheck || norm(G.nameCheck) !== norm(v)) { G.nameCheck = v;
       toolReply(callId, { ok: true, saved: false, status: `Not saved yet. Say exactly: "Did I get that right: ${v}, ${spellOut(v)}?" and wait. If they say yes, call set_user_name again with "${v}" and confirmed true. If they correct it or spell it, call set_user_name with their spelling and confirmed false, and read that back the same way.` }); return; }
@@ -129,9 +129,9 @@ const TOOL_HANDLERS = {
     const r = resolveTarget("interaction", data.contact_name);
     if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
     const c = r.contact; S.sel.contact = c.id; go("contact");
-    if (!c.mobile) { toolReply(callId, { ok: false, error: `${nameOf(c)} has no phone number on record.` }); return; }
-    if (c.dnc) { toolReply(callId, { ok: false, error: `${nameOf(c)} is marked Do Not Contact.` }); return; }
-    if (!c.permCalls) { toolReply(callId, { ok: false, error: `Calls aren't permitted for ${nameOf(c)} (Calls permitted is off on the contact).` }); return; }
+    if (!c.mobile) { toolReply(callId, { ok: false, error: `${nameOf(c)} has no phone number on record. Say so and offer to add one to the contact.` }); return; }
+    if (c.dnc) { toolReply(callId, { ok: false, error: `${nameOf(c)} is marked Do Not Contact, so the app can't place the call. Say so; only a Chief Gift Officer can change that.` }); return; }
+    if (!c.permCalls) { toolReply(callId, { ok: false, error: `Calls aren't permitted for ${nameOf(c)} (Calls permitted is off on the contact). Say so and offer another way to reach them.` }); return; }
     callPromptModal(c); whenIdle("instr");
     toolReply(callId, { ok: true, status: `A Call button for ${nameOf(c)} is on screen. In one short sentence, tell the officer to tap Call, and that you'll help write up the call when they're back. Our conversation ends when the call starts.` }); return;
   },
@@ -225,7 +225,7 @@ const TOOL_HANDLERS = {
       say: `Speak only what was asked. History: newest first, one short sentence each (when, how, and the gist of the summary); if there are more than three, give the latest three and offer the rest. ${focus === "history" ? "" : "Then the open tasks for this contact, overdue first, each with its due date; if none, say there are no open tasks for them."} Never add details that aren't in the records.` }); return;
   },
   highlight_stage(callId, data, name) {
-    const i = flowIndex(data.stage); if (i < 0) { toolReply(callId, { ok: false, error: "Unknown stage." }); return; }
+    const i = flowIndex(data.stage); if (i < 0) { toolReply(callId, { ok: false, error: "Unknown stage. The stages are Qualification, Cultivation, Ask Planning, Ask Made, Commitment and Closed. Ask which one." }); return; }
     if (i === 0) { // a new walkthrough: drop the earlier one from the conversation so Grok doesn't carry on from its old words
       const old = (G.tourItems || []).filter(id => !(G.respItems || []).includes(id));
       old.forEach(id => send({ type: "conversation.item.delete", item_id: id }));
@@ -253,7 +253,7 @@ const TOOL_HANDLERS = {
     if (target === "contact" || target === "opp") {
       const r = resolveTarget("interaction", data.contact_name);
       if (r.error) { toolReply(callId, { ok: false, error: r.error }); return; }
-      if (target === "opp" && !r.opp) { toolReply(callId, { ok: false, error: `${nameOf(r.contact)} has no open opportunity.` }); return; }
+      if (target === "opp" && !r.opp) { toolReply(callId, { ok: false, error: `${nameOf(r.contact)} has no open opportunity. Say so and offer to create one.` }); return; }
       if (target === "contact") S.sel.contact = r.contact.id; else S.sel.opp = r.opp.id;
       summary = target === "contact" ? `Showing ${nameOf(r.contact)}.` : `Showing ${r.opp.name}, in ${r.opp.stage}.`;
     } else if (target === "contacts") summary = `Contacts shown: ${S.contacts.map(nameOf).join(", ")}.`;
@@ -263,12 +263,21 @@ const TOOL_HANDLERS = {
     toolReply(callId, { ok: true, summary }); return;
   },
 };
-function onTool(callId, name, args) {
+function onTool(callId, name, args, held) {
   busy(); G.respTool = true;
-  if (!callId || G.handled.has(callId)) return; G.handled.add(callId);
+  if (!callId || G.handled.has(callId)) return;
+  // the engine's transcript of the officer's last turn is still to come (speech ended, no transcript yet): the call waits for it, up to
+  // HEARD_WAIT_MS, so the evidence rule judges the fields against what the officer just said (OpenAI sends the call first)
+  if (!held && G.heardWait && (G.heardN || 0) <= G.heardWait.n && Date.now() - G.heardWait.at < HEARD_WAIT_MS) {
+    const w = G.heardWait, t0 = Date.now();
+    (function poll() { if (G.handled.has(callId) || !G.live) return;
+      if (!G.heardWait || (G.heardN || 0) > w.n || Date.now() - t0 >= HEARD_WAIT_MS) { const came = (G.heardN || 0) > w.n; vlog(`${name}: held ${Date.now() - t0} ms for the officer's transcript${came ? "" : " (it didn't come)"}`); if (came) act("step", `${name} waited ${Date.now() - t0} ms for the officer's words before the form was checked`); onTool(callId, name, args, true); }
+      else setTimeout(poll, 50); })();
+    return; }
+  G.handled.add(callId);
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
-  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command." }); return; }
+  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command. Don't repeat it; go on with what the officer says next." }); return; }
   if (Object.hasOwn(TOOL_HANDLERS, name)) { TOOL_HANDLERS[name](callId, data, name); return; }
   draftTool(callId, name, data);
 }
@@ -276,7 +285,7 @@ function onTool(callId, name, args) {
 function draftTool(callId, name, data) {
   G.tour = false; // the officer moved on to other work; keep it out of the walkthrough that gets dropped
   let tool = TOOLS.find(t => t.name === name && !t.hidden);
-  if (!tool) { toolReply(callId, { ok: false, error: "Unknown tool." }); return; }
+  if (!tool) { toolReply(callId, { ok: false, error: "Unknown tool. Use one of the tools you were given, or tell the officer the app can't do that." }); return; }
   // another form while the open one was read back and is waiting for a yes: the officer's yes saves it first, anything else keeps it open (a safeguard added Oct 25)
   const settle = () => { const p = hfSettlePending(); if (!p) return false;
     if (!p.saved) { toolReply(callId, { ok: false, error: `The open ${p.title} form was read back and is waiting for the officer's yes; it is NOT saved${p.err ? ` (${p.err})` : ""}. Settle it first: if they said yes, call save_form with confirmed true; if they want a change, update it; otherwise ask them. Then open the ${ACTIONS[tool.action].title} form.` }); return true; }

@@ -58,7 +58,7 @@ function optAsk(callId, said) { // the app itself says what it heard and the nex
   toolReply(callId, { ok: true, done: true, button: A.saveLabel, status: `${said ? `Start with "${said}" ` : ""}That was the last optional field. In one short sentence say the details are in, then ask them to check the draft and tap "${A.saveLabel}".` });
 }
 function optStep(callId, data) {
-  if (!V || !OPT_STEPS[V.action]) { toolReply(callId, { ok: false, error: "No new contact or new opportunity form is open." }); return; }
+  if (!V || !OPT_STEPS[V.action]) { toolReply(callId, { ok: false, error: "No new contact or new opportunity form is open. Open the form the officer asked for first, or ask what they'd like to do." }); return; }
   const step = data.step || "answer";
   if (!V.opt && step === "answer" && data.value) { V.opt = { done: [] }; const st = optNext();
     if (st && optParse(st.k, data.value) !== null) { V.opt.cur = st.k; act("step", "optional fields: the officer's answer came before the questions; taken for " + st.k); } else { optAsk(callId); return; } }
@@ -203,7 +203,7 @@ async function hfSave(callId, data, lead) {
     toolReply(callId, { ok: true, saved: false, read_back: `${lead ? lead + " " : ""}${hfReadback()} Shall I save it?`, next: "The app said read_back aloud. After the officer's yes, call save_form again with confirmed true; if they want a change, update the draft first." }); return;
   }
   const heard = await hfHeardAfter(c.n);
-  if (!V || G.saveCheck !== c) { toolReply(callId, { ok: false, saved: false, error: "The form changed while waiting. Nothing was saved." }); return; }
+  if (!V || G.saveCheck !== c) { toolReply(callId, { ok: false, saved: false, error: "The form changed while waiting. Nothing was saved. Read it back again and ask for a yes." }); return; }
   if (!heard) { toolReply(callId, { ok: false, saved: false, error: "Not saved: the officer hasn't answered yet. Wait for them to say yes, then call save_form with confirmed true." }); return; }
   if (!hfYes(heard.text)) { c.n = G.heardN; toolReply(callId, { ok: false, saved: false, error: `Not saved: the officer said "${heard.text}", which isn't a clear yes. In one short sentence, ask whether to save it or what to change. If they then say yes, call save_form with confirmed true again (no new read-back needed).` }); return; }
   if (HF_MONEY.includes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; paintCall();

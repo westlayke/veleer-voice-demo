@@ -74,7 +74,7 @@ function resolveTarget(action, spoken, sel = {}) {
   if (!opp) return { error: `${nameOf(contact)} has no open opportunity yet. Offer to create one first.` };
   const qual = `${opp.name} is still in Qualification. An ask can be planned only once it is in Cultivation, which needs a capacity rating, a substantive interaction and the officer's confirmation${cultMissing(contact).length ? "; it still needs " + cultMissing(contact).join(" and ") : "; the criteria are met, so offer to move it to Cultivation"}.`;
   if (action === "cultivate") {
-    if (opp.stage !== "Qualification") return { error: `${opp.name} is already in ${opp.stage}.` };
+    if (opp.stage !== "Qualification") return { error: `${opp.name} is already in ${opp.stage}. Say so and offer what comes next there.` };
     const m = cultMissing(contact); if (m.length) return { error: `${opp.name} can't move to Cultivation yet: it still needs ${m.join(" and ")}. Offer to log a meeting.` };
   }
   if ((action === "plan" || action === "ask") && opp.stage === "Qualification") return { error: qual };
