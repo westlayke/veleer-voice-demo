@@ -7,6 +7,7 @@
 // Usage: node tools/lint-comments.js [files...]   (default: preview/*.js and tests/**/*.js)
 const fs = require("fs"), path = require("path");
 const args = process.argv.slice(2);
+if (!args.length) process.chdir(path.join(__dirname, "..")); // the default list is relative to the repo root, wherever the script is run from (the suite is often run from tests/)
 const files = args.length ? args : [
   ...fs.readdirSync("preview").filter(f => f.endsWith(".js")).map(f => "preview/" + f),
   "tests/bot.js", ...fs.readdirSync("tests/checks").map(f => "tests/checks/" + f)];
