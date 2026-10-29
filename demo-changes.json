@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 29, 6:38 PM",
+      "change": "Preview: the phone keeps reconnecting for 10 minutes (was 8); from 8 minutes it says once that it will stop at 10, and the last try is announced (\"This is my last try, Jim.\"). The skeleton now drops from the top of the screen half the time, lands with a bounce, does his gesture and laugh, then strolls off.",
+      "area": "Voice, Halloween",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill: \"change the retry connection maximum time to 10 minutes, and at about minute 8 start letting them know you will stop retrying and then let them know when you are making your last retry\"; \"occasionally the skeleton man drops down from the top of the screen, and when he reaches the bottom he should do his gesture and laugh\"."
+    },
+    {
       "date": "Oct 29, 6:29 PM",
       "change": "Preview: a pick-list answer (meeting type, response, method...) the officer gives to the question just asked goes on the form even when the voice model leaves it out of its call; a scripted line whose reply starts but stays silent for 6 s is treated as not started (taking-a-moment line, line test, fallback); Ara's own question stands over a scripted line only within 12 s of it being sent, so a save confirmation is never cut unheard.",
       "area": "Voice",

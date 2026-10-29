@@ -63,7 +63,9 @@ test("Halloween: in October a spider, pumpkin or ghost crosses without blocking 
   ok(await p.evaluate(() => !!document.querySelector(".spk-skeleton svg .sk-arm") && !!document.querySelector(".spk-skeleton svg .sk-skull")), "the skeleton visitor has no waving arm or nodding skull");
   ok(await p.evaluate(() => fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES.skeleton).then(r => r.ok && r.headers.get("content-length") !== "0")), "the skeleton's recording is missing");
   ok(await p.evaluate(() => fetch((ON_PREVIEW ? "preview/" : "app/") + "sounds/" + XMAS_FILES.laugh).then(r => r.ok && r.headers.get("content-length") !== "0")), "the skeleton's laugh recording is missing");
-  await p.waitForTimeout(3200); ok(await p.evaluate(() => document.querySelector(".spk-skeleton").classList.contains("sk-waving")), "the skeleton didn't start waving once he stopped");
+  await p.waitForTimeout(3500); ok(await p.evaluate(() => document.querySelector(".spk-skeleton").classList.contains("sk-waving")), "the skeleton didn't start waving once he stopped");
+  // half his visits start with a drop from the top of the screen (Carverhill, Oct 29): both kinds exist and both end with the gesture
+  ok(await p.evaluate(() => { const k = new Set(); for (let i = 0; i < 40 && k.size < 2; i++) { const el = window.__demo.spookyOnce("skeleton"); k.add(el.dataset.drop ? "drop" : "walk"); el.remove(); } return k.size === 2; }), "the skeleton never drops from the top (or never strolls in)");
   const picks = await p.evaluate(() => { const out = []; for (let i = 0; i < 40; i++) { const el = window.__demo.spookyOnce(); out.push(el.className.replace("spk spk-", "").split(" ")[0]); el.remove(); } return out; });
   ok(picks.every((k, i) => i === 0 || k !== picks[i - 1]), "a visitor came twice running: " + picks.join(","));
   const drops = await p.evaluate(() => { let n = 0; for (let i = 0; i < 40; i++) { const el = window.__demo.spookyOnce("pumpkin"); if (/translate\(.*-\d+px\) rotate\(0deg\)/.test(el.getAnimations()[0].effect.getKeyframes()[0].transform)) n++; el.remove(); } return n; });

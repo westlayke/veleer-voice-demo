@@ -76,7 +76,7 @@ phone locked.
 
 `reconnect(why)` runs the same sequence whatever the signal:
 
-1. **Give up?** If nothing has been heard from xAI for `NO_LINE_GIVE_UP_MS` (8 minutes), the call ends: `voiceUnavailable`
+1. **Give up?** If nothing has been heard from xAI for `NO_LINE_GIVE_UP_MS` (10 minutes since Oct 29; from 8 minutes down the phone says once that it will hang up at 10, `WARN_GIVE_UP_MS`, and a try starting within `LAST_TRY_MS` 40 s of the limit is announced as the last), the call ends: `voiceUnavailable`
    logs it, plays the down tone, keeps the form and the last lines for Carry on, and shows "The voice service isn't
    answering. Your form is still here." The count of tries no longer ends a call (a driveway dead spot took four).
 2. **Mark the line down.** Status "Reconnecting…", any playing audio stopped, pending asks and timers cleared, the old
@@ -87,7 +87,7 @@ phone locked.
    (15 s), before trying.
 5. **Get a voice pass.** `getToken()` uses the pass prefetched during the call if it is fresh, else mints one.
    `mintToken` is time-limited (`TOKEN_WAIT_MS` 6 s): one fetch hung for 89 s on October 25 and the call hung with it.
-   On failure, try again every `TOKEN_RETRY_MS` (2 s) until `DOWN_GIVE_UP_MS` (8 minutes) or a definite refusal
+   On failure, try again every `TOKEN_RETRY_MS` (2 s) until `DOWN_GIVE_UP_MS` (10 minutes) or a definite refusal
    (bad code, service error), which ends the call as in step 1.
 6. **Open the socket**, with the saved `conversation_id` so the conversation resumes. On open: session configuration
    is sent again, `downEnd(true)` stops the phone's lines and plays "You're back with Ara." if the line was down 5 s or
@@ -415,3 +415,7 @@ Also in this build: Ara's own save-question wording is excluded from "a yes to A
 ## A started reply with no sound, a stale question over a scripted line, and a pick-list Grok left out (Oct 29, 5:59 PM call)
 
 Three generic faults from Carverhill's 5:59 PM call. (1) `forcedEvent` set `f.started` on `response.created`, so when Grok acknowledged the save line in 0.8 s and then produced nothing for 23 s, every watchdog stood down. Now a scripted line's reply counts as started only when its sound starts: `SOUND_WAIT_MS` (6 s) after `response.created` with no audio delta, the line is treated as not started (`forceTick(true)`: "Ara's taking a moment", line test, fresh line if slow) and the fallback hands the words to Ara 4 s later. (2) The 10:05 AM rule "Ara asked her own question while the scripted question was still to come: hers stands, the scripted copy is cut" now applies only within `TWO_Q_MS` (12 s) of the line being sent; a scripted line older than that is news the officer hasn't heard (here: "Ask recorded... record the gift, yes or no?"), so it plays and Ara's stale question does not stand. (3) In `draftTool`, a pick-list field (`type: "select"`, not the entity) that is blank after Grok's call is filled by the app when `optionAnswered()` finds the option in the officer's last line as the answer to the question just asked ("In person" said three times, never sent). Check "Scripted line (5:59 PM call, Oct 29)" in 08-voice.js.
+
+## Ten minutes of retries, warned at eight, the last try announced (Oct 29, Carverhill)
+
+`NO_LINE_GIVE_UP_MS` and `DOWN_GIVE_UP_MS` are 10 minutes (8 since Oct 28). From `WARN_GIVE_UP_MS` (8 minutes) without a word from the voice service, the next "still trying" slot says once "Still no signal, Jim. I'll keep trying for two more minutes, then hang up." (`downSay("warn")`, `G.warnSaid`). A reconnect that starts within `LAST_TRY_MS` (40 s) of the limit says "This is my last try, Jim." and sets `G.lastTry`; if that line fails too, the next `reconnect()` gives up at once. Both lines exist with the officer's name (NAMED_LINES, storage key `namedLines:v4`, 13 lines) and as stock recordings (line-warn.mp3, line-last.mp3 in tools/ara-lines.json, recorded by the Record Ara's lines workflow). `downEnd()` clears both flags when the line is back. `downSince()` is the shared clock.

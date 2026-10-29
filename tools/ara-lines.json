@@ -5,6 +5,8 @@
     { "file": "line-dropped.mp3", "text": "The line dropped. Reconnecting you to Ara." },
     { "file": "still-trying.mp3", "text": "Still trying to reconnect." },
     { "file": "line-back.mp3", "text": "You're back with Ara." },
-    { "file": "ara-slow.mp3", "text": "Ara's taking a moment." }
+    { "file": "ara-slow.mp3", "text": "Ara's taking a moment." },
+    { "file": "line-warn.mp3", "text": "Still no signal. I'll keep trying for two more minutes, then hang up." },
+    { "file": "line-last.mp3", "text": "This is my last try." }
   ]
 }
