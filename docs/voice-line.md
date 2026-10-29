@@ -378,7 +378,7 @@ The real-Grok spoken runs (quiet, car noise, and a probe with cellular drops for
 - **The reconnect line stacked.** When a second drop came before the officer said anything, Ara's last line already began "Sorry, I lost you for a moment", and the app put it in front again: five in a row by the fourth drop. `lastQuestion()` now strips that opening from her last line before repeating it.
 - **"Ara's taking a moment" after nearly every save line.** On a quick "yes" the app saves and says its own line at the transcript, before the service reports the officer's speech stopped; `speech_stopped` then reopened the officer's turn while that line was already playing, and the turn watch ticked 4 s later. Now `speech_stopped` opens a turn only when no reply is running, and `response.done` closes an open turn as `response.created` already did. 23 of 25 quiet conversations and 20 of 24 noisy ones had heard the line.
 
-## A turn opens when the speech stops, not on a partial transcript (Oct 29, 3:40 PM)
+## A turn opens when the speech stops, not on a partial transcript (Oct 29, 3:36 PM)
 
 The confirmation run on the 2:55 PM build still played "Ara's taking a moment" twice, 4 s into a long sentence while the officer was still talking: the service sends `input_audio_transcription.completed` for the first part of a long line before `speech_stopped`, and the transcript branch opened the turn. `G.speechOn` (true from `speech_started` to `speech_stopped`) now blocks that; harnesses that send transcripts without speech events are unchanged.
 

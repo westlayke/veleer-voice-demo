@@ -2,7 +2,7 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
-   "date": "Oct 29, 3:40 PM",
+   "date": "Oct 29, 3:36 PM",
    "change": "Preview: \"Ara's taking a moment\" no longer plays in the middle of a long sentence. The officer's turn now opens only when the voice service says their speech has stopped, not on the first part of the transcript.",
    "area": "Voice",
    "requestedBy": "Carverhill",
