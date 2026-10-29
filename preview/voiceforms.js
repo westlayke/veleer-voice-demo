@@ -187,7 +187,8 @@ function nextStepNo(text) {
   const t = String(text || "").toLowerCase().replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim().replace(/^((no|nope) )?(thanks|thank you)$/, "no");
   if (!/^(no|nope|not now|not right now|no not now|not yet|no not yet)$/.test(t)) return false;
   const last = ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").trim(); if (!last.endsWith(NEXT_Q.trim())) return false;
-  act("step", "a no to the next step: the app asks what they'd like to do"); stopPlayback(); if (G.responding) send({ type: "response.cancel" }); G.cmdAt = Date.now();
+  if (G.noAt && Date.now() - G.noAt < 3000) return true; G.noAt = Date.now(); /* the transcript lands two or three times */
+  act("step", "a no to the next step: the app asks what they'd like to do"); stopPlayback(); if (G.responding) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now();
   forceSay(NEXT_NO_Q); return true;
 }
 function nextStepLine(c, closed) {

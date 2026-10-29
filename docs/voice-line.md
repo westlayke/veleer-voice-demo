@@ -306,3 +306,14 @@ The next-step line after every save ends "Do you want to do that now?" (`NEXT_Q`
 says itself (named reconnect lines, "Still waiting on Ara", the hang-up lines, the four stock recordings) is one voice, xAI's Eve
 (`NAMED_VOICE`, `tools/ara-lines.json`).
 
+
+## Late copies, silent replies and the phone's recordings (Oct 28, 10:33 PM)
+
+A scripted copy that plays late after Ara has already said the line is cut with `stopResp(seq)` in voice.js: only the sources
+of that reply are stopped and its remaining audio deltas are dropped (`G.muteResp`), so whatever else is playing carries on.
+`nextStepNo` cancels the running reply and sets `G.cancelAt`; `forceSay` waits `CANCEL_SETTLE_MS` (0.7 s) after a cancel
+before sending the next forced line, which is how "What would you like to do?" comes back with audio instead of words only.
+A line counts as silent only `SILENT_JUDGE_MS` (2 s) after it should have ended; the resend in `silentLine` stands down when
+`G.respSeq` has moved on, sound is queued or playing, so the real copy that arrives meanwhile plays once. `cutStatusLine(why)`
+in voiceline.js stops a phone recording still playing; it is called when the line comes back and on the first audio chunk of a
+reply, so "Ara's taking a moment" cannot play over her.

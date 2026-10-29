@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 10:33 PM",
+   "change": "Preview: four guards from the 10:01 PM call trace. (1) When a scripted copy plays late after Ara has already said the line, the phone cuts only that copy's audio (stopResp drops the one reply, not everything playing). (2) When a line came without sound and the phone asks for it again, the resend stands down if her sound has started or is queued meanwhile, so the line isn't heard twice. (3) \"What would you like to do?\" after a no waits 0.7 s for the cancelled reply to settle, so it comes back with audio; a second no within 3 s is ignored. (4) A line counts as silent only 2 s after it should have ended (was 0.8 s), and any phone recording still playing is cut the moment Ara's sound starts, so \"Ara's taking a moment\" no longer plays over her.",
+   "area": "Voice (preview)",
+   "requestedBy": "Carverhill",
+   "why": "The 10:01 PM call trace showed Ara's late copy cutting her own line, a line said twice after a silent copy, \"What would you like to do?\" coming back without audio, and the \"taking a moment\" recording playing over her sounded copy (Carverhill: \"Go\", 10:16 PM; \"Why did our app audio play over Ara?\", 10:20 PM)"
+  },
+  {
    "date": "Oct 28, 9:58 PM",
    "change": "Preview: the activity log keeps the flattened event stream around every scripted line. While a scripted line is pending, every raw event from the voice service is recorded with its delay since the line was sent; the \"Scripted line didn't play\" and \"Ara answered on her own\" rows now carry that trace, and \"Scripted line played\" rows are written for the first two lines of a call and for any line that took over 2.5 s to start. This shows whether the service acknowledges a scripted line before the reply starts.",
    "area": "Voice",

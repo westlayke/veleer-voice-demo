@@ -471,8 +471,11 @@ function playPcm(i16) {
   const at = Math.max(G.ctx.currentTime + 0.02, G.playHead, lineEnd); src.start(at); G.playHead = at + buf.duration;
   if (G.respAudio) { if (G.respAudio.t0 == null) G.respAudio.t0 = at; G.respAudio.end = G.playHead; } /* where this reply's audio sits on the clock, for a truncate on interruption */
   const cap = G.caps && G.caps[G.caps.length - 1]; if (cap) { if (cap.t0 == null) cap.t0 = at; cap.t1 = G.playHead; }
-  G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
+  src.resp = G.respSeq; src.endAt = G.playHead; G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
 }
+// stop one reply's queued audio and nothing else (Oct 28 10:06 PM: cutting a late scripted copy with stopPlayback() also cut the read-back Ara was still saying)
+function stopResp(seq) { const cut = G.sources.filter(s => s.resp === seq); cut.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = G.sources.filter(s => s.resp !== seq);
+  G.playHead = G.sources.reduce((m, s) => Math.max(m, s.endAt || 0), 0); G.muteResp = seq; if (cut.length) vlog(`reply ${seq}: ${cut.length} queued chunks cut, the rest keeps playing`); }
 // the officer talked over Ara: tell the service how much of her reply was actually heard, so her record matches (Oct 25 review item 6; xAI: conversation.item.truncate)
 function truncateSpoken() {
   const r = G.respAudio; if (!PROV().forceItem || !r || !r.itemId || r.t0 == null || !G.ctx) return;
@@ -767,7 +770,7 @@ function voiceCommand(text) {
   else if (cmd === "restart") { if (!V) return false; say = `The officer said "start over". The app cleared the ${restartForm()} form. Ask for the first detail again.`; }
   else if (cmd === "back") { if (V) return false; const b = document.querySelector("header.top .back"); if (!b) return false; const where = BACK_NAMES[b.dataset.go] || "the previous screen"; go(b.dataset.go); say = { force: `Back on ${where}.` }; }
   vlog("voice command: " + cmd); act("step", "voice command " + cmd);
-  stopPlayback(); if (G.responding) send({ type: "response.cancel" }); G.cmdAt = Date.now(); // drop whatever the model started to do with those words
+  stopPlayback(); if (G.responding) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now(); // drop whatever the model started to do with those words
   if (say === null) hfAnnounce(); else if (say.force) forceSay(say.force, say.then); else guide(say); return true;
 }
 // Guidance for Ara's next reply only: it travels with the reply request (xAI's per-response instructions), so it never sits in the
@@ -828,7 +831,7 @@ function onEvent(e) {
   if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0;
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0; clearTimeout(G.idleTimer); if (G.responding) send({ type: "response.cancel" }); stopPlayback(); if (G.forced) { G.forced = null; clearTimeout(G.forceTimer); } /* a goodbye still waiting to be said is dropped */ vlog("hang-up called off: the officer spoke"); act("step", "Quiet hang-up called off: the officer spoke"); } }
-  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += e.pcm ? e.pcm.length : Math.floor(atob(e.delta || "").length / 2); if (e.item_id && G.respAudio && !G.respAudio.itemId) G.respAudio.itemId = e.item_id; }
+  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); cutStatusLine("Ara's sound started"); } G.audioSamples += e.pcm ? e.pcm.length : Math.floor(atob(e.delta || "").length / 2); if (e.item_id && G.respAudio && !G.respAudio.itemId) G.respAudio.itemId = e.item_id; }
   if (t === "session.created") { vlog(`session created ${Date.now() - (G.t0 || Date.now())} ms after the tap`); netLog(`Session created ${Date.now() - (G.t0 || Date.now())} ms after the tap`); } /* separates the service's connect time from the Worker's when a line is slow */
   if (t === "conversation.item.input_audio_transcription.updated" && e.transcript) { G.heardLive = e.transcript; if (Date.now() - (G.heardLiveAt || 0) > 2000) { G.heardLiveAt = Date.now(); vlog('← officer (so far) "' + String(e.transcript).slice(-120) + '"'); } } /* the officer's words as they speak */
   if (t === "input_audio_buffer.timeout_triggered") { /* the service's own idle timer (its speech detection, not the phone's mic level): its check-in is dropped and the app's goodbye goes instead */
@@ -856,7 +859,7 @@ function onEvent(e) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)
     G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
   else if (t === "response.created") { G.createAt = 0; G.slowSaid = false; if (G.dropIdle) { if (Date.now() - G.dropIdle < 5000 && !G.asked && !G.qCreate) { G.dropNext = true; send({ type: "response.cancel" }); act("step", "The voice service's own check-in after its idle timer: dropped"); } G.dropIdle = 0; } G.respSeq = (G.respSeq || 0) + 1; G.respAudio = { itemId: null, t0: null, end: 0 }; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
-  else if (/audio\.delta$/.test(t) && (e.delta || e.pcm)) { if (e.pcm) playPcm(e.pcm); else playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; if (paused) G.unheardResp = G.respSeq; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
+  else if (/audio\.delta$/.test(t) && (e.delta || e.pcm)) { if (G.muteResp === G.respSeq) { /* a cut late copy: its audio is dropped, not played */ } else if (e.pcm) playPcm(e.pcm); else playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; if (paused) G.unheardResp = G.respSeq; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); lateForcedCheck(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
@@ -886,7 +889,7 @@ function lateForcedCheck() {
   if (lf.resp === G.respSeq) return;
   if (!(lf.firstAudio > 12000)) { G.lateForced = null; vlog("scripted line played late, but the first telling had no sound: let it play"); return; } // the officer may not have heard the first one (Oct 25)
   G.lateForced = null; vlog("scripted line played late: duplicate cut"); act("step", "Scripted line played late after Ara said it: cut the repeat");
-  send({ type: "response.cancel" }); stopPlayback(); G.dropNext = true;
+  send({ type: "response.cancel" }); stopResp(G.respSeq); G.dropNext = true;
 }
 function sentInstructions() { G.sentRules = rulesKey(); G.sentCtx = ctxNow(); return grokInstructions(); }
 const playingLeft = () => G.ctx && G.playHead > G.ctx.currentTime + 0.05 ? G.playHead - G.ctx.currentTime : 0;

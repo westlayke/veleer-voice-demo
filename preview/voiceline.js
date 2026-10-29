@@ -24,6 +24,7 @@ const TICK_MS = 4000;                        // soft tick while waiting, and the
 const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has started by now (Grok sometimes takes 6 to 10 s)
 const EARLY_PING_MS = 2500;                  // the early line test's limit
 const RESUME_MS = 25 * 60000;               // a line reopened within this long picks up the same conversation on xAI (kept 30 minutes)
+const CANCEL_SETTLE_MS = 700;                // a scripted line waits this long after a response.cancel (Oct 28: forced in the same instant, the line came back as words with no audio)
 const FORCE_WAIT_MS = 8000;                  // a scripted line that hasn't started by now is said by Ara instead (3 s was too short on a slow line, Oct 25; 5 s still fell back 5 times in the 4:42 PM call, lines then played late)
 const REPLAY_MS = 20000, REPLAY_BEFORE_MS = 90000; // ...and only when the earlier call came within 90 s before the drop                     // a tool call repeated this soon after a picked-up conversation, identical to one made before the drop, is the service replaying it (Oct 28)
 const LATE_FORCE_MS = 90000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long (25 s until Oct 28 4:12 PM: Ara took 29 s and the officer heard the line twice)
@@ -288,9 +289,14 @@ function downStart() {
   const again = () => { if (!G.live || !G.downAt) return; downSay("still"); G.downTimer = setTimeout(again, downRepeatMs()); };
   G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; downSay("dropped"); G.downTimer = setTimeout(again, SAY_STILL_MS - SAY_DOWN_MS); }, SAY_DOWN_MS);
 }
+// a status recording still playing is stopped so it can't overlap Ara (Oct 25 call; Oct 28 10:03 PM: "Ara's taking a moment" played over her sounded copy of the line)
+function cutStatusLine(why) {
+  const cut = G.lineEndAt && Date.now() < G.lineEndAt;
+  if (cut) { try { G.lineSrc && G.lineSrc.stop(); } catch (e) {} act("step", `The phone's status line was cut short: ${why}`); } G.lineSrc = null; G.lineEndAt = 0;
+  return cut;
+}
 function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;
-  const cut = G.lineEndAt && Date.now() < G.lineEndAt; // a status recording still playing is stopped so it can't overlap Ara (Oct 25 call)
-  if (cut) { try { G.lineSrc && G.lineSrc.stop(); } catch (e) {} act("step", "The phone's status line was cut short: the line came back"); } G.lineSrc = null; G.lineEndAt = 0;
+  const cut = cutStatusLine("the line came back");
   if (G.downAt) { vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && !cut && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back", namedText("back")); }
   G.downAt = 0; }
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
@@ -436,7 +442,7 @@ function forceSay(text, then, fallback, waited = 0) {
   if (/A is \$250,000 and up/.test(String(text || ""))) G.rangesSaid = true; /* the A to E ranges are read once per call (Oct 28) */
   if (!G.live) { G.pendingForce = null; return; }
   if (!waited) G.pendingForce = text;
-  if ((replyBusy() || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
+  if ((replyBusy() || playingLeft() > 0 || G.forced || Date.now() - (G.cancelAt || 0) < CANCEL_SETTLE_MS) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
   // the reply just finished already said it (the engine answered the tool result with the question itself): no second copy (OpenAI, Oct 27: "What's the first name?" three times)
   if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text))) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
   G.forced = { at: Date.now(), events: [], text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;

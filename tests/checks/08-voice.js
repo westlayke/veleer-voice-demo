@@ -264,12 +264,12 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
   // a line with words but no voice audio is flagged (the readings: audio received, speaker level, mic echo, sound state)
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "What's her last name?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
-  await p.waitForTimeout(1200);
+  await p.waitForTimeout(2600);
   ok(/Ara's line may not have been heard: no voice audio came from the voice service, only the words \("What's her last name\?"\)/.test(await logged()), "a line without voice audio wasn't flagged: " + (await logged()).slice(-300));
   ok(await p.evaluate(() => !!(G.out && G.outAn) && G.lastLine && G.lastLine.text === "What's her last name?"), "the speaker-path analyser or the last-line record is missing");
   // a line with sound is not flagged
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(4800))) }, { type: "response.output_audio_transcript.delta", delta: "Smith, got it." }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); G.audioSamples = 30000; G.outPeak = 0.2; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
-  await p.waitForTimeout(1200);
+  await p.waitForTimeout(2600);
   ok(!/may not have been heard: [^|]*Smith, got it/.test(await logged()), "a line with sound was flagged as not heard");
   // "Are you there?" (Carverhill, Oct 25: it always means he heard nothing for a while)
   const n0 = await p.evaluate(() => __sent.length);
@@ -285,9 +285,15 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   // a line with words and no sound, once a line has been heard in the call: "Ara's taking a moment", then the line is asked for again; a second silent copy reconnects (Carverhill, Oct 28)
   const nS = await p.evaluate(() => { G.audioEver = true; __sent.length = 0; return __sent.length; });
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
-  await p.waitForTimeout(3500);
+  await p.waitForTimeout(5000);
   ok(/came without sound: the phone says she's taking a moment, then asks for it again/.test(await logged()) && await p.evaluate(() => __sent.some(s => /Say it again now, word for word: \\"Which campaign: National, or Idaho\?\\"/.test(s))), "a silent line wasn't asked for again: " + (await logged()).slice(-300));
-  await p.evaluate(() => { window.__wsS = __ws; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
+  // a reply with sound starting before the resend goes out: the resend stands down (Oct 28 10:03 PM: a line heard twice)
+  await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Pennsylvania?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
+  await p.waitForTimeout(2600);
+  await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(4800))) }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Pennsylvania?" }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); G.audioSamples = 30000; G.outPeak = 0.2; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await p.waitForTimeout(3000);
+  ok(/resend stands down/.test(await logged()) && await p.evaluate(() => !__sent.some(s => /Pennsylvania/.test(s))), "the resend went out although a reply had started: " + (await logged()).slice(-300));
+  await p.evaluate(() => { G.silentAgain = { text: "Which campaign: National, or Idaho?", at: Date.now() }; window.__wsS = __ws; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForFunction(() => __ws !== __wsS, null, { timeout: 8000 }).catch(() => {});
   ok(/came without sound twice: the line is treated as dead/.test(await logged()) && await p.evaluate(() => __ws !== __wsS), "a second silent copy didn't reconnect: " + (await logged()).slice(-300));
 });

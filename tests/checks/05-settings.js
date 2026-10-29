@@ -267,7 +267,7 @@ test("Hey Ara start-up address (#call): one big mic, one tap starts the conversa
   await p.tap(".wl-mic.big"); await p.waitForTimeout(600);
   ok(await p.evaluate(() => __sent.some(s => s.includes("session.update"))), "the tap did not start Ara");
   ok(!(await p.isVisible("text=Talk to Ara")), "the start-up screen stayed over the call");
-  await p.waitForTimeout(4600); const open = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.text)); /* log rows go out in batches */
+  await p.waitForTimeout(7000); const open = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.text)); /* log rows go out in batches; the silent-line judge at 2 s restarts the 4 s batch clock */
   ok(open.some(t => /Hey Ara start-up address/.test(t)), "the start-up open was not logged: " + open.slice(-5).join(" | "));
   await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Home").catch(() => {}); await p.waitForTimeout(200);
   await p.tap("[data-go=settings] >> nth=0"); await p.waitForTimeout(400);
