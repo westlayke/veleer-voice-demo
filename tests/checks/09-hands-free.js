@@ -80,8 +80,8 @@ test("Hands-free: a drop right after a save tells Ara it went through, and savin
   await said(p, "Yes."); const r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved === true, "not saved: " + JSON.stringify(r));
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
-  const line = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || "");
-  ok(/Carry on where you were/.test(line) && !/went through just before the drop|Saved so far/.test(line), "the reconnect line still rebuilds Ara's memory of the save (Oct 28): " + line.slice(0, 300));
+  const line = await p.evaluate(() => ((G.justNow || {}).text || "")); /* Oct 29: the app says the sorry line itself; what Ara is told is the Right now text */
+  ok(/Carry on where you were/.test(line) && /The app has just said, in your voice, "Sorry, I lost you for a moment\. /.test(line) && !/went through just before the drop|Saved so far/.test(line), "the reconnect line still rebuilds Ara's memory of the save (Oct 28): " + line.slice(0, 300));
   const again = await ara(p, "save_form", { confirmed: true });
   ok(again.saved === true && again.already && /already saved/.test(again.status || again.note || ""), "saving again after the drop didn't say it was already saved: " + JSON.stringify(again));
 });
@@ -91,7 +91,7 @@ test("Hands-free: a line that stalls without closing (officer talking, nothing h
   await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res, rej) => { if (o && o.signal) o.signal.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError"))); }) : f(u, o); });
   await p.evaluate(() => { window.__ws0 = __ws; G.lastMsg = Date.now() - 7000; G.speechSince = Date.now() - 6000; G.loudAt = Date.now(); });
   await p.waitForTimeout(5500);
-  const out = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), heard: __sent.some(s => s.includes("may have answered while the line was down") || s.includes("talking while the line was down")) }));
+  const out = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), heard: __sent.some(s => s.includes("talking while the line was down") || s.includes("Sorry, I lost you for a moment. Could you say that again?")) }));
   ok(out.live && out.newLine && /Line stalled \(officer talking/.test(out.log) && out.heard, "the stalled line wasn't reconnected: " + JSON.stringify({ newLine: out.newLine, live: out.live, heard: out.heard }));
 });
 

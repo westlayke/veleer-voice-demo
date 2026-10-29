@@ -575,8 +575,8 @@ async function openAudio() {
         const rms = Math.sqrt(sq / f32.length); G.echoPeak = Math.max(G.echoPeak || 0, rms);
         if (rms < BARGE_RMS) f32 = new Float32Array(f32.length); else G.barge = (G.barge || 0) + 1;
       }
-      if (!(G.playHead > G.ctx.currentTime + 0.03)) { let sq = 0; for (let i = 0; i < f32.length; i += 4) sq += f32[i] * f32[i]; const lvl = Math.sqrt(sq / (f32.length / 4));
-      if (lvl > SPEAK_RMS) { if (!G.speechSince) G.speechSince = Date.now(); G.loudAt = Date.now(); if (/^Reconnecting/.test(G.status)) G.spokeInGap = true; } else if (G.speechSince && Date.now() - (G.loudAt || 0) > 8000) G.speechSince = 0; }
+      if (!(G.playHead > G.ctx.currentTime + 0.03)) { let sq = 0; for (let i = 0; i < f32.length; i += 4) sq += f32[i] * f32[i]; const lvl = window.__quietMic ? 0 : Math.sqrt(sq / (f32.length / 4)); /* __quietMic: the harness's fake mic is loud */
+      if (lvl > SPEAK_RMS) { if (!G.speechSince) G.speechSince = Date.now(); G.loudAt = Date.now(); if (/^Reconnecting/.test(G.status)) { if (!G.gapLoud) G.gapLoud = Date.now(); else if (Date.now() - G.gapLoud > GAP_SPEECH_MS) G.spokeInGap = true; } } else { G.gapLoud = 0; if (G.speechSince && Date.now() - (G.loudAt || 0) > 8000) G.speechSince = 0; } }
     G.buf.push(downsample(f32, G.ctx.sampleRate));
       const total = G.buf.reduce((n, a) => n + a.length, 0);
       if (total < 2400) return; // ~100 ms

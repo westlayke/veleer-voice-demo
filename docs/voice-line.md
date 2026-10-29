@@ -346,3 +346,9 @@ A scripted line (`forceSay`, a force_message) is not a reply request, so the 4 s
 In the same build the app asks its own next-step question when it drops a next step Ara invented on an interaction report (`nextQ` in aratools.js, the `NEXT_STEP_Q` line from the hands-free save): the 9:14 AM call heard only "I didn't catch the next step from you, so it's not on the form", and Ara never asked what the step was.
 
 Tested by the "Scripted line (Oct 29)" check in 08-voice.js (healthy line: one phone line and the 8 s fallback; slow line: fresh line at about 6.5 s saying the scripted line) and the dropped next step in the "keeps only what the officer said" check.
+
+## The reconnect line is the app's whenever the line comes back (Oct 29, 9:45 AM call)
+
+After a pickup with no form open, Ara used to be asked to say "Sorry, I lost you for a moment." and then one question. In Carverhill's 9:45 AM call she said the sorry and stopped, and there were 12 s of dead air before he asked whether she was there. Now the app says the whole line itself in every case (`say()` in `reconnect`'s open callback): the pending form question (`formPosition`), else a scripted line the old line never started (`G.pendingForce`), else `lastQuestion()`: "Could you say that again?" when the officer spoke while the line was down (`G.spokeInGap`, now only after `GAP_SPEECH_MS` of sound, and set by a stall that found the officer talking) or had answered since Ara's last line; else the last question in Ara's last line (`G.lastBot`); else "What would you like to do?". `reconnectLine(lock, said)` tells Ara the app has said it and not to repeat it. The warmed line now shapes the session body per engine (`providerSession` for OpenAI), which the Oct 29 warm build had missed.
+
+Tested by "Reconnect with no form open (Oct 29)" in 08-voice.js (all three lines) and the updated drop checks in 08 and 09.

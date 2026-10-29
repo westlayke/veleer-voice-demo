@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 10:01 AM",
+   "change": "Preview: after a drop with no form open, the app says the whole reconnect line itself: \"Sorry, I lost you for a moment.\" then the question Ara had asked and you hadn't answered, or \"Could you say that again?\" if you had spoken last, or \"What would you like to do?\". Ara is told not to repeat it. A bump of road noise while the line is down no longer counts as you talking. The warmed line now sends the right session shape on OpenAI too.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Look at my last call log, failed at the start. What's the fix\" (9:45 AM call): Ara said only the sorry after the reconnect, then 12 s of dead air until \"Are you there?\"."
+  },
+  {
    "date": "Oct 29, 9:40 AM",
    "change": "Preview: 4 s after a scripted line (a save line, a read-back, a question) with nothing back, the phone says \"Ara's taking a moment.\" and tests the line; a slow line gets a fresh one at about 6.5 s, which says the line itself. A healthy line keeps waiting for the 8 s fallback. And when the app drops a next step Ara invented on an interaction report, it asks its own next-step question in the same line instead of leaving it to Ara.",
    "area": "Voice",

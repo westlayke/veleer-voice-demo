@@ -669,16 +669,39 @@ test("Ara: no reply at the first tick on a slow line gets a fresh line at once, 
   ok(/No reply started after 4 s on a slow line \(test request no answer in 2.5 s\): fresh line/.test(await logged()), "the early slow-line check wasn't logged");
   // the next line hangs without opening: after 5 s a second one is tried alongside, and the first to open is kept
   await p.waitForFunction(() => G.status === "Listening", null, { timeout: 8000 });
-  await p.evaluate(() => { window.fetch = window.__fetch0; const Orig = window.WebSocket; let n = 0;
+  await p.evaluate(() => { window.fetch = window.__fetch0; window.__quietMic = true; const Orig = window.WebSocket; let n = 0;
     window.WebSocket = function (...a) { n++; if (n === 1) { const w = { readyState: 0, send() {}, close() { this.closed = true; } }; window.__hung = w; return w; } window.WebSocket = Orig; return new Orig(...a); };
-    window.__ws2 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; __ws.onclose({ code: 1006, reason: "" }); });
+    window.__ws2 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; G.spokeInGap = false; G.lastHeard = null; __ws.onclose({ code: 1006, reason: "" }); });
   await p.waitForTimeout(8000);
   const st = await p.evaluate(() => ({ live: G.live, status: G.status, onSecond: G.ws === __ws && __ws !== __ws2, hungClosed: !!__hung.closed }));
   ok(st.live && st.status === "Listening" && st.onSecond && st.hungClosed, "a line that wouldn't open didn't get a second line alongside: " + JSON.stringify(st));
   const q = await logged();
   ok(/trying a second line alongside/.test(q) && /\(the second line\)/.test(q), "the second line wasn't logged");
-  const sorry = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || "");
-  ok(/no (spooky|festive|other) aside/.test(sorry) && /just one question/.test(sorry), "the reconnect line still allows a theme aside or more than one question");
+  // Oct 29: with no form open the app says the whole line itself (sorry + the open question); Ara is told not to say it again
+  const sorry = await p.evaluate(() => ({ forced: __sent.filter(s => /force_message/.test(s) && s.includes("Sorry, I lost you")).pop() || "", told: __sent.some(s => /don't say it or anything like it again/.test(s)), oneQ: __sent.some(s => /then ask just one question/.test(s)) }));
+  ok(/Sorry, I lost you for a moment\. What would you like to do\?/.test(sorry.forced) && sorry.told && !sorry.oneQ, "after a drop with no form open the app didn't say the whole reconnect line itself: " + JSON.stringify(sorry).slice(0, 400));
+});
+test("Reconnect with no form open (Oct 29): the app says the sorry and the question itself, so Ara can't stop after the sorry", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
+  const lastForced = () => p.evaluate(() => __sent.map(s => { try { return JSON.parse(s); } catch (e) { return {}; } }).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text).pop() || "");
+  const logged = () => p.evaluate(() => ACT.q.map(a => a.text).join(" | "));
+  await p.evaluate(() => { window.__quietMic = true; }); /* the fake mic is loud: it would count as the officer talking while the line is down */
+  const drop = async () => { await p.evaluate(() => { G.drops = 0; G.loudAt = 0; G.speechSince = 0; G.spokeInGap = false; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForFunction(() => G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(600); };
+  // Ara had just asked a question and the officer hadn't answered: the line comes back with that question (the 9:45 AM call: Ara said only the sorry, then 12 s of dead air)
+  await fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  await drop();
+  ok((await lastForced()) === "Sorry, I lost you for a moment. Do you want to do that now?" && /the app asks Ara's last question again itself/.test(await logged()), "Ara's unanswered question wasn't asked again by the app: " + (await lastForced()));
+  const instr = await p.evaluate(() => __sent.filter(s => /instructions/.test(s) && s.includes("Sorry, I lost you")).pop() || "");
+  ok(/Carry on where you were/.test(instr) && /don't say it or anything like it again/.test(instr), "Ara wasn't told the app said the line: " + instr.slice(0, 300));
+  // the officer had answered (or spoken) after Ara's last line: the app asks them to say it again
+  await p.evaluate(() => { G.lastHeard = { text: "Yes, let's do it.", n: (G.heardN || 0) + 1, at: Date.now() }; });
+  await drop();
+  ok((await lastForced()) === "Sorry, I lost you for a moment. Could you say that again?", "the officer's unheard answer wasn't asked for again: " + (await lastForced()));
+  // nothing waiting: the open question
+  await p.evaluate(() => { G.lastBot = "Noted."; G.lastBotAt = Date.now(); G.lastHeard = null; });
+  await drop();
+  ok((await lastForced()) === "Sorry, I lost you for a moment. What would you like to do?", "with nothing waiting the app didn't ask what to do: " + (await lastForced()));
 });
 test("Scripted line (Oct 29): nothing back 4 s after it gets \"Ara's taking a moment\" and a line test; a slow line gets a fresh one that says the line again", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -879,8 +902,8 @@ test("Ara: a drop with no form open comes back to the person just worked on, and
   ok((await state(p)).contacts.find(c => c.first === "Nora").capacity === "C", "the contact didn't save with the rating");
   // the line drops with no form open: Ara carries on with Nora, never "anyone else" (Carverhill, Oct 25)
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1200);
-  const line = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && /Sorry, I lost you/.test(e.response.instructions)).map(e => e.response.instructions).pop() || "");
-  ok(/Carry on where you were/.test(line) && !/You were working on|Saved so far|last things said/.test(line), "the reconnect line rebuilds Ara's memory instead of letting her carry on (Oct 28): " + line.slice(0, 600));
+  const line = await p.evaluate(() => ((G.justNow || {}).text || "")); /* Oct 29: the app says the line itself; what Ara is told is the Right now text */
+  ok(/Carry on where you were/.test(line) && /The app has just said, in your voice, "Sorry, I lost you for a moment\. [^"]+\?"/.test(line) && !/You were working on|Saved so far|last things said/.test(line), "the reconnect line rebuilds Ara's memory instead of letting her carry on (Oct 28): " + line.slice(0, 600));
 });
 test("Ara: Move to Cultivation is refused while the criteria are missing, by voice and at the save", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -911,7 +934,7 @@ test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, scr
   ok(/^wss:\/\/api\.openai\.com\/v1\/realtime\?model=gpt-realtime-2\.1$/.test(url), "the socket isn't OpenAI's: " + url);
   ok(protos[0] === "realtime" && /^openai-insecure-api-key\.test-pass$/.test(protos[1] || ""), "the subprotocols don't carry the pass: " + JSON.stringify(protos));
   const sess = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(x => x.type === "session.update").map(x => x.session));
-  ok(sess.length >= 1 && sess[0].type === "realtime" && sess[0].model === "gpt-realtime-2.1" && sess[0].audio.input.turn_detection.type === "server_vad" && sess[0].audio.input.transcription.model && sess[0].audio.output.voice === "marin" && sess[0].tools.length > 10 && sess[0].instructions.length > 1000, "the OpenAI session body is wrong: " + JSON.stringify(sess[0]).slice(0, 300));
+  ok(sess.length >= 1 && sess[0].type === "realtime" && sess[0].model === "gpt-realtime-2.1" && sess[0].audio.input.turn_detection.type === "server_vad" && sess[0].audio.input.transcription.model && sess[0].audio.output.voice === "marin" && sess[0].tools.length > 10 && sess[0].instructions.length > 1000, "the OpenAI session body is wrong: " + JSON.stringify(sess.map(x => ({ type: x.type, model: x.model, td: x.audio && x.audio.input && x.audio.input.turn_detection, tr: x.audio && x.audio.input && x.audio.input.transcription, voice: x.audio && x.audio.output && x.audio.output.voice, tools: x.tools && x.tools.length, il: x.instructions && x.instructions.length }))).slice(0, 600));
   ok(!sess.some(x => x.resumption || x.replace || x.keyterms), "xAI-only extras were sent to OpenAI: " + JSON.stringify(sess.map(x => Object.keys(x))));
   ok(!sess.some(x => x.instructions && !x.type), "a session update went out without the session type: " + JSON.stringify(sess.map(x => Object.keys(x))));
   // a scripted line: no force_message on this engine, so the assistant is asked in a reply of its own to say it word for word
