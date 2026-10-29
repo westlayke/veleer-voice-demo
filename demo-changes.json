@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 29, 7:40 PM",
+      "change": "Preview: a question (\"Are you there?\") is never taken as a yes to a read-back; while the phone has the microphone muted the voice service's idle timer no longer hangs up (the app says the mic is muted and waits); after a save, a read-back still waiting to play is dropped, Ara's late copy of it is cut, and the reconnect line says it's saved instead of asking again.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, 6:22 and 6:23 PM calls: \"twice the app closed mic and said it was hanging up. Why?\" (the phone muted the mic at the start of one call; \"Are you there?\" saved the gift in the other). Plan approved: \"Build the fixes\"."
+    },
+    {
       "date": "Oct 29, 7:21 PM",
       "change": "Preview: a new contact with neither an email nor a mobile gets the app's own question (\"What's Jenny's email address or mobile number?\"), before and after a drop; the reconnect line no longer says the form has everything it needs when it doesn't.",
       "area": "Voice",

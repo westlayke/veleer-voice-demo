@@ -508,4 +508,33 @@ test("Carverhill's 1:14 PM call (Oct 29): a form with every required field in st
   const fp = await p.evaluate(() => { V.askedCap = true; V.opt = null; V.askedOptional = false; V.choice = null; return formPosition(); });
   ok(/^That's everything the new contact form needs for Jordan\. Save it, or add the optional details first\?$/.test(fp.ask), "a complete contact form's position isn't the save-or-optional question: " + JSON.stringify(fp));
 });
+test("Carverhill's 6:22 and 6:23 PM calls (Oct 29): a question is never a yes, a muted mic blocks the idle hang-up, a save drops the stale read-back", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const log = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  // 1. the read-back is waiting for a yes; "Are you there?" (and any question) is not one
+  await said(p, "Add a task for Ruth: send her the board deck, due November 30.");
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
+  let r = await ara(p, "save_form", { confirmed: false });
+  ok(/Yes to save, or no to change something\?$/.test(r.read_back || ""), "the form wasn't read back: " + JSON.stringify(r));
+  ok(await p.evaluate(() => ["Are you there?", "Is it saved?", "Can you hear me?", "Hello?", "Ara?", "Did you get that?"].every(t => !appYes(t)) && appYes("Yes.") && appYes("Go ahead.") && appYes("That's right.")), "a question counted as a yes");
+  await said(p, "Are you there?"); await p.waitForTimeout(400);
+  ok(!(await state(p)).tasks.some(t => t.text === "Send Ruth the board deck") && await p.evaluate(() => !!G.saveCheck), "\"Are you there?\" saved the form (6:23 PM call)");
+  // 2. the service's idle timer while the phone has the mic muted: no hang-up
+  await p.evaluate(() => { G.micMutedAt = Date.now() - 5000; G.lastAct = Date.now() - 40000; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.timeout_triggered" }) }); }); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => G.live && !G.idleEnding && !G.idleAt) && /idle timer\): ignored, (the phone has the microphone muted|a form is open)/.test(await log()), "the idle timer hung up while the phone had the mic muted (6:22 PM call): " + JSON.stringify(await p.evaluate(() => [G.live, G.idleEnding])));
+  await p.evaluate(() => { const v = V; V = null; G.micMutedAt = Date.now() - 5000; G.lastAct = Date.now() - 40000; G.dropIdle = 0; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.timeout_triggered" }) }); V = v; }); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => G.live && !G.idleEnding && !G.idleAt) && /idle timer\): ignored, the phone has the microphone muted/.test(await log()), "with no form open the idle timer hung up while the mic was muted: " + JSON.stringify(await p.evaluate(() => [G.live, G.idleEnding])));
+  await p.evaluate(() => { G.micMutedAt = 0; G.dropIdle = 0; });
+  // 3. the yes saves; a read-back still waiting to play is dropped, Ara's late telling of it is cut, and the reconnect line says it's saved
+  await p.evaluate(() => { window.__noAutoForce = true; });
+  await ara(p, "save_form", { confirmed: false }); /* the read-back is forced again and, on this slow line, never starts */
+  ok(await p.evaluate(() => G.forced && /Yes to save, or no to change something\?$/.test(G.forced.text)), "no read-back waiting to play");
+  await said(p, "Yes."); await p.waitForTimeout(400);
+  ok((await state(p)).tasks.some(t => t.text === "Send Ruth the board deck") && await p.evaluate(() => !G.forced || !/Yes to save/.test(G.forced.text)) && /The read-back still waiting to play is dropped: the form is saved/.test(await log()), "the save didn't drop the waiting read-back: " + JSON.stringify(await p.evaluate(() => G.forced && G.forced.text)));
+  await p.evaluate(() => { window.__noAutoForce = false; G.forced = null; });
+  await p.evaluate(() => { G.bot = ""; G.respSeq = (G.respSeq || 0) + 1; __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "New task for Ruth Abernathy: Send Ruth the board deck, due Nov 30. Yes to save, or no to change something?" }) }); }); await p.waitForTimeout(200);
+  ok(/scripted line played late: duplicate cut|Scripted line played late after Ara said it: cut the repeat/.test(await log()) || await p.evaluate(() => G.dropNext), "Ara's late telling of the saved read-back wasn't cut");
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "cancelled" } }) }); G.dropNext = false; G.lastBot = "New task for Ruth Abernathy: Send Ruth the board deck, due Nov 30. Yes to save, or no to change something?"; G.lastBotAt = Date.now(); G.lastHeard = null; });
+  ok(await p.evaluate(() => !V && /^(Task added for Ruth|It's saved)/.test(lastQuestion().line)), "the reconnect line after a save still asks the old read-back: " + JSON.stringify(await p.evaluate(() => lastQuestion())));
+});
 };

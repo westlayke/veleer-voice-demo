@@ -218,7 +218,9 @@ const HF_YES = /\b(yes|yeah|yep|yup|ya|correct|right|sure|save|go ahead|do it|co
 const HF_NO = /^(no|nope|nah|wait|hold on|hang on|not yet|stop|cancel)\b|\b(don't|dont|do not|not|never) (save|do it|go ahead)|\b(not yet|hold on|hang on|wait a|change|wrong|incorrect|isn't right|not right|that's off|fix)\b/;
 // the app asked its own yes/no question: a short reply (4 words or fewer) that isn't a no, a question or a command counts as yes, whatever the
 // words ("looks good", "lock it in", "it was") (Oct 29 phrase-list review: a yes list always misses the next phrasing)
-const appYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim(); if (hfYes(t)) return true;
+const appYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim();
+  if (/\?\s*$/.test(String(text)) || /^(are|is|do|did|does|can|could|would|will|should|have|has|hello|hey|hi|ara)\b/.test(t) || (typeof HEARD_WORDS !== "undefined" && HEARD_WORDS.test(String(text)))) return false; /* a question is never a yes: "Are you there?" saved a gift (6:23 PM call, Oct 29) */
+  if (hfYes(t)) return true;
   if (!t || t.split(" ").length > 4 || HF_NO.test(t) || /^(no|nope|nah|not|never|don't|dont|what|which|how|why|when|where|who|say|repeat|undo|cancel|wait|hold|hang|stop|skip|back|change|hmm|um|uh|huh|pardon|sorry)\b/.test(t) || /\b(no|not|don't|dont|wrong|change|undo|cancel|wait|again|driving|parked|drive|hands|free|bug|help|goodbye|bye)\b/.test(t)) return false; /* "I'm driving" is a switch, not a yes */
   return true; };
 const hfYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim(); return HF_YES.test(t) && !HF_NO.test(t); };
@@ -374,8 +376,17 @@ function hfYesHeard(text) {
   const r = hfCommit();
   if (!r.ok) { act("step", `the officer's yes to the ${title} read-back, but it can't be saved: ${r.err}`); guide(`Not saved. ${r.err} Ask for what's missing in one short question, update the draft, then read it back again.`); return true; } /* the same guidance save_form gets; never spoken as is */
   G.savedByWords = Date.now(); G.savedByWordsLine = r.force || ""; /* the spoken line only; r.say is guidance for Ara */ act("step", `the officer's yes to the read-back saved the ${title} form itself, from their words`);
+  staleReadback(); /* 6:23 PM call, Oct 29: the read-back played 12 s after the save, and a fresh line repeated it */
   if (r.force) forceSay(r.force); else guide(r.say || `Say in a few words that it's saved, then ask "What's next?"`);
   return true;
+}
+// after a save, the read-back that was still waiting to play (a slow line) is dropped, and Ara's late telling of it is cut when it comes
+function staleReadback() {
+  const rb = G.saveCheck && G.saveCheck.key ? "" : ""; const f = G.forced, t = f && f.text || "";
+  if (f && /\?\s*$/.test(t) && new RegExp(SAVE_Q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$").test(t)) { clearTimeout(G.forceTimer); clearTimeout(G.forceTick); G.forced = null; act("step", "The read-back still waiting to play is dropped: the form is saved"); }
+  const last = (G.lastBot || "").trim(); const want = /Yes to save, or no to change something\?\s*$/.test(last) ? last : t;
+  if (want && /Yes to save, or no to change something\?\s*$/.test(want)) { G.lateForced = { text: want.replace(/^(Sorry, I lost you for a moment\.\s*)+/, ""), said: 0, at: Date.now(), resp: G.respSeq, firstAudio: 99999 }; } /* lateForcedCheck cuts a later reply that starts with these words */
+  G.staleRbAt = Date.now(); void rb;
 }
 function hfCommit() {
   const A = ACTIONS[V.action], before = S.history.length, action = V.action; G.hfTry = {};
