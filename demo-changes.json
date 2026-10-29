@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 3:40 PM",
+   "change": "Preview: \"Ara's taking a moment\" no longer plays in the middle of a long sentence. The officer's turn now opens only when the voice service says their speech has stopped, not on the first part of the transcript.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "The 10-conversation confirmation run on the 2:55 PM build still played the line twice during long officer lines; Carverhill: \"Why not do 1 more 10 convo run\"."
+  },
+  {
    "date": "Oct 29, 2:55 PM",
    "change": "Preview: two fixes from the first real-Grok runs with simulated drops. After two drops in a row Ara no longer stacks \"Sorry, I lost you for a moment\" in front of her question; and \"Ara's taking a moment\" no longer plays a few seconds after a save line when the officer answered a read-back quickly (the app's own line had already answered them).",
    "area": "Voice",

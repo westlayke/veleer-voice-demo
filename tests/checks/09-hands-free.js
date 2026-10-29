@@ -470,7 +470,13 @@ test("Officer's turn watch (Oct 29): no reply after the officer's words gets the
   await p.evaluate(() => { G.responding = false; G.turnOpen = Date.now() - 1000; G.turnStep = 0; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
   await p.waitForTimeout(4500);
   ok(await p.evaluate(() => !G.turnOpen && !G.slowSaid), "a finished reply didn't close the officer's turn (the taking-a-moment line played after the save line)");
-  await p.evaluate(() => { G.responding = false; G.respAsked = false; }); /* the pretend reply is left unfinished so the reply watch doesn't take it for an empty one */
+  // a partial transcript while the officer is still talking (a long sentence) opens no turn; the turn opens when their speech stops
+  await p.evaluate(() => { G.responding = false; G.slowSaid = false; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); __ws.onmessage({ data: JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: "I met him yesterday at the party, in person. We talked about" }) }); });
+  await p.waitForTimeout(4500);
+  ok(await p.evaluate(() => !G.turnOpen && !G.slowSaid), "a partial transcript mid-sentence opened the officer's turn (taking-a-moment played while they were still talking)");
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_stopped" }) }); });
+  ok(await p.evaluate(() => !!G.turnOpen), "the officer's speech stopping didn't open their turn");
+  await p.evaluate(() => { G.turnOpen = 0; G.responding = false; G.respAsked = false; }); /* the pretend reply is left unfinished so the reply watch doesn't take it for an empty one */
   // a slow line: the test fails and a fresh line asks the officer to say it again
   await p.evaluate(() => { window.__pingMs = 2800; window.__ws0 = __ws; G.slowSaid = false; G.asked = false; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.retried = 0; G.spokeInGap = false; G.lastAct = Date.now(); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_stopped" }) }); });
   await said(p, "J Pike at gmail dot com.");
