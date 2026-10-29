@@ -16,7 +16,7 @@ on:
         default: "1"
       jobs:
         description: "Conversations at once per machine"
-        default: "8"
+        default: "6"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -45,6 +45,9 @@ jobs:
           JOBS: ${{ inputs.jobs }}
           SEED: ${{ matrix.seed }}
         run: node tests/patience/run.js
+      - name: Report (in the log, since artifacts can't be fetched from the cloud session)
+        if: always()
+        run: cat tests/patience/results/report-*.md
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -60,7 +63,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { path: all, pattern: patient-pat-seed-* }
       - name: Combine
-        run: node tests/patience/combine.js all > combined.md && cat combined.md >> "$GITHUB_STEP_SUMMARY"
+        run: node tests/patience/combine.js all > combined.md && cat combined.md >> "$GITHUB_STEP_SUMMARY" && cat combined.md
       - uses: actions/upload-artifact@v4
         with:
           name: patient-pat-combined
