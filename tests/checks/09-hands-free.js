@@ -464,6 +464,12 @@ test("Officer's turn watch (Oct 29): no reply after the officer's words gets the
   // a reply arrives: the watch is over
   await fire(p, [{ type: "response.created" }]); await p.waitForTimeout(200);
   ok(await p.evaluate(() => !G.turnOpen), "a reply that started didn't close the officer's turn");
+  // the officer's "yes" is answered by the app's own save line before the service reports their speech stopped (the real-line runs, Oct 29): no turn opens, and a finished reply closes one
+  await p.evaluate(() => { G.slowSaid = false; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_stopped" }) }); });
+  ok(await p.evaluate(() => !G.turnOpen && G.responding), "speech stopping while the save line was already playing opened a turn");
+  await p.evaluate(() => { G.responding = false; G.turnOpen = Date.now() - 1000; G.turnStep = 0; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  await p.waitForTimeout(4500);
+  ok(await p.evaluate(() => !G.turnOpen && !G.slowSaid), "a finished reply didn't close the officer's turn (the taking-a-moment line played after the save line)");
   await p.evaluate(() => { G.responding = false; G.respAsked = false; }); /* the pretend reply is left unfinished so the reply watch doesn't take it for an empty one */
   // a slow line: the test fails and a fresh line asks the officer to say it again
   await p.evaluate(() => { window.__pingMs = 2800; window.__ws0 = __ws; G.slowSaid = false; G.asked = false; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.retried = 0; G.spokeInGap = false; G.lastAct = Date.now(); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_stopped" }) }); });

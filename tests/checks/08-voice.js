@@ -692,6 +692,10 @@ test("Reconnect with no form open (Oct 29): the app says the sorry and the quest
   await fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
   await drop();
   ok((await lastForced()) === "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?" && /the app says Ara's whole last line again itself/.test(await logged()), "Ara's whole last line wasn't said again by the app (Oct 29 10:05 AM call): " + (await lastForced()));
+  // a second drop before the officer says anything (the real-line probe, Oct 29): the same question again, the sorry said once, not stacked
+  await p.evaluate(() => { G.lastBot = "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?"; G.lastBotAt = Date.now(); G.lastHeard = null; });
+  await drop();
+  ok((await lastForced()) === "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?", "a second drop stacked the sorry: " + (await lastForced()));
   const instr = await p.evaluate(() => __sent.filter(s => /instructions/.test(s) && s.includes("Sorry, I lost you")).pop() || "");
   ok(/Carry on where you were/.test(instr) && /don't say it or anything like it again/.test(instr), "Ara wasn't told the app said the line: " + instr.slice(0, 300));
   // the officer had answered (or spoken) after Ara's last line: the app asks them to say it again

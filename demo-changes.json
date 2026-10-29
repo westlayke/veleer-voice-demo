@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 2:55 PM",
+   "change": "Preview: two fixes from the first real-Grok runs with simulated drops. After two drops in a row Ara no longer stacks \"Sorry, I lost you for a moment\" in front of her question; and \"Ara's taking a moment\" no longer plays a few seconds after a save line when the officer answered a read-back quickly (the app's own line had already answered them).",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "Found by the real-line consistency runs on Oct 29 (probe with drops forced high; 23 of 25 quiet conversations heard the stray line); Carverhill: \"Go\"."
+  },
+  {
    "date": "Oct 29, 1:33 PM",
    "change": "Preview: when the line comes back with a form open, the app first says where you are (\"We're on the interaction report for Elon.\") and then the form's pending question. A form whose required fields are all in now always has a question (the substantive question, the next-step question, \"Save it, or add the optional details first?\", or the read-back), so the reconnect never falls back to \"Could you say that again?\" with a form open. On the 1:14 PM call that gap let Ara guess at an old question and try to open a second opportunity (which the app refused).",
    "area": "Voice",

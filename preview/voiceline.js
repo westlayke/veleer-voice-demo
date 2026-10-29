@@ -294,7 +294,7 @@ async function openAgain(lock) {
 }
 // what the app asks after a drop with no form open: the question Ara had just asked and the officer hadn't answered, "say that again" when the officer had spoken last, else the open question
 function lastQuestion() {
-  const bot = String(G.lastBot || "").trim(), heardAt = G.lastHeard && G.lastHeard.at || 0, answered = heardAt > (G.lastBotAt || 0);
+  const bot = String(G.lastBot || "").trim().replace(/^(Sorry, I lost you for a moment\.\s*)+/, ""), heardAt = G.lastHeard && G.lastHeard.at || 0, answered = heardAt > (G.lastBotAt || 0); /* her last line may itself be the app's reconnect line: a second drop with no word from the officer must not stack the sorry (Patient Pat on the real line, Oct 29: five in a row) */
   if (G.spokeInGap || answered) return { line: "Could you say that again?", why: `the app asks the officer to repeat what they said ${G.spokeInGap ? "while the line was down" : "after Ara's last line"}` };
   // her whole last line when it is short and ends in her question (10:05 AM call: the last sentence alone, "which fits?", lost the choices); else just the question
   if (/\?\s*$/.test(bot) && bot.length > 3 && bot.length <= 220) return { line: bot, why: "the app says Ara's whole last line again itself" };
