@@ -691,7 +691,7 @@ test("Reconnect with no form open (Oct 29): the app says the sorry and the quest
   // Ara had just asked a question and the officer hadn't answered: the line comes back with that question (the 9:45 AM call: Ara said only the sorry, then 12 s of dead air)
   await fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
   await drop();
-  ok((await lastForced()) === "Sorry, I lost you for a moment. Do you want to do that now?" && /the app asks Ara's last question again itself/.test(await logged()), "Ara's unanswered question wasn't asked again by the app: " + (await lastForced()));
+  ok((await lastForced()) === "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?" && /the app says Ara's whole last line again itself/.test(await logged()), "Ara's whole last line wasn't said again by the app (Oct 29 10:05 AM call): " + (await lastForced()));
   const instr = await p.evaluate(() => __sent.filter(s => /instructions/.test(s) && s.includes("Sorry, I lost you")).pop() || "");
   ok(/Carry on where you were/.test(instr) && /don't say it or anything like it again/.test(instr), "Ara wasn't told the app said the line: " + instr.slice(0, 300));
   // the officer had answered (or spoken) after Ara's last line: the app asks them to say it again
@@ -806,7 +806,7 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = "C"; S.opps.unshift({ id: "o_cult", contactId: c.id, name: "Okafor, James - 2026", stage: "Qualification", asks: [], fund: "C.A. Idaho C4", campaign: "Idaho", officer: OFFICER, participants: "", createdOn: todayISO() }); S.interactions.unshift({ id: "i_cult", contactId: c.id, date: todayISO(), type: "In person", summary: "Good talk.", substantive: true, kind: "interaction" }); save(); });
   await said(p, "I'm driving"); await p.waitForTimeout(900);
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
-  ok(/^Move James to Cultivation\? That means you, as the gift officer, believe they're ready to be pursued for a gift\.$/.test(r.read_back || ""), "the Cultivation read-back isn't the decision with its meaning: " + JSON.stringify(r));
+  ok(/^Move James to Cultivation\? That means you, as the gift officer, believe they're ready to be pursued for a gift\. Save it, or change something\?$/.test(r.read_back || ""), "the Cultivation read-back isn't the decision with its meaning and the save question (Oct 29): " + JSON.stringify(r));
   await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved && /^James is now in Cultivation\. (Say undo if that's wrong\. )?The next step in the process to move James to Ask Planning is to add a planned ask\. Do you want to do that now\?$/.test(r.ask_exactly || r.said || ""), "the Cultivation save line isn't \"James is now in Cultivation\": " + JSON.stringify(r));

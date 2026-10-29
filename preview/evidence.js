@@ -90,7 +90,7 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
 function fieldSaidIn(action, f, lines) {
   if (!f || !lines.length) return false; const all = lines.join(" \n ").toLowerCase();
   if (f.k === "capacity") return ratedIn(lines);
-  if (f.k === "fund") return !!(typeof matchEntity === "function" && matchEntity(lines[lines.length - 1]).hits.length);
+  if (f.k === "fund") return !!(typeof matchEntity === "function" && matchEntity(lines[lines.length - 1]).hits.length === 1); /* a state with two entities is a choice still to make (10:05 AM call) */
   if (f.k === "campaign") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all) || [...new Set(Object.values(ENTITY_STATE).filter(Boolean))].some(s => all.includes(s.toLowerCase()));
   if (OPTION_WORDS[f.k]) return Object.values(OPTION_WORDS[f.k]).some(re => re.test(all) || re.test(all.replace(/-/g, " ")));
   if (f.type === "money") return /\$|\d|\b(thousand|hundred|million|grand|bucks|dollars)\b/.test(all);

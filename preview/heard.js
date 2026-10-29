@@ -40,7 +40,8 @@ function silentLine(rec) {
   sayLocal("Ara's taking a moment.", "slow"); G.slowSaid = true;
   const wait = Math.round(((lineBuf.slow && lineBuf.slow.duration) || 1.6) * 1000) + 300;
   setTimeout(() => { if (!G.live || (G.lastHeard && G.lastHeard.at > rec.at)) return;
-    if (G.respSeq !== rec.resp || playingLeft() > 0 || G.audioOn) { act("step", "Ara's line is being said again already: the phone's resend stands down"); return; } /* Oct 28 10:03 PM: the real copy arrived while the resend was waiting, and the line played twice */
+    const same = (t) => typeof sameWords === "function" && t && sameWords(t) === sameWords(rec.text);
+    if (G.respSeq !== rec.resp || playingLeft() > 0 || G.audioOn || same(G.forced && G.forced.text) || same(G.pendingForce)) { act("step", "Ara's line is being said again already: the phone's resend stands down"); return; } /* 10:05 AM call: the app's own copy was already on its way */ /* Oct 28 10:03 PM: the real copy arrived while the resend was waiting, and the line played twice */
     const own = rec.text === G.lastForcedText; G.lastBot = ""; /* else the resend is cut as a doubled reply */
     if (own) forceSay(rec.text); else askReply(`Your last line reached the officer as text only, with no sound. Say it again now, word for word: "${rec.text}"`); }, wait);
 }

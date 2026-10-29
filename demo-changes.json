@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 11:07 AM",
+   "change": "Preview: five fixes from the 10:05 AM call, all in the shared voice code. After a drop the app repeats Ara's whole last line (not just the last sentence). A save asked for after the form already saved is answered by the app's own \"it's saved, what's next\" line, so Ara doesn't say it a second time. The phone's resend of a soundless line stands down when the app's own copy is already on its way. Every read-back ends in \"Save it, or change something?\" unless it already ends in a question (the Cultivation read-back had ended in a statement). A state with two entities no longer counts as the entity said, and when Ara asks her own question while the app's question is pending, hers stands and the app's copy is cut.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill's 10:05 AM call on Oct 29: \"Can you read log from my last run, there were some issues\", then \"Are these fixes generic... I don't want separate one off form fixes\" and \"Go build it please\"."
+  },
+  {
    "date": "Oct 29, 10:01 AM",
    "change": "Preview: after a drop with no form open, the app says the whole reconnect line itself: \"Sorry, I lost you for a moment.\" then the question Ara had asked and you hadn't answered, or \"Could you say that again?\" if you had spoken last, or \"What would you like to do?\". Ara is told not to repeat it. A bump of road noise while the line is down no longer counts as you talking. The warmed line now sends the right session shape on OpenAI too.",
    "area": "Voice",

@@ -276,6 +276,8 @@ async function openAgain(lock) {
 function lastQuestion() {
   const bot = String(G.lastBot || "").trim(), heardAt = G.lastHeard && G.lastHeard.at || 0, answered = heardAt > (G.lastBotAt || 0);
   if (G.spokeInGap || answered) return { line: "Could you say that again?", why: `the app asks the officer to repeat what they said ${G.spokeInGap ? "while the line was down" : "after Ara's last line"}` };
+  // her whole last line when it is short and ends in her question (10:05 AM call: the last sentence alone, "which fits?", lost the choices); else just the question
+  if (/\?\s*$/.test(bot) && bot.length > 3 && bot.length <= 220) return { line: bot, why: "the app says Ara's whole last line again itself" };
   const q = (bot.match(/[^.?!]*\?/g) || []).pop(); if (q && q.trim().length > 3 && q.trim().length <= 200) return { line: q.trim(), why: "the app asks Ara's last question again itself" };
   return { line: typeof NEXT_NO_Q === "string" ? NEXT_NO_Q : "What would you like to do?", why: "no question was waiting: the app asks what the officer would like to do" };
 }
@@ -499,6 +501,7 @@ function forcedEvent(t) {
       // Ara answered on her own (to the tool result) and the app took that for the scripted line starting (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
       if (f.viaReply && saidLine(said, want)) { G.forced = null; G.lastForcedText = f.text; act("step", `${PROV().name} said the scripted line in its own words`); if (f.then) setTimeout(() => guide(f.then), 0); return; } /* no late copy is coming on this engine */
       if (saidLine(said, want)) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
+      else if (/\?\s*$/.test(G.bot || "") && /\?\s*$/.test(f.text)) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", `Ara asked her own question while the app's scripted question was still to come: hers stands, the scripted copy will be cut (${forcedTrace(f)})`); if (f.then) setTimeout(() => guide(f.then), 0); } /* 10:05 AM call: two questions in a row */
       else { f.started = false; act("step", `Ara answered on her own while the scripted line was still to come (${forcedTrace(f)})`); clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(g)})`); guide(g.fallback); } }, FORCE_WAIT_MS); }
       return; }
     G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; { const st = (f.events || []).find(x => x.t === "response.created"); G.traceN = (G.traceN || 0) + 1; if (G.traceN <= 2 || !st || st.dt > 2500) act("step", `Scripted line played (${forcedTrace(f)})`); } /* the first two per call and every slow one: enough to see the ack without flooding the log */ if (f.then) setTimeout(() => guide(f.then), 0); }
