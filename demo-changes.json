@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 9:26 AM",
+   "change": "Preview: the configuration goes up on the warmed line as soon as that line opens, even when the tap has already landed (on the phone the tap lands about 100 ms after the touch and the line opens after 300 ms, so the 8:16 AM build never got to send it early). A warmed line that a Carry on doesn't use is closed.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Take a look at last call log\" (9:14 AM call): no \"configuration went up on the warmed line\" row, session.updated still 924 ms after the greeting was sent."
+  },
+  {
    "date": "Oct 29, 8:16 AM",
    "change": "Preview: Ara's configuration (about 55 KB of instructions and tools) goes up on the warmed line the moment the officer touches the mic button, while the phone is still opening its mic, instead of after the tap. The tap then sends only what changed since the touch. The call-start harness (tests/call-start, run 1: 56 real calls) showed the 1.3 s wait was the phone's uplink carrying those bytes, not xAI.",
    "area": "Voice",

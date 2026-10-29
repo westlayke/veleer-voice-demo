@@ -144,7 +144,7 @@ function warmLine() {
   w.tokP.then(token => { if (G.warm !== w || G.live) return; /* the tap already started the call with this pass */
     const ws = w.ws = new WebSocket(P.url(null, token), P.protocols(token)); ws.binaryType = "arraybuffer"; vlog("line warmed on touch");
     ws.onmessage = (m) => w.queued.push(m); ws.onclose = ws.onerror = () => { if (G.warm === w) G.warm = null; };
-    ws.onopen = () => { if (G.warm !== w || G.live || ws.readyState !== 1) return; /* the tap already took the line: openSocket sends the configuration itself */
+    ws.onopen = () => { if (ws.readyState !== 1) return; /* runs until openSocket takes the line and puts its own onopen on it: the tap usually lands before the socket is open (Jim's 9:14 AM call: open 16 ms after the mic was ready), and the mic takes 2 s, so the configuration still goes up first */
       // Ara's whole configuration (about 55 KB) goes up now, while the phone is still opening its mic: the call-start harness (Oct 29) showed
       // the phone's uplink carrying it was the 1.3 s wait for session.updated, not xAI. Built as the call will start: hands-free on, nothing saved yet.
       const hands = G.hands, saves = G.saves, name = S.settings.userName, el = document.getElementById("wlName"), typed = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : ""; G.hands = true; G.saves = []; if (typed) S.settings.userName = typed; /* the name being typed on the welcome is the officer's name once Start is tapped */
@@ -160,6 +160,7 @@ function openSocket(token, first, second, warm) {
   const P = PROV(), resume = P.resume && G.convId && Date.now() - (G.convAt || 0) < RESUME_MS ? G.convId : null;
   const useWarm = !!(warm && warm.ws && warm.ws.readyState <= 1 && !resume && !second && !P.open);
   if (!useWarm && !token) { getToken().then(tk => openSocket(tk, first, second)).catch(e => { endCall("couldn't start: " + String(e && e.message || e)); toast(callError(e)); }); return; } /* the warmed line went before the tap finished: a fresh pass */
+  if (warm && warm.ws && !useWarm) { try { warm.ws.close(); } catch (e) {} warm.ws = null; } /* a warmed line not used (a resumed conversation) is closed, not left open */
   const ws = useWarm ? warm.ws : P.open ? P.open(token, resume) : new WebSocket(P.url(resume, token), P.protocols(token));
   ws.resumed = resume; if (useWarm) { ws.onerror = null; ws.warmed = true; } try { ws.binaryType = "arraybuffer"; } catch (e) {} /* audio can come as binary frames (binAudio) */
   if (second) G.tries.add(ws); else { G.ws = ws; G.tries = new Set([ws]); }
