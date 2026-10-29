@@ -745,6 +745,40 @@ test("Scripted line (Oct 29): nothing back 4 s after it gets \"Ara's taking a mo
   ok(await p.evaluate(() => __said.length === 1 && __said[0] === "slow: Ara's taking a moment."), "the phone's line before the fresh line is wrong: " + JSON.stringify(await p.evaluate(() => __said)));
   await p.evaluate(() => { window.fetch = window.__fetch0; window.__noAutoForce = false; });
 });
+test("Scripted line (5:59 PM call, Oct 29): the app fills a pick-list from the answer; a reply with no sound in 6 s counts as not started; Ara's own question stands only within 12 s", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  // 1. the app asked the type, the officer answered, Grok's call leaves the type out: the app fills it from the answer
+  await said(p, "Log an interaction with Ken Ito.");
+  let r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: "2026-10-28", summary: "We talked about the gala." });
+  ok(/^Type: In person, Phone call, Video call, Event, Email\?$/.test(r.ask_exactly || ""), "the type question wasn't asked by the app: " + JSON.stringify(r));
+  await p.waitForFunction(() => !G.forced, null, { timeout: 5000 }); await said(p, "In person."); await p.waitForTimeout(200);
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", response: "Awaiting", summary: "" });
+  ok((await p.inputValue("#f_meetingType")) === "In person" && /The app filled the type from the officer's answer to the question just asked/.test(await logged()) && !/^Type:/.test(r.ask_exactly || ""), "the type the officer answered wasn't filled in by the app when Grok left it out: " + JSON.stringify(r).slice(0, 300) + " " + (await p.inputValue("#f_meetingType")));
+  await p.waitForFunction(() => !G.forced, null, { timeout: 5000 }).catch(() => {});
+  await p.evaluate(() => { window.__noAutoForce = true; window.__said = []; window.sayLocal = (t, k) => { __said.push(k + ": " + t); return true; }; window.cue = () => {}; G.forced = null; G.lateForced = null; G.slowSaid = false; G.bot = ""; G.lastBot = "";
+    const f = window.fetch; window.__fetch0 = f; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res) => setTimeout(() => res(new Response("{}")), 200)) : f(u, o); window.__ws1 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; });
+  // 2. the reply is created at once but no sound comes: 6 s later the phone says Ara's taking a moment, and the fallback hands the words to Ara 4 s after that
+  await p.evaluate(() => { forceSay("Ask recorded for Charlie. Do you want to do that now, yes or no?"); __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); });
+  await p.waitForTimeout(4600);
+  ok(await p.evaluate(() => __said.length === 0 && G.forced && G.forced.started), "the 4 s tick fired although the reply had started: " + JSON.stringify(await p.evaluate(() => __said)));
+  await p.waitForTimeout(2000);
+  ok(await p.evaluate(() => __said.length === 1 && __said[0] === "slow: Ara's taking a moment." && G.forced && !G.forced.started && __ws === __ws1) && /Scripted line's reply started but no sound in 6 s: treated as not started/.test(await logged()), "a started reply with no sound for 6 s wasn't treated as not started: " + JSON.stringify(await p.evaluate(() => [__said, !!G.forced, G.forced && G.forced.started])));
+  await p.waitForTimeout(4300);
+  ok(await p.evaluate(() => !G.forced && G.lateForced && /Ask recorded for Charlie/.test(G.lateForced.text)), "the fallback didn't hand the silent line to Ara: " + JSON.stringify(await p.evaluate(() => [!!G.forced, G.lateForced])));
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); G.lateForced = null; __said.length = 0; G.slowSaid = false; }); await p.waitForTimeout(300);
+  // 3. sound within 6 s: the line counts as started, no tick
+  await p.evaluate(() => { forceSay("Task added for Ruth. What's next?"); __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio.delta", delta: btoa("\0\0\0\0") }) }); });
+  await p.waitForTimeout(6600);
+  ok(await p.evaluate(() => __said.length === 0 && G.forced && G.forced.started && G.forced.sound), "a line whose sound came was treated as not started: " + JSON.stringify(await p.evaluate(() => [__said, G.forced])));
+  // 4. Ara asks her own question while the scripted line is 15 s old: the scripted line is news the officer hasn't heard, so it is not cut
+  await p.evaluate(() => { G.forced.at = Date.now() - 15000; G.bot = "The read-back is still waiting on you. Shall I save it, yes or no?"; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); }); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => G.forced && !G.forced.started && !G.lateForced) && /Ara answered on her own while the scripted line was still to come/.test(await logged()), "a stale question of Ara's cut a 15 s old scripted line: " + JSON.stringify(await p.evaluate(() => [!!G.forced, G.lateForced])));
+  // and within 12 s: hers stands, the copy is cut (the 10:05 AM rule)
+  await p.evaluate(() => { G.forced.at = Date.now() - 3000; G.forced.started = true; G.bot = "Which contact is this task for?"; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); }); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => !G.forced && G.lateForced && G.lateForced.text === "Task added for Ruth. What's next?"), "two questions within 12 s: hers didn't stand: " + JSON.stringify(await p.evaluate(() => [!!G.forced, G.lateForced])));
+  await p.evaluate(() => { G.lateForced = null; clearTimeout(G.forceTimer); window.fetch = window.__fetch0; window.__noAutoForce = false; });
+});
 test("Ara: sees opportunities closed this year, passes a question on after any yes, and hands-free read-backs skip long text", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const snap = await p.evaluate(() => { const o = S.opps.find(x => x.stage !== "Closed"); o.stage = "Closed"; o.closed = "Won"; o.closedOn = todayISO(); return crmSnapshot(); });

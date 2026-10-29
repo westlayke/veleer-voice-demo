@@ -26,6 +26,8 @@ const TURN_TEST_MS = 8000, TURN_GIVE_UP_MS = 12000; // the officer's own turn wi
 const EARLY_PING_MS = 2500;                  // the early line test's limit
 const RESUME_MS = 25 * 60000;               // a line reopened within this long picks up the same conversation on xAI (kept 30 minutes)
 const CANCEL_SETTLE_MS = 700;                // a scripted line waits this long after a response.cancel (Oct 28: forced in the same instant, the line came back as words with no audio)
+const SOUND_WAIT_MS = 6000;                  // a scripted line whose reply was created but has no sound by now counts as not started (5:59 PM call, Oct 29: acknowledged in 0.8 s, nothing for 23 s)
+const TWO_Q_MS = 12000;                      // Ara's own question stands over the scripted one only this soon after it was sent; later, the scripted line is news the officer hasn't heard
 const FORCE_WAIT_MS = 8000;                  // a scripted line that hasn't started by now is said by Ara instead (3 s was too short on a slow line, Oct 25; 5 s still fell back 5 times in the 4:42 PM call, lines then played late)
 const REPLAY_MS = 20000, REPLAY_BEFORE_MS = 90000; // ...and only when the earlier call came within 90 s before the drop                     // a tool call repeated this soon after a picked-up conversation, identical to one made before the drop, is the service replaying it (Oct 28)
 const LATE_FORCE_MS = 90000;                 // a scripted line that then plays late, after Ara said it, is cut as a duplicate within this long (25 s until Oct 28 4:12 PM: Ara took 29 s and the officer heard the line twice)
@@ -503,7 +505,7 @@ function forceSay(text, then, fallback, waited = 0) {
 }
 // a scripted line is not a reply request, so the 4 s tick and the early line test above didn't cover it: 12.7 s of silence before "Ara's taking a moment" after a save line (Carverhill's 7:39 AM call, Oct 29)
 // Nothing started 4 s after the line went out: the phone says "Ara's taking a moment." and tests the line; a slow line gets a fresh one (which re-asks the pending question), a healthy one keeps waiting for the 8 s fallback
-function forceTick() {
+function forceTick(now) {
   clearTimeout(G.forceTick); const f = G.forced, ws = G.ws; if (!f || f.viaReply) return; /* a line said through a reply request is covered by askReply's own watch */
   G.forceTick = setTimeout(() => { if (!G.live || G.forced !== f || f.started || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
     if (!G.slowSaid) { if (sayLocal("Ara's taking a moment.", "slow")) { G.slowSaid = true; G.slowAt = Date.now(); } else cue("wait"); }
@@ -511,7 +513,7 @@ function forceTick() {
     pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.forced !== f || f.started || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
       if (typeof ms === "number" && ms <= SLOW_LINE_MS) return; // a healthy line: the voice service is just slow, the 8 s fallback still applies
       clearTimeout(G.forceTimer); G.forced = null; G.pendingForce = f.text; /* the fresh line asks the pending question itself (formPosition), so the scripted line isn't lost */
-      act("step", `Scripted line not started after ${TICK_MS / 1000} s on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); }); }, TICK_MS);
+      act("step", `Scripted line not started after ${TICK_MS / 1000} s on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); }); }, now ? 0 : TICK_MS);
 }
 // the flattened event stream around a scripted line (Carverhill, Oct 28: does the service acknowledge a force message before the reply starts?)
 function forcedTrace(f) { const ev = f.events || [], out = []; ev.forEach(x => { const l = out[out.length - 1]; if (l && l.t === x.t) { l.n++; l.last = x.dt; } else out.push({ t: x.t, n: 1, dt: x.dt, last: x.dt }); });
@@ -519,14 +521,17 @@ function forcedTrace(f) { const ev = f.events || [], out = []; ev.forEach(x => {
 function forcedEvent(t) {
   const f = G.forced;
   if (f.events && f.events.length < 60) f.events.push({ t, dt: Date.now() - f.at });
-  if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); clearTimeout(G.forceTick); }
+  if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); clearTimeout(G.forceTick);
+    clearTimeout(f.soundTimer); f.soundTimer = setTimeout(() => { if (G.forced !== f || f.sound || !G.live) return; f.started = false; act("step", `Scripted line's reply started but no sound in ${SOUND_WAIT_MS / 1000} s: treated as not started`); /* 5:59 PM call, Oct 29: acknowledged at once, silent for 23 s, the watchdogs stood down */
+      G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(g)})`); guide(g.fallback); } }, FORCE_WAIT_MS / 2); forceTick(true); }, SOUND_WAIT_MS); }
+  else if (/audio\.delta$/.test(t) && f.started) { f.sound = true; clearTimeout(f.soundTimer); }
   else if (t === "response.done" && f.started) {
     const said = sameWords(G.bot || ""), want = sameWords(f.text);
     if (said.length >= 12 && !want.startsWith(said.slice(0, 40)) && !said.startsWith(want.slice(0, 40))) {
       // Ara answered on her own (to the tool result) and the app took that for the scripted line starting (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
       if (f.viaReply && saidLine(said, want)) { G.forced = null; G.lastForcedText = f.text; act("step", `${PROV().name} said the scripted line in its own words`); if (f.then) setTimeout(() => guide(f.then), 0); return; } /* no late copy is coming on this engine */
       if (saidLine(said, want)) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
-      else if (/\?\s*$/.test(G.bot || "") && /\?\s*$/.test(f.text)) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", `Ara asked her own question while the app's scripted question was still to come: hers stands, the scripted copy will be cut (${forcedTrace(f)})`); if (f.then) setTimeout(() => guide(f.then), 0); } /* 10:05 AM call: two questions in a row */
+      else if (/\?\s*$/.test(G.bot || "") && /\?\s*$/.test(f.text) && Date.now() - f.at <= TWO_Q_MS) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", `Ara asked her own question while the app's scripted question was still to come: hers stands, the scripted copy will be cut (${forcedTrace(f)})`); if (f.then) setTimeout(() => guide(f.then), 0); } /* 10:05 AM call: two questions in a row */
       else { f.started = false; act("step", `Ara answered on her own while the scripted line was still to come (${forcedTrace(f)})`); clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(g)})`); guide(g.fallback); } }, FORCE_WAIT_MS); }
       return; }
     G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; { const st = (f.events || []).find(x => x.t === "response.created"); G.traceN = (G.traceN || 0) + 1; if (G.traceN <= 2 || !st || st.dt > 2500) act("step", `Scripted line played (${forcedTrace(f)})`); } /* the first two per call and every slow one: enough to see the ack without flooding the log */ if (f.then) setTimeout(() => guide(f.then), 0); }

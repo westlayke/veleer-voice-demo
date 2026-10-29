@@ -380,6 +380,11 @@ function draftTool(callId, name, data) {
   renderOverlay();
   const A = ACTIONS[tool.action], R = voiceRule(tool.action), d = V.data, empty = (v) => v === null || v === undefined || String(v).trim() === "";
   const condReq = new Set(R.requiredWhen ? R.requiredWhen(d) : []); /* required under a condition the form declares (a reason when declined or deferred) */
+  // a pick-list field Grok left out is filled by the app from the officer's answer to the question just asked (5:59 PM call, Oct 29: "In person" said three times, never sent; the question is the evidence)
+  if (typeof optionAnswered === "function") { const lines = officerLines(1), asked = askedBefore(1);
+    A.fields.filter(f => f.type === "select" && !f.fixed && f.k !== "fund" && fieldBlank(f, d[f.k])).forEach(f => { const opts = (typeof f.opts === "function" ? f.opts(d) : f.opts || []).filter(o => String(o).length >= 3);
+      const hit = opts.find(o => optionAnswered(String(o), lines, asked)); if (hit === undefined) return;
+      d[f.k] = hit; V.fromVoice.add(f.k); vlog(`${name}: ${f.k} filled by the app from the officer's answer: ${hit}`); act("step", `The app filled the ${optLabel(f)} from the officer's answer to the question just asked`); }); renderOverlay(); }
   const missingFields = A.fields.filter(f => (f.req || condReq.has(f.k)) && !f.fixed && fieldBlank(f, d[f.k]));
   const missing = missingFields.map(f => f.k === "campaign" && d.fund ? `Campaign (${d.badCampaign ? d.badCampaign + " isn't a campaign for " + d.fund + "; " : ""}the entity, ${d.fund}, is already set; its campaign is ${campaignsFor(d.fund).join(" or ")})` : f.label);
   // what is already on the form (filled in by the app from earlier records, or said before), so Ara never asks for it again

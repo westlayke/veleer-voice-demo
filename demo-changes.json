@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 29, 6:29 PM",
+      "change": "Preview: a pick-list answer (meeting type, response, method...) the officer gives to the question just asked goes on the form even when the voice model leaves it out of its call; a scripted line whose reply starts but stays silent for 6 s is treated as not started (taking-a-moment line, line test, fallback); Ara's own question stands over a scripted line only within 12 s of it being sent, so a save confirmation is never cut unheard.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, 5:59 PM call: \"Ara had problems saving the type then went silent on me\" (the type was answered four times before it stuck; the ask-recorded line was cut after 45 s of silence). Plan approved: \"Build\"."
+    },
+    {
       "date": "Oct 29, 5:25 PM",
       "change": "Preview: lists built to be heard. Entities are said by short unique names without \"C.A.\" (National C3, Idaho PAC, North Dakota Federal PAC...), a spoken entity that fits several gets a two-or-three-way question, an answer counts by name, position (\"the second one\") or letter, Ara's own questions end \"yes or no\" (\"Yes to save, or no to change something?\") and any short answer that isn't a no is a yes. A contact Ara names counts only when the officer named them (or they are on screen, the form's target or the last save), so a guess after a dropped sentence is refused.",
       "area": "Voice",
