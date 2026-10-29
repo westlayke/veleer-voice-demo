@@ -266,7 +266,9 @@ async function openAgain(lock) {
   G.heardAt = G.lastMsg || G.heardAt || Date.now(); G.lastMsg = 0;
   // the app says where the form stands and, when a question is pending, asks it again itself as a scripted line; the context goes in Ara's instructions (Right now)
   openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null;
+    const pf = G.pendingForce; G.pendingForce = null; /* a scripted line the old line never started (forceTick): said again on this one unless the form question covers it */
     if (fp && fp.ask) { G.justNow = { text: reconnectLine(lock) + " " + fp.where, at: Date.now() }; act("step", `${lock ? "Line reopened" : "Reconnected"}: the app asks the pending question itself (${fp.where})`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${fp.ask}`); }
+    else if (pf) { G.justNow = { text: reconnectLine(lock), at: Date.now() }; act("step", `${lock ? "Line reopened" : "Reconnected"}: the app says the scripted line the old line never started`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${pf}`); }
     else guide(reconnectLine(lock) + (fp ? " " + fp.where : "")); });
 }
 // after a drop the app no longer rebuilds Ara's memory of the call (what was said, what was saved): she resumes her own conversation and the
@@ -399,7 +401,7 @@ function appHidden() {
 }
 function lockPause(why) { // close the line while the phone is locked; the conversation is kept on xAI for RESUME_MS
   if (G.lockPaused) return; G.lockPaused = Date.now(); G.status = "Paused (phone locked)"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.retriedAt = 0; G.dropNext = false;
-  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); clearTimeout(G.forceTimer); G.forced = null; G.pendingForce = null; stopPlayback();
+  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); clearTimeout(G.forceTimer); clearTimeout(G.forceTick); G.forced = null; G.pendingForce = null; stopPlayback();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries(); paintCall();
   if (typeof keepResume === "function") keepResume("Your phone closed the app while it was locked."); /* Oct 28: the page was discarded during a lock and the card came up on a fresh page with no explanation */
   netLog(why ? `Voice line closed while the phone was locked (${why}): it reopens when the app is back` : `Phone locked: voice line closed after ${((Date.now() - G.hiddenAt) / 1000).toFixed(1)} s (nothing is charged while the phone is locked); the conversation is kept for ${RESUME_MS / 60000} minutes`);
@@ -462,6 +464,19 @@ function forceSay(text, then, fallback, waited = 0) {
   else { G.forced.viaReply = true; G.createAt = Date.now(); forceByReply(text); } /* an engine without force_message is asked to say it in a reply of its own: a reply request like any other, so the next one waits for it */
   vlog("scripted line: " + text);
   clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now() }; act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(f)})`); guide(f.fallback); } }, FORCE_WAIT_MS);
+  forceTick();
+}
+// a scripted line is not a reply request, so the 4 s tick and the early line test above didn't cover it: 12.7 s of silence before "Ara's taking a moment" after a save line (Carverhill's 7:39 AM call, Oct 29)
+// Nothing started 4 s after the line went out: the phone says "Ara's taking a moment." and tests the line; a slow line gets a fresh one (which re-asks the pending question), a healthy one keeps waiting for the 8 s fallback
+function forceTick() {
+  clearTimeout(G.forceTick); const f = G.forced, ws = G.ws; if (!f || f.viaReply) return; /* a line said through a reply request is covered by askReply's own watch */
+  G.forceTick = setTimeout(() => { if (!G.live || G.forced !== f || f.started || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+    if (!G.slowSaid) { if (sayLocal("Ara's taking a moment.", "slow")) { G.slowSaid = true; G.slowAt = Date.now(); } else cue("wait"); }
+    act("step", `Nothing back ${TICK_MS / 1000} s after a scripted line: the phone says Ara's taking a moment and tests the line (${forcedTrace(f)})`);
+    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.forced !== f || f.started || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+      if (typeof ms === "number" && ms <= SLOW_LINE_MS) return; // a healthy line: the voice service is just slow, the 8 s fallback still applies
+      clearTimeout(G.forceTimer); G.forced = null; G.pendingForce = f.text; /* the fresh line asks the pending question itself (formPosition), so the scripted line isn't lost */
+      act("step", `Scripted line not started after ${TICK_MS / 1000} s on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); }); }, TICK_MS);
 }
 // the flattened event stream around a scripted line (Carverhill, Oct 28: does the service acknowledge a force message before the reply starts?)
 function forcedTrace(f) { const ev = f.events || [], out = []; ev.forEach(x => { const l = out[out.length - 1]; if (l && l.t === x.t) { l.n++; l.last = x.dt; } else out.push({ t: x.t, n: 1, dt: x.dt, last: x.dt }); });
@@ -469,7 +484,7 @@ function forcedTrace(f) { const ev = f.events || [], out = []; ev.forEach(x => {
 function forcedEvent(t) {
   const f = G.forced;
   if (f.events && f.events.length < 60) f.events.push({ t, dt: Date.now() - f.at });
-  if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); }
+  if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); clearTimeout(G.forceTick); }
   else if (t === "response.done" && f.started) {
     const said = sameWords(G.bot || ""), want = sameWords(f.text);
     if (said.length >= 12 && !want.startsWith(said.slice(0, 40)) && !said.startsWith(want.slice(0, 40))) {

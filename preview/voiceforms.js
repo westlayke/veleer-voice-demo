@@ -9,6 +9,7 @@ const FOLLOW_Q = (t) => { const s = followUpSuggestion(t); return `An ask that's
 const awaitingAsk = (action, d) => !!(d && voiceRule(action).followUpWhen && voiceRule(action).followUpWhen(d));
 const wantsNextStep = (action, d, t) => !!(d && voiceRule(action).nextStepWhen && voiceRule(action).nextStepWhen(d, t)); // declared per form (VOICE_RULES)
 const SUBST_Q = "Was it a substantive interaction, one that moved the relationship forward?";
+const NEXT_STEP_Q = "A substantive interaction needs a next step, which becomes a Task for you. Do you want to set that now? If so, tell me the step and when it's due."; /* the app's own question, never a suggested step (the officer decides) */
 // the officer's yes or no to the substantive question, from their last line (Grok sometimes doesn't pass it on)
 function officerSubstantive() { const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9); if (!t) return null;
   if (/\b(not|no|wasn't|isn't)\b/i.test(t) && !/\bbut yes\b/i.test(t)) return false; return hfYes(t) || /\bsubstantive\b/i.test(t) ? true : null; }
@@ -316,7 +317,7 @@ async function hfSave(callId, data, lead, short) { /* short: only the changed fi
     if (awaitingAsk(V.action, d)) { const s = followUpSuggestion(V.target), last = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9);
       if (V.askedFollow && last && hfYes(last)) { const cur = readDraft(); cur.nextStep = s.text; cur.nextDue = s.due; V.fromVoice.add("nextStep"); V.fromVoice.add("nextDue"); V.data = prefill(V.action, cur, V.target); renderOverlay(); act("step", `follow-up task "${s.text}" by ${fmtDate(s.due)}, the officer said yes to the suggestion`); }
       else { V.askedFollow = true; toolReply(callId, { ok: false, saved: false, field: "nextStep", ask_exactly: `${lead ? lead + " " : ""}${FOLLOW_Q(V.target)}`, error: `Not read back yet: the app asked the officer whether to use the suggested follow-up task "${s.text}" due ${s.due}. If they say yes, call the draft tool with exactly that nextStep and nextDue ${s.due}; if they give their own words or date, use those.` }); return; } }
-    else { toolReply(callId, { ok: false, saved: false, field: "nextStep", ask_exactly: `${lead ? lead + " " : ""}A substantive interaction needs a next step, which becomes a Task for you. Do you want to set that now? If so, tell me the step and when it's due.`, error: "Not read back yet: a substantive interaction (or an ask that wasn't declined) needs a next step and its due date. After the answer, call the draft tool with nextStep and nextDue." }); return; } } }
+    else { toolReply(callId, { ok: false, saved: false, field: "nextStep", ask_exactly: `${lead ? lead + " " : ""}${NEXT_STEP_Q}`, error: "Not read back yet: a substantive interaction (or an ask that wasn't declined) needs a next step and its due date. After the answer, call the draft tool with nextStep and nextDue." }); return; } } }
   const key = V.action + JSON.stringify(readDraft()); let c = G.saveCheck;
   if (data.confirmed === true && !(c && c.key === key) && araReadBack()) { c = G.saveCheck = { key, step: "read", n: (G.heardN || 1) - 1 }; act("step", "Ara read the form back herself, in full, and the officer said yes: taken as the read-back"); }
   if (data.confirmed !== true || !c || c.key !== key) {

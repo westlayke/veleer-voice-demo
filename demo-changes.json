@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 9:40 AM",
+   "change": "Preview: 4 s after a scripted line (a save line, a read-back, a question) with nothing back, the phone says \"Ara's taking a moment.\" and tests the line; a slow line gets a fresh one at about 6.5 s, which says the line itself. A healthy line keeps waiting for the 8 s fallback. And when the app drops a next step Ara invented on an interaction report, it asks its own next-step question in the same line instead of leaving it to Ara.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"Go build all those fixes including the 4 second fix\": 12.7 s of silence after a save line in the 7:39 AM call before \"Ara's taking a moment\"; \"I didn't catch the next step from you\" with no question in the 9:14 AM call."
+  },
+  {
    "date": "Oct 29, 9:26 AM",
    "change": "Preview: the configuration goes up on the warmed line as soon as that line opens, even when the tap has already landed (on the phone the tap lands about 100 ms after the touch and the line opens after 300 ms, so the 8:16 AM build never got to send it early). A warmed line that a Carry on doesn't use is closed.",
    "area": "Voice",

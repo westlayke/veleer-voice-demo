@@ -145,8 +145,11 @@ test("Ara: an interaction report keeps only what the officer said (substantive, 
   ok(/substantive interaction/i.test(r.ask_exactly || ""), "the app didn't ask the substantive question after dropping Grok's own answer: " + JSON.stringify(r));
   ok(/Left out of the form because the officer never said it: substantive, next step, outcome/.test(r.status || r.error || r.next || ""), "the tool reply didn't tell Ara what was left out: " + JSON.stringify(r));
   await said(p, "Yes, it was.");
-  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true });
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true, nextStep: "Follow up on Ken's interest in the North Dakota work", nextDue: "2026-11-01" });
   ok(r.still_needed && r.still_needed.some(x => /Next step/.test(x)), "after the officer's yes the next step wasn't asked for: " + JSON.stringify(r));
+  // Carverhill's 9:14 AM call (Oct 29): the invented next step was dropped and the officer heard only "I didn't catch the next step from you", so the app now asks its own question in the same line
+  ok(/^I didn't catch the next step from you, so it's not on the form\. A substantive interaction needs a next step, which becomes a Task for you\. Do you want to set that now\? If so, tell me the step and when it's due\.$/.test(r.ask_exactly || "") && /The app asked whether to set the next step itself/.test(r.next || ""), "a dropped invented next step didn't get the app's own next-step question: " + JSON.stringify(r));
+  ok(/the app asks its own next-step question/.test(await p.evaluate(() => ACT.q.map(a => a.text).join(" | "))), "the app's next-step question wasn't logged");
   await said(p, "I'll give him a call next Tuesday.");
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", nextStep: "Call Ken", nextDue: "2026-10-27" });
   d = await p.evaluate(() => V && V.data);
@@ -676,6 +679,31 @@ test("Ara: no reply at the first tick on a slow line gets a fresh line at once, 
   ok(/trying a second line alongside/.test(q) && /\(the second line\)/.test(q), "the second line wasn't logged");
   const sorry = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || "");
   ok(/no (spooky|festive|other) aside/.test(sorry) && /just one question/.test(sorry), "the reconnect line still allows a theme aside or more than one question");
+});
+test("Scripted line (Oct 29): nothing back 4 s after it gets \"Ara's taking a moment\" and a line test; a slow line gets a fresh one that says the line again", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  await p.evaluate(() => { window.__noAutoForce = true; window.__said = []; window.__cues = []; window.sayLocal = (t, k) => { __said.push(k + ": " + t); return true; }; window.cue = (k) => { __cues.push(k); };
+    const f = window.fetch; window.__fetch0 = f; window.__pingMs = 200; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res, rej) => { const t = setTimeout(() => res(new Response("{}")), window.__pingMs); o && o.signal && o.signal.addEventListener("abort", () => { clearTimeout(t); rej(new Error("aborted")); }); }) : f(u, o); window.__ws1 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; G.responding = false; G.slowSaid = false; });
+  // a healthy line (test request 200 ms): the phone says the line once at 4 s, the line is kept, and the 8 s fallback still hands the words to Ara
+  await p.evaluate(() => forceSay("Task added for Ruth. What's next?")); await p.waitForTimeout(4600);
+  ok(await p.evaluate(() => __said.length === 1 && __said[0] === "slow: Ara's taking a moment." && __ws === __ws1 && G.forced && !G.forced.started), "4 s after a scripted line with nothing back the phone didn't say \"Ara's taking a moment.\" once and keep the healthy line: " + JSON.stringify(await p.evaluate(() => [__said, __ws === __ws1, !!G.forced])));
+  ok(/Nothing back 4 s after a scripted line: the phone says Ara's taking a moment and tests the line/.test(await logged()), "the 4 s check wasn't logged");
+  await p.waitForTimeout(4000);
+  ok(await p.evaluate(() => __ws === __ws1 && !G.forced && G.lateForced && G.lateForced.text === "Task added for Ruth. What's next?" && __said.length === 1), "on a healthy line the 8 s fallback didn't hand the line to Ara, or the phone spoke twice: " + JSON.stringify(await p.evaluate(() => [__said, !!G.forced, G.lateForced])));
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); }); await p.waitForTimeout(300);
+  // a slow line (the test request gets no answer in 2.5 s): a fresh line at about 6.5 s, which says the scripted line itself with "Sorry, I lost you for a moment"
+  await p.evaluate(() => { window.__pingMs = 2800; window.__said = []; G.slowSaid = false; G.lateForced = null; G.cancelAt = 0; G.asked = false; G.qCreate = false; G.responding = false; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; }); /* the fallback's own reply request is out of the way: this half is about the scripted line's check alone */
+  const n = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => forceSay("Task added for Ruth. What's next?"));
+  await p.waitForFunction(() => __ws !== __ws1, null, { timeout: 9000 }).catch(() => {});
+  ok(await p.evaluate(() => __ws !== __ws1 && G.live), "a scripted line with nothing back on a slow line didn't get a fresh line before the 8 s fallback");
+  ok(/Scripted line not started after 4 s on a slow line \(test request no answer in 2.5 s\): fresh line/.test(await logged()), "the slow-line check after a scripted line wasn't logged: " + (await logged()).slice(-900));
+  await p.waitForFunction(() => G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(1200);
+  const forced = await p.evaluate((n) => __sent.slice(n).map(s => { try { return JSON.parse(s); } catch (e) { return {}; } }).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
+  ok(forced.length === 2 && forced[1] === "Sorry, I lost you for a moment. Task added for Ruth. What's next?" && /the app says the scripted line the old line never started/.test(await logged()), "the fresh line didn't say the scripted line the old one never started: " + JSON.stringify(forced));
+  ok(await p.evaluate(() => __said.length === 1 && __said[0] === "slow: Ara's taking a moment."), "the phone's line before the fresh line is wrong: " + JSON.stringify(await p.evaluate(() => __said)));
+  await p.evaluate(() => { window.fetch = window.__fetch0; window.__noAutoForce = false; });
 });
 test("Ara: sees opportunities closed this year, passes a question on after any yes, and hands-free read-backs skip long text", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
