@@ -119,15 +119,18 @@ const FAULTS = {
   stepnodue: { title: "Step without a date", about: "the officer gives the next step and no date; the app asks \"When is it due?\" alone, then the date comes",
     reply: async (p, h, turn, step) => { if (turn.field === "nextStep") { const a = Object.assign({}, turn.tool[1]); const due = a.nextDue; delete a.nextDue; await h.tool([turn.tool[0], a]); await p.waitForFunction(() => __sent.some(s => /force_message/.test(s) && /When is it due\?/.test(s)), null, { timeout: 12000 }).catch(() => {}); await p.waitForTimeout(400); await h.said("Friday."); await h.tool([turn.tool[0], { contact_name: turn.tool[1].contact_name, nextDue: due }]); } else if (turn.tool) await h.tool(turn.tool); },
     expect: (log, sent, step, turnSent) => step.turns.some(t => t.field === "nextStep") ? /"When is it due\?"/.test(turnSent) && !/What's the step, and when is it due\?".*What's the step, and when is it due\?"/s.test(turnSent) : "n/a: no next step on this form" },
+  dropyes: { title: "Drop before the yes", about: "the line drops while the form's read-back waits for the yes; the conversation is picked up and the officer's yes on the new line saves it, from their words, even though the previous form's save used the same tool call a minute before (Oct 29, 7:39 AM)",
+    before: async (p, h) => { await p.evaluate(() => { G.convId = G.convId || "walk"; G.convAt = Date.now(); G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await h.newLine(); },
+    expect: (log) => /Picked up the same conversation|Voice line open .*reconnect/.test(log) && /saved the .* form itself, from their words/.test(log) && !/came again after the line was picked up|didn't go through/.test(log) },
   lockform: { title: "Phone lock, mid-form", about: "the phone locks while a form is open; when the app is back, the line that asks the pending question again names the form",
     after: async (p, h, turn, step) => FAULTS.lock.after(p, h, turn, step),
     expect: (log, sent, step, turnSent) => /Phone locked: voice line closed/.test(log) && /Sorry, I lost you for a moment\. The .* form( for [^"]*)? is open\./.test(turnSent) },
 };
 const OPT_STEPS_FORMS = ["contact", "opportunity"];
 // which turns a fault can be aimed at: one that waits for a Grok reply (a tool call), one that ends in the app's own scripted line, or any
-const PICK = { slow: "tool", silent: "tool", slowline: "tool", stall: "tool", double: "tool", noaudio: "tool", resend: "tool", invent: "draft", noforce: "forced", tts: "forced", error: "tool", slowtts: "forced", sideq: "inform", there: "inform", wherewerewe: "firstopt", yesword: "subst", stepnodue: "nextstep", lockform: "inform" };
+const PICK = { slow: "tool", silent: "tool", slowline: "tool", stall: "tool", double: "tool", noaudio: "tool", resend: "tool", invent: "draft", noforce: "forced", tts: "forced", error: "tool", slowtts: "forced", sideq: "inform", there: "inform", wherewerewe: "firstopt", yesword: "subst", stepnodue: "nextstep", lockform: "inform", dropyes: "yes" };
 JOURNEY.forEach(s => s.turns.forEach((t, i) => { t.inForm = i > 0; })); /* the first turn of a step opens its form; the form is open from the second on */
-const pickable = (faultId, turn) => { const k = PICK[faultId]; return !k ? true : k === "tool" ? !!turn.tool : k === "draft" ? !!(turn.tool && /^show_/.test(turn.tool[0])) : k === "inform" ? !!turn.inForm : k === "firstopt" ? !!(turn.opt && turn.inForm) : k === "subst" ? turn.field === "substantive" : k === "nextstep" ? turn.field === "nextStep" : !!(turn.opt || turn.scripted); }; // scripted: the app answers that turn with its own line (journey.js)
+const pickable = (faultId, turn) => { const k = PICK[faultId]; return !k ? true : k === "tool" ? !!turn.tool : k === "draft" ? !!(turn.tool && /^show_/.test(turn.tool[0])) : k === "inform" ? !!turn.inForm : k === "firstopt" ? !!(turn.opt && turn.inForm) : k === "subst" ? turn.field === "substantive" : k === "yes" ? !!turn.yes : k === "nextstep" ? turn.field === "nextStep" : !!(turn.opt || turn.scripted); }; // scripted: the app answers that turn with its own line (journey.js)
 const INVENT = { contact: { capacity: "A" }, opportunity: { potential: 50000 }, interaction: { outcome: "Interested, continue cultivation" }, cultivate: {}, plan: { askType: "Pledge" }, ask: { agreedAmount: 30000 }, gift: { amount: 30000 } };
 const count = (s, re) => (s.match(new RegExp(re.source, "g")) || []).length;
 
@@ -149,7 +152,7 @@ async function walk(browser, base, faultId) {
   };
   const logText = async (from) => (await h.log()).filter(l => l.slice(0, 24) >= from).join("\n");
   for (let si = 0; si < JOURNEY.length; si++) {
-    const step = JOURNEY[si], all = step.turns.filter(t => !t.yes), turns = all.filter(t => pickable(faultId, t)).length ? all.filter(t => pickable(faultId, t)) : all, pick = turns[(Object.keys(FAULTS).indexOf(faultId) + si) % turns.length];
+    const step = JOURNEY[si], all = step.turns.filter(t => !t.yes || PICK[faultId] === "yes"), turns = all.filter(t => pickable(faultId, t)).length ? all.filter(t => pickable(faultId, t)) : all, pick = turns[(Object.keys(FAULTS).indexOf(faultId) + si) % turns.length];
     const rec = { step: step.id, title: step.title, field: pick.field, say: pick.say, ok: false, notes: [] }; w.steps.push(rec);
     const logStart = new Date().toISOString(), sentStart = await p.evaluate(() => __sent.length), vlogStart = await p.evaluate(() => VLOG.length);
     try {

@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 8:02 AM",
+   "change": "Preview: a save can no longer be refused as a replay. The officer's yes to the app's read-back now saves the form straight from their words (money forms get the app's own amount check first), and Ara's save_form is answered silently as already saved. After a pickup, the replay guard only applies until the officer's first words on the new line. Also: a rating of \\\"C\\\" no longer makes the app refuse the next answer containing a c.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill's 7:39 AM call: his \\\"Save it\\\" after a reconnect was refused as a replay of the contact's save a minute earlier and Ara said \\\"That save didn't go through\\\". \\\"That can NEVER happen again.\\\""
+  },
+  {
    "date": "Oct 28, 10:43 PM",
    "change": "Preview: the phone never talks over Ara. Before playing \"Ara's taking a moment\" for a line that came without sound, the phone checks whether her sound is already playing or queued; if it is, the silence was a false alarm and nothing is said or resent. Her audio that arrives while a phone recording plays is already queued behind it; the pause after the recording is now 1 s (was 0.15 s). The 10:33 PM \"cut the recording when her sound starts\" guard is removed.",
    "area": "Voice (preview)",

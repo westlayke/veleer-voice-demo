@@ -173,7 +173,7 @@ function openSocket(token, first, second, warm) {
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws; G.lockResume = false;
     sessUpdate(sessionCfg()); sendExtras(); if (G.drops && P.replay) replayRecent(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep(); setTimeout(() => prepNamedLines("line open"), 4000);
-    if (ws.resumed) { netLog("Picked up the same conversation"); G.resumedAt = Date.now(); }
+    if (ws.resumed) { netLog("Picked up the same conversation"); G.resumedAt = Date.now(); G.resumedHeardN = G.heardN || 0; } /* a replayed tool call can only come before the officer's first words on the new line (Oct 29) */
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"}${ws.warmed ? ", line warmed on touch" : ""})`);
     netLog(`Voice line open in ${Date.now() - t0} ms${ws.warmed ? " (warmed on touch)" : ""}${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops})` : ""}`);

@@ -758,7 +758,7 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   ok(/^Move James to Cultivation\? That means you, as the gift officer, believe they're ready to be pursued for a gift\.$/.test(r.read_back || ""), "the Cultivation read-back isn't the decision with its meaning: " + JSON.stringify(r));
   await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved && /^James is now in Cultivation\. (Say undo if that's wrong\. )?The next step in the process to move James to Ask Planning is to add a planned ask\. Do you want to do that now\?$/.test(r.ask_exactly || ""), "the Cultivation save line isn't \"James is now in Cultivation\": " + JSON.stringify(r));
+  ok(r.saved && /^James is now in Cultivation\. (Say undo if that's wrong\. )?The next step in the process to move James to Ask Planning is to add a planned ask\. Do you want to do that now\?$/.test(r.ask_exactly || r.said || ""), "the Cultivation save line isn't \"James is now in Cultivation\": " + JSON.stringify(r));
   // a deferral reads back and saves as what it is
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); const o = S.opps.find(o => o.id === "o_cult"); o.stage = "Qualification"; G.lastSaved = null; });
   await said(p, "Let's defer James's move, he's travelling until the new year, reconsider on January 15th.");
@@ -799,7 +799,7 @@ test("Carverhill's Bugs call (Oct 28): \"in-person\" is in person; \"a follow-up
   ok(f.pending && !f.late && /Ara answered on her own while the scripted line was still to come/.test(f.log), "a three-word echo was taken for the scripted read-back (its real telling would then be cut): " + JSON.stringify(f));
   await p.evaluate(() => { G.forced = null; G.lateForced = null; window.__noAutoForce = false; });
   // the voice service replays its last tool call when the conversation is picked up after a drop: the same call, identical, is not done again
-  await p.evaluate(() => { G.resumedAt = Date.now(); });
+  await p.evaluate(() => { G.resumedAt = Date.now(); G.resumedHeardN = G.heardN || 0; }); /* nothing said yet on the new line */
   r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextStep: `Follow up with ${first} to get an answer on the ask`, nextDue: "2026-11-04" });
   ok(r.ok === false && /already handled before the line dropped/.test(r.error || "") && /Every required field of the "Interaction report · the ask" form is in|form has been read back|still needs/.test(r.error || ""), "the replayed call wasn't refused with where the form stands: " + JSON.stringify(r));
   ok(/came again after the line was picked up/.test(await p.evaluate(() => ACT.q.map(a => a.text).join(" | "))), "the replay wasn't logged");
@@ -1156,6 +1156,6 @@ test("Reconnect lines with the officer's name (Oct 28): fetched once from the ke
   await p.evaluate(() => { clearTimeout(G.idleTimer); G.idleEnding = false; G.idleAt = 0; V = null; });
   // Ara's audio arriving while a phone line still plays is queued until the line ends (no overlap)
   const q = await p.evaluate(() => { G.lineEndAt = Date.now() + 1500; G.playHead = 0; const t0 = G.ctx.currentTime; playPcm(new Int16Array(2400)); const d = G.playHead - 0.1 - t0; G.lineEndAt = 0; G.playHead = 0; return d; });
-  ok(q > 1.4 && q < 2.2, "Ara's audio wasn't held until the phone's line had finished: started " + q.toFixed(2) + " s out");
+  ok(q > 2.4 && q < 3.2, /* the line's 1.5 s plus the 1 s gap (LINE_GAP_S, Oct 28 10:43 PM) */ "Ara's audio wasn't held until the phone's line had finished: started " + q.toFixed(2) + " s out");
 });
 };

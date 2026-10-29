@@ -27,7 +27,7 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   // read back again, then yes saves it
   await said(p, "Yeah, I don't think you needed to say that, but yes, save it.");
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved === true && /undo/.test(r.ask_exactly), "not saved after yes: " + JSON.stringify(r));
+  ok(r.saved === true && r.already && /undo/.test(r.said || ""), "not saved on the officer's own yes, or Ara's save_form wasn't answered as already saved: " + JSON.stringify(r)); /* since Oct 29 the yes itself saves; save_form is a late echo */
   let st = await state(p);
   ok(st.tasks.some(t => t.text === "Send Ruth the board deck"), "task missing after the hands-free save");
   ok(st.history[0].hf === true, "History does not mark the save hands-free");
@@ -83,7 +83,7 @@ test("Hands-free: a drop right after a save tells Ara it went through, and savin
   const line = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || "");
   ok(/Carry on where you were/.test(line) && !/went through just before the drop|Saved so far/.test(line), "the reconnect line still rebuilds Ara's memory of the save (Oct 28): " + line.slice(0, 300));
   const again = await ara(p, "save_form", { confirmed: true });
-  ok(again.saved === true && again.already && /already saved/.test(again.status), "saving again after the drop didn't say it was already saved: " + JSON.stringify(again));
+  ok(again.saved === true && again.already && /already saved/.test(again.status || again.note || ""), "saving again after the drop didn't say it was already saved: " + JSON.stringify(again));
 });
 test("Hands-free: a line that stalls without closing (officer talking, nothing heard back) is reconnected instead of hung up", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -132,7 +132,8 @@ test("Hands-free: after a save Ara says the undo line once per call, never 'Save
   await said(p, "I'm driving"); await p.waitForTimeout(900);
   const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage !== "Closed"); const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
   const saveTask = async (text) => { await said(p, `Add a task for ${who}: ${text.toLowerCase()}, due November 30.`); await ara(p, "show_task_draft", { contact_name: who, text, due: "2026-11-30" }); await ara(p, "save_form", { confirmed: false }); await said(p, "Yes, save it."); return ara(p, "save_form", { confirmed: true }); };
-  const a = await saveTask("Send the board deck"), b = await saveTask("Send the agenda");
+  const a0 = await saveTask("Send the board deck"), b0 = await saveTask("Send the agenda"); /* the app saved on the yes and said the line itself; save_form reports it as already said */
+  const a = Object.assign({}, a0, { ask_exactly: a0.ask_exactly || a0.said }), b = Object.assign({}, b0, { ask_exactly: b0.ask_exactly || b0.said });
   ok(a.saved && /Say undo/.test(a.ask_exactly), "the first save has no undo line: " + JSON.stringify(a));
   ok(b.saved && b.ask_exactly && !/Say undo/.test(b.ask_exactly), "the second save repeats the undo line: " + JSON.stringify(b));
   ok(![a.ask_exactly, b.ask_exactly].some(s => /Saved: /.test(s)), "a save line still starts with 'Saved:': " + a.ask_exactly);
@@ -314,8 +315,8 @@ test("Hands-free: a yes to a read-back saves the form even when Ara opens anothe
   await said(p, "Yes, let's go ahead and do that."); await p.waitForTimeout(200);
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
   const after = await p.evaluate(() => ({ n: S.interactions.length, form: V && V.action, hf: S.history[0] && S.history[0].hf, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | ") }));
-  ok(after.n === n0 + 1 && !after.form && /saved the Interaction report form before the next one opened/.test(after.log) && /refused: the officer hasn't asked for the Move to Cultivation\? form/.test(after.log), "the yes didn't save the report, or the unasked Cultivation form opened anyway (Oct 25: a form opens only on the officer's word): " + JSON.stringify(after));
-  ok(await p.evaluate(() => __sent.some(s => s.includes("The officer's yes saved the Interaction report form first"))), "Ara wasn't told the report was saved first");
+  ok(after.n === n0 + 1 && !after.form && /saved the Interaction report form (before the next one opened|itself, from their words)/.test(after.log) && /refused: the officer hasn't asked for the Move to Cultivation\? form/.test(after.log), "the yes didn't save the report, or the unasked Cultivation form opened anyway (Oct 25: a form opens only on the officer's word): " + JSON.stringify(after));
+  ok(await p.evaluate(() => __sent.some(s => s.includes("The officer's yes saved the Interaction report form first") || s.includes("Interaction report saved"))), "Ara wasn't told the report was saved first");
   await p.evaluate(() => recent(botName(), "The next step in the process is to confirm James's move to Cultivation. Do you want to do that now, or something else?")); await said(p, "Yes.");
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
   ok(await p.evaluate(() => V && V.action === "cultivate"), "the Cultivation form didn't open after the officer's yes to Ara's offer: " + JSON.stringify(r));
@@ -415,5 +416,34 @@ test("A page the phone closed in the middle of a call (no end logged) is noticed
   ok(batch && batch.session === oldSession && batch.events.some(e => /after "step: breadcrumb check"/.test(e.text)), "the silent end wasn't logged against the cut-off call: " + JSON.stringify(batch && { session: batch.session, old: oldSession }));
   await p.tap("#rsmX"); await p.waitForTimeout(300);
   ok(await p.evaluate(() => !localStorage.getItem("resumeKeep")), "the kept copy stayed after Not now");
+});
+
+test("Carverhill's 7:39 AM call (Oct 29): a yes said after a pickup saves the second form, even when the first form's save was a minute before the drop, and the replay guard stops at the officer's first words", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const log = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  // first form, saved on the officer's yes (hands-free is on by default)
+  await said(p, "Add a task for Ruth: send her the board deck, due November 30.");
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
+  await ara(p, "save_form", { confirmed: false }); await said(p, "Save it."); await p.waitForTimeout(300);
+  let r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved === true && r.already && (await state(p)).tasks.some(t => t.text === "Send Ruth the board deck"), "the first form wasn't saved on the yes: " + JSON.stringify(r));
+  // second form, read back and waiting for the yes when the line drops; the new line picks the conversation up
+  await said(p, "And another task for Ruth: send her the agenda, due November 30.");
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the agenda", due: "2026-11-30" });
+  r = await ara(p, "save_form", { confirmed: false });
+  ok(/Save it, or change something\?$/.test(r.read_back || ""), "the second form wasn't read back: " + JSON.stringify(r));
+  await p.evaluate(() => { G.convId = "c-oct29"; G.convAt = Date.now(); G.loudAt = 0; window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); });
+  await p.waitForFunction(() => G.live && G.ws === window.__ws && window.__ws !== window.__ws0 && G.status === "Listening", null, { timeout: 9000 }); await p.waitForTimeout(500);
+  ok(await p.evaluate(() => !!G.resumedAt && G.resumedHeardN === G.heardN), "the pickup didn't note how much the officer had said: " + JSON.stringify(await p.evaluate(() => ({ at: G.resumedAt, n: G.resumedHeardN, heard: G.heardN }))));
+  // before the officer says anything on the new line, the service's replay of the last call is still refused
+  r = await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the agenda", due: "2026-11-30" });
+  ok(r.ok === false && /already handled before the line dropped/.test(r.error || ""), "the replayed draft call wasn't refused: " + JSON.stringify(r));
+  // the officer's yes on the new line saves the form, from their words; Ara's save_form (the same words as the first form's save a minute earlier) is a late echo
+  await said(p, "Save it."); await p.waitForTimeout(300);
+  const st = await state(p), l = await log();
+  ok(st.tasks.some(t => t.text === "Send Ruth the agenda") && await p.evaluate(() => V === null) && /saved the New task form itself, from their words/.test(l), "the yes after the pickup didn't save the second form: " + l.slice(-600));
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved === true && r.already && !/save_form came again after the line was picked up/.test(await log()) && !/didn't go through/.test(await p.evaluate(() => __sent.join(" "))), "Ara's save_form after the officer's yes was refused as a replay: " + JSON.stringify(r));
+  ok(await p.evaluate(() => __sent.filter(s => s.includes("force_message") && s.includes("Task added for Ruth")).length === 2), "the saved line wasn't said by the app itself, once per save");
 });
 };

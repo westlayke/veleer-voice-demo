@@ -322,3 +322,15 @@ a recording still playing plus `LINE_GAP_S` (1 s), so chunks that arrive while a
 buffer, with no separate store. The other order is the one that overlapped at 10:03:52 PM: her chunks were already on the clock
 when the silence judgement ran. So `silentLine` first checks `playingLeft() > 0 || G.audioOn` and, if her sound is playing or
 queued, logs a false alarm and says nothing. The 10:33 PM cut of the recording on her first audio chunk is gone.
+
+## The yes that saves is the officer's, not Ara's (Oct 29)
+
+Carverhill's 7:39 AM call: a drop while the opportunity's read-back waited for his yes, a pickup, and his "Save it" on the new line was refused as a replay, because the replay guard (Oct 28) matched the tool call's name and arguments (save_form, confirmed) against the contact's save 60 s before the drop. Ara turned the refusal into "That save didn't go through."
+
+Two rules now:
+
+- A replay can only arrive before the officer has said anything on the picked-up line. `G.resumedHeardN` is the transcript count at the pickup; the guard in `onTool` applies only while `G.heardN` is still that. Anything said after the pickup is answered for real, whatever it matches.
+- The officer's yes to the app's own read-back saves the form from their words. `hfYesHeard(text)` runs first in the transcript handler: with a read-back pending (`G.saveCheck` for the open draft) and a yes, it stops Ara's reply, commits (or, on a money form, asks the app's own amount check first and saves on the next yes) and speaks the saved line and the next step itself. Ara's `save_form`, when it comes, finds the form gone and is answered silently (`already`, `said`), so she says nothing. Her tool call is no longer in the path of any save; the app's `hfSave` only still handles a save_form that comes first (Ara ahead of the transcript).
+
+Tested by the Oct 29 check in 09-hands-free.js (a save, a drop, a pickup, a replayed draft call refused, the yes on the new line saving the second form) and the Testing Terry fault "Drop before the yes".
+
