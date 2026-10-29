@@ -5,7 +5,10 @@ test("Ara: a new contact gets the other contact detail, then the optional fields
   await signIn(p);
   await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); }); // this check starts in tap mode; hands-free is on by default since Oct 25
   let r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin" });
-  ok(r.still_needed && r.still_needed.some(x => /Email or mobile/.test(x)), "Ara was not asked for an email or mobile");
+  ok(r.still_needed && r.still_needed.some(x => /Email or mobile/.test(x)) && r.ask_exactly === "What's Maya's email address or mobile number?", "the app didn't ask for an email or mobile itself: " + JSON.stringify(r));
+  // after a reconnect the form's position is that question, not "that's everything the form needs" (6:58 PM call, Oct 29)
+  ok(await p.evaluate(() => formPosition().ask === "What's Maya's email address or mobile number?"), "the form position with neither email nor mobile isn't the email-or-mobile question: " + JSON.stringify(await p.evaluate(() => formPosition())));
+  await said(p, "No email."); ok(await p.evaluate(() => formPosition().ask === "What's Maya's mobile number?"), "after \"no email\" the position isn't the mobile question: " + JSON.stringify(await p.evaluate(() => formPosition())));
   r = await ara(p, "show_contact_draft", { first: "Maya", last: "Lin", email: "maya@example.org" });
   ok(/mobile number/.test(r.ask_exactly || r.next || ""), "Ara was not asked for the mobile too: " + JSON.stringify(r));
   // the rating an opportunity will need is asked right away, by the app's own line (Carverhill, Oct 25); then the rest of the details are offered

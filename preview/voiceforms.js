@@ -292,6 +292,12 @@ const REQ_Q = {
   "cultivate.decision": (w) => `Move ${w} to Cultivation, or defer?`, "cultivate.reason": () => "What's the reason to defer, and when should it come up again?",
   lostReason: () => "What was the reason?", reason: () => "What's the reason?", campaign: (w, d) => `Which campaign: National, or ${ENTITY_STATE[d.fund] || "the state"}?`, fund: () => { const hits = typeof matchEntity === "function" ? matchEntity(officerLines(1)[0] || "").hits : []; return hits.length > 1 && hits.length <= 5 ? `Which one: ${hits.map(entitySpoken).join(", ")}?` : "Which entity?"; }, email: (w) => `What's ${w}'s email address?`, mobile: (w) => `What's ${w}'s mobile number?`
 };
+// a contact with neither an email nor a mobile: the app's own question for the one it needs (6:58 PM call, Oct 29: after a reconnect the app said "that's everything the form needs" with no email or mobile on the form, and Ara had asked for them in her own words)
+function oneOfQuestion(action, d) {
+  const one = voiceRule(action).needsOneOf; if (!one || !one.every(k => optEmpty(d[k]))) return "";
+  const who = (d && d.first) || "them", noEmail = typeof officerSaidNone === "function" && officerSaidNone("email"), noMobile = typeof officerSaidNone === "function" && officerSaidNone("mobile");
+  return noEmail && !noMobile ? `What's ${who}'s mobile number?` : noMobile && !noEmail ? `What's ${who}'s email address?` : `What's ${who}'s email address or mobile number?`;
+}
 function reqQuestion(action, fields, d) {
   const f = fields[0]; if (!f) return ""; const who = V && V.target && V.target.contact ? V.target.contact.first : (d && d.first) || "them";
   const q = REQ_Q[action + "." + f.k] || REQ_Q[f.k]; if (q) return q(who, d || {});
@@ -393,6 +399,8 @@ function formPosition() {
   if (voiceRule(V.action).alwaysAsk === "substantive" && V.askedSubst && !V.fromVoice.has("substantive")) return { where: "The app asked whether the interaction was substantive and is waiting for the answer; it asks again itself.", ask: SUBST_Q };
   const needF = (A.fields || []).filter(f => f.req && !f.fixed && optEmpty(d[f.k])), need = needF.map(f => f.label);
   if (need.length) return { where: `The "${A.title}" form still needs: ${need.join(", ")}; the app asks for the first of those itself.`, ask: reqQuestion(V.action, needF, d) };
+  { const q = oneOfQuestion(V.action, d); if (q) return { where: `The "${A.title}" form still needs an email or a mobile; the app asks for it itself.`, ask: q }; }
+  { const one = voiceRule(V.action).needsOneOf; if (one && !V.askedOther && one.some(k => optEmpty(d[k]))) { const who = d.first || "them", e = optEmpty(d.email); return { where: `The "${A.title}" form has one of email and mobile; the app asks once for the other itself.`, ask: `Do you have ${e ? "an email address" : "a mobile number"} for ${who} too?`, arm: () => { V.askedOther = true; } }; } }
   // every required field is in: the form still has a question, the same one the form flow would ask next (1:14 PM call, Oct 29: an empty question here
   // made the reconnect say "Could you say that again?", and Ara guessed "that" from two forms earlier). One rule for every form.
   // (arm() puts the form in the state that question implies; only the caller that actually asks it calls arm, the status readers don't)

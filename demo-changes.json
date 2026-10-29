@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 29, 7:21 PM",
+      "change": "Preview: a new contact with neither an email nor a mobile gets the app's own question (\"What's Jenny's email address or mobile number?\"), before and after a drop; the reconnect line no longer says the form has everything it needs when it doesn't.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, 6:58 PM call: \"Check the log, she tried saving a contact without an email\"."
+    },
+    {
       "date": "Oct 29, 6:38 PM",
       "change": "Preview: the phone keeps reconnecting for 10 minutes (was 8); from 8 minutes it says once that it will stop at 10, and the last try is announced (\"This is my last try, Jim.\"). The skeleton now drops from the top of the screen half the time, lands with a bounce, does his gesture and laugh, then strolls off.",
       "area": "Voice, Halloween",
