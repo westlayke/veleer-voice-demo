@@ -1,0 +1,68 @@
+name: Patient Pat's calls
+# The "are you there?" harness (tests/patience/): a stand-in officer with Jim's measured patience talks to a stand-in voice service
+# through the app's own code, with dropped lines, stalls, dead spots, slow replies and soundless lines thrown in at Jim's rates.
+# Every "Are you there?" is logged with its cause. No xAI calls, so a run costs nothing. Several machines run at once (matrix).
+on:
+  workflow_dispatch:
+    inputs:
+      conversations:
+        description: "Conversations per machine"
+        default: "24"
+      machines:
+        description: "Machines at once (1-8); each gets its own seed"
+        default: "4"
+      rate:
+        description: "Fault rate: 0 = none (baseline), 1 = Jim's calls, 2 = twice as rough"
+        default: "1"
+      jobs:
+        description: "Conversations at once per machine"
+        default: "8"
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      seeds: ${{ steps.m.outputs.seeds }}
+    steps:
+      - id: m
+        run: echo "seeds=$(node -e "const n=Math.max(1,Math.min(8,Number('${{ inputs.machines }}')||4));console.log(JSON.stringify(Array.from({length:n},(_,i)=>i+1)))")" >> "$GITHUB_OUTPUT"
+  talk:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: ${{ fromJson(needs.plan.outputs.seeds) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Talk
+        env:
+          CONVS: ${{ inputs.conversations }}
+          RATE: ${{ inputs.rate }}
+          JOBS: ${{ inputs.jobs }}
+          SEED: ${{ matrix.seed }}
+        run: node tests/patience/run.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: patient-pat-seed-${{ matrix.seed }}
+          path: tests/patience/results/
+          retention-days: 30
+  report:
+    needs: talk
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: all, pattern: patient-pat-seed-* }
+      - name: Combine
+        run: node tests/patience/combine.js all > combined.md && cat combined.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patient-pat-combined
+          path: combined.md
+          retention-days: 30
