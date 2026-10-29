@@ -392,3 +392,7 @@ Carverhill answered "Let's give her a C." to Ara's "What letter would you give h
 
 Real-line run on the 4:09 PM build: a drop cut "Record the ask for Elena Vasquez" to "Record the", and the new reconnect line said "You said: "Record the"" and had Ara act on it. `reconnect()` now notes when the officer's speech had started and not stopped (`G.cutMidSpeech`), and `lastQuestion()` treats that as a lost answer ("I didn't catch your answer").
 
+## Every option field takes the answer to the question just asked (Oct 29, after the 4:18 PM call)
+
+The same weakness as the rating guard sat under every pick-list field (`OPTION_WORDS`: meeting type, response, confirmed by, method, ask type, frequency, decision, ally, do-not-contact, texting) and the outcome: a phrase table that the next phrasing misses. `optionAnswered(label, lines, asked)` now runs first: when the line Ara or the app just said listed that option and the officer's reply (12 words or fewer) names it, by its label or its first word of four letters or more, the value stands. The phrase tables remain for answers given unprompted. The evidence check adds a question-asked case and a no-option-named case for every option of every form (937 cases).
+

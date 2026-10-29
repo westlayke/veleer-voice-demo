@@ -24,9 +24,16 @@ function substantiveIn(lines, asked) { const ls = lines.slice(-3); if (ls.some(t
 function nextStepIn(lines, asked) { const ls = lines.slice(-4), last = ls[ls.length - 1] || "";
   if (/\b(next step|follow[- ]?up|follow up|what's next)\b/.test(asked || "") && last.split(/\s+/).length >= 2 && !/\b(no|none|nothing|not sure|don't know)\b/.test(last)) return true;
   return ls.some(t => /\b(next step|follow[- ]?up|call (him|her|them|back)|give (him|her|them) a call|phone (him|her|them)|meet(ing)?|lunch|coffee|dinner|breakfast|send (him|her|them)?|email (him|her|them)?|text (him|her|them)|visit|drop by|stop by|check (in|back)|reach out|invite|schedule|set up|get back|circle back|touch base|task|remind|tour|introduce|proposal|deck|materials)\b/.test(t)); }
+// the question Ara (or the app) just asked listed this option, and the officer's short reply names it: that is the answer, whatever
+// the phrase table knows (Carverhill, 4:18 PM Oct 29: a phrase list always misses the next phrasing; the question asked is the stronger evidence)
+function optionAnswered(label, lines, asked) {
+  const l = String(label || "").toLowerCase().trim(), last = (lines[lines.length - 1] || "").toLowerCase(), q = String(asked || "").toLowerCase();
+  if (!l || !q.includes(l) || last.split(/\s+/).length > 12) return false;
+  const first = l.split(/\s+/)[0]; return last.includes(l) || (first.length >= 4 && new RegExp("\\b" + first + "\\b").test(last));
+}
 // did the officer say something that matches the outcome Grok picked?
 const OUTCOME_WORDS = { "Interested, continue cultivation": /\b(interested|keen|excited|enthusiastic|positive|receptive|engaged|on board|liked it|loved it)\b|went (really |very )?well|(good|great) (meeting|call|conversation)|keep cultivating/, "Ask made": /\bask(ed)?\b|proposed|pitched|requested|invited (him|her|them) to give/, "Ask accepted": /accept|agreed|said yes|yes to|committed|he's in|she's in|they're in|pledg|handed|check/, "Not now, revisit": /not now|later|revisit|next year|next quarter|hold off|wait|timing|busy|not yet|down the road/, "Not interested": /not interested|no interest|declined|turned (me|us|it) down|passed|no thanks|not for (him|her|them)/, "Referred elsewhere": /refer|pointed (me|us) to|sent (me|us) to|someone else|better fit/ };
-function outcomeIn(o, lines) { const re = OUTCOME_WORDS[o]; if (!re) return false; return lines.slice(-4).some(t => re.test(t)); }
+function outcomeIn(o, lines, asked) { if (optionAnswered(o, lines, asked)) return true; const re = OUTCOME_WORDS[o]; if (!re) return false; return lines.slice(-4).some(t => re.test(t)); }
 // words that stand for an option when the officer says them
 const OPTION_WORDS = {
   meetingType: { "In person": /\bin person\b|\bmet\b|\bmeeting\b|\blunch\b|\bcoffee\b|\bdinner\b|\bbreakfast\b|\boffice\b|\bvisit|\bface to face\b|\bevent\b|\bparty\b|\bdropped by\b|\bstopped by\b|\bhouse\b|\bhome\b/,
@@ -78,12 +85,12 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
   if (INTERACTION_ONLY.has(f.k)) { if (action !== "interaction") return null; // Grok marks reports substantive, picks outcomes and invents next steps on its own (Oct 25 consistency run, 2 of 6)
     if (f.k === "substantive") return ctx.askedSubst ? true : substantiveIn(lines, ctx.asked);
     if (f.k === "nextStep") return nextStepIn(lines, ctx.asked);
-    return outcomeIn(v, lines); }
+    return outcomeIn(v, lines, ctx.asked); }
   const all = lines.join(" \n ");
   if (f.k === "fund") return entitySaid(v, lines);
   if (f.k === "campaign") { const c = campaignsFor(data.fund || ""); if (c.length === 1 && c[0] === v) return true; if (v === "National") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all); return all.includes(String(v).toLowerCase()); }
   if (f.type === "bool" && !v) return null; // false is the default, nothing to prove
-  if (OPTION_WORDS[f.k]) { const re = OPTION_WORDS[f.k][String(v)]; return re ? re.test(all) || re.test(all.replace(/-/g, " ")) : null; } // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)
+  if (OPTION_WORDS[f.k]) { const re = OPTION_WORDS[f.k][String(v)]; if (optionAnswered(String(v), lines, ctx.asked)) return true; return re ? re.test(all) || re.test(all.replace(/-/g, " ")) : null; } // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)
   if (f.type === "money") return amountSaid(v, lines);
   if (f.type === "date") { const iso = normDate(v); if (iso && iso === todayISO()) return true; return DATE_WORDS.test(all) || /\d/.test(all); }
   if (f.type === "select" || f.type === "bool") return false; // an option with no words of its own: only the officer's own tap sets it

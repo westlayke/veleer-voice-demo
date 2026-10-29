@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 4:24 PM",
+   "change": "Preview: every pick-list question (meeting type, response, confirmed by, method, ask type, frequency, outcome, decision, flags) takes the option the officer names in answer to it, whatever words surround it, instead of relying only on a list of expected phrasings.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "The 4:18 PM rating refusal was one instance of a general weakness; Carverhill: \"it seems we are not\" making progress on bugs. Found by going through the other guards."
+  },
+  {
    "date": "Oct 29, 4:22 PM",
    "change": "Preview: a rating answer to Ara's own rating question is taken whatever the words around the letter (\"Let's give her a C.\" was refused and asked again). And when a drop cuts the officer off mid-sentence, the fragment heard is not treated as their answer: Ara repeats her question and says \"I didn't catch your answer\".",
    "area": "Voice",
