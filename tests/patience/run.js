@@ -93,7 +93,7 @@ const forForm = (ctx, args) => [FORM_TOOL[ctx.form] || "show_interaction_draft",
 const ND = "C.A. North Dakota Fed PAC";
 const BOOK = [
   { q: /Just to be sure, the amount is/i, say: "Yes." },
-  { q: /Save it, or change something\?|Shall I save it\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
+  { q: /Save it, or change something\?|Yes to save, or no to change something\?|Shall I save it\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
   { q: /Save it, or add the optional details first\?/i, say: "Save it.", tool: ["save_form", {}] },
   { q: /set a capacity rating\. Do you want to do that now\??/i, say: "No. Create an opportunity for Jordan Pike.", tool: ["show_opportunity_draft", { contact_name: C }] },
   { q: /Do you want to do that now\??/i, say: "Yes.", tool: (line) => STEP_TOOL(line) },

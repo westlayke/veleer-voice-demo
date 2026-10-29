@@ -85,7 +85,7 @@ for (const f of fs.readdirSync(path.join(__dirname, "checks")).filter(f => f.end
   const flush = () => { while (printed < run.length && done[printed]) console.log(done[printed++]); };
   const fails = [];
   async function one(i, again) {
-    const t = run[i], p = await fresh(t.opts.page || PAGE), t0 = Date.now();
+    const t = run[i]; if (process.env.TRACE) console.error("start: " + t.name); const p = await fresh(t.opts.page || PAGE), t0 = Date.now();
     try { await t.fn(p); ok(!p.errors.length, "page error: " + p.errors[0]); lines[i] = `✓ ${t.name}${again ? " (passed on its second try, alone)" : ""}`; }
     catch (e) { if (!again) { fails.push(i); await p.context().close(); return; } failed++; const shot = path.join(OUT, t.name.replace(/[^\w]+/g, "-").slice(0, 60) + ".png"); await p.screenshot({ path: shot }).catch(() => {}); lines[i] = `✗ ${t.name}\n    ${e.message.split("\n")[0]}\n    screenshot: tests/results/${path.basename(shot)}`; }
     done[i] = `${lines[i]} (${Date.now() - t0} ms)`; if (!again) flush();
