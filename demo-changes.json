@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 4:09 PM",
+   "change": "Preview: when the line comes back with no form open, Ara repeats her whole last line so you know where you were, then either says the answer the app had already heard (\"You said: yes\") and carries on with it, or says \"I didn't catch your answer\" when your words were lost in the dead air. No more bare \"Could you say that again?\" after a question.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "3:57 PM call: after a 38 s dead spot Ara asked \"Could you say that again?\" with no reminder of her question; \"I want it to repeat exactly where we were\"; \"Build it\"."
+  },
+  {
    "date": "Oct 29, 3:36 PM",
    "change": "Preview: \"Ara's taking a moment\" no longer plays in the middle of a long sentence. The officer's turn now opens only when the voice service says their speech has stopped, not on the first part of the transcript.",
    "area": "Voice",
