@@ -87,7 +87,7 @@ const STAND_IN = () => {
 
 // ---------- the officer's answer book: what Patient Pat says to each question, and the tool the stand-in Grok then calls ----------
 const C = "Jordan Pike", iso = (d) => d.toISOString().slice(0, 10), today = new Date(), friday = new Date(today); friday.setDate(today.getDate() + ((5 - today.getDay() + 7) % 7 || 7)); const T = iso(today), F = iso(friday);
-const STEP_TOOL = (line) => /create an opportunity/i.test(line) ? ["show_opportunity_draft", { contact_name: C }] : /substantive interaction/i.test(line) ? ["show_interaction_draft", { contact_name: C }] : /planned ask/i.test(line) ? ["show_ask_plan_draft", { contact_name: C }] : /record the ask/i.test(line) ? ["show_ask_result_draft", { contact_name: C, date: T }] : /move to Cultivation|Cultivation\?/i.test(line) ? ["show_cultivation_decision", { contact_name: C, decision: "Move to Cultivation" }] : /planned ask/i.test(line) ? ["show_ask_plan_draft", { contact_name: C }] : /record the ask/i.test(line) ? ["show_ask_result_draft", { contact_name: C, date: T }] : /gift|answer/i.test(line) ? ["show_gift_draft", { contact_name: C }] : null;
+const STEP_TOOL = (line) => /capacity rating/i.test(line) ? null /* the officer declines and names the next form instead (see BOOK) */ : /create an opportunity/i.test(line) ? ["show_opportunity_draft", { contact_name: C }] : /substantive interaction/i.test(line) ? ["show_interaction_draft", { contact_name: C }] : /planned ask/i.test(line) ? ["show_ask_plan_draft", { contact_name: C }] : /record the ask/i.test(line) ? ["show_ask_result_draft", { contact_name: C, date: T }] : /move to Cultivation|Cultivation\?/i.test(line) ? ["show_cultivation_decision", { contact_name: C, decision: "Move to Cultivation" }] : /planned ask/i.test(line) ? ["show_ask_plan_draft", { contact_name: C }] : /record the ask/i.test(line) ? ["show_ask_result_draft", { contact_name: C, date: T }] : /gift|answer/i.test(line) ? ["show_gift_draft", { contact_name: C }] : null;
 const FORM_TOOL = { contact: "show_contact_draft", opportunity: "show_opportunity_draft", interaction: "show_interaction_draft", ask: "show_ask_result_draft", plan: "show_ask_plan_draft", gift: "show_gift_draft", cultivate: "show_cultivation_decision", response: "show_ask_response_draft" };
 const forForm = (ctx, args) => [FORM_TOOL[ctx.form] || "show_interaction_draft", Object.assign({ contact_name: C }, args)]; /* the stand-in sends only what the officer just said: the app's evidence guard drops anything else */
 const ND = "C.A. North Dakota Fed PAC";
@@ -95,6 +95,7 @@ const BOOK = [
   { q: /Just to be sure, the amount is/i, say: "Yes." },
   { q: /Save it, or change something\?|Shall I save it\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
   { q: /Save it, or add the optional details first\?/i, say: "Save it.", tool: ["save_form", {}] },
+  { q: /set a capacity rating\. Do you want to do that now\??/i, say: "No. Create an opportunity for Jordan Pike.", tool: ["show_opportunity_draft", { contact_name: C }] },
   { q: /Do you want to do that now\??/i, say: "Yes.", tool: (line) => STEP_TOOL(line) },
   { q: /What would you like to do\?|What's next\?/i, say: (ctx) => ctx.agenda() },
   { q: /first and last name/i, say: "Jordan Pike, P I K E.", tool: ["show_contact_draft", { first: "Jordan", last: "Pike" }] },
@@ -150,7 +151,7 @@ async function conversation(browser, base, n) {
     __ws.onmessage({ data: JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: text }) });
     // hands-free: the app asks for no reply itself after a transcript, the service answers on its own; the stand-in sends the tool call now, after its latency
     if (tool) setTimeout(() => { const ws = __ws; if (ws.readyState !== 1 || window.__standIn.pendingTool !== tool) return; window.__standIn.pendingTool = null; ws.deliver({ type: "response.created" }, 0); ws.deliver({ type: "response.output_audio.delta", delta: window.__silence }, 20); ws.deliver({ type: "response.function_call_arguments.done", call_id: "t" + Math.random().toString(36).slice(2), name: tool[0], arguments: JSON.stringify(tool[1]) }, 40); ws.deliver({ type: "response.done", response: { status: "completed" } }, 60); }, window.__latency()); }, [text, tool]);
-  const bookCtx = { form: "", saves: 0, agenda: () => AGENDA[Math.min(bookCtx.saves, AGENDA.length - 1)], again: () => lastSaid || "Yes." };
+  const bookCtx = { form: "", saves: 0, agenda: () => AGENDA[Math.min(bookCtx.saves, AGENDA.length - 1)], again: () => lastSaid && !/^(yes|no|save it|move on|in person)\.?$/i.test(lastSaid) ? lastSaid : bookCtx.agenda() /* a bare yes means nothing on its own: the officer says what they were doing */ };
   const spokenMs = (text) => Math.round((String(text).split(/\s+/).filter(Boolean).length / 2.7) * 1000) + 300; /* about 160 words a minute */
   const t0 = Date.now(); let seenLines = 0, seenEvents = 0;
   try {
@@ -181,7 +182,7 @@ async function conversation(browser, base, n) {
     const line = q.text; let entry = BOOK.find(b => b.q.test(line)); if (!entry) { conv.unanswered.push(line.slice(0, 120)); return; }
     if (entry.q.source === "\\?$") conv.unanswered.push(line.slice(0, 120));
     const say = typeof entry.say === "function" ? entry.say(bookCtx) : entry.say; let tool = typeof entry.tool === "function" ? entry.tool(line, bookCtx) : entry.tool || null;
-    if (/What would you like to do|What's next/i.test(line)) tool = AGENDA_TOOL[Math.min(bookCtx.saves, AGENDA_TOOL.length - 1)];
+    if (/What would you like to do|What's next/i.test(line) || (say === bookCtx.agenda() && !tool)) tool = AGENDA_TOOL[Math.min(bookCtx.saves, AGENDA_TOOL.length - 1)];
     await p.waitForTimeout(800 + Math.round(rnd() * 1200)); /* a person takes a moment */
     const st = await state(); if (!st.live) return;
     conv.turns++; lastSaid = say; lastAnswerAt = Date.now(); waitLimit = patience(); asksInRow = 0;
