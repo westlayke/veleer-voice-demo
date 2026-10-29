@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 9:58 PM",
+   "change": "Preview: the activity log keeps the flattened event stream around every scripted line. While a scripted line is pending, every raw event from the voice service is recorded with its delay since the line was sent; the \"Scripted line didn't play\" and \"Ara answered on her own\" rows now carry that trace, and \"Scripted line played\" rows are written for the first two lines of a call and for any line that took over 2.5 s to start. This shows whether the service acknowledges a scripted line before the reply starts.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "9:52 PM: \"Can you update the logging to flatten the event stream and see if you get an ack back?\" (the app waits 8 s for a reply to start and never listened for an acknowledgement)."
+  },
+  {
    "date": "Oct 28, 7:45 PM",
    "change": "Preview: six changes from the 6:31 PM call, all shared rules, no form-specific code. (1) After every save the next-step line ends \"Do you want to do that now?\": yes opens the step, a bare no gets the app's own \"What would you like to do?\", \"no, <step>\" goes to that step. (2) One voice for every line the phone says (xAI's Eve, distinct from Ara): the lines with the officer's name switch to it and the four stock recordings are re-recorded in it. (3) When a guessed value is dropped from a required field, the drop note and the next required question are one scripted line (\"I didn't catch the response from you, so it's not on the form. What was the response: ...?\"). (4) A scripted required question is skipped when the officer's words that landed with the tool call already answer it (the amount said in the same second as the date). (5) After a drop the app no longer rebuilds Ara's memory of the call (last lines said, saves made): she resumes her own conversation, the tool guards refuse anything stale, and the app re-asks only its own pending form question, which now includes the first required question of a half-filled form. (6) A reply of Ara's that arrives as words with no sound: the phone says \"Ara's taking a moment\" and asks for the line again once; a second silent copy reconnects.",
    "area": "Voice",

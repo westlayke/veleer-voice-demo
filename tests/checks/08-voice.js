@@ -770,7 +770,8 @@ test("Carverhill's Bugs call (Oct 28): \"in-person\" is in person; \"a follow-up
   ok(d.meetingType === "In person" && !/Left out/.test(r.status || ""), "\"In-person.\" (with the hyphen) was not taken as the type: " + JSON.stringify({ type: d.meetingType, status: r.status }));
   await said(p, "He's going to think about it and talk to his wife.");
   r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it." });
-  ok(/due in 14 days, on Nov 11/.test(r.ask_exactly || ""), "the suggestion didn't offer 14 days when no date was given: " + JSON.stringify(r));
+  const in14 = (() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); })(); /* not a fixed date: the check ran past midnight UTC once (Oct 29) */
+  ok(new RegExp("due in 14 days, on " + in14).test(r.ask_exactly || ""), "the suggestion didn't offer 14 days when no date was given: " + JSON.stringify(r));
   await said(p, "How about if it's a follow-up in seven days?");
   r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextDue: "2026-11-04" });
   d = await p.evaluate(() => V.data);

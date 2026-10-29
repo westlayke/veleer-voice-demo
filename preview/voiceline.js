@@ -439,14 +439,18 @@ function forceSay(text, then, fallback, waited = 0) {
   if ((replyBusy() || playingLeft() > 0 || G.forced) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
   // the reply just finished already said it (the engine answered the tool result with the question itself): no second copy (OpenAI, Oct 27: "What's the first name?" three times)
   if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text))) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
-  G.forced = { text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;
+  G.forced = { at: Date.now(), events: [], text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false }; if (G.pendingForce === text) G.pendingForce = null;
   if (PROV().forceItem) send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
   else { G.forced.viaReply = true; G.createAt = Date.now(); forceByReply(text); } /* an engine without force_message is asked to say it in a reply of its own: a reply request like any other, so the next one waits for it */
   vlog("scripted line: " + text);
-  clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(f.fallback); } }, FORCE_WAIT_MS);
+  clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const f = G.forced; if (f && !f.started) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now() }; act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(f)})`); guide(f.fallback); } }, FORCE_WAIT_MS);
 }
+// the flattened event stream around a scripted line (Carverhill, Oct 28: does the service acknowledge a force message before the reply starts?)
+function forcedTrace(f) { const ev = f.events || [], out = []; ev.forEach(x => { const l = out[out.length - 1]; if (l && l.t === x.t) { l.n++; l.last = x.dt; } else out.push({ t: x.t, n: 1, dt: x.dt, last: x.dt }); });
+  return `sent 0 ms` + out.map(x => `; ${x.t.replace(/^conversation\./, "conv.").replace(/^response\./, "resp.")}${x.n > 1 ? ` x${x.n}` : ""} +${x.dt} ms${x.n > 1 ? `..${x.last}` : ""}`).join("") + (ev.length ? "" : "; nothing received"); }
 function forcedEvent(t) {
   const f = G.forced;
+  if (f.events && f.events.length < 60) f.events.push({ t, dt: Date.now() - f.at });
   if (t === "response.created") { f.started = true; clearTimeout(G.forceTimer); }
   else if (t === "response.done" && f.started) {
     const said = sameWords(G.bot || ""), want = sameWords(f.text);
@@ -454,9 +458,9 @@ function forcedEvent(t) {
       // Ara answered on her own (to the tool result) and the app took that for the scripted line starting (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
       if (f.viaReply && saidLine(said, want)) { G.forced = null; G.lastForcedText = f.text; act("step", `${PROV().name} said the scripted line in its own words`); if (f.then) setTimeout(() => guide(f.then), 0); return; } /* no late copy is coming on this engine */
       if (saidLine(said, want)) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
-      else { f.started = false; act("step", "Ara answered on her own while the scripted line was still to come"); clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", "Scripted line didn't play: Ara says it instead"); guide(g.fallback); } }, FORCE_WAIT_MS); }
+      else { f.started = false; act("step", `Ara answered on her own while the scripted line was still to come (${forcedTrace(f)})`); clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(g)})`); guide(g.fallback); } }, FORCE_WAIT_MS); }
       return; }
-    G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; if (f.then) setTimeout(() => guide(f.then), 0); }
+    G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; { const st = (f.events || []).find(x => x.t === "response.created"); G.traceN = (G.traceN || 0) + 1; if (G.traceN <= 2 || !st || st.dt > 2500) act("step", `Scripted line played (${forcedTrace(f)})`); } /* the first two per call and every slow one: enough to see the ack without flooding the log */ if (f.then) setTimeout(() => guide(f.then), 0); }
 }
 // did Ara say the scripted line in her own words? Most of the shorter line's words shared, and enough of them: a three-word echo
 // ("For the date.") shares "the" and "date" with an 18 s read-back and is not that read-back (Oct 28: the real read-back was then cut as a late copy)

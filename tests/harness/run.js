@@ -70,7 +70,7 @@ const FAULTS = {
   noforce: { title: "Scripted line never plays", about: "the app's own voice line fails and Grok's force line (the fallback) gets no response either; Ara says the line herself at 8 s, and the late copy is cut",
     before: async (p) => p.evaluate(() => { window.__noAutoForce = true; window.__ttsFail = true; }), settle: 9500,
     afterSettle: async (p, h) => { await p.evaluate(() => { window.__noAutoForce = false; window.__ttsFail = false; }); await h.fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300); },
-    expect: (log, sent, step, turnSent) => /Scripted line didn't play: Ara says it instead/.test(log) || (!/"app\.tts"/.test(turnSent) && !/force_message/.test(turnSent) && "n/a: no scripted line in this turn") },
+    expect: (log, sent, step, turnSent) => /Scripted line didn't play/.test(log) || (!/"app\.tts"/.test(turnSent) && !/force_message/.test(turnSent) && "n/a: no scripted line in this turn") },
   tts: { title: "Slow app voice", about: "the app's own voice line (its stand-in voice) takes 12 s to arrive: the line is left to Grok's force line, and the late audio is never played",
     before: async (p) => p.evaluate(() => { window.__ttsHang = 12000; }), settle: 11500, /* inside a form the app gives its own voice 10 s (TTS_WAIT_FORM_MS) before the force line goes out; 4 s elsewhere */ afterSettle: async (p) => p.evaluate(() => { window.__ttsHang = 0; }),
     expect: (log, sent, step, turnSent) => (/own line didn't arrive in time/.test(log) && /force_message/.test(turnSent)) || (!/"app\.tts"/.test(turnSent) && "n/a: no scripted line in this turn") },
