@@ -9,10 +9,13 @@ const EVIDENCE_SKIP = new Set(["first", "last", "email", "mobile", "summary", "n
 const INTERACTION_ONLY = new Set(["substantive", "nextStep", "outcome"]); // judged on the interaction report only, as before; a recorded ask's next step is not
 const SHORT_LABEL = { substantive: "substantive", nextStep: "next step", outcome: "outcome" }; // how the "left out" note names them
 // the officer talked about a rating in their last three lines ("rate him a C", "she gives about $10,000 a year", "C." after hearing the choices)
-function ratedIn(lines) {
+function ratedIn(lines, asked) {
+  const last = (lines[lines.length - 1] || "").toLowerCase(); // Ara (or the app) had just asked for the rating and the answer names a letter: that is the answer, whatever words are around it (Carverhill, 4:18 PM Oct 29: "Let's give her a C." refused)
+  if (/\b(capacity|rating|rate|letter|a through e|a to e)\b/i.test(asked || "") && /\b(a|b|c|d|e|bee|see|sea|cee|dee|ee)\b[.!,]?(\s|$)/.test(last) && last.split(/\s+/).length <= 12) return true;
   return lines.slice(-3).map(t => t.toLowerCase().trim()).some(t => /\b(capacity|rating|rated|rate them|rate her|rate him)\b/.test(t) || /\$\s?\d|\b\d+\s?(k|thousand|million)\b|\b(thousand|million|grand)\b|\b(donat\w*|gives?|gave|giving)\b.*\b(dollars?|a year|annually)\b|\bunder (five|5)\b/.test(t)
     || /^((a|b|c|d|e|bee|be|see|sea|cee|dee|ee)[.!,]?( please)?[.!]?\s*){1,3}$/.test(t.replace(/^(it's|its|make it|let's say|lets say|say|um|uh|okay|ok)[, ]+/, "")) /* "B. B." (Oct 28: said twice, refused) */
-    || /\b(let's do|lets do|go with|i'd say|i would say|make (it|him|her|them)|set (it|him|her|them)( to| at)?|put (him|her|them) (at|as|down as)|rate (him|her|them)( as| at)?)\s+(an? )?(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)\b/.test(t)); // "Let's do C." after hearing the choices (Oct 25)
+    || /\b(let's do|lets do|go with|i'd say|i would say|make (it|him|her|them)|set (it|him|her|them)( to| at)?|put (him|her|them) (at|as|down as)|rate (him|her|them)( as| at)?)\s+(an? )?(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)\b/.test(t) // "Let's do C." after hearing the choices (Oct 25)
+    || /\b(give|gives|gave|giving|call|calling|mark|marking|score|scoring|she's|he's|they're|is|as)\s+(her |him |them |it )?(an? )?(letter )?(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)\b[.!]?\s*$/.test(t)); // "Let's give her a C." (Carverhill, 4:18 PM Oct 29: the rating was refused and asked again)
 }
 // did the officer say whether it was substantive (the word itself, or a yes/no to a question that used it)? Oct 25 consistency run: Grok marked 2 of 6 reports substantive on its own
 function substantiveIn(lines, asked) { const ls = lines.slice(-3); if (ls.some(t => /\bsubstantive\b/.test(t))) return true;
@@ -71,7 +74,7 @@ function entitySaid(fund, lines) {
 function fieldEvidence(action, f, v, data, lines, ctx = {}) {
   if (!f || EVIDENCE_SKIP.has(f.k) || v === null || v === undefined || v === "") return null;
   if (f.type === "money" && !(toNum(v) > 0)) return false; // $0, or no amount at all (Oct 25 consistency run: amount 0 was read back as $0 and saved)
-  if (f.k === "capacity") return ratedIn(lines); // the voice model tends to fill in a rating nobody gave (usually E)
+  if (f.k === "capacity") return ratedIn(lines, ctx.asked); // the voice model tends to fill in a rating nobody gave (usually E)
   if (INTERACTION_ONLY.has(f.k)) { if (action !== "interaction") return null; // Grok marks reports substantive, picks outcomes and invents next steps on its own (Oct 25 consistency run, 2 of 6)
     if (f.k === "substantive") return ctx.askedSubst ? true : substantiveIn(lines, ctx.asked);
     if (f.k === "nextStep") return nextStepIn(lines, ctx.asked);

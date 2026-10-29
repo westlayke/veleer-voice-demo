@@ -707,6 +707,10 @@ test("Reconnect with no form open (Oct 29): the app says the sorry and the quest
   await p.evaluate(() => { G.lastBot = "Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?"; G.lastBotAt = Date.now(); G.lastHeard = null; G.drops = 0; G.loudAt = 0; G.speechSince = 0; G.spokeInGap = false; __ws.onclose({ code: 1006, reason: "" }); G.spokeInGap = true; });
   await p.waitForFunction(() => G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(600);
   ok((await lastForced()) === "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now? I didn't catch your answer.", "words lost in the gap didn't get the whole line plus 'I didn't catch your answer': " + (await lastForced()));
+  // the line went while the officer was still talking (speech started, never stopped): what was heard is a fragment, so the answer counts as lost (real-line run, Oct 29: "You said: Record the")
+  await p.evaluate(() => { G.lastBot = "Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?"; G.lastBotAt = Date.now(); G.lastHeard = { text: "Record the", n: (G.heardN || 0) + 1, at: Date.now() }; G.speechOn = true; });
+  await drop();
+  ok((await lastForced()) === "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now? I didn't catch your answer." && await p.evaluate(() => !G.speechOn && !G.cutMidSpeech), "a fragment heard as the line went was taken for the officer's answer: " + (await lastForced()));
   // the officer had spoken after a statement (no question): the app asks them to say it again
   await p.evaluate(() => { G.lastBot = "Noted, Billy's rating is C."; G.lastBotAt = Date.now(); G.lastHeard = { text: "Yes, let's do it.", n: (G.heardN || 0) + 1, at: Date.now() }; });
   await drop();
