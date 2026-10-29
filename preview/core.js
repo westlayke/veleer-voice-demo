@@ -12,6 +12,13 @@ const ENTITY_STATE = { "Citizens Alliance C3": "", "C.A. of America Action C4": 
   "C.A. North Dakota C4": "North Dakota", "C.A. North Dakota State PAC": "North Dakota", "C.A. North Dakota Fed PAC": "North Dakota", "C.A. New Hampshire C4": "New Hampshire",
   "C.A. Pennsylvania C4": "Pennsylvania", "C.A. Pennsylvania State PAC": "Pennsylvania" };
 const FUNDS = Object.keys(ENTITY_STATE);
+// how each entity is said and heard by voice (Carverhill, Oct 29 4:33 PM: drop "C.A." from the spoken lists; one unique key per option): the
+// record keeps the full name, Ara says and accepts the key; "Fed" and "Federal" are the same word
+const ENTITY_KEY = { "Citizens Alliance C3": "National C3", "C.A. of America Action C4": "National C4", "C.A. Fed PAC": "National Federal PAC", "C.A. Idaho C4": "Idaho C4", "C.A. Idaho PAC": "Idaho PAC",
+  "C.A. North Dakota C4": "North Dakota C4", "C.A. North Dakota State PAC": "North Dakota State PAC", "C.A. North Dakota Fed PAC": "North Dakota Federal PAC", "C.A. New Hampshire C4": "New Hampshire C4",
+  "C.A. Pennsylvania C4": "Pennsylvania C4", "C.A. Pennsylvania State PAC": "Pennsylvania State PAC" };
+const entitySpoken = (f) => ENTITY_KEY[f] || f;
+const fundFromSpoken = (v) => { if (!v) return v; if (FUNDS.includes(v)) return v; const k = Object.keys(ENTITY_KEY).find(f => ENTITY_KEY[f].toLowerCase() === String(v).toLowerCase().trim()); if (k) return k; const m = matchEntity(v).hits; return m.length === 1 ? m[0] : v; }; /* a key or a close spoken form -> the record name */
 const CAMPAIGNS = ["National", "Idaho", "North Dakota", "New Hampshire", "Pennsylvania"];
 const oppNeedsCampaign = (action, d) => (action === "opportunity" || action === "editOpportunity") && d && d.fund && !d.campaign && campaignsFor(d.fund).length > 1;
 const campaignsFor = (f) => ENTITY_STATE[f] === undefined ? CAMPAIGNS : ["National", ...(ENTITY_STATE[f] ? [ENTITY_STATE[f]] : [])];
@@ -32,20 +39,21 @@ function spokenAmount(raw) {
   const n = total + cur; return any && n > 1 ? n : null;
 }
 // a spoken entity -> one entity, or the few it could be: "the C-3", "Citizens Alliance C 3", "North Dakota Fed PAC" (Oct 24: "C-3" wasn't understood)
-const entityWords = (t) => String(t || "").toLowerCase().replace(/c\.a\.|\bca\b/g, "citizens alliance").replace(/\bc\s*-?\s*([34])\b/g, "c$1").replace(/[^a-z0-9 ]/g, " ")
+const entityWords = (t) => String(t || "").toLowerCase().replace(/c\.a\.|\bca\b/g, "citizens alliance").replace(/\bc\s*-?\s*([34])\b/g, "c$1").replace(/\bfed\b/g, "federal").replace(/[^a-z0-9 ]/g, " ")
   .split(/\s+/).filter(w => w && !/^[a-z]$/.test(w) && !["the", "a", "an", "is", "it", "its", "it's", "one", "that", "this", "to", "for", "of", "let's", "lets", "go", "with", "please", "entity", "entities", "ones", "i", "think", "say", "make", "yes", "yeah"].includes(w));
 function matchEntity(t) {
   const ws = entityWords(t); if (!ws.length) return { hits: [] };
-  const hits = FUNDS.filter(f => { const fw = entityWords(f); return ws.every(w => fw.includes(w)); });
-  const exact = hits.filter(f => entityWords(f).length === ws.length); // "C.A. Fed PAC" is that one, not also the North Dakota Fed PAC
+  const wordsOf = (f) => [...new Set(entityWords(f).concat(entityWords(ENTITY_KEY[f] || "")))]; // the record's words and the spoken key's ("National C4")
+  const hits = FUNDS.filter(f => { const fw = wordsOf(f); return ws.every(w => fw.includes(w)); });
+  const same = (fw) => fw.length === ws.length && ws.every(w => fw.includes(w)); const exact = hits.filter(f => same(entityWords(f)) || same(entityWords(ENTITY_KEY[f] || ""))); // "C.A. Fed PAC" is that one, not also the North Dakota Fed PAC
   return { hits: exact.length === 1 ? exact : hits };
 }
-const ENTITY_RULE = FUNDS.map(f => `${f}: ${campaignsFor(f).join(" or ")}`).join("; ");
+const ENTITY_RULE = FUNDS.map(f => `${entitySpoken(f)}: ${campaignsFor(f).join(" or ")}`).join("; ");
 // by state, so Ara never invents one (seen Oct 24: "C.A. Pennsylvania Fed PAC", which doesn't exist)
 // "Oct 25 (today)": the model misread a same-day due date as tomorrow (Oct 25 call), so dates are handed back with their day word
 const dayWord = (iso) => { const t = typeof todayISO === "function" ? todayISO() : ""; if (!iso || !t) return ""; const d = Math.round((new Date(iso) - new Date(t)) / 86400000); return d === 0 ? "today" : d === 1 ? "tomorrow" : d === -1 ? "yesterday" : ""; };
 const dateSaid = (iso) => { const w = dayWord(iso); return fmtDate(iso) + (w ? ` (${w})` : ""); };
-const ENTITIES_BY_STATE = () => { const by = {}; FUNDS.forEach(f => { const st = ENTITY_STATE[f] || "National"; (by[st] = by[st] || []).push(f); }); return Object.entries(by).map(([st, fs]) => `${st}: ${fs.join(", ")}`).join("; "); };
+const ENTITIES_BY_STATE = () => { const by = {}; FUNDS.forEach(f => { const st = ENTITY_STATE[f] || "National"; (by[st] = by[st] || []).push(entitySpoken(f)); }); return Object.entries(by).map(([st, fs]) => `${st}: ${fs.join(", ")}`).join("; "); };
 const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
 const CAPACITY_LIST = Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", "); // "A = $250k and up, B = ..." for Ara
 const CAPACITY_LONG = { A: "$250,000 and up", B: "$100,000 to $250,000", C: "$25,000 to $100,000", D: "$5,000 to $25,000", E: "under $5,000" }; // a rating is always spoken as its letter then its range in full (Carverhill, Oct 28)

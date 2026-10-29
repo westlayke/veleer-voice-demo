@@ -8,11 +8,11 @@ const dueSaid = (s) => s.own ? `due on ${fmtDate(s.due)} as you said` : `due in 
 const FOLLOW_Q = (t) => { const s = followUpSuggestion(t); return `An ask that's still waiting for an answer needs a follow-up task, which becomes a Task for you. I suggest "${s.text}", ${dueSaid(s)}. Shall I use that, or do you want different words?`; };
 const awaitingAsk = (action, d) => !!(d && voiceRule(action).followUpWhen && voiceRule(action).followUpWhen(d));
 const wantsNextStep = (action, d, t) => !!(d && voiceRule(action).nextStepWhen && voiceRule(action).nextStepWhen(d, t)); // declared per form (VOICE_RULES)
-const SUBST_Q = "Was it a substantive interaction, one that moved the relationship forward?";
+const SUBST_Q = "Was it a substantive interaction, one that moved the relationship forward, yes or no?"; /* the app's own yes/no questions ask for a yes or no (Carverhill, Oct 29: train the officer out of "yeah, do that") */
 const NEXT_STEP_Q = "A substantive interaction needs a next step, which becomes a Task for you. Do you want to set that now? If so, tell me the step and when it's due."; /* the app's own question, never a suggested step (the officer decides) */
 // the officer's yes or no to the substantive question, from their last line (Grok sometimes doesn't pass it on)
 function officerSubstantive() { const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9); if (!t) return null;
-  if (/\b(not|no|wasn't|isn't)\b/i.test(t) && !/\bbut yes\b/i.test(t)) return false; return hfYes(t) || /\bsubstantive\b/i.test(t) ? true : null; }
+  if (/\b(not|no|wasn't|isn't)\b/i.test(t) && !/\bbut yes\b/i.test(t)) return false; return hfYes(t) || /\bsubstantive\b/i.test(t) || (V && V.askedSubst && appYes(t)) ? true : null; } /* "It was." / "Very much so" to the app's own question */
 const OPT_OFFER = `The required details are in. Before anything else, ask exactly this: "Would you like to add more details? I can take you through them one at a time." If yes, call optional_fields with step start. If no, ask them to check the draft and tap the button.`;
 // the A to E ranges are read out once per call; after that the question is short, so it can be cut in on (Oct 28: the long line was said twice and couldn't be interrupted)
 const CAP_RANGES = "A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000.";
@@ -134,7 +134,7 @@ function optStep(callId, data) {
   if (k !== "fund" && V.opt.done.includes("fund") && optSteps().some(s => s.k === "fund") && optEmpty(readDraft().fund) && optParse(k, data.value, st) === null && matchEntity(data.value || "").hits.length) {
     act("step", "optional fields: answer taken for the entity"); V.opt.done = V.opt.done.filter(x => x !== "fund" && x !== "campaign"); V.opt.cur = k = "fund"; st = optSteps().find(s => s.k === "fund"); }
   const boolQ = st.group || (st.f && st.f.type === "bool");
-  if (step !== "skip" && !boolQ && /^(no|nope|nah|next|skip|pass|move on|moving on|nothing|none|no notes|leave it|not now)\b/i.test(String(data.value || "").trim())) { act("step", `optional field ${k}: "${data.value}" taken as move on`); data = { step: "skip" }; }
+  if (step !== "skip" && !boolQ && /^(no|nope|nah|next|skip|pass|move on|moving on|nothing|none|no notes|leave it|not now|don't know|do not know|dunno|not sure|no idea|nothing to add|leave that|that's it|that is it|i'm not sure|not that i know)\b/i.test(String(data.value || "").trim())) { act("step", `optional field ${k}: "${data.value}" taken as move on`); data = { step: "skip" }; }
   if (data.step === "skip") { V.opt.done.push(k); act("step", "optional field skipped: " + k); optAsk(callId, "No problem."); return; }
   const v = optParse(k, data.value, st);
   if (v === null) {
@@ -182,7 +182,7 @@ const savedShort = (action, who, d = {}) => {
   if (action === "cultivate" && first) return d.decision === "Defer" ? `${first}'s move to Cultivation is deferred${d.reconsiderOn ? " until " + dateSaid(d.reconsiderOn).replace(/ \((today|tomorrow|yesterday)\)$/, "") : ""}.` : `${first} is now in Cultivation.`; /* Carverhill, Oct 28: "Decision recorded for Y" said nothing */
   return `${ACTIONS[action].saved}${who ? " for " + first : ""}.`; };
 // the next step in the process for a contact, word for word: said after every save and whenever the officer asks what's next
-const NEXT_Q = " Do you want to do that now?", NEXT_NO_Q = "What would you like to do?"; /* yes opens the step; a bare no gets NEXT_NO_Q from the app; "no, <step>" goes to that step (Carverhill, Oct 28) */
+const NEXT_Q = " Do you want to do that now, yes or no?", NEXT_NO_Q = "What would you like to do?"; /* yes opens the step; a bare no gets NEXT_NO_Q from the app; "no, <step>" goes to that step (Carverhill, Oct 28) */
 // the officer's bare no to the next-step question: the app asks what they'd like to do, in its own scripted words
 function nextStepNo(text) {
   const t = String(text || "").toLowerCase().replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim().replace(/^((no|nope) )?(thanks|thank you)$/, "no");
@@ -216,6 +216,11 @@ const secondYes = (action) => voiceRule(action).secondYes || ""; // a declared f
 const HF_YES = /\b(yes|yeah|yep|yup|ya|correct|right|sure|save|go ahead|do it|confirm|confirmed|sounds good|perfect|ok|okay|absolutely|definitely)\b/;
 // a no is an answer that opens with no or wait, or asks not to save or to change something; "I don't think you needed to say that, but yes" is still a yes
 const HF_NO = /^(no|nope|nah|wait|hold on|hang on|not yet|stop|cancel)\b|\b(don't|dont|do not|not|never) (save|do it|go ahead)|\b(not yet|hold on|hang on|wait a|change|wrong|incorrect|isn't right|not right|that's off|fix)\b/;
+// the app asked its own yes/no question: a short reply (4 words or fewer) that isn't a no, a question or a command counts as yes, whatever the
+// words ("looks good", "lock it in", "it was") (Oct 29 phrase-list review: a yes list always misses the next phrasing)
+const appYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim(); if (hfYes(t)) return true;
+  if (!t || t.split(" ").length > 4 || HF_NO.test(t) || /^(no|nope|nah|not|never|don't|dont|what|which|how|why|when|where|who|say|repeat|undo|cancel|wait|hold|hang|stop|skip|back|change|hmm|um|uh|huh|pardon|sorry)\b/.test(t) || /\b(no|not|don't|dont|wrong|change|undo|cancel|wait|again|driving|parked|drive|hands|free|bug|help|goodbye|bye)\b/.test(t)) return false; /* "I'm driving" is a switch, not a yes */
+  return true; };
 const hfYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim(); return HF_YES.test(t) && !HF_NO.test(t); };
 // what Ara says when hands-free goes on or off, then she carries on: "Say only" left her silent mid-form (Oct 24: the officer waited 30 s for the first-name question)
 function hfSwitchLine(on) {
@@ -259,7 +264,7 @@ function readbackParts(A, R, d, only) {
     if (f.type === "area") { out.push(`${optLabel(f)} noted`); return; } // long text is on the form; reading it out made the read-back about 13 s (Oct 24)
     if (f.type === "money") { out.push(money(v)); return; }
     if (f.type === "date") { out.push(`${/^Next step due/.test(f.label) ? "due " : /^(Received|Confirmed) on/.test(f.label) ? f.label.replace(/ on$/, "").toLowerCase() + " on " : ""}${dateSaid(v).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1")}`); return; }
-    if (f.type === "select") { out.push(f.k === "capacity" ? `rated ${v}` : f.k === "method" ? `by ${String(v).toLowerCase()}` : String(v)); return; }
+    if (f.type === "select") { out.push(f.k === "capacity" ? `rated ${v}` : f.k === "method" ? `by ${String(v).toLowerCase()}` : f.k === "fund" && typeof entitySpoken === "function" ? entitySpoken(v) : String(v)); return; }
     let x = String(v); const w = x.split(/\s+/); if (w.length > 14) x = w.slice(0, 14).join(" ") + "…";
     out.push(/^(first|last|text|title)$/.test(f.k) ? x : `${optLabel(f)}, ${x}`); });
   // a declared pair of plain-text fields (first and last name) is one item
@@ -267,7 +272,7 @@ function readbackParts(A, R, d, only) {
     const i = out.indexOf(String(d[a])), j = out.indexOf(String(d[b])); if (i >= 0 && j === i + 1) out.splice(i, 2, `${d[a]} ${d[b]}`); });
   return out;
 }
-const SAVE_Q = "Save it, or change something?";
+const SAVE_Q = "Yes to save, or no to change something?";
 // one rule for every form: the read-back ends with the save question unless it already ends with a question of its own (10:05 AM call: the Cultivation read-back ended in a statement and the officer waited)
 const saveQ = (rb) => /\?\s*$/.test(rb) ? "" : " " + SAVE_Q;
 const formName = (A) => A.title.toLowerCase().replace(/ · /, ", ").replace(/\?$/, "");
@@ -285,7 +290,7 @@ const REQ_Q = {
   "task.text": () => "What's the task?", "task.due": () => "When is it due?",
   "meeting.title": () => "What's the meeting about?", "meeting.date": () => "When is it, date and time?",
   "cultivate.decision": (w) => `Move ${w} to Cultivation, or defer?`, "cultivate.reason": () => "What's the reason to defer, and when should it come up again?",
-  lostReason: () => "What was the reason?", reason: () => "What's the reason?", campaign: (w, d) => `Which campaign: National, or ${ENTITY_STATE[d.fund] || "the state"}?`, fund: () => "Which entity?", email: (w) => `What's ${w}'s email address?`, mobile: (w) => `What's ${w}'s mobile number?`
+  lostReason: () => "What was the reason?", reason: () => "What's the reason?", campaign: (w, d) => `Which campaign: National, or ${ENTITY_STATE[d.fund] || "the state"}?`, fund: () => { const hits = typeof matchEntity === "function" ? matchEntity(officerLines(1)[0] || "").hits : []; return hits.length > 1 && hits.length <= 5 ? `Which one: ${hits.map(entitySpoken).join(", ")}?` : "Which entity?"; }, email: (w) => `What's ${w}'s email address?`, mobile: (w) => `What's ${w}'s mobile number?`
 };
 function reqQuestion(action, fields, d) {
   const f = fields[0]; if (!f) return ""; const who = V && V.target && V.target.contact ? V.target.contact.first : (d && d.first) || "them";
@@ -354,7 +359,7 @@ function araReadBack() {
 // app's own amount check first. Ara's save_form, when it comes, finds the form saved (hfSave) and says nothing more.
 const HF_YES_AGAIN_MS = 2500; // the service sends a transcript several times as it grows: one yes, not three
 function hfYesHeard(text) {
-  const c = G.saveCheck; if (!V || !c || !G.hands || !hfYes(text)) return false;
+  const c = G.saveCheck; if (!V || !c || !G.hands || !appYes(text)) return false;
   if (c.key !== V.action + JSON.stringify(readDraft()) || Date.now() - (G.hfYesAt || 0) < HF_YES_AGAIN_MS) return false;
   G.hfYesAt = Date.now(); const title = ACTIONS[V.action].title;
   stopPlayback(); if (G.responding) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } /* whatever Ara started to say about the yes; her save_form still gets its answer (hfSave: already saved) */

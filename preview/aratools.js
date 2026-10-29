@@ -309,13 +309,14 @@ function draftTool(callId, name, data) {
     guide(`The officer's yes saved the ${p.title} form first (${p.line}); say so in a few words before going on.`); return false; };
   // the open form settles first (its save can be what makes the next form possible), unless this tool is the open form under its routed name (Oct 28 4:41 PM call: "credit card" on the routed gift form was refused as a new form)
   if (V && V.action !== tool.action && voiceRule(V.action).routedFrom !== tool.action && settle()) return;
-  const target = resolveTarget(tool.action, data.contact_name, { date: data.which_date ? normDate(data.which_date) : "", which: data.which });
+  const target = resolveTarget(tool.action, data.contact_name, { date: data.which_date ? normDate(data.which_date) : "", which: data.which, noNameGuard: true });
   if (target.error) { toolReply(callId, { ok: false, error: target.error }); return; }
   if (target.route) { tool = TOOLS.find(t => t.action === target.route); delete data.fund; } // Record gift in Commitment: applied to the pledge
   // a new form opens only when the officer asked for it, or said yes to Ara offering it (Carverhill, Oct 25: "always prompt me to go to the next step")
   if ((!V || V.action !== tool.action) && typeof formAskedFor === "function" && !formAskedFor(tool.action)) { const A0 = ACTIONS[tool.action];
     act("step", `${name} refused: the officer hasn't asked for the ${A0.title} form`);
     toolReply(callId, { ok: false, opened: false, error: `The officer hasn't asked for the ${A0.title} form, and a form opens only on their word. Offer it in one short question, for example "Next could be ${A0.title.toLowerCase()}. Want to do that now?", and call this tool only after they say yes. If they asked for something else, do that instead.` }); return; }
+  if (data.contact_name && target.contact && unnamed(target.contact)) { act("step", `${name} refused: the officer hasn't named ${nameOf(target.contact)}`); toolReply(callId, { ok: false, error: unnamedError(target.contact) }); return; } // the name evidence guard, after the form-asked guard
   if (V && V.action === tool.action && ((V.target.contact || null) !== (target.contact || null) || (V.target.item || null) !== (target.item || null)) && settle()) return;
   delete data.contact_name; delete data.which; delete data.which_date;
   // the voice model sometimes files the officer's words under a name the tool doesn't have (notes, description...); put them where they belong, and note any other stray field in the Voice log
@@ -360,10 +361,11 @@ function draftTool(callId, name, data) {
   const notCaught = (xs) => `I didn't catch ${xs.length > 1 ? "these" : "the"} ${xs.join(", ").replace(/, ([^,]*)$/, " and $1")} from you, so ${xs.length > 1 ? "they're" : "it's"} not on the form.`;
   // the officer named a state: its entities are known, so the app fills in a single one or names exactly the ones there (Oct 25: Ara offered Pennsylvania for New Hampshire)
   let stateNote = "";
+  if (data.fund) { const f = fundFromSpoken(data.fund); if (f !== data.fund) { vlog(`${name}: entity "${data.fund}" -> ${f}`); data.fund = f; } }
   if ((tool.action === "opportunity" || tool.action === "plan") && !data.fund && !(V && V.action === tool.action && V.data && V.data.fund)) {
     const last = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9).toLowerCase();
     const st = [...new Set(Object.values(ENTITY_STATE).filter(Boolean))].find(s => last.includes(s.toLowerCase()));
-    if (st) { const hits = FUNDS.filter(f => ENTITY_STATE[f] === st); if (hits.length === 1) { data.fund = hits[0]; vlog(`${name}: entity ${hits[0]} from the state the officer named`); } else stateNote = ` The officer named ${st}, which has exactly these entities: ${hits.join(", ")}. Ask which one of those, and name no other.`; } }
+    if (st) { const hits = FUNDS.filter(f => ENTITY_STATE[f] === st); if (hits.length === 1) { data.fund = hits[0]; vlog(`${name}: entity ${hits[0]} from the state the officer named`); } else stateNote = ` The officer named ${st}, which has exactly these entities: ${hits.map(entitySpoken).join(", ")}. Ask which one of those, and name no other.`; } }
   const said = Object.keys(data).filter(k => data[k] !== null && data[k] !== "" && data[k] !== undefined);
   // the officer spelled something out: check it made it into this update (Grok sometimes resends the old fields instead)
   const flat = said.map(k => String(data[k]).toLowerCase().replace(/[^a-z]/g, "")).join(" ");

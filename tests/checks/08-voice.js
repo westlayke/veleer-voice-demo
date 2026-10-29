@@ -324,7 +324,7 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
   f = await forced(n0); i = await instr(n0);
-  ok(f.some(t => /^Sorry, I lost you for a moment\. We're on the new contact for Nora\. New contact: Nora Quist, email, nora@example\.org[^]*Save it, or change something\?$/.test(t)), "the read-back wasn't repeated by the app after the reconnect: " + JSON.stringify(f));
+  ok(f.some(t => /^Sorry, I lost you for a moment\. We're on the new contact for Nora\. New contact: Nora Quist, email, nora@example\.org[^]*Yes to save, or no to change something\?$/.test(t)), "the read-back wasn't repeated by the app after the reconnect: " + JSON.stringify(f));
   ok(/has been read back in full and is waiting for the officer's yes to save it/.test(i), "Ara's instructions don't say the form is waiting for a yes: " + i.slice(-400));
   // a form with required fields still missing: Ara is guided as before, told what's still needed
   await p.evaluate(() => { V = null; G.saveCheck = null; renderOverlay && renderOverlay(); });
@@ -801,19 +801,19 @@ test("Ara: \"he handed me the check\" records the ask as Accepted, and a new ask
 test("Ara: an entity comes from the state the officer names, a rating is never invented, and the Cultivation decision is explained", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const instr = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.session && e.session.instructions).map(e => e.session.instructions).at(-1));
-  ok(/Pennsylvania: C\.A\. Pennsylvania C4, C\.A\. Pennsylvania State PAC[;.]/.test(instr) && /Never name any other/.test(instr), "the entities by state aren't in Ara's instructions");
+  ok(/Pennsylvania: Pennsylvania C4, Pennsylvania State PAC[;.]/.test(instr) && /Never name any other/.test(instr), "the entities by state aren't in Ara's instructions");
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = c.capacity || "C"; save(); });
   // one entity in that state: filled in; several: exactly those are named
-  await said(p, "Let's pick the New Hampshire entity.");
+  await said(p, "Create an opportunity for James. Let's pick the New Hampshire entity.");
   let r = await ara(p, "show_opportunity_draft", { contact_name: "James Okafor" });
   ok((await p.inputValue("#f_fund")) === "C.A. New Hampshire C4", "the New Hampshire entity wasn't filled in from the state: " + JSON.stringify(r));
   await said(p, "Cancel."); await p.waitForTimeout(900);
   await said(p, "The North Dakota entity.");
   r = await ara(p, "show_opportunity_draft", { contact_name: "James Okafor" });
-  ok(/named North Dakota, which has exactly these entities: C\.A\. North Dakota C4, C\.A\. North Dakota State PAC, C\.A\. North Dakota Fed PAC\. Ask which one of those, and name no other/.test(r.status || ""), "the North Dakota entities weren't listed exactly: " + JSON.stringify(r));
+  ok(/named North Dakota, which has exactly these entities: North Dakota C4, North Dakota State PAC, North Dakota Federal PAC\. Ask which one of those, and name no other/.test(r.status || ""), "the North Dakota entities weren't listed exactly: " + JSON.stringify(r));
   await said(p, "Cancel."); await p.waitForTimeout(900);
   // a rating the officer never said is asked for, not proposed
-  await said(p, "Let's take the next step.");
+  await said(p, "Let's take the next step for Ruth.");
   r = await ara(p, "set_capacity_rating", { contact_name: "Ruth Abernathy", rating: "A", confirmed: false });
   ok((r.ok === false || r.already) && (/What's Ruth's capacity rating\? A is \$250,000 and up/.test(r.ask_exactly || "") || (r.already && /already rated/.test(r.ask_exactly || ""))), "an invented rating wasn't turned into the question: " + JSON.stringify(r));
   await said(p, "Let's do C.");
@@ -821,17 +821,17 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   ok(r.ok && /^Rate Ruth C, \$25,000 to \$100,000\?$/.test(r.ask_exactly || ""), "a rating the officer did say wasn't asked with the letter and the range: " + JSON.stringify(r));
   // the Cultivation read-back opens with what the decision means
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = "C"; S.opps.unshift({ id: "o_cult", contactId: c.id, name: "Okafor, James - 2026", stage: "Qualification", asks: [], fund: "C.A. Idaho C4", campaign: "Idaho", officer: OFFICER, participants: "", createdOn: todayISO() }); S.interactions.unshift({ id: "i_cult", contactId: c.id, date: todayISO(), type: "In person", summary: "Good talk.", substantive: true, kind: "interaction" }); save(); });
-  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  await said(p, "I'm driving"); await p.waitForTimeout(900); await said(p, "Move James to Cultivation.");
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Move to Cultivation" });
-  ok(/^Move James to Cultivation\? That means you, as the gift officer, believe they're ready to be pursued for a gift\. Save it, or change something\?$/.test(r.read_back || ""), "the Cultivation read-back isn't the decision with its meaning and the save question (Oct 29): " + JSON.stringify(r));
+  ok(/^Move James to Cultivation\? That means you, as the gift officer, believe they're ready to be pursued for a gift\. Yes to save, or no to change something\?$/.test(r.read_back || ""), "the Cultivation read-back isn't the decision with its meaning and the save question (Oct 29): " + JSON.stringify(r));
   await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved && /^James is now in Cultivation\. (Say undo if that's wrong\. )?The next step in the process to move James to Ask Planning is to add a planned ask\. Do you want to do that now\?$/.test(r.ask_exactly || r.said || ""), "the Cultivation save line isn't \"James is now in Cultivation\": " + JSON.stringify(r));
+  ok(r.saved && /^James is now in Cultivation\. (Say undo if that's wrong\. )?The next step in the process to move James to Ask Planning is to add a planned ask\. Do you want to do that now, yes or no\?$/.test(r.ask_exactly || r.said || ""), "the Cultivation save line isn't \"James is now in Cultivation\": " + JSON.stringify(r));
   // a deferral reads back and saves as what it is
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); const o = S.opps.find(o => o.id === "o_cult"); o.stage = "Qualification"; G.lastSaved = null; });
   await said(p, "Let's defer James's move, he's travelling until the new year, reconsider on January 15th.");
   r = await ara(p, "show_cultivation_decision", { contact_name: "James Okafor", decision: "Defer", reason: "Travelling until the new year", reconsiderOn: "2027-01-15" });
-  ok(/^Defer James's move to Cultivation, reason: Travelling until the new year, reconsider on Jan 15, 2027\. Save it, or change something\?$/.test(r.read_back || ""), "the deferral read-back: " + JSON.stringify(r));
+  ok(/^Defer James's move to Cultivation, reason: Travelling until the new year, reconsider on Jan 15, 2027\. Yes to save, or no to change something\?$/.test(r.read_back || ""), "the deferral read-back: " + JSON.stringify(r));
   await said(p, "Yes.");
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved && /^James's move to Cultivation is deferred until Jan 15, 2027\. /.test(r.ask_exactly || ""), "the deferral save line: " + JSON.stringify(r));
@@ -1177,7 +1177,7 @@ test("Oct 28 11:51 AM call: a repeated letter rates, a yes to Ara's offer opens 
   ok(yes.saved && (await state(p)).contacts.find(x => x.id === c0.id).capacity === "B", "not saved after yes");
   // the resumed line asks about the saved rating again: the app answers "already B" instead of asking
   const already = await ara(p, "set_capacity_rating", { contact_name: name, rating: "B", confirmed: false });
-  ok(already.already && /^Horatio is already rated B, \$100,000 to \$250,000\. The next step in the process to move Horatio to Qualification is to create an opportunity\. Do you want to do that now\?$/.test(already.ask_exactly || ""), "a saved rating was re-asked, or the line lacks the letter, range and next step: " + JSON.stringify(already));
+  ok(already.already && /^Horatio is already rated B, \$100,000 to \$250,000\. The next step in the process to move Horatio to Qualification is to create an opportunity\. Do you want to do that now, yes or no\?$/.test(already.ask_exactly || ""), "a saved rating was re-asked, or the line lacks the letter, range and next step: " + JSON.stringify(already));
   // Ara offers the opportunity, the officer says yes (sent three times as the transcript grows): the form opens
   await p.evaluate(() => { G.lastSaved = { at: Date.now(), who: "Horatio Alger", next: "" }; recent("Ara", "It's saved. Would you like to create an opportunity for him?"); });
   await said(p, "Yes."); await said(p, "Yes."); await said(p, "Yes.");

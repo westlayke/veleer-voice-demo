@@ -19,7 +19,7 @@ function spelledWords() {
   return out;
 }
 const SAVE_ECHO_MS = 8000; // a "yes" or "save it" repeated within this of a hands-free save is the same answer, not a new turn
-function officerRated() { if (ratedIn(officerLines(3))) return true; const last = officerLines(1)[0] || ""; return /^[a-e][.!]?$/.test(last.trim()) && /\b(rating|capacity|a through e|a to e)\b/.test(askedBefore(1)); } /* a letter alone answers the rating question (Oct 28) */ // the matcher lives in evidence.js (Oct 28 tidy-up); this wrapper serves set_capacity_rating
+function officerRated() { if (ratedIn(officerLines(3), askedBefore(1))) return true; const last = officerLines(1)[0] || ""; return /^[a-e][.!]?$/.test(last.trim()) && /\b(rating|capacity|a through e|a to e)\b/.test(askedBefore(1)); } /* a letter alone answers the rating question (Oct 28) */ // the matcher lives in evidence.js (Oct 28 tidy-up); this wrapper serves set_capacity_rating
 // the officer's last words turn texting on or off ("texting is permitted", "you can text him", "no texts"), or null if they didn't mention texting
 function officerSaidTexting() {
   const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9).toLowerCase().replace(/[’‘]/g, "'");
@@ -83,8 +83,9 @@ function formAskedFor(action) {
   if (!(G.lastSaved && Date.now() - G.lastSaved.at < 120000)) return true; // the rule bites where the problem was: moving on to another form right after a save
   const ls = officerLines(3).filter(t => !/^((turn on |switch on |start |use )?(hands ?free|driving)( mode)?( on)?|(i'm|i am) driving( now)?)[.!]?$/.test(t.trim())); if (!ls.length) return true; // nothing said yet (or only "I'm driving"): a tap or typed flow
   if (ls.some(t => re.test(t))) return true;
+  if (ls[ls.length - 1].split(/\s+/).length > 4 && !hfYes(ls[ls.length - 1]) && !/^(no|nope|nah|yes|yeah|yep|sure|ok|okay|please|go ahead|do it|let's do (it|that)|that's (right|fine|it))\b/.test(ls[ls.length - 1])) return true; /* a sentence of their own is a request, whatever words it uses (Oct 29 phrase-list review: "Let's do the same for Bob") */
   const last = ls[ls.length - 1], a = askedBefore(2) + " " + ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").toLowerCase(); // a yes to Ara offering that form counts; a yes to "shall I save it?" doesn't, even when the read-back names the form
-  return (hfYes(last) || /^(yes|yeah|yep|sure|ok|okay|please|go ahead|let's|lets|do it)\b/.test(last)) && re.test(a) && !/shall i save|save it\?|save it, or change|is that (right|correct)|ok to save|ready to save/.test(a);
+  return (hfYes(last) || /^(yes|yeah|yep|sure|ok|okay|please|go ahead|let's|lets|do it)\b/.test(last)) && re.test(a) && !/shall i save|save it\?|save it, or change|yes to save|is that (right|correct)|ok to save|ready to save/.test(a);
 }
 function normCap(v) {
   if (v == null) return null; const t = String(v).trim(); if (!t) return null;
@@ -220,7 +221,7 @@ function grokInstructions() {
 - When the tool reply says nothing more is needed, ask them to check the draft and tap the button named in the reply's "button", using that exact label (say "tap Record pledge", never "tap Save" when the button says something else).
 - Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix or the step it suggests.
 - The officer can say "cancel", "undo", "go back", "start over" or "say that again" at any time: the app carries these out itself and tells you what it did, so don't act on those words yourself. If they ask in other words to close, cancel or clear the open form and the app said nothing, call close_form. Never say a form was closed, cancelled, cleared or reset unless the app says so.
-- After a save the app itself says that it's saved and the next step in the process, then asks "Do you want to do that now?": don't repeat it. Yes opens that step; "no, <something>" means do that; a bare no is answered by the app. Never ask an open "what would you like to do?" when a next step exists. The officer can stop any time, so never ask if they want to stop or are done. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
+- After a save the app itself says it's saved and the next step, then "Do you want to do that now, yes or no?": don't repeat it. Yes opens that step; "no, <something>" means do that; a bare no is answered by the app. Never ask an open "what would you like to do?" when a next step exists. The officer can stop any time, so never ask if they want to stop or are done. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 - You can see saves: the app tells you each one and lists them under Right now. If the officer asks whether something saved, answer from that; never say you can't see saves.
 ### Task by task
 - New contact: always ask for their email and their mobile number (one question at a time, skipping any the officer already gave), explaining briefly that a contact needs at least one; without either it can't be saved. Then the app has you ask once whether they'd like to add more details; if yes, call optional_fields with step start and let the app lead: it asks one question at a time and fills in each answer itself. Pass every answer to optional_fields (step answer, their words as value); "skip" and "that's enough" are steps skip and stop. Never list all the optional fields at once, and never jump ahead of the app's questions. The same goes for a new opportunity's optional details.
@@ -265,7 +266,7 @@ ${G.hands ? "### Hands-free mode\n- " + HF_RULES + "\n" : ""}
 ## Guardrails
 ${PROV().rules ? PROV().rules + "\n" : ""}- Ask at most one question at a time, and only for a required field the officer hasn't said. Never ask about optional fields, except the ones named above (email and mobile and the optional-fields questions the app gives you for a new contact or opportunity, and the next step for a substantive meeting).
 - Never make up details: leave out anything the officer didn't say, such as a capacity rating, whether a meeting was substantive, its outcome or a next step. Never suggest a next step, a date or a way of contacting someone: ask, and let the officer decide (Carverhill, Oct 25). A field you could guess from context is still a field to leave empty: the app asks the officer for what it needs, and a guessed value that the officer confirms by habit is worse than a question.
-- Call the money's recipient the "entity" (C3, C4 or PAC), never "fund". The only entities, by state: ${ENTITIES_BY_STATE()}. Never name any other; when asked about a state, list exactly those.
+- Call the money's recipient the "entity" (C3, C4 or PAC), never "fund". Use these short names (never "C.A." or "Citizens Alliance"), as the fund value too. The only entities, by state: ${ENTITIES_BY_STATE()}. Never name any other; for a state, list exactly those.
 - Say "gift", never "payment". Write spoken email addresses as real addresses. Resolve relative dates against today.
 - When the officer spells something letter by letter, use exactly those letters in the field they mean; "T as in Tom" and words like Tango or Delta stand for their first letter. When they correct how a name is spelled, ask once whether the email address should change to match.
 - Never joke about investors, money, Do Not Contact or Ally flags, or the officer's mistakes.

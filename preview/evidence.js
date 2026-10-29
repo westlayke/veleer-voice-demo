@@ -11,7 +11,7 @@ const SHORT_LABEL = { substantive: "substantive", nextStep: "next step", outcome
 // the officer talked about a rating in their last three lines ("rate him a C", "she gives about $10,000 a year", "C." after hearing the choices)
 function ratedIn(lines, asked) {
   const last = (lines[lines.length - 1] || "").toLowerCase(); // Ara (or the app) had just asked for the rating and the answer names a letter: that is the answer, whatever words are around it (Carverhill, 4:18 PM Oct 29: "Let's give her a C." refused)
-  if (/\b(capacity|rating|rate|letter|a through e|a to e)\b/i.test(asked || "") && /\b(a|b|c|d|e|bee|see|sea|cee|dee|ee)\b[.!,]?(\s|$)/.test(last) && last.split(/\s+/).length <= 12) return true;
+  if (/\b(capacity|rating|rate|letter|a through e|a to e)\b/i.test(asked || "") && /\b(a|b|c|d|e|bee|see|sea|cee|dee|ee)\b[.!,]?(\s|$)/.test(last) && last.split(/\s+/).length <= 12 && !/\b([a-z] ){2,}[a-z]\b/.test(last)) return true; // not a spelled name ("Z E L N I K")
   return lines.slice(-3).map(t => t.toLowerCase().trim()).some(t => /\b(capacity|rating|rated|rate them|rate her|rate him)\b/.test(t) || /\$\s?\d|\b\d+\s?(k|thousand|million)\b|\b(thousand|million|grand)\b|\b(donat\w*|gives?|gave|giving)\b.*\b(dollars?|a year|annually)\b|\bunder (five|5)\b/.test(t)
     || /^((a|b|c|d|e|bee|be|see|sea|cee|dee|ee)[.!,]?( please)?[.!]?\s*){1,3}$/.test(t.replace(/^(it's|its|make it|let's say|lets say|say|um|uh|okay|ok)[, ]+/, "")) /* "B. B." (Oct 28: said twice, refused) */
     || /\b(let's do|lets do|go with|i'd say|i would say|make (it|him|her|them)|set (it|him|her|them)( to| at)?|put (him|her|them) (at|as|down as)|rate (him|her|them)( as| at)?)\s+(an? )?(a|b|c|d|e|bee|be|see|sea|cee|dee|ee)\b/.test(t) // "Let's do C." after hearing the choices (Oct 25)
@@ -29,7 +29,11 @@ function nextStepIn(lines, asked) { const ls = lines.slice(-4), last = ls[ls.len
 function optionAnswered(label, lines, asked) {
   const l = String(label || "").toLowerCase().trim(), last = (lines[lines.length - 1] || "").toLowerCase(), q = String(asked || "").toLowerCase();
   if (!l || !q.includes(l) || last.split(/\s+/).length > 12) return false;
-  const first = l.split(/\s+/)[0]; return last.includes(l) || (first.length >= 4 && new RegExp("\\b" + first + "\\b").test(last));
+  const first = l.split(/\s+/)[0]; if (last.includes(l) || (first.length >= 4 && new RegExp("\\b" + first + "\\b").test(last))) return true;
+  const ORD = { first: 0, "1st": 0, one: 0, second: 1, "2nd": 1, two: 1, third: 2, "3rd": 2, three: 2, fourth: 3, "4th": 3, four: 3, fifth: 4, "5th": 4, five: 4, last: -1 }; // "the second one": the options in the order the question listed them
+  const m = last.match(/\b(first|second|third|fourth|fifth|last|1st|2nd|3rd|4th|5th|one|two|three|four|five)\b/); if (!m) return false;
+  const listed = q.split(/[:?]/).slice(1).join(" ").split(/,|\bor\b/).map(x => x.trim()).filter(Boolean); const i = ORD[m[1]] === -1 ? listed.length - 1 : ORD[m[1]];
+  return listed.length > 1 && listed[i] === l;
 }
 // did the officer say something that matches the outcome Grok picked?
 const OUTCOME_WORDS = { "Interested, continue cultivation": /\b(interested|keen|excited|enthusiastic|positive|receptive|engaged|on board|liked it|loved it)\b|went (really |very )?well|(good|great) (meeting|call|conversation)|keep cultivating/, "Ask made": /\bask(ed)?\b|proposed|pitched|requested|invited (him|her|them) to give/, "Ask accepted": /accept|agreed|said yes|yes to|committed|he's in|she's in|they're in|pledg|handed|check/, "Not now, revisit": /not now|later|revisit|next year|next quarter|hold off|wait|timing|busy|not yet|down the road/, "Not interested": /not interested|no interest|declined|turned (me|us|it) down|passed|no thanks|not for (him|her|them)/, "Referred elsewhere": /refer|pointed (me|us) to|sent (me|us) to|someone else|better fit/ };
@@ -58,6 +62,16 @@ const COUNT_WORDS = "a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelv
 const DATE_WORDS = new RegExp(`\\bin (${COUNT_WORDS}|a few|a couple of|several) (day|week|month|year)s?\\b|\\b(${COUNT_WORDS}) (day|week|month|year)s? (from|out|later|ahead|time)\\b|` + String.raw`\b(today|tomorrow|yesterday|tonight|this|next|last|coming|end of|beginning of|mid|early|late|week|weekend|month|year|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|first|second|third|fourth|fifth|tenth|fifteenth|twentieth|thirtieth|christmas|thanksgiving|halloween|new year|on the|by the|the \d+(st|nd|rd|th)?|\d+(st|nd|rd|th)|\d+\/\d+|\d{4})\b`);
 // every officer line of this call, lower case
 function evidenceLines() { return (G.recent || []).filter(l => l.startsWith("Officer: ")).map(l => l.slice(9).toLowerCase().replace(/[’‘]/g, "'")); }
+// has the officer named this contact in this call (a name word of 3+ letters), or is it the record in front of them / the one just saved? (the name guard)
+function nameHeard(c) {
+  if (!c) return false; const f = typeof focusContact === "function" ? focusContact() : null;
+  if ((f && f.id === c.id) || (typeof V !== "undefined" && V && V.target && V.target.contact && V.target.contact.id === c.id) || (G.lastSaved && G.lastSaved.contactId === c.id)) return true;
+  // the officer's own words, and Ara's lines the officer has answered (an offer "Next could be the ask for Ruth?" + "yes"); Ara's lines since the officer last spoke don't count: that's where a guess lives
+  const r = G.recent || []; let i = r.length - 1; while (i >= 0 && !r[i].startsWith("Officer: ")) i--;
+  const upTo = r.slice(0, i + 1), no = i >= 0 && /^officer: (no|nope|nah)\b/i.test(r[i]); let j = i - 1; while (no && j >= 0 && !r[j].startsWith("Officer: ")) j--;
+  const said = (no ? upTo.slice(0, j + 1) : upTo).filter(l => !l.startsWith("App: ")).map(l => l.replace(/^[^:]+: /, "")).join(" \n ").toLowerCase(), words = `${c.first || ""} ${c.last || ""}`.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+  return words.some(w => new RegExp("\\b" + w.replace(/[^a-z0-9]/g, "") + "\\b").test(said.replace(/[^a-z0-9 \n]/g, "")));
+}
 // did the officer say this amount, in digits or words ("25,000", "25k", "twenty-five thousand", "ten grand")?
 function amountSaid(n, lines) {
   n = toNum(n); if (!(n > 0)) return false;

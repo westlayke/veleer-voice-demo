@@ -55,6 +55,10 @@ const EDIT_KEYS = ["first", "last", "email", "mobile", "permEmail", "permCalls",
 // flags this officer may not turn off (the demo officer is a gift officer, not the Chief Gift Officer)
 const lockedOff = (c, k) => k === "dnc" ? !!c.dnc : k === "ally" ? !!c.ally && (c.allySetBy || "") !== OFFICER : false;
 // Returns { contact, opp } or { error } for Grok to relay.
+// the name evidence guard (Oct 29 real-line runs: after a drop cut "Record the ask for Elena", Grok guessed "That sounds like Ken Ito" and the form took it):
+// a contact Ara names counts only when the officer has named them, or they're open on screen, the form's target, or the last save
+const unnamed = (c) => !!c && G.live && typeof nameHeard === "function" && officerLines(1).length > 0 && !nameHeard(c);
+const unnamedError = (c) => `The officer hasn't named ${nameOf(c)} in this conversation, so don't assume it's them. Ask exactly: "Which investor is this for?" and wait for the name.`;
 function resolveTarget(action, spoken, sel = {}) {
   if (action === "contact") return {};
   let list = spoken ? findContacts(spoken) : [];
@@ -62,6 +66,7 @@ function resolveTarget(action, spoken, sel = {}) {
   if (!list.length) return { error: spoken ? `No contact named "${spoken}". Known contacts: ${S.contacts.map(nameOf).join(", ")}. Ask who they mean, or offer to add them as a new contact.` : "Ask which contact this is for." };
   if (list.length > 1) return { error: `More than one contact matches: ${list.map(nameOf).join(", ")}. Ask which one.` };
   const contact = list[0];
+  if (spoken && !sel.noNameGuard && unnamed(contact)) return { error: unnamedError(contact) }; /* Oct 29 real-line runs: after a drop cut "Record the ask for Elena", Grok guessed "That sounds like Ken Ito" and the form took it */
   if (action === "editContact") return { contact };
   if (EDITS.includes(action)) return editItem(action, contact, sel);
   if (action === "opportunity") { const ch = oppChecks(contact), miss = ch.filter(x => !x.ok);
