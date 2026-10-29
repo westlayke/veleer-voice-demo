@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 4:16 PM",
+   "change": "Preview: after a drop that follows a statement of Ara's (not a question), she repeats the statement and says \"Then you started to say something. Can you repeat what you said?\" instead of a bare \"Could you say that again?\".",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "\"The way you wrote it sounds like she is asking me to say Billy's rating again.\""
+  },
+  {
    "date": "Oct 29, 4:09 PM",
    "change": "Preview: when the line comes back with no form open, Ara repeats her whole last line so you know where you were, then either says the answer the app had already heard (\"You said: yes\") and carries on with it, or says \"I didn't catch your answer\" when your words were lost in the dead air. No more bare \"Could you say that again?\" after a question.",
    "area": "Voice",

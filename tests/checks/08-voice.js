@@ -710,7 +710,7 @@ test("Reconnect with no form open (Oct 29): the app says the sorry and the quest
   // the officer had spoken after a statement (no question): the app asks them to say it again
   await p.evaluate(() => { G.lastBot = "Noted, Billy's rating is C."; G.lastBotAt = Date.now(); G.lastHeard = { text: "Yes, let's do it.", n: (G.heardN || 0) + 1, at: Date.now() }; });
   await drop();
-  ok((await lastForced()) === "Sorry, I lost you for a moment. Could you say that again?", "the officer's unheard answer wasn't asked for again: " + (await lastForced()));
+  ok((await lastForced()) === "Sorry, I lost you for a moment. Noted, Billy's rating is C. Then you started to say something. Can you repeat what you said?", "after a statement the app didn't say it again and ask for what the officer had started to say (Carverhill, 4:15 PM Oct 29): " + (await lastForced()));
   // nothing waiting: the open question
   await p.evaluate(() => { G.lastBot = "Noted."; G.lastBotAt = Date.now(); G.lastHeard = null; });
   await drop();
