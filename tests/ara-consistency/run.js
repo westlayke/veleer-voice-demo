@@ -130,6 +130,7 @@ async function converse(browser, base, flow, n) {
           const s = mctx.createBufferSource(); s.buffer = buf; const g = mctx.createGain(); g.gain.value = gain == null ? 1 : gain; s.connect(g).connect(dst); s.onended = () => { window.__mic.played++; res(n / 24); }; s.start(); }); /* gain 0: a quiet mic (FAULTS) */
       }
       window.__acts = []; const real = act; act = function (role, text, sess) { window.__acts.push({ at: Date.now(), role, text: String(text || "") }); return real.apply(this, arguments); };
+      window.__forms = []; const realSave = saveDraft; saveDraft = function () { try { if (typeof V !== "undefined" && V && V.data) window.__forms.push(Object.assign({}, readDraft())); } catch (x) {} return realSave.apply(this, arguments); }; /* the form as saved: fields the app filled itself (an optional answer, a pick-list from the officer's answer) never pass through Grok's arguments */
       window.__drops = []; window.__vlog = []; const vt0 = Date.now(); const realV = vlog; vlog = function (text) { if (/: dropped |: left out /.test(String(text))) window.__drops.push(String(text)); if (window.__vlog.length < 900) window.__vlog.push(((Date.now() - vt0) / 1000).toFixed(1) + " " + String(text).slice(0, 220)); return realV.apply(this, arguments); }; // the evidence rule's Voice log lines, and the whole voice log for a diagnostic run (DIAG=1)
       const tapSend = (proto) => { const real = proto.send; proto.send = function (d) { try { const t = String(d); if (!t.includes('"input_audio_buffer.append"') && !t.includes('"realtimeInput"')) window.__tap("sent", t); } catch (x) {} return real.call(this, d); }; };
       tapSend(WebSocket.prototype); if (typeof GeminiSocket !== "undefined") tapSend(GeminiSocket.prototype); // what the app sends, as app events (Gemini's raw frames carry no type and are ignored by the tap)
@@ -213,6 +214,7 @@ async function converse(browser, base, flow, n) {
     await p.evaluate(() => { try { endCall("test done"); } catch (e) {} });
     await p.waitForTimeout(300);
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
+    conv.forms = await p.evaluate(() => window.__forms || []);
     conv.drops = await p.evaluate(() => window.__drops || []);
     conv.faults.forEach(f => { if (!f.backAt) return; const next = conv.replies.find(r => r.at > f.backAt); f.recoverMs = next ? next.at - f.backAt : null; f.lostLine = !!next && /lost you|line dropped|reconnect/i.test(next.text); const heard = conv.acts.filter(a => a.role === "grok" && a.at > f.backAt).slice(0, 2).map(a => a.text); f.said = heard.join(" | ").slice(0, 300); }); // what the officer heard first once the network was back
     if (DIAG) conv.vlog = await p.evaluate(() => window.__vlog || []);
@@ -299,6 +301,7 @@ function score(conv, flow) {
   own.forEach(r => { if (/\b(i've|i have|it's|it is|has been|been|all) (saved|recorded|logged|added)\b|\bsaved it\b/i.test(r.text)) hit("no_false_saved", conv.saved.some(s => s.at <= r.at + 1500) && conv.saved.filter(s => s.at <= r.at + 1500).length > 0 && conv.acts.some(a => a.role === "saved" && a.at <= r.at + 1500 && a.at > r.at - 60000), r.text); });
   conv.turns.forEach(t => hit("replies_every_turn", t.heard, `no reply to "${t.say}"`));
   if (flow.heard) { const got = {}; conv.tools.forEach(t => Object.entries(t.args || {}).forEach(([k, v]) => { if (v !== "" && v != null) got[k] = v; })); /* the last value the engine put in each field */
+    (conv.forms || []).forEach(f => Object.entries(f).forEach(([k, v]) => { if (v !== "" && v != null && v !== false) got[k] = v; })); /* and what the form held when it was saved (Oct 29: a capacity answered to the app's own question, a campaign the app filled from the answer, were scored as missing) */
     Object.entries(flow.heard).forEach(([k, want]) => hit("heard_right", fieldOk(want, got[k]), `${k}: wanted ${want}, got ${JSON.stringify(got[k] === undefined ? null : got[k])}; heard: ${conv.turns.map(t => t.heardText || "").filter(Boolean).join(" / ").slice(0, 200)}`)); }
   const heard = conv.acts.filter(a => a.role === "grok"); // what the app played and logged, as the officer heard it
   for (let i = 1; i < heard.length; i++) hit("no_double_reply", sameWords(heard[i - 1].text) !== sameWords(heard[i].text), heard[i].text);
