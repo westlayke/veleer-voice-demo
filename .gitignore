@@ -4,3 +4,4 @@ tests-live/
 tests/ara-consistency/results/
 tests/harness/results/
 tests/ara-consistency/voices/
+tests/call-start/results/
