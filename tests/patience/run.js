@@ -10,7 +10,7 @@ const http = require("http"), fs = require("fs"), path = require("path");
 let chromium; try { ({ chromium } = require("playwright")); } catch (e) { ({ chromium } = require("/opt/node-tools/node_modules/playwright")); }
 const ROOT = path.resolve(__dirname, "../.."), OUT = path.join(__dirname, "results");
 const CONVS = Math.max(1, Number(process.env.CONVS) || 10), JOBS = Math.max(1, Number(process.env.JOBS) || 3), SEED = Number(process.env.SEED) || 1, RATE = process.env.RATE === undefined ? 1 : Number(process.env.RATE);
-const NAME = process.env.OFFICER || "Patient Pat", MAX_MS = Number(process.env.MAX_MS) || 8 * 60e3;
+const NAME = process.env.OFFICER || "Patient Pat", MAX_MS = Number(process.env.MAX_MS) || 10 * 60e3;
 // Jim's 45 measured waits before "Are you there?" (Oct 27-28, seconds): the officer's patience is drawn from these
 const WAITS = [24.4, 9.9, 20.0, 2.6, 2.9, 7.6, 2.6, 13.7, 16.3, 9.8, 7.2, 15.6, 11.5, 5.0, 8.3, 5.5, 6.3, 8.4, 22.1, 5.7, 4.0, 5.0, 12.5, 30.2, 15.4, 2.6, 6.7, 2.6, 22.7, 28.3, 20.3, 11.4, 21.6, 4.8, 33.6, 2.6, 34.4, 5.1, 4.7, 6.3, 25.2, 25.0, 7.2, 14.8, 37.4];
 // fault rates per officer turn at RATE=1 (Jim's calls: about 55 connection problems in 38 conversations, one problem every 6 to 7 minutes, a turn is about 12 s)
@@ -117,6 +117,8 @@ const BOOK = [
   { q: /planned ask date/i, say: "Today, twenty-five thousand dollars.", tool: ["show_ask_plan_draft", { contact_name: C, plannedDate: T, amount: 25000 }] },
   { q: /How much (was the ask|is the gift|is the pledge), and for which entity/i, say: "Twenty-five thousand dollars, for the North Dakota Fed PAC.", tool: (line, ctx) => forForm(ctx, { amount: 25000, fund: ND }) },
   { q: /When was it received, and how was it paid/i, say: "Today, by check.", tool: (line, ctx) => forForm(ctx, { date: T, method: "Check" }) },
+  { q: /Ally - Do Not Solicit, or Do Not Contact/i, say: "Neither.", tool: ["optional_fields", { step: "answer", value: "neither" }] },
+  { q: /What's the type\?/i, say: "In person.", tool: (line, ctx) => forForm(ctx, { meetingType: "In person" }) },
   { q: /Payment method: Check/i, say: "By check.", tool: (line, ctx) => forForm(ctx, { method: "Check" }) },
   { q: /How much|the amount\?/i, say: "Twenty-five thousand dollars.", tool: (line, ctx) => forForm(ctx, { amount: 25000 }) },
   { q: /When (was|is) it|what date/i, say: "Today.", tool: (line, ctx) => forForm(ctx, { date: T }) },
@@ -155,7 +157,7 @@ async function conversation(browser, base, n) {
     while (Date.now() - t0 < MAX_MS) {
       await p.waitForTimeout(150); const st = await state(); if (!st.live) { conv.ended = "the conversation ended"; break; }
       bookCtx.form = st.form; form = st.form; bookCtx.saves = st.saves;
-      if (st.events > seenEvents) { const ev = await p.evaluate((n) => window.__events.slice(n), seenEvents); conv.faults.push(...ev); seenEvents = st.events; }
+      if (st.events > seenEvents) { const ev = await p.evaluate((n) => window.__events.slice(n), seenEvents); conv.faults.push(...ev.map(e => Object.assign({}, e, { at: e.at - t0 }))); seenEvents = st.events; } /* the page's faults are stamped in page time; the report counts from the start */
       if (st.saves > conv.saves.length) { const sv = await p.evaluate(() => G.saves.slice()); conv.saves = sv; asksInRow = 0; if (/Closed Won|Gift recorded/.test(sv.join(" "))) { conv.closedWon = true; } }
       if (conv.closedWon) { await p.waitForTimeout(2500); break; }
       // the last thing heard: Ara's line (its sound ends after its words), a phone recording, or the officer's own words
