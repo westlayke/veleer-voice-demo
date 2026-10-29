@@ -173,8 +173,9 @@ async function converse(browser, base, flow, n) {
       const last = sents.pop() || "", tail = sents.slice(-1).concat(last).join(" "); // the officer answers the question Ara ended on (tail = its last two sentences)
       let say;
       if (savedDone()) break;
-      if (/say that again|lost you for a moment\.\s*$|didn't catch that/i.test(last) && conv.turns.length) say = conv.turns[conv.turns.length - 1].say; // after a drop the app asks the officer to repeat: they say their last line again (the probe at FAULTS 30 ended three calls on "No, that's all for now")
+      if (/say that again|lost you for a moment\.\s*$|didn't catch (that|your answer)|repeat what you said/i.test(last) && conv.turns.length) say = conv.turns[conv.turns.length - 1].say; // after a drop the app asks the officer to repeat: they say their last line again (the probe at FAULTS 30 ended three calls on "No, that's all for now")
       else if (/substantive/i.test(last) && /\?\s*$/.test(last.trim())) say = flow.subst || "Yes.";
+      else if (/^Which one: /i.test(last)) say = last.replace(/^Which one: /i, "").split(/,|\?/)[0].trim() + "."; // the app's two-to-five-way entity question (Oct 29): the first one named
       else if (/\b(save|saving)\b[^.?!]*\?|shall i (save|record)|say yes|is that (right|correct)\?|correct\?|confirm/i.test(last) && !/would you like to (add|fill)/i.test(last)) say = "Yes.";
       else if (/^rate \w+ [A-E]\b.*\?$/i.test(last)) say = "Yes."; // 1.0 confirms a named rating with its own question ("Rate James B, $100k to $250k?")
       else if (/next step|due/i.test(tail) && /\?\s*$/.test(last) && !script.length && stepAnswers++ < 3) say = /when is it due|due date\?$/i.test(last) ? "Today." : /what('s| is| should) the (next )?step/i.test(last) ? "Collect the check from her." : "Yes, collect the check from her, due today."; // 1.0 asks before taking the next step; only when the question itself is about it, and not forever if Ara keeps asking
