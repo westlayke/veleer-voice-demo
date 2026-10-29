@@ -22,6 +22,7 @@ const OPEN_TIMEOUT_MS = 10000;               // a new line not open after this l
 const MAX_ASKS = 1;                          // times the app asks Grok again for a reply before opening a fresh line
 const TICK_MS = 4000;                        // soft tick while waiting, and the early line test when no reply has started
 const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has started by now (Grok sometimes takes 6 to 10 s)
+const TURN_TEST_MS = 8000, TURN_GIVE_UP_MS = 12000; // the officer's own turn with no reply started: line test at 8 s, fresh line at 12 s (the tick at TICK_MS)
 const EARLY_PING_MS = 2500;                  // the early line test's limit
 const RESUME_MS = 25 * 60000;               // a line reopened within this long picks up the same conversation on xAI (kept 30 minutes)
 const CANCEL_SETTLE_MS = 700;                // a scripted line waits this long after a response.cancel (Oct 28: forced in the same instant, the line came back as words with no audio)
@@ -100,7 +101,26 @@ async function mintToken(limit = TOKEN_WAIT_MS) {
 }
 // Grok bills for every minute a conversation is open, so hang up after 12 seconds with no talking and no taps
 const idleMs = () => typeof V !== "undefined" && V && ACTIONS[V.action] ? Math.max(IDLE_FORM_MS, G.hands ? IDLE_HF_MS : IDLE_MS) : G.hands ? IDLE_HF_MS : IDLE_MS;
-function idleCheck() { if (typeof keepAlive === "function") keepAlive();
+// The officer's own turn (Oct 29, Patient Pat's first run: 34 of 135 "are you there?"s were a reply slow to start after the officer's words).
+// In hands-free the voice service answers the officer on its own, so the app had asked for nothing and the tick, the line test and the fresh
+// line never ran; the officer sat in silence until the hang-up. The same ladder as a scripted line: "Ara's taking a moment." at TICK_MS, a line
+// test at TURN_TEST_MS (slow line: fresh line, which asks "Could you say that again?"; healthy: one reply request with their words, then the
+// usual watch), a fresh line at TURN_GIVE_UP_MS whatever happened. The hang-up is held off while a turn is open. No words from the turn: noise.
+function turnWatch() {
+  if (!G.live || !G.turnOpen || G.asked || G.forced || G.pendingForce || G.responding || G.audioOn || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  const heard = G.lastHeard && G.lastHeard.at >= G.turnOpen - 1500 ? String(G.lastHeard.text || "") : "", dt = Date.now() - G.turnOpen;
+  if (!heard) { if (dt > TURN_TEST_MS) G.turnOpen = 0; return; }
+  if (dt >= TICK_MS && !G.turnStep) { G.turnStep = 1; if (!G.slowSaid) { if (sayLocal("Ara's taking a moment.", "slow")) { G.slowSaid = true; G.slowAt = Date.now(); } else cue("wait"); }
+    act("step", `No reply started ${TICK_MS / 1000} s after the officer spoke ("${heard.slice(0, 60)}"): the phone says Ara's taking a moment`); }
+  else if (dt >= TURN_TEST_MS && G.turnStep === 1) { G.turnStep = 2; const ws = G.ws, at = G.turnOpen;
+    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.turnOpen !== at || G.ws !== ws || G.responding || G.asked || /^(Connecting|Reconnecting)/.test(G.status)) return;
+      G.turnOpen = 0;
+      if (typeof ms !== "number" || ms > SLOW_LINE_MS) { act("step", `No reply ${TURN_TEST_MS / 1000} s after the officer spoke, on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
+      act("step", `No reply ${TURN_TEST_MS / 1000} s after the officer spoke on a healthy line: asked for one with their words`); G.retriedAt = Date.now(); G.heardSinceRetry = false;
+      askReply(`The officer just said: "${heard}". Answer that now, out loud in one or two sentences, or call the tool it needs.`); }); }
+  else if (dt >= TURN_GIVE_UP_MS && G.turnStep === 2) { G.turnOpen = 0; act("step", `No reply ${TURN_GIVE_UP_MS / 1000} s after the officer spoke: fresh line`); G.retried = 0; reconnect("the voice service stopped answering"); }
+}
+function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWatch();
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
   // Oct 27 (Carverhill), back on Oct 28 after the 1.0 reset dropped it: a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
   if (G.live && G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
@@ -116,7 +136,7 @@ function idleCheck() { if (typeof keepAlive === "function") keepAlive();
   // the officer is talking but the voice service hasn't heard anything: the line may have stalled without closing (seen Oct 24 in a dead spot)
   const talking = G.speechSince && Date.now() - G.speechSince > STALL_MS && Date.now() - (G.lastMsg || 0) > STALL_MS;
   const since = Date.now() - (G.lastAct || Date.now());
-  const quiet = since >= idleMs() && (Date.now() - (G.loudAt || 0) >= idleMs() || since >= NOISE_CAP_MS); // sound on the mic counts as talking, but not for more than a minute (road noise)
+  const quiet = since >= idleMs() && (Date.now() - (G.loudAt || 0) >= idleMs() || since >= NOISE_CAP_MS) && !G.turnOpen; /* never a goodbye while the officer's words are unanswered (turnWatch reconnects instead) */ // sound on the mic counts as talking, but not for more than a minute (road noise)
   if (!talking && !quiet) return;
   G.probing = true; const ws = G.ws;
   pingMs(LINE_TEST_MS).then(ms => { G.probing = false; if (!G.live || G.ws !== ws || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
@@ -238,7 +258,7 @@ async function netLog(what, known) { const sess = G.session, info = netInfo(), m
 async function reconnect(why) {
   if (!G.live) return;
   if (Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now()) > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
-  G.drops++; G.status = "Reconnecting…"; G.createAt = 0; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0;
+  G.drops++; G.status = "Reconnecting…"; G.createAt = 0; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.turnOpen = 0;
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
   if (G.drops === 1) cue("drop");

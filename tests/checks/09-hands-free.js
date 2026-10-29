@@ -446,4 +446,31 @@ test("Carverhill's 7:39 AM call (Oct 29): a yes said after a pickup saves the se
   ok(r.saved === true && r.already && !/save_form came again after the line was picked up/.test(await log()) && !/didn't go through/.test(await p.evaluate(() => __sent.join(" "))), "Ara's save_form after the officer's yes was refused as a replay: " + JSON.stringify(r));
   ok(await p.evaluate(() => __sent.filter(s => s.includes("force_message") && s.includes("Task added for Ruth")).length === 2), "the saved line wasn't said by the app itself, once per save");
 });
+
+test("Officer's turn watch (Oct 29): no reply after the officer's words gets the taking-a-moment line at 4 s, a line test at 8 s (healthy: a reply request with their words; slow: a fresh line), and no goodbye meanwhile", async (p) => {
+  const fire = (p, evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.live && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { const f = window.fetch; window.__fetch0 = f; window.__pingMs = 200; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise(res => setTimeout(() => res(new Response("{}")), window.__pingMs)) : f(u, o); window.__said = []; window.__quietMic = true; /* the test browser's pretend mic is loud: the stall watch (officer talking, nothing back) must not run instead */ });
+  // a healthy line that is just slow: tick, then a reply request with the officer's words
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_stopped" }) }); G.lastAct = Date.now() - 40000; });
+  await said(p, "Let's add a new contact, Jordan Pike.");
+  await p.waitForTimeout(5200);
+  let log = await p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  ok(/No reply started 4 s after the officer spoke \("Let's add a new contact/.test(log) && !/seconds quiet: hanging up/.test(await p.evaluate(() => VLOG.join("\n"))) && await p.evaluate(() => G.live && !G.idleEnding), "no taking-a-moment tick 4 s after the officer's words, or the goodbye fired meanwhile: " + log.slice(-300));
+  await p.waitForTimeout(4200);
+  const asked = await p.evaluate(() => __sent.filter(s => /response\.create/.test(s) && /The officer just said: \\"Let's add a new contact/.test(s)).length);
+  log = await p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  ok(asked === 1 && /healthy line: asked for one with their words/.test(log) && await p.evaluate(() => G.asked && !G.turnOpen), "8 s after the officer's words on a healthy line, the app didn't ask once for a reply with their words: " + JSON.stringify({ asked, tail: log.slice(-200) }));
+  // a reply arrives: the watch is over
+  await fire(p, [{ type: "response.created" }]); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !G.turnOpen), "a reply that started didn't close the officer's turn");
+  await p.evaluate(() => { G.responding = false; G.respAsked = false; }); /* the pretend reply is left unfinished so the reply watch doesn't take it for an empty one */
+  // a slow line: the test fails and a fresh line asks the officer to say it again
+  await p.evaluate(() => { window.__pingMs = 2800; window.__ws0 = __ws; G.slowSaid = false; G.asked = false; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.retried = 0; G.spokeInGap = false; G.lastAct = Date.now(); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_stopped" }) }); });
+  await said(p, "J Pike at gmail dot com.");
+  await p.waitForFunction(() => __ws !== __ws0 && G.live, null, { timeout: 14000 }).catch(() => {});
+  await p.waitForTimeout(1200);
+  const out = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), again: (G.justNow && G.justNow.text) || "" }));
+  ok(out.newLine && out.live && /on a slow line \(test request .*: fresh line/.test(out.log) && /Could you say that again\?/.test(out.again), "a slow line 8 s after the officer's words didn't get a fresh line that asks them to say it again: " + JSON.stringify({ newLine: out.newLine, live: out.live, again: out.again, tail: out.log.slice(-700) }));
+});
 };

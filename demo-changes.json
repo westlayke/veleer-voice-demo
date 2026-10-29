@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 1:08 PM",
+   "change": "Preview: when you've spoken and Ara's reply is slow to start, the phone now says \"Ara's taking a moment\" at 4 seconds, tests the line at 8 (a slow line gets a fresh one that asks you to say that again; a healthy one gets a nudge for the reply), and opens a fresh line at 12 seconds whatever happened. Before, that silence had no cover at all in hands-free, because the ladder only ran for the app's own questions. The quiet hang-up goodbye no longer fires while your last words are unanswered.",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "Patient Pat's first run (Oct 29): 34 of 135 \"are you there?\"s were a reply slow to start after the officer's words, and 3 conversations ended with the goodbye while the officer's words were unanswered. Carverhill: \"Go\"."
+  },
+  {
    "date": "Oct 29, 11:07 AM",
    "change": "Preview: five fixes from the 10:05 AM call, all in the shared voice code. After a drop the app repeats Ara's whole last line (not just the last sentence). A save asked for after the form already saved is answered by the app's own \"it's saved, what's next\" line, so Ara doesn't say it a second time. The phone's resend of a soundless line stands down when the app's own copy is already on its way. Every read-back ends in \"Save it, or change something?\" unless it already ends in a question (the Cultivation read-back had ended in a statement). A state with two entities no longer counts as the entity said, and when Ara asks her own question while the app's question is pending, hers stands and the app's copy is cut.",
    "area": "Voice",
