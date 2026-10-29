@@ -18,6 +18,12 @@ const { officerAudio } = require("./officer-voice");
 // TURN='{"threshold":0.7,"silence_duration_ms":600}' tries turn-detection settings (the app's window.__turn), MIC_HP=<Hz> a high-pass filter on the mic
 // (window.__micHp): both for the car-noise question of Oct 28 (Grok's reply time doubled in noise). Blank = the app's own defaults.
 const TURN = process.env.TURN ? JSON.parse(process.env.TURN) : null, MIC_HP = Number(process.env.MIC_HP || 0);
+// FAULTS=<rate> (Oct 29, Carverhill: "add those to the real grok run"): cellular drops at Patient Pat's rates times this number (0 = none). A drop
+// takes the phone offline and closes the voice line, before the officer speaks or a little into Ara's reply; a dead spot keeps it offline
+// 10-70 s, a plain drop 0.3-3 s. Seeded per conversation, so a rerun of the same run gets the same drops.
+// A quiet mic (Carverhill: "we should be able to simulate mic going quiet"): the officer's line plays into the microphone at no volume, as when the
+// phone mutes the mic in a dead spot or behind a dialog; the officer waits 4-10 s for an answer, then says the line again out loud.
+const FAULTS = Number(process.env.FAULTS || 0), FAULT_RATES = { drop: 0.025 /* per turn */, deadspot: 0.35 /* of drops */, quietMic: 0.025 /* per turn */ };
 const RECORD = SPOKEN ? Number(process.env.RECORD == null ? 1 : process.env.RECORD) : 0; // spoken runs: keep the first RECORD conversations of each flow as a sound clip (officer, Ara, noise) with a transcript, to listen to end to end
 const { execFileSync } = require("child_process");
 const ANSWERS = ["Yes.", "No.", "Move on.", "Neither.", "No, that's all for now.", "Today.", "Collect the check from her.", "Yes, collect the check from her, due today.", "Yes, it was."]; // every line the pretend officer can answer with, besides the flows' own
@@ -31,7 +37,7 @@ const JOBS = Number(process.env.JOBS || 3);
 const ONLY = process.env.FLOWS ? process.env.FLOWS.split(",") : null;
 // xAI prices (Oct 2026): speech to speech per minute of open line, and each conversation.item.create (counted for every item, to be safe)
 const PER_MIN = Number(process.env.PER_MIN || ENGINE.perMin), PER_ITEM = Number(process.env.PER_ITEM || 0.004); // OpenAI: about $0.019/min in + $0.077/min out of audio, counted as a flat per-minute rate
-const MAX_CONV_MS = 6 * 60000, TURN_WAIT_MS = 25000, MAX_TURNS = 20;
+const MAX_CONV_MS = 6 * 60000, TURN_WAIT_MS = 25000, MAX_TURNS = 20, DOWN_WAIT_MS = 100000; // DOWN_WAIT_MS: how long the officer waits for a line that dropped (FAULTS)
 const ROOT = path.resolve(__dirname, "../.."), OUT = path.join(__dirname, "results");
 
 if (!KEY) { console.error(ENGINE.key + " is not set"); process.exit(1); }
@@ -76,10 +82,13 @@ let items = 0, stopAll = false;
 // ---------- one conversation ----------
 let voices = {}; // officer line -> 24 kHz PCM, in spoken mode
 async function converse(browser, base, flow, n) {
-  const conv = { flow: flow.id, n, turns: [], replies: [], tools: [], saved: [], acts: [], errors: [], forced: [], lineMs: 0, items: 0, started: new Date().toISOString() };
+  const conv = { flow: flow.id, n, turns: [], replies: [], tools: [], saved: [], acts: [], errors: [], forced: [], faults: [], lineMs: 0, items: 0, started: new Date().toISOString() };
+  let rnd = (() => { let a = 0; for (const ch of flow.id + "#" + n) a = (a * 31 + ch.charCodeAt(0)) >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })();
+  let offline = false; // during a simulated drop: the phone has no network at all, so a token request fails too
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true, permissions: ["microphone"] });
   await ctx.route(/veleer-voice\.klaracey\.workers\.dev/, async (route) => {
     const req = route.request(), u = new URL(req.url());
+    if (offline) return route.abort("internetdisconnected");
     if (u.pathname === "/log") return route.fulfill({ status: 200, contentType: "application/json", body: req.method() === "GET" ? '{"logging":true}' : '{"stored":0}' });
     try { const t = await mintToken(); if (t.status !== 200) conv.errors.push("token " + t.status + " " + t.body.slice(0, 200)); return route.fulfill({ status: t.status, contentType: "application/json", body: t.body }); }
     catch (e) { conv.errors.push("token " + e.message); return route.fulfill({ status: 503, body: "{}" }); }
@@ -116,9 +125,9 @@ async function converse(browser, base, flow, n) {
           const src = mctx.createBufferSource(); src.buffer = n; src.loop = true; const g = mctx.createGain(); g.gain.value = noise; src.connect(g).connect(dst); src.start(); }
         window.__mic = { ctx: mctx, dst, played: 0 }; window.__ara = []; // Ara's audio as it arrives, kept for the clip: [at, base64 pcm] with [at, null] marking each new reply
         navigator.mediaDevices.getUserMedia = async () => dst.stream;
-        window.__speak = (b64) => new Promise((res) => { mctx.resume(); const bin = atob(b64), n = bin.length >> 1, buf = mctx.createBuffer(1, n, 24000), d = buf.getChannelData(0);
+        window.__speak = (b64, gain) => new Promise((res) => { mctx.resume(); const bin = atob(b64), n = bin.length >> 1, buf = mctx.createBuffer(1, n, 24000), d = buf.getChannelData(0);
           for (let i = 0; i < n; i++) { const v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); d[i] = (v >= 0x8000 ? v - 0x10000 : v) / 32768; }
-          const s = mctx.createBufferSource(); s.buffer = buf; s.connect(dst); s.onended = () => { window.__mic.played++; res(n / 24); }; s.start(); });
+          const s = mctx.createBufferSource(); s.buffer = buf; const g = mctx.createGain(); g.gain.value = gain == null ? 1 : gain; s.connect(g).connect(dst); s.onended = () => { window.__mic.played++; res(n / 24); }; s.start(); }); /* gain 0: a quiet mic (FAULTS) */
       }
       window.__acts = []; const real = act; act = function (role, text, sess) { window.__acts.push({ at: Date.now(), role, text: String(text || "") }); return real.apply(this, arguments); };
       window.__drops = []; window.__vlog = []; const vt0 = Date.now(); const realV = vlog; vlog = function (text) { if (/: dropped |: left out /.test(String(text))) window.__drops.push(String(text)); if (window.__vlog.length < 900) window.__vlog.push(((Date.now() - vt0) / 1000).toFixed(1) + " " + String(text).slice(0, 220)); return realV.apply(this, arguments); }; // the evidence rule's Voice log lines, and the whole voice log for a diagnostic run (DIAG=1)
@@ -135,9 +144,19 @@ async function converse(browser, base, flow, n) {
       startCall(null);
     }, { prov: PROVIDER, spoken: SPOKEN, noise: NOISE, turn: TURN, micHp: MIC_HP });
     conv.record = SPOKEN && n <= RECORD; if (!conv.record) await p.evaluate(() => { window.__ara = null; });
+    const t0 = Date.now();
+    const drop = async (when) => { // a cellular drop: offline, line closed, back after downMs; recovery = the first reply sound after the network is back
+      const dead = rnd() < FAULT_RATES.deadspot, downMs = dead ? 10000 + Math.round(rnd() * 60000) : 300 + Math.round(rnd() * 2700);
+      const f = { at: Date.now() - t0, kind: dead ? "dead spot" : "drop", when, downMs, repliesBefore: conv.replies.length }; conv.faults.push(f);
+      offline = true; await ctx.setOffline(true);
+      await p.evaluate(() => { try { G.ws && G.ws.close(); } catch (e) {} }).catch(() => {});
+      await p.waitForTimeout(downMs);
+      offline = false; await ctx.setOffline(false); f.backAt = Date.now();
+      await p.evaluate(() => window.dispatchEvent(new Event("online"))).catch(() => {});
+    };
     const settle = async () => { // until Ara has finished her turn and the app has nothing more to say
       const t0 = Date.now(); let quietSince = 0;
-      while (Date.now() - t0 < TURN_WAIT_MS && !stopAll) {
+      while ((Date.now() - t0 < TURN_WAIT_MS || offline || Date.now() - t0 < DOWN_WAIT_MS && await p.evaluate(() => /^(Connecting|Reconnecting)/.test(G.status) || !!G.downAt).catch(() => false)) && !stopAll) { // after a drop the officer waits for the line, as a real one would
         await p.waitForTimeout(250);
         const busy = await p.evaluate(() => !!(G.responding || G.qCreate || G.qInstr || G.forced || G.pendingForce || playingLeft() > 0 || /^(Connecting|Reconnecting|Thinking)/.test(G.status)));
         if (busy || Date.now() - lastFrame < 1200) { quietSince = 0; continue; }
@@ -148,7 +167,6 @@ async function converse(browser, base, flow, n) {
     await settle();
     const script = flow.lines.slice(); let saidNo = 0, doneAt = 0, stepAnswers = 0;
     const savedDone = () => doneAt;
-    const t0 = Date.now();
     for (let turn = 0; turn < MAX_TURNS && !stopAll && Date.now() - t0 < MAX_CONV_MS; turn++) {
       const whole = (conv.replies.filter(r => r.text).pop() || { text: "" }).text.trim();
       const sents = whole.split(/(?<=[.?!])\s+/).filter(Boolean);
@@ -167,9 +185,16 @@ async function converse(browser, base, flow, n) {
       else { say = "No, that's all for now."; saidNo++; }
       if (!await p.evaluate(() => G.live)) { conv.errors.push("call ended: " + (await p.evaluate(() => (window.__acts.filter(a => a.role === "end").pop() || { text: "?" }).text)).slice(0, 160)); break; } // nobody to talk to (Oct 27 7:03 PM run: three calls ended at once with "couldn't connect" and the officer went on talking for two minutes)
       const nBefore = conv.replies.length, at = Date.now();
+      if (FAULTS && rnd() < FAULT_RATES.drop * FAULTS && rnd() < 0.5) { await drop("before the officer's words"); await settle(); continue; } // the line goes while the officer is about to speak: they wait for it, then answer whatever Ara says next
+      const midReply = FAULTS && rnd() < FAULT_RATES.drop * FAULTS; // the other half: a little into Ara's reply (a read-back, a question)
+      if (midReply) setTimeout(() => { if (!stopAll) drop("during Ara's reply"); }, 1500 + Math.round(rnd() * 3000));
       conv.turns.push({ say, at, after: last.slice(0, 300) });
       if (SPOKEN) { // the line plays into the microphone; the engine hears it, decides when the officer has finished and answers on its own
         const pcm = voices[say]; if (!pcm) { conv.errors.push("no voice for: " + say); break; }
+        if (FAULTS && rnd() < FAULT_RATES.quietMic * FAULTS) { // the mic is quiet: the line goes in silently, the officer waits, then says it again
+          const f = { at: Date.now() - t0, kind: "quiet mic", when: "the officer's words", downMs: 0, repliesBefore: conv.replies.length }; conv.faults.push(f);
+          await p.evaluate((b) => window.__speak(b, 0), pcm.toString("base64")); const wait = 4000 + Math.round(rnd() * 6000); await p.waitForTimeout(wait);
+          f.backAt = Date.now(); f.downMs = f.backAt - (f.at + t0); f.meanwhile = (await p.evaluate(() => window.__acts.filter(a => a.role === "grok").map(a => [a.at, a.text]))).filter(([a]) => a > f.at + t0).map(([, x]) => x).join(" | ").slice(0, 300); }
         if (conv.record) (conv.officer = conv.officer || []).push({ at: Date.now(), text: say, pcm });
         const ms = await p.evaluate((b) => window.__speak(b), pcm.toString("base64"));
         conv.askedAt = Date.now(); conv.turns[conv.turns.length - 1].spokenMs = Math.round(ms);
@@ -187,6 +212,7 @@ async function converse(browser, base, flow, n) {
     await p.waitForTimeout(300);
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
     conv.drops = await p.evaluate(() => window.__drops || []);
+    conv.faults.forEach(f => { if (!f.backAt) return; const next = conv.replies.find(r => r.at > f.backAt); f.recoverMs = next ? next.at - f.backAt : null; f.lostLine = !!next && /lost you|line dropped|reconnect/i.test(next.text); const heard = conv.acts.filter(a => a.role === "grok" && a.at > f.backAt).slice(0, 2).map(a => a.text); f.said = heard.join(" | ").slice(0, 300); }); // what the officer heard first once the network was back
     if (DIAG) conv.vlog = await p.evaluate(() => window.__vlog || []);
     // the engine closing the line with a reason (code 1011 "prepayment credits are depleted" on Gemini, Oct 28, which two runs reported only as "no answer") is an error of this conversation
     (await p.evaluate(() => (window.__vlog || []).filter(l => /Voice line closed \(code (?!1000\b)\d+/.test(l)))).slice(0, 2).forEach(l => conv.errors.push("line: " + l.replace(/^.*Voice line closed /, "").slice(0, 200)));
@@ -286,7 +312,10 @@ function report(convs, extra) {
   const rows = table(convs), money = (x) => "$" + x.toFixed(2);
   const byFlow = {}; convs.forEach(c => { const f = byFlow[c.flow] = byFlow[c.flow] || { n: 0, saved: 0, cost: 0, min: 0 }; f.n++; f.cost += c.cost; f.min += c.lineMs / 60000; if (c.score && c.score.task_saved && !c.score.task_saved.broke) f.saved++; });
   const fw = convs.flatMap(c => c.firstMs || []).sort((x, y) => x - y), pct = (q) => fw.length ? (fw[Math.min(fw.length - 1, Math.floor(q * fw.length))] / 1000).toFixed(2) + " s" : "n/a";
-  let md = `# Ara consistency run: ${ENGINE.name}${SPOKEN ? " (spoken" + (NOISE ? ", noise " + NOISE : ", quiet") + ")" : ""}\n\n${extra}${SPOKEN ? "\n\nThe officer's lines were spoken into the microphone (Grok's " + OFFICER_VOICE + " voice" + (NOISE ? ", with car-like noise at level " + NOISE : ", no noise") + "); reply time runs from the end of the officer's speech." + (TURN ? " Turn detection: " + JSON.stringify(TURN) + "." : "") + (MIC_HP ? " Mic high-pass: " + MIC_HP + " Hz." : "") : ""}\n\nConversations: ${convs.length}. Estimated cost: ${money(convs.reduce((a, c) => a + c.cost, 0))} (${(convs.reduce((a, c) => a + c.lineMs, 0) / 60000).toFixed(1)} min of open line at $${PER_MIN}/min + ${convs.reduce((a, c) => a + c.items, 0)} items at $${PER_ITEM}).\n\nFirst sound of a reply after the officer's words (${fw.length} turns): median ${pct(0.5)}, 90th percentile ${pct(0.9)}, slowest ${pct(1)}, over 3 s: ${fw.filter(x => x > 3000).length}.\n\n`;
+  let md = `# Ara consistency run: ${ENGINE.name}${SPOKEN ? " (spoken" + (NOISE ? ", noise " + NOISE : ", quiet") + ")" : ""}${FAULTS ? " with cellular drops x" + FAULTS : ""}\n\n${extra}${SPOKEN ? "\n\nThe officer's lines were spoken into the microphone (Grok's " + OFFICER_VOICE + " voice" + (NOISE ? ", with car-like noise at level " + NOISE : ", no noise") + "); reply time runs from the end of the officer's speech." + (TURN ? " Turn detection: " + JSON.stringify(TURN) + "." : "") + (MIC_HP ? " Mic high-pass: " + MIC_HP + " Hz." : "") : ""}\n\nConversations: ${convs.length}. Estimated cost: ${money(convs.reduce((a, c) => a + c.cost, 0))} (${(convs.reduce((a, c) => a + c.lineMs, 0) / 60000).toFixed(1)} min of open line at $${PER_MIN}/min + ${convs.reduce((a, c) => a + c.items, 0)} items at $${PER_ITEM}).\n\nFirst sound of a reply after the officer's words (${fw.length} turns): median ${pct(0.5)}, 90th percentile ${pct(0.9)}, slowest ${pct(1)}, over 3 s: ${fw.filter(x => x > 3000).length}.\n\n`;
+  if (FAULTS) { const fs_ = convs.flatMap(c => c.faults.map(f => Object.assign({ flow: c.flow, n: c.n, saved: c.score && c.score.task_saved && !c.score.task_saved.broke }, f))), hit = convs.filter(c => c.faults.length);
+    const rec = fs_.filter(f => f.recoverMs != null).map(f => f.recoverMs).sort((x, y) => x - y), q = (k) => rec.length ? (rec[Math.min(rec.length - 1, Math.floor(k * rec.length))] / 1000).toFixed(1) + " s" : "n/a";
+    md += `## Drops and quiet mics (FAULTS ${FAULTS}: drops at ${FAULT_RATES.drop * FAULTS} per turn, ${Math.round(FAULT_RATES.deadspot * 100)}% of them dead spots of 10-70 s; quiet mics at ${FAULT_RATES.quietMic * FAULTS} per turn)\n\n${fs_.length} faults in ${hit.length} of ${convs.length} conversations (${fs_.filter(f => f.kind === "drop").length} drops, ${fs_.filter(f => f.kind === "dead spot").length} dead spots, ${fs_.filter(f => f.kind === "quiet mic").length} quiet mics; for a quiet mic, "down" is how long the officer waited before repeating and "back to first words" counts from the repeat). Of the conversations with a drop, ${hit.filter(c => c.score && c.score.task_saved && !c.score.task_saved.broke).length} still ended saved. From the network coming back to Ara's first words: median ${q(0.5)}, 90th percentile ${q(0.9)}, slowest ${q(1)}; ${fs_.filter(f => f.recoverMs == null).length} never answered. First line after the drop was the app's "lost you" line ${fs_.filter(f => f.lostLine).length} times.\n\n| Flow | When | Kind | Down | Back to first words | Officer then heard |\n|---|---|---|---:|---:|---|\n` + fs_.map(f => `| ${f.flow} #${f.n} | ${f.when} at ${(f.at / 1000).toFixed(0)} s | ${f.kind} | ${(f.downMs / 1000).toFixed(1)} s | ${f.recoverMs == null ? "never" : (f.recoverMs / 1000).toFixed(1) + " s"} | ${((f.meanwhile ? "(while quiet: " + f.meanwhile + ") " : "") + (f.said || "")).replace(/\|/g, "/")} |`).join("\n") + "\n\n"; }
   md += `## Rule breaks\n\n| Rule | Checked | Broken | Rate |\n|---|---:|---:|---:|\n` + rows.map(r => `| ${r.rule} | ${r.checked} | ${r.broken} | ${r.rate}% |`).join("\n") + "\n\n";
   md += `## By flow\n\n| Flow | Conversations | Ended saved | Avg cost | Avg minutes |\n|---|---:|---:|---:|---:|\n` + Object.entries(byFlow).map(([k, f]) => `| ${k} | ${f.n} | ${f.saved} | ${money(f.cost / f.n)} | ${(f.min / f.n).toFixed(2)} |`).join("\n") + "\n\n";
   // reply time by flow: mean, standard deviation, median, 90th percentile (Carverhill, Oct 27: "compare standard deviation on response times too")
@@ -326,7 +355,7 @@ function report(convs, extra) {
       progress(c, convs.length).catch(() => {});
       console.log(`${convs.length}. ${c.flow} #${c.n}: ${c.turns.length} turns, ${(c.lineMs / 1000).toFixed(0)} s, $${c.cost.toFixed(3)}, saved: ${c.saved.map(s => s.text).join(" | ") || "nothing"}${c.errors.length ? ", errors: " + c.errors.slice(0, 2).join("; ") : ""}  [total $${spent().toFixed(3)}]`);
       if (!half.said && spent() >= BUDGET / 2) { half.said = true; console.log(`MILESTONE halfway: ${convs.length} conversations, $${spent().toFixed(3)}`); }
-      console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => { let err = ""; try { err = (JSON.parse(t.out || "{}").error || "").slice(0, 220); } catch (x) {} return [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)].concat(err ? ["ERROR: " + err] : []); }), saved: c.saved.map(s => s.text), leftOut: c.leftOut || [], drops: c.drops || [], errors: c.errors.slice(0, 3), heard: SPOKEN ? c.turns.map(t => [t.say, t.heardText || "", t.spokenMs || 0]) : undefined }));
+      console.log("TRANSCRIPT " + JSON.stringify({ flow: c.flow, n: c.n, kinds: c.kinds, appSaid: c.acts.filter(a => a.role === "grok").map(a => a.text.slice(0, 200)), turns: c.turns.map(t => t.say), replies: c.replies.map(r => [r.turn, scripted(r, c.forced) ? "S" : "A", r.text.slice(0, 260)]), tools: c.tools.map(t => { let err = ""; try { err = (JSON.parse(t.out || "{}").error || "").slice(0, 220); } catch (x) {} return [t.turn, t.name, JSON.stringify(t.args).slice(0, 200)].concat(err ? ["ERROR: " + err] : []); }), saved: c.saved.map(s => s.text), leftOut: c.leftOut || [], drops: c.drops || [], faults: c.faults, errors: c.errors.slice(0, 3), heard: SPOKEN ? c.turns.map(t => [t.say, t.heardText || "", t.spokenMs || 0]) : undefined }));
       if (DIAG) console.log("VOICELOG " + JSON.stringify({ flow: c.flow, n: c.n, steps: c.acts.filter(a => a.role === "step").map(a => [a.at, a.text.slice(0, 220)]), vlog: c.vlog || [] })); /* the app's own voice log, for reading an engine's behaviour line by line */
       fs.writeFileSync(path.join(OUT, "conversations.json"), JSON.stringify(convs, null, 1));
     }
