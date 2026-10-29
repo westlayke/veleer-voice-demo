@@ -1,0 +1,43 @@
+name: Call start timing
+# How long xAI takes from an open line to Ara's first sound, per variant of the session setup (tests/call-start/). Standalone:
+# the app's real configuration is dumped from a headless browser, then a Node script opens real lines. Costs real money
+# (ARA_CONSISTENCY_KEY): about a cent a call. Run by hand only.
+on:
+  workflow_dispatch:
+    inputs:
+      calls:
+        description: "Calls per variant"
+        default: "8"
+      variants:
+        description: "Variants, comma separated: none, instr, tools, full, merged, early, slim"
+        default: "none,instr,tools,full,merged,early,slim"
+      jobs:
+        description: "Calls at once"
+        default: "3"
+      early_ms:
+        description: "early variant: milliseconds between the configuration and the greeting (the phone's mic time)"
+        default: "1200"
+jobs:
+  time:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 } # 22: the built-in WebSocket
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Ara's configuration from the app
+        run: node tests/call-start/dump.js
+      - name: Time the calls
+        env:
+          ARA_CONSISTENCY_KEY: ${{ secrets.ARA_CONSISTENCY_KEY }}
+          CALLS: ${{ inputs.calls }}
+          VARIANTS: ${{ inputs.variants }}
+          JOBS: ${{ inputs.jobs }}
+          EARLY_MS: ${{ inputs.early_ms }}
+        run: node tests/call-start/run.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: call-start-results
+          path: tests/call-start/results/
