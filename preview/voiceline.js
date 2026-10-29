@@ -289,7 +289,7 @@ function downStart() {
   const again = () => { if (!G.live || !G.downAt) return; downSay("still"); G.downTimer = setTimeout(again, downRepeatMs()); };
   G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; downSay("dropped"); G.downTimer = setTimeout(again, SAY_STILL_MS - SAY_DOWN_MS); }, SAY_DOWN_MS);
 }
-// a status recording still playing is stopped so it can't overlap Ara (Oct 25 call; Oct 28 10:03 PM: "Ara's taking a moment" played over her sounded copy of the line)
+// a status recording still playing is stopped when the line comes back, so it can't overlap Ara (Oct 25 call)
 function cutStatusLine(why) {
   const cut = G.lineEndAt && Date.now() < G.lineEndAt;
   if (cut) { try { G.lineSrc && G.lineSrc.stop(); } catch (e) {} act("step", `The phone's status line was cut short: ${why}`); } G.lineSrc = null; G.lineEndAt = 0;

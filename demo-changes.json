@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 28, 10:43 PM",
+   "change": "Preview: the phone never talks over Ara. Before playing \"Ara's taking a moment\" for a line that came without sound, the phone checks whether her sound is already playing or queued; if it is, the silence was a false alarm and nothing is said or resent. Her audio that arrives while a phone recording plays is already queued behind it; the pause after the recording is now 1 s (was 0.15 s). The 10:33 PM \"cut the recording when her sound starts\" guard is removed.",
+   "area": "Voice (preview)",
+   "requestedBy": "Carverhill",
+   "why": "\"When we play a recording, can we buffer any audio received to play 1 or 2 seconds after our audio ends?\" (10:30 PM); the 10:03:52 PM overlap happened because her sounded copy was already on the clock when the recording started (\"Go\", 10:41 PM)"
+  },
+  {
    "date": "Oct 28, 10:33 PM",
    "change": "Preview: four guards from the 10:01 PM call trace. (1) When a scripted copy plays late after Ara has already said the line, the phone cuts only that copy's audio (stopResp drops the one reply, not everything playing). (2) When a line came without sound and the phone asks for it again, the resend stands down if her sound has started or is queued meanwhile, so the line isn't heard twice. (3) \"What would you like to do?\" after a no waits 0.7 s for the cancelled reply to settle, so it comes back with audio; a second no within 3 s is ignored. (4) A line counts as silent only 2 s after it should have ended (was 0.8 s), and any phone recording still playing is cut the moment Ara's sound starts, so \"Ara's taking a moment\" no longer plays over her.",
    "area": "Voice (preview)",

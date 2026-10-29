@@ -35,6 +35,7 @@ function silentLine(rec) {
   if (!G.audioEver || !G.live) return;
   if (G.lastHeard && G.lastHeard.at > rec.at) { act("step", "Ara's line came without sound, but the officer answered: not asked again"); return; }
   if (G.silentAgain && G.silentAgain.text === rec.text) { G.silentAgain = null; act("step", "Ara's line came without sound twice: the line is treated as dead"); reconnect("her line came without sound twice"); return; }
+  if (playingLeft() > 0 || G.audioOn) { act("step", "Ara's line came without sound, but her sound is already playing or queued: a false alarm, nothing said"); return; } /* Oct 28 10:03 PM: her sounded copy was on the clock before the judgement, and the recording played over it */
   G.silentAgain = { text: rec.text, at: Date.now() }; act("step", `Ara's line came without sound: the phone says she's taking a moment, then asks for it again ("${rec.text.slice(0, 60)}")`);
   sayLocal("Ara's taking a moment.", "slow"); G.slowSaid = true;
   const wait = Math.round(((lineBuf.slow && lineBuf.slow.duration) || 1.6) * 1000) + 300;

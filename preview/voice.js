@@ -461,13 +461,14 @@ function downsample(f32, from) {
   return out;
 }
 function playChunk(b64) { return playPcm(int16FromB64(b64)); }
+const LINE_GAP_S = 1.0; // pause between the end of a phone recording and Ara's queued audio (Carverhill, Oct 28 10:30 PM: "1 or 2 seconds after our audio ends")
 function playPcm(i16) {
   if (!i16 || !i16.length) return;
   const buf = G.ctx.createBuffer(1, i16.length, 24000), ch = buf.getChannelData(0);
   for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 32768;
   const src = G.ctx.createBufferSource(); src.buffer = buf; src.connect(G.out || G.ctx.destination);
-  // Ara's audio is queued on the phone's clock: it waits for a phone line still playing ("Still waiting on Ara.") so the two never overlap (Carverhill, Oct 28)
-  const lineEnd = G.lineEndAt && G.lineEndAt > Date.now() ? G.ctx.currentTime + (G.lineEndAt - Date.now()) / 1000 + 0.15 : 0;
+  // Ara's audio is queued on the phone's clock: it waits for a phone line still playing ("Still waiting on Ara.") plus LINE_GAP_S so the two never overlap (Carverhill, Oct 28)
+  const lineEnd = G.lineEndAt && G.lineEndAt > Date.now() ? G.ctx.currentTime + (G.lineEndAt - Date.now()) / 1000 + LINE_GAP_S : 0;
   const at = Math.max(G.ctx.currentTime + 0.02, G.playHead, lineEnd); src.start(at); G.playHead = at + buf.duration;
   if (G.respAudio) { if (G.respAudio.t0 == null) G.respAudio.t0 = at; G.respAudio.end = G.playHead; } /* where this reply's audio sits on the clock, for a truncate on interruption */
   const cap = G.caps && G.caps[G.caps.length - 1]; if (cap) { if (cap.t0 == null) cap.t0 = at; cap.t1 = G.playHead; }
@@ -831,7 +832,7 @@ function onEvent(e) {
   if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0;
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0; clearTimeout(G.idleTimer); if (G.responding) send({ type: "response.cancel" }); stopPlayback(); if (G.forced) { G.forced = null; clearTimeout(G.forceTimer); } /* a goodbye still waiting to be said is dropped */ vlog("hang-up called off: the officer spoke"); act("step", "Quiet hang-up called off: the officer spoke"); } }
-  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); cutStatusLine("Ara's sound started"); } G.audioSamples += e.pcm ? e.pcm.length : Math.floor(atob(e.delta || "").length / 2); if (e.item_id && G.respAudio && !G.respAudio.itemId) G.respAudio.itemId = e.item_id; }
+  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += e.pcm ? e.pcm.length : Math.floor(atob(e.delta || "").length / 2); if (e.item_id && G.respAudio && !G.respAudio.itemId) G.respAudio.itemId = e.item_id; }
   if (t === "session.created") { vlog(`session created ${Date.now() - (G.t0 || Date.now())} ms after the tap`); netLog(`Session created ${Date.now() - (G.t0 || Date.now())} ms after the tap`); } /* separates the service's connect time from the Worker's when a line is slow */
   if (t === "conversation.item.input_audio_transcription.updated" && e.transcript) { G.heardLive = e.transcript; if (Date.now() - (G.heardLiveAt || 0) > 2000) { G.heardLiveAt = Date.now(); vlog('← officer (so far) "' + String(e.transcript).slice(-120) + '"'); } } /* the officer's words as they speak */
   if (t === "input_audio_buffer.timeout_triggered") { /* the service's own idle timer (its speech detection, not the phone's mic level): its check-in is dropped and the app's goodbye goes instead */

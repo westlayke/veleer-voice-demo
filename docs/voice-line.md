@@ -315,5 +315,10 @@ of that reply are stopped and its remaining audio deltas are dropped (`G.muteRes
 before sending the next forced line, which is how "What would you like to do?" comes back with audio instead of words only.
 A line counts as silent only `SILENT_JUDGE_MS` (2 s) after it should have ended; the resend in `silentLine` stands down when
 `G.respSeq` has moved on, sound is queued or playing, so the real copy that arrives meanwhile plays once. `cutStatusLine(why)`
-in voiceline.js stops a phone recording still playing; it is called when the line comes back and on the first audio chunk of a
-reply, so "Ara's taking a moment" cannot play over her.
+in voiceline.js stops a phone recording still playing when the line comes back.
+
+Her audio and the phone's recordings share one clock (10:43 PM). `playPcm` schedules every chunk of hers no earlier than the end of
+a recording still playing plus `LINE_GAP_S` (1 s), so chunks that arrive while a recording plays wait behind it; that is the
+buffer, with no separate store. The other order is the one that overlapped at 10:03:52 PM: her chunks were already on the clock
+when the silence judgement ran. So `silentLine` first checks `playingLeft() > 0 || G.audioOn` and, if her sound is playing or
+queued, logs a false alarm and says nothing. The 10:33 PM cut of the recording on her first audio chunk is gone.
