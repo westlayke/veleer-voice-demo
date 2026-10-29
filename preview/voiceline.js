@@ -288,7 +288,7 @@ async function openAgain(lock) {
   openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null;
     const pf = G.pendingForce; G.pendingForce = null; /* a scripted line the old line never started (forceTick): said again on this one unless the form question covers it */
     const back = lock ? "Line reopened" : "Reconnected", say = (line, why) => { G.justNow = { text: reconnectLine(lock, line) + (fp ? " " + fp.where : ""), at: Date.now() }; act("step", `${back}: ${why}`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${line}`); };
-    if (fp && fp.ask) say(fp.ask, `the app asks the pending question itself (${fp.where})`);
+    if (fp && fp.ask) { if (fp.arm) fp.arm(); say(`${typeof formIntro === "function" ? formIntro() + " " : ""}${fp.ask}`, `the app says where we are and asks the pending question itself (${fp.where})`); } /* "We're on the interaction report for Elon." first: the officer may have been away a while */
     else if (pf) say(pf, "the app says the scripted line the old line never started");
     else { const q = lastQuestion(); say(q.line, q.why); } }); /* no form open: the app still says the whole line, so Ara can't stop after the sorry (9:45 AM call, Oct 29: 12 s of dead air) */
 }

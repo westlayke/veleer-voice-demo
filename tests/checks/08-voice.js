@@ -314,7 +314,7 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   let n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
   let f = await forced(n0), i = await instr(n0);
-  ok(f.some(t => /^Sorry, I lost you for a moment\. Next, Nora's capacity rating, which an opportunity needs\. (A is \$250,000 and up|A to E: which fits Nora)/.test(t)), "the pending optional question wasn't asked again by the app after the reconnect: " + JSON.stringify(f));
+  ok(f.some(t => /^Sorry, I lost you for a moment\. We're on the new contact for Nora\. Next, Nora's capacity rating, which an opportunity needs\. (A is \$250,000 and up|A to E: which fits Nora)/.test(t)), "the pending optional question wasn't asked again by the app after the reconnect: " + JSON.stringify(f));
   ok(/Just now: The connection to the officer dropped[^]*The optional questions for the "New contact" form are at "Capacity rating" \(the earlier ones are done\); the app asks it again itself\./.test(i), "Ara's instructions don't say where the optional questions stand: " + i.slice(-500));
   ok(!(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /Sorry, I lost you/.test(x.response.instructions || ""); }), n0)), "Ara was also asked to say the sorry line herself (a doubled turn)");
   // the read-back waiting for a yes is read again by the app
@@ -324,7 +324,7 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
   f = await forced(n0); i = await instr(n0);
-  ok(f.some(t => /^Sorry, I lost you for a moment\. New contact: Nora Quist, email, nora@example\.org[^]*Save it, or change something\?$/.test(t)), "the read-back wasn't repeated by the app after the reconnect: " + JSON.stringify(f));
+  ok(f.some(t => /^Sorry, I lost you for a moment\. We're on the new contact for Nora\. New contact: Nora Quist, email, nora@example\.org[^]*Save it, or change something\?$/.test(t)), "the read-back wasn't repeated by the app after the reconnect: " + JSON.stringify(f));
   ok(/has been read back in full and is waiting for the officer's yes to save it/.test(i), "Ara's instructions don't say the form is waiting for a yes: " + i.slice(-400));
   // a form with required fields still missing: Ara is guided as before, told what's still needed
   await p.evaluate(() => { V = null; G.saveCheck = null; renderOverlay && renderOverlay(); });
@@ -332,7 +332,7 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
-  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return /Sorry, I lost you for a moment\. (Which entity, and which campaign|When is the planned ask date|Which campaign)/.test(s); }), n0), "a form with required fields missing wasn't asked its first required question after the reconnect");
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return /Sorry, I lost you for a moment\. We're on the add planned ask for \w+\. (Which entity, and which campaign|When is the planned ask date|Which campaign)/.test(s); }), n0), "a form with required fields missing wasn't asked its first required question after the reconnect");
 });
 test("Ara: a task named in full is found even when another task shares a word with it; the hands-free filter lists the saves to check; Ara's own answer isn't taken for a scripted line", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -633,7 +633,7 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; it ke
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   await p.evaluate(() => recent(botName(), "Which entity is the ask for?"));
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1200);
-  const back = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, sorry: __sent.some(s => /Sorry, I lost you for a moment\. (Which entity|When is the planned ask date|Which campaign)/.test(s)) }));
+  const back = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, sorry: __sent.some(s => /Sorry, I lost you for a moment\. We're on the add planned ask for Ruth\. (Which entity|When is the planned ask date|Which campaign)/.test(s)) }));
   ok(back.newLine && back.live && back.sorry, "the dropped line wasn't reopened with the last question and the open form");
   ok(await p.evaluate(() => !!document.getElementById("draftForm")), "the planned ask form closed when the line dropped");
   await p.evaluate(() => { window.speechSynthesis.speak = (u) => { window.__spoke = u.text; }; }); // the phone's built-in speech must never be used (Oct 25: iOS "Stop audio recording?" dialog)

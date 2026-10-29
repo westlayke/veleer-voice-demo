@@ -123,7 +123,7 @@ test("Hands-free: words said while the line was down make Ara ask for them again
   await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the agenda" });
   await p.evaluate(() => { G.spokeInGap = true; window.__ws0 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
   const line = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || ""), now = await p.evaluate(() => (G.justNow || {}).text || "");
-  ok(/Sorry, I lost you for a moment\. When is it due\?/.test(line) && /say that again/.test(now) && /"New task" form still needs/.test(now) && await p.evaluate(() => !!V), "the reconnect didn't re-ask the task's question or keep the form: " + line.slice(0, 300) + " | " + now.slice(0, 300));
+  ok(/Sorry, I lost you for a moment\. We're on the new task for Ruth\. When is it due\?/.test(line) && /say that again/.test(now) && /"New task" form still needs/.test(now) && await p.evaluate(() => !!V), "the reconnect didn't re-ask the task's question or keep the form: " + line.slice(0, 300) + " | " + now.slice(0, 300));
   ok(await p.evaluate(() => !G.spokeInGap), "the missed-words flag stayed on after the line came back");
 });
 
@@ -472,5 +472,28 @@ test("Officer's turn watch (Oct 29): no reply after the officer's words gets the
   await p.waitForTimeout(1200);
   const out = await p.evaluate(() => ({ newLine: __ws !== __ws0, live: G.live, log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "), again: (G.justNow && G.justNow.text) || "" }));
   ok(out.newLine && out.live && /on a slow line \(test request .*: fresh line/.test(out.log) && /Could you say that again\?/.test(out.again), "a slow line 8 s after the officer's words didn't get a fresh line that asks them to say it again: " + JSON.stringify({ newLine: out.newLine, live: out.live, again: out.again, tail: out.log.slice(-700) }));
+});
+
+test("Carverhill's 1:14 PM call (Oct 29): a form with every required field in still has a pending question after a drop, and the reconnect line says where we are first", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.live && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { window.__quietMic = true; });
+  await said(p, "Log an interaction with James Okafor.");
+  await ara(p, "show_interaction_draft", { contact_name: "James Okafor" });
+  await said(p, "In person."); await ara(p, "show_interaction_draft", { contact_name: "James Okafor", date: "2026-10-29", meetingType: "In person" });
+  await said(p, "He's excited about giving to Citizens Alliance."); await ara(p, "show_interaction_draft", { contact_name: "James Okafor", summary: "He's excited about giving to Citizens Alliance." });
+  await said(p, "Yes."); await ara(p, "show_interaction_draft", { contact_name: "James Okafor", substantive: true }); await p.waitForTimeout(300);
+  // the line drops before the next-step question went out: the fresh line says the form and asks the next step itself, never "say that again"
+  await p.evaluate(() => { window.__ws0 = __ws; G.forced = null; G.pendingForce = null; clearTimeout(G.forceTimer); __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1800);
+  const out = await p.evaluate(() => ({ forced: __sent.filter(s => /force_message/.test(s)).map(s => JSON.parse(s).item.content[0].text).pop() || "", told: (G.justNow || {}).text || "", log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | ") }));
+  ok(/^Sorry, I lost you for a moment\. We're on the interaction report for James\. A substantive interaction needs a next step/.test(out.forced) && !/say that again/i.test(out.forced) && /says where we are and asks the pending question itself/.test(out.log), "after the drop the app didn't say where we are and ask the form's next-step question: " + JSON.stringify({ forced: out.forced.slice(0, 200), tail: out.log.slice(-200) }));
+  ok(/needs its next step; the app asks its own next-step question itself/.test(out.told), "Ara wasn't told the form's position: " + out.told.slice(-300));
+  // the next step answered: the read-back follows as usual
+  await said(p, "Yes. Call him Friday about the donation."); const r = await ara(p, "show_interaction_draft", { contact_name: "James Okafor", nextStep: "Call James about the donation", nextDue: "2026-10-30" });
+  ok(/Save it, or change something\?$/.test(r.read_back || r.ask_exactly || ""), "the form didn't go on to its read-back after the next step: " + JSON.stringify(r).slice(0, 300));
+  // a contact form with everything in and the optional details not yet offered: the position is the save-or-optional question
+  await p.evaluate(() => { try { closeOverlay(); } catch (e) {} V = null; });
+  await said(p, "New contact, Jordan Pike, email jpike at example dot com."); await ara(p, "show_contact_draft", { first: "Jordan", last: "Pike", email: "jpike@example.com" }); await p.waitForTimeout(300);
+  const fp = await p.evaluate(() => { V.askedCap = true; V.opt = null; V.askedOptional = false; V.choice = null; return formPosition(); });
+  ok(/^That's everything the new contact form needs for Jordan\. Save it, or add the optional details first\?$/.test(fp.ask), "a complete contact form's position isn't the save-or-optional question: " + JSON.stringify(fp));
 });
 };

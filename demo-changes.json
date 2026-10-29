@@ -2,6 +2,13 @@
  "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
  "changes": [
   {
+   "date": "Oct 29, 1:33 PM",
+   "change": "Preview: when the line comes back with a form open, the app first says where you are (\"We're on the interaction report for Elon.\") and then the form's pending question. A form whose required fields are all in now always has a question (the substantive question, the next-step question, \"Save it, or add the optional details first?\", or the read-back), so the reconnect never falls back to \"Could you say that again?\" with a form open. On the 1:14 PM call that gap let Ara guess at an old question and try to open a second opportunity (which the app refused).",
+   "area": "Voice",
+   "requestedBy": "Carverhill",
+   "why": "Carverhill's 1:14 PM call, Oct 29: \"Ara got into a state where she was creating a duplicate opportunity... when she comes back with 'sorry I lost you for a moment' she needs to repeat what we were working on before she went away\"; \"Go\"."
+  },
+  {
    "date": "Oct 29, 1:08 PM",
    "change": "Preview: when you've spoken and Ara's reply is slow to start, the phone now says \"Ara's taking a moment\" at 4 seconds, tests the line at 8 (a slow line gets a fresh one that asks you to say that again; a healthy one gets a nudge for the reply), and opens a fresh line at 12 seconds whatever happened. Before, that silence had no cover at all in hands-free, because the ladder only ran for the app's own questions. The quiet hang-up goodbye no longer fires while your last words are unanswered.",
    "area": "Voice",

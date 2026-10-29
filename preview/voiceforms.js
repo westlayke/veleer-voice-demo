@@ -387,8 +387,19 @@ function formPosition() {
   if (V.choice === "saveOrOpt") return { where: `Every required field of the "${A.title}" form is in; the app asked whether to save it or add the optional details first, and asks again itself.`, ask: `That's everything the ${formName(A)} form needs. Save it, or add the optional details first?` };
   if (voiceRule(V.action).alwaysAsk === "substantive" && V.askedSubst && !V.fromVoice.has("substantive")) return { where: "The app asked whether the interaction was substantive and is waiting for the answer; it asks again itself.", ask: SUBST_Q };
   const needF = (A.fields || []).filter(f => f.req && !f.fixed && optEmpty(d[f.k])), need = needF.map(f => f.label);
-  return { where: need.length ? `The "${A.title}" form still needs: ${need.join(", ")}; the app asks for the first of those itself.` : `Every required field of the "${A.title}" form is in; nothing has been read back yet.`, ask: need.length ? reqQuestion(V.action, needF, d) : "" };
+  if (need.length) return { where: `The "${A.title}" form still needs: ${need.join(", ")}; the app asks for the first of those itself.`, ask: reqQuestion(V.action, needF, d) };
+  // every required field is in: the form still has a question, the same one the form flow would ask next (1:14 PM call, Oct 29: an empty question here
+  // made the reconnect say "Could you say that again?", and Ara guessed "that" from two forms earlier). One rule for every form.
+  // (arm() puts the form in the state that question implies; only the caller that actually asks it calls arm, the status readers don't)
+  if (voiceRule(V.action).alwaysAsk === "substantive" && !V.fromVoice.has("substantive")) return { where: "The app asks whether the interaction was substantive itself.", ask: SUBST_Q, arm: () => { V.askedSubst = true; } };
+  if (wantsNextStep(V.action, d, V.target) && (optEmpty(d.nextStep) || optEmpty(d.nextDue))) { const follow = awaitingAsk(V.action, d);
+    return { where: `The "${A.title}" form needs its next step; the app asks its own next-step question itself. After the answer, call the draft tool with nextStep and nextDue in the officer's words.`, ask: follow ? FOLLOW_Q(V.target) : NEXT_STEP_Q, arm: () => { if (follow) V.askedFollow = true; else V.askedNext = true; } }; }
+  if (!V.askedOptional && !V.opt && optSteps().length > 1) return { where: `Every required field of the "${A.title}" form is in; the app asks whether to save it or add the optional details first, itself.`, ask: `That's everything the ${formName(A)} form needs for ${optWho()}. Save it, or add the optional details first?`, arm: () => { V.askedOptional = true; V.opt = { done: [] }; V.choice = "saveOrOpt"; } };
+  if (G.hands && !voiceRule(V.action).noVoiceSave) return { where: `Every required field of the "${A.title}" form is in; the app reads it back itself and waits for the officer's yes to save it.`, ask: `${hfReadback()}${saveQ(hfReadback())}`, arm: () => { G.saveCheck = { key, step: "read", n: G.heardN || 0 }; paintCall(); } };
+  return { where: `Every required field of the "${A.title}" form is in; the app says so itself and asks the officer to check the draft and tap "${A.saveLabel}".`, ask: `Everything required is in on the ${formName(A)} form. Check the draft and tap "${A.saveLabel}", or tell me what to change.` };
 }
+// where we are, said before a pending question when the line comes back (Carverhill, 1:14 PM call Oct 29: "she needs to repeat what we were working on")
+function formIntro() { if (!V || !ACTIONS[V.action]) return ""; const A = ACTIONS[V.action], who = V.target && V.target.contact ? V.target.contact.first : V.action === "contact" ? (readDraft().first || "") : ""; return `We're on the ${formName(A)}${who ? " for " + who : ""}.`; }
 // "What fields are left?": the app answers with the list itself, in one scripted line (Jacqueline's call, Oct 27: Ara's answer was vague)
 function fieldsLeft() {
   const A = ACTIONS[V.action], d = readDraft(), fields = (A.fields || []).filter(f => !f.fixed && f.type !== "bool" && !(f.when && !d[f.when]));
