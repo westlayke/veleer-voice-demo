@@ -1158,4 +1158,20 @@ test("Reconnect lines with the officer's name (Oct 28): fetched once from the ke
   const q = await p.evaluate(() => { G.lineEndAt = Date.now() + 1500; G.playHead = 0; const t0 = G.ctx.currentTime; playPcm(new Int16Array(2400)); const d = G.playHead - 0.1 - t0; G.lineEndAt = 0; G.playHead = 0; return d; });
   ok(q > 2.4 && q < 3.2, /* the line's 1.5 s plus the 1 s gap (LINE_GAP_S, Oct 28 10:43 PM) */ "Ara's audio wasn't held until the phone's line had finished: started " + q.toFixed(2) + " s out");
 });
+
+test("Call start (Oct 29): Ara's configuration goes up on the warmed line at the touch, and the tap sends it again only if something changed", async (p) => {
+  // a finger rests on the button before the tap lands (on a phone the mic then takes about a second): the warm-up has time to open
+  await p.tap("text=I'd rather type my name"); await p.waitForTimeout(400); /* the welcome clears an autofilled name 300 ms after it opens; a name typed before that goes with it (the quick signIn helper taps Start before then) */ await p.fill("#wlName", "Sam"); { const b = (await p.$("[data-act4=welcome-ok]")), box = await b.boundingBox(); await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.mouse.down(); await p.waitForTimeout(300); await p.mouse.up(); } await p.waitForTimeout(500);
+  await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }).catch(async () => { throw new Error("no live line: " + JSON.stringify(await p.evaluate(() => ({ status: G.status, live: G.live, name: S.settings.userName, vlog: VLOG.slice(-8) })))); }); await p.waitForTimeout(400);
+  const f = await p.evaluate(() => { const sent = __sent.map(s => { try { return JSON.parse(s); } catch (e) { return {}; } }); const ups = sent.filter(x => x.type === "session.update");
+    return { full: ups.filter(x => x.session && x.session.instructions && x.session.tools).length, instrOnly: ups.filter(x => x.session && x.session.instructions && !x.session.tools).length, extras: ups.filter(x => x.session && (x.session.resumption || x.session.replace)).length,
+      log: ACT.q.map(a => a.text).join(" | "), vlog: VLOG.join(" | "), rules: G.sentRules === rulesKey(), ctx: G.sentCtx === ctxNow() }; });
+  ok(/configuration sent on the warmed line \(5 updates\)/.test(f.vlog) && /Ara's configuration went up on the warmed line \d+ ms before the tap finished/.test(f.log), "the configuration didn't go up on the warmed line: " + f.vlog.slice(0, 600));
+  ok(f.full === 1 && f.extras === 2 && f.instrOnly === 0 && f.rules && f.ctx, "the tap sent the configuration again, or the rules/Right now markers don't match the live call: " + JSON.stringify({ full: f.full, extras: f.extras, instrOnly: f.instrOnly, rules: f.rules, ctx: f.ctx }));
+  // a line opened without a warm-up (a reconnect, a Carry on) still sends the whole configuration itself
+  await p.evaluate(() => { __sent.length = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); });
+  await p.waitForFunction(() => G.live && G.ws === window.__ws && G.status === "Listening" && __sent.some(s => s.includes('"session.update"')), null, { timeout: 9000 }); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => __sent.map(s => { try { return JSON.parse(s); } catch (e) { return {}; } }).filter(x => x.type === "session.update" && x.session && x.session.tools).length === 1), "the fresh line after a drop didn't send the full configuration");
+});
 };
+

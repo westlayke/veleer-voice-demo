@@ -144,6 +144,12 @@ function warmLine() {
   w.tokP.then(token => { if (G.warm !== w || G.live) return; /* the tap already started the call with this pass */
     const ws = w.ws = new WebSocket(P.url(null, token), P.protocols(token)); ws.binaryType = "arraybuffer"; vlog("line warmed on touch");
     ws.onmessage = (m) => w.queued.push(m); ws.onclose = ws.onerror = () => { if (G.warm === w) G.warm = null; };
+    ws.onopen = () => { if (G.warm !== w || G.live || ws.readyState !== 1) return; /* the tap already took the line: openSocket sends the configuration itself */
+      // Ara's whole configuration (about 55 KB) goes up now, while the phone is still opening its mic: the call-start harness (Oct 29) showed
+      // the phone's uplink carrying it was the 1.3 s wait for session.updated, not xAI. Built as the call will start: hands-free on, nothing saved yet.
+      const hands = G.hands, saves = G.saves, name = S.settings.userName, el = document.getElementById("wlName"), typed = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : ""; G.hands = true; G.saves = []; if (typed) S.settings.userName = typed; /* the name being typed on the welcome is the officer's name once Start is tapped */
+      try { const msgs = [{ type: "session.update", session: sessionCfg() }, ...extraUpdates()]; msgs.forEach(m => ws.send(JSON.stringify(m))); w.cfg = { at: Date.now(), n: msgs.length, rules: G.sentRules, ctx: G.sentCtx }; vlog(`configuration sent on the warmed line (${msgs.length} updates)`); }
+      catch (e) { w.cfg = null; } finally { G.hands = hands; G.saves = saves; S.settings.userName = name; } };
     setTimeout(() => { if (G.warm === w && !G.live) { G.warm = null; try { ws.close(); } catch (e) {} vlog("warmed line closed unused"); } }, WARM_MAX_MS); }).catch(() => {});
 }
 function takeWarm() { const w = G.warm; G.warm = null; if (!w) return null; if (w.ws && (w.ws.readyState > 1 || Date.now() - w.at > WARM_MAX_MS)) { try { w.ws.close(); } catch (e) {} w.ws = null; } return w; }
@@ -171,7 +177,12 @@ function openSocket(token, first, second, warm) {
     if (ws.opened) return; ws.opened = true; /* a warmed line that was already open is told once */
     if (G.ws !== ws && !(second && G.tries && G.tries.has(ws))) return;
     if (G.tries) G.tries.forEach(o => { if (o !== ws) { try { o.onclose = null; o.close(); } catch (e) {} } }); G.tries = null; G.ws = ws; G.lockResume = false;
-    sessUpdate(sessionCfg()); sendExtras(); if (G.drops && P.replay) replayRecent(); if (typeof first === "function") first(); else guide(first);
+    if (ws.warmed && warm && warm.cfg) { G.sentRules = warm.cfg.rules; G.sentCtx = warm.cfg.ctx; /* sent at the touch; only what changed since goes again */
+      if (G.sentRules !== rulesKey() || ctxNow() !== G.sentCtx) { vlog("configuration from the warmed line, instructions sent again (" + (G.sentRules !== rulesKey() ? "the rules" : "Right now") + " changed since the touch)"); sessUpdate({ instructions: sentInstructions() }); }
+      else vlog("configuration from the warmed line (" + warm.cfg.n + " updates sent " + (Date.now() - warm.cfg.at) + " ms before the line was taken)");
+      act("step", `Ara's configuration went up on the warmed line ${Date.now() - warm.cfg.at} ms before the tap finished${G.sentRules !== warm.cfg.rules || G.sentCtx !== warm.cfg.ctx ? " (instructions sent again: changed since)" : ""}`); }
+    else { sessUpdate(sessionCfg()); sendExtras(); }
+    if (G.drops && P.replay) replayRecent(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep(); setTimeout(() => prepNamedLines("line open"), 4000);
     if (ws.resumed) { netLog("Picked up the same conversation"); G.resumedAt = Date.now(); G.resumedHeardN = G.heardN || 0; } /* a replayed tool call can only come before the officer's first words on the new line (Oct 29) */
     G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);

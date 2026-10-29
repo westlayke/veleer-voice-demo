@@ -514,15 +514,18 @@ function keyTerms() {
   return [...new Set(all)].slice(0, 100);
 }
 const transcriptionCfg = () => ({ language_hint: "en", keyterms: keyTerms() });
-function sendExtras() {
-  if (!PROV().extras) return; // xAI only: OpenAI has no resumption, pronunciation table or key terms (transcription goes in the session body)
-  send({ type: "session.update", session: { resumption: { enabled: true } } });
-  send({ type: "session.update", session: { replace: SAY_AS } });
-  send({ type: "session.update", session: { audio: Object.assign({}, sessionCfg().audio, { input: Object.assign({}, sessionCfg().audio.input, { transcription: transcriptionCfg() }) }) } });
+function sendExtras() { extraUpdates().forEach(send); }
+function extraUpdates() {
+  if (!PROV().extras) return []; // xAI only: OpenAI has no resumption, pronunciation table or key terms (transcription goes in the session body)
+  const u = [], cfg = sessionCfg();
+  u.push({ type: "session.update", session: { resumption: { enabled: true } } });
+  u.push({ type: "session.update", session: { replace: SAY_AS } });
+  u.push({ type: "session.update", session: { audio: Object.assign({}, cfg.audio, { input: Object.assign({}, cfg.audio.input, { transcription: transcriptionCfg() }) }) } });
   // the officer's words as they speak (conversation.item.input_audio_transcription.updated): its own update, so a refusal keeps the key terms above
-  send({ type: "session.update", session: { audio: Object.assign({}, sessionCfg().audio, { input: Object.assign({}, sessionCfg().audio.input, { transcription: Object.assign({ model: "grok-transcribe" }, transcriptionCfg()) }) }) } });
-  if (quickThinking()) send({ type: "session.update", session: { reasoning: { effort: "none" } } }); /* xAI documents "none" for lower latency; the default is "high" */
-  if (turnTuned()) { vlog("turn detection " + JSON.stringify(turnDetection())); send({ type: "session.update", session: { turn_detection: turnDetection() } }); }
+  u.push({ type: "session.update", session: { audio: Object.assign({}, cfg.audio, { input: Object.assign({}, cfg.audio.input, { transcription: Object.assign({ model: "grok-transcribe" }, transcriptionCfg()) }) }) } });
+  if (quickThinking()) u.push({ type: "session.update", session: { reasoning: { effort: "none" } } }); /* xAI documents "none" for lower latency; the default is "high" */
+  if (turnTuned()) { vlog("turn detection " + JSON.stringify(turnDetection())); u.push({ type: "session.update", session: { turn_detection: turnDetection() } }); }
+  return u;
 }
 // Turn detection: when a silence ends the officer's turn and how loud the mic must be to count as speech. The engine's own defaults,
 // unless the harness sets window.__turn (consistency runs trying settings against car noise, Oct 28: Grok's reply time doubled in a

@@ -334,3 +334,7 @@ Two rules now:
 
 Tested by the Oct 29 check in 09-hands-free.js (a save, a drop, a pickup, a replayed draft call refused, the yes on the new line saving the second form) and the Testing Terry fault "Drop before the yes".
 
+## The configuration goes up at the touch (Oct 29)
+
+The call-start harness (tests/call-start, run 1) showed xAI applies Ara's whole 55 KB configuration about 240 ms after session.created from a datacenter, while the phone waited 1,280 ms for the same five session.updated acks: the phone's uplink carrying the bytes. So the warmed line (opened on the first touch of the button) now sends the configuration the moment it opens, in `warmLine`'s `onopen`: `sessionCfg()` plus `extraUpdates()`, built as the call will start (hands-free on, nothing saved yet, the name being typed on the welcome counted as the officer's name). `w.cfg` keeps the rules and Right now markers that went up. When the tap takes the warmed line, `openSocket`'s `onopen` skips the configuration and sends only `instructions` again if the rules or the Right now section changed between the touch and the tap. A line opened without a warm-up (a reconnect, a Carry on, a resumed conversation) still sends everything itself. Checked by "Call start (Oct 29)" in 08-voice.js.
+
