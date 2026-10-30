@@ -133,6 +133,7 @@ const BOOK = [
   { q: /When was (it|the ask made), and was it in person/i, say: "Today, in person.", tool: (line, ctx) => forForm(ctx, { date: T, meetingType: "In person" }) },
   { q: /email or mobile|email address|What's the email/i, say: "J Pike at gmail dot com.", tool: ["show_contact_draft", { first: "Jordan", last: "Pike", email: "jpike@gmail.com" }] },
   { q: /mobile number/i, say: "No.", tool: ["show_contact_draft", { first: "Jordan", last: "Pike", email: "jpike@gmail.com" }] },
+  { q: /Set \w+'s capacity to .*yes or no\?/i, say: "Yes.", tool: ["set_capacity_rating", { contact_name: C, rating: "C", confirmed: true }] }, // the app's own confirmation of a rating (Oct 30)
   { q: /capacity rating|which fits/i, say: "C.", tool: ["optional_fields", { step: "answer", value: "C" }] },
   { q: /Fill it in, or move on\?|skip it|or move on\?/i, say: "Move on.", tool: ["optional_fields", { step: "skip" }] },
   { q: /What was the (response|answer)/i, say: "He accepted.", tool: (line, ctx) => forForm(ctx, { response: "Accepted" }) },

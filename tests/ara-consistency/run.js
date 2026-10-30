@@ -195,7 +195,7 @@ async function converse(browser, base, flow, n) {
       else if (/substantive/i.test(last) && /\?\s*$/.test(last.trim())) say = flow.subst || "Yes.";
       else if (/^Which one: /i.test(last)) say = last.replace(/^Which one: /i, "").split(/,|\?/)[0].trim() + "."; // the app's two-to-five-way entity question (Oct 29): the first one named
       else if (/\b(save|saving)\b[^.?!]*\?|shall i (save|record)|say yes|is that (right|correct)\?|correct\?|confirm/i.test(last) && !/would you like to (add|fill)/i.test(last)) say = "Yes.";
-      else if (/^rate \w+ [A-E]\b.*\?$/i.test(last)) say = "Yes."; // 1.0 confirms a named rating with its own question ("Rate James B, $100k to $250k?")
+      else if (/^rate \w+ [A-E]\b.*\?$/i.test(last) || /^set \w+'s capacity to [A-E]\b.*yes or no\?$/i.test(last)) say = "Yes."; // the app confirms a named rating with its own question (1.0: "Rate James B, $100k to $250k?"; Oct 30: "Set James's capacity to B, ..., yes or no?")
       else if (/next step|due/i.test(tail) && /\?\s*$/.test(last) && !script.length && stepAnswers++ < 3) say = /when is it due|due date\?$/i.test(last) ? "Today." : /what('s| is| should) the (next )?step/i.test(last) ? "Collect the check from her." : "Yes, collect the check from her, due today."; // 1.0 asks before taking the next step; only when the question itself is about it, and not forever if Ara keeps asking
       else if (/say neither|neither to move on/i.test(whole) && /\?|neither/i.test(last)) say = "Neither.";
       else if (/fill it in,? or move on|or move on\?/i.test(last) && !/^(Let's go with capacity|Add a capacity)/.test(script[0] || "")) { say = "Move on."; saidNo++; }

@@ -47,7 +47,7 @@ test("Ara: a long task list gives counts first, and one person's tasks can be as
 test("Ara: changing a task's status asks first, then saves", async (p) => {
   await signIn(p);
   const ask = await ara(p, "set_task_status", { task: "Pennsylvania update", status: "done", confirmed: false });
-  ok(ask.ok && /^Mark '[^']*Pennsylvania update' for [A-Z][^,]+, due [A-Z][a-z]{2} \d+, as done\?$/.test(ask.ask_exactly || ""), "the question doesn't name the task, the person and the due date: " + JSON.stringify(ask));
+  ok(ask.ok && /^Mark '[^']*Pennsylvania update' for [A-Z][^,]+, due [A-Z][a-z]{2} \d+, as done, yes or no\?$/.test(ask.ask_exactly || ""), "the question doesn't name the task, the person and the due date: " + JSON.stringify(ask));
   ok(!(await state(p)).tasks.find(t => /Pennsylvania/.test(t.text)).done, "saved before the officer said yes");
   const yes = await ara(p, "set_task_status", { task: "Pennsylvania update", status: "done", confirmed: true });
   ok(yes.saved, "not saved after yes");

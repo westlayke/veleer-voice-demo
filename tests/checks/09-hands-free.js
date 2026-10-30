@@ -161,7 +161,7 @@ test("Hands-free: after a save Ara says the undo line once per call, never 'Save
   await said(p, "I'm driving"); await p.waitForTimeout(900);
   const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage !== "Closed"); const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
   const saveTask = async (text) => { await said(p, `Add a task for ${who}: ${text.toLowerCase()}, due November 30.`); await ara(p, "show_task_draft", { contact_name: who, text, due: "2026-11-30" }); await ara(p, "save_form", { confirmed: false }); await said(p, "Yes, save it."); return ara(p, "save_form", { confirmed: true }); };
-  const a0 = await saveTask("Send the board deck"), b0 = await saveTask("Send the agenda"); /* the app saved on the yes and said the line itself; save_form reports it as already said */
+  const a0 = await saveTask("Send the board deck"); await p.evaluate((t) => lineSaid(t), a0.ask_exactly || a0.said || ""); const b0 = await saveTask("Send the agenda"); /* the undo line counts as said once heard with sound (Oct 30): a typed run marks it heard here */ /* the app saved on the yes and said the line itself; save_form reports it as already said */
   const a = Object.assign({}, a0, { ask_exactly: a0.ask_exactly || a0.said }), b = Object.assign({}, b0, { ask_exactly: b0.ask_exactly || b0.said });
   ok(a.saved && /Say undo/.test(a.ask_exactly), "the first save has no undo line: " + JSON.stringify(a));
   ok(b.saved && b.ask_exactly && !/Say undo/.test(b.ask_exactly), "the second save repeats the undo line: " + JSON.stringify(b));

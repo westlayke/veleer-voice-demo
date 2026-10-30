@@ -368,6 +368,39 @@ test("Carverhill's 12:45 PM call (Oct 30): a tool call's reply is never taken fo
   await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t4 + " " }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
   ok(await p.evaluate(() => !G.forced), "the resent scripted line didn't play");
 });
+test("Said means heard (Oct 30): the A to E ranges count as read only once heard with sound; a late copy of an earlier answer doesn't stand the resend down", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const logged = () => p.evaluate(() => ACT.q.map(a => a.text).join(" | "));
+  const ev = (list) => p.evaluate((list) => { list.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }, list);
+  const audio = { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(24000))) }; /* 0.5 s of sound */
+  await p.evaluate(() => { window.__noAutoForce = true; G.audioEver = true; G.rangesSaidAt = 0; SILENT_STILL_MS = 1200; SILENT_RESEND_MS = 3000; });
+  const ranges = await p.evaluate(() => "What's Carver's capacity rating? " + CAP_RANGES);
+  // 1. Carverhill's 4:50 PM call: "No." to the question before is transcribed three times; the ranges arrive as text only after the second copy
+  await said(p, "No."); await p.waitForTimeout(200); await said(p, "No.");
+  await ev([{ type: "response.created", response: { id: "r1" } }, { type: "response.output_audio_transcript.delta", delta: ranges }, { type: "response.done", response: { status: "completed" } }]);
+  await p.waitForTimeout(300); await said(p, "No."); /* the third copy lands after the soundless line */
+  ok(await p.evaluate(() => G.lastHeard && G.lastHeard.repeat === true), "the third copy of \"No.\" wasn't marked as a repeat: " + JSON.stringify(await p.evaluate(() => G.lastHeard)));
+  await p.waitForTimeout(5800);
+  ok(/\(no sound\) Ara's line may not have been heard: no voice audio/.test(await logged()) && !/officer answered after it/.test(await logged()) && /No sound for Ara's line in \d+ s: asked for it again, once/.test(await logged()), "a soundless ranges line after a repeated answer wasn't asked for again: " + (await logged()).slice(-400));
+  ok(await p.evaluate(() => !G.rangesSaidAt && !rangesHeard()), "the ranges were marked as read with no sound (the Oct 30 bug)");
+  ok(/A is \$250,000 and up/.test(await p.evaluate(() => rateQ("Carver"))), "the next rating question is the short form although the ranges were never heard: " + await p.evaluate(() => rateQ("Carver")));
+  // 2. a new answer after the line would have finished stands the resend down
+  await p.evaluate(() => { G.silentAgain = null; G.resend = null; });
+  await ev([{ type: "response.created", response: { id: "r2" } }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }]);
+  await p.waitForTimeout(400); await said(p, "National."); await p.waitForTimeout(5800);
+  ok(/officer answered after it: not asked again/.test(await logged()), "a new answer after the soundless line didn't stand the resend down: " + (await logged()).slice(-300));
+  // 3. the ranges heard with sound: now they count as read, and the next rating question is the short form; after two minutes the list is read again
+  await ev([{ type: "response.created", response: { id: "r3" } }, audio, { type: "response.output_audio_transcript.delta", delta: ranges }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]);
+  await p.waitForFunction(() => G.rangesSaidAt > 0, null, { timeout: 6000 }).catch(() => {}); /* the judgement runs 2 s after the queued sound has played */
+  ok(await p.evaluate(() => G.rangesSaidAt > 0 && rangesHeard()), "the ranges heard with sound weren't marked as read: " + JSON.stringify(await p.evaluate(() => [G.lastLine, G.ctx && G.ctx.state])) + (await logged()).slice(-300));
+  ok(await p.evaluate(() => rateQ("Carver")) === "What's Carver's capacity rating, A to E?", "the rating question after the ranges were heard isn't the short form");
+  ok(/A is \$250,000 and up/.test(await p.evaluate(() => { G.rangesSaidAt = Date.now() - RANGES_HEARD_MS - 1; return rateQ("Carver"); })), "the list isn't read again after two minutes");
+  // 4. the capacity confirmation and the task-status confirmation are yes-or-no decisions
+  await p.evaluate(() => { const c = S.contacts[0]; c.capacity = ""; save(); });
+  const who = await p.evaluate(() => S.contacts[0].first + " " + S.contacts[0].last), first = who.split(" ")[0];
+  await said(p, "Let's give " + first + " a B."); const r = await ara(p, "set_capacity_rating", { contact_name: who, rating: "B", confirmed: false });
+  ok(r.ask_exactly === `Set ${first}'s capacity to B, $100,000 to $250,000, yes or no?`, "the rating confirmation isn't a yes-or-no decision: " + JSON.stringify(r));
+});
 test("Ara: after a reconnect the app says where the form stands and asks the pending question itself (an optional question, or the read-back waiting for a yes)", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await ara(p, "show_contact_draft", { first: "Nora", last: "Quist", email: "nora@example.org", mobile: "(555) 010-0188" });
@@ -922,7 +955,7 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
   ok((r.ok === false || r.already) && (/What's Ruth's capacity rating\? A is \$250,000 and up/.test(r.ask_exactly || "") || (r.already && /already rated/.test(r.ask_exactly || ""))), "an invented rating wasn't turned into the question: " + JSON.stringify(r));
   await said(p, "Let's do C.");
   r = await ara(p, "set_capacity_rating", { contact_name: "Ruth Abernathy", rating: "C", confirmed: false });
-  ok(r.ok && /^Rate Ruth C, \$25,000 to \$100,000\?$/.test(r.ask_exactly || ""), "a rating the officer did say wasn't asked with the letter and the range: " + JSON.stringify(r));
+  ok(r.ok && /^Set Ruth's capacity to C, \$25,000 to \$100,000, yes or no\?$/.test(r.ask_exactly || ""), "a rating the officer did say wasn't confirmed as a yes-or-no decision with the letter and the range (Oct 30): " + JSON.stringify(r));
   // the Cultivation read-back opens with what the decision means
   await p.evaluate(() => { const c = S.contacts.find(x => x.first === "James"); S.opps = S.opps.filter(o => o.contactId !== c.id); c.capacity = "C"; S.opps.unshift({ id: "o_cult", contactId: c.id, name: "Okafor, James - 2026", stage: "Qualification", asks: [], fund: "C.A. Idaho C4", campaign: "Idaho", officer: OFFICER, participants: "", createdOn: todayISO() }); S.interactions.unshift({ id: "i_cult", contactId: c.id, date: todayISO(), type: "In person", summary: "Good talk.", substantive: true, kind: "interaction" }); save(); });
   await said(p, "I'm driving"); await p.waitForTimeout(900); await said(p, "Move James to Cultivation.");
@@ -1289,17 +1322,18 @@ test("Oct 28 11:51 AM call: a repeated letter rates, a yes to Ara's offer opens 
   const c0 = (await state(p)).contacts.find(c => c.first === "Horatio"), name = "Horatio Alger";
   ok(c0 && !c0.capacity, "test contact not added unrated");
   // the first rating question reads the ranges; the officer answers "B" and the service sends the transcript three times as it grows
-  await p.evaluate(() => { G.rangesSaid = false; recent("Ara", "What rating would you give him, A through E?"); });
+  await p.evaluate(() => { G.rangesSaidAt = 0; recent("Ara", "What rating would you give him, A through E?"); });
   const first = await ara(p, "set_capacity_rating", { contact_name: name, rating: "B", confirmed: false });
   ok(/A is \$250,000 and up/.test(first.ask_exactly || ""), "the first rating question didn't read the ranges: " + JSON.stringify(first));
+  await p.evaluate((t) => lineSaid(t), first.ask_exactly); /* the ranges count as read only once heard with sound (Oct 30); a typed run marks them heard here */
   await said(p, "B"); await said(p, "B"); await said(p, "B. B.");
   ok((await p.evaluate(() => officerLines(3))).join("|") === "b. b.", "the growing transcript piled up as several officer lines: " + (await p.evaluate(() => officerLines(3))).join("|"));
   const bb = await ara(p, "set_capacity_rating", { contact_name: name, rating: "B", confirmed: false });
-  ok(/^Rate Horatio B, \$100,000 to \$250,000\?$/.test(bb.ask_exactly || ""), "\"B. B.\" wasn't taken as the officer's rating: " + JSON.stringify(bb));
+  ok(/^Set Horatio's capacity to B, \$100,000 to \$250,000, yes or no\?$/.test(bb.ask_exactly || ""), "\"B. B.\" wasn't taken as the officer's rating: " + JSON.stringify(bb));
   // a bare letter right after Ara's rating question counts too
   await p.evaluate(() => { recent("Ara", "What's Horatio's capacity rating, A to E?"); }); await said(p, "C.");
   const c = await ara(p, "set_capacity_rating", { contact_name: name, rating: "C", confirmed: false });
-  ok(/^Rate Horatio C, \$25,000 to \$100,000\?$/.test(c.ask_exactly || ""), "a bare letter after the rating question wasn't taken: " + JSON.stringify(c));
+  ok(/^Set Horatio's capacity to C, \$25,000 to \$100,000, yes or no\?$/.test(c.ask_exactly || ""), "a bare letter after the rating question wasn't taken: " + JSON.stringify(c));
   // a later rating question is short
   await said(p, "Let's take the next step."); await said(p, "What else is there?"); await said(p, "Go on.");
   const again = await ara(p, "set_capacity_rating", { contact_name: name, rating: "A", confirmed: false });
