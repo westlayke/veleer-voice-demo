@@ -81,7 +81,8 @@ test("Hands-free: a drop right after a save tells Ara it went through, and savin
   ok(r.saved === true, "not saved: " + JSON.stringify(r));
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
   const line = await p.evaluate(() => ((G.justNow || {}).text || "")); /* Oct 29: the app says the sorry line itself; what Ara is told is the Right now text */
-  ok(/Carry on where you were/.test(line) && /The app has just said, in your voice, "Sorry, I lost you for a moment\. /.test(line) && !/went through just before the drop|Saved so far/.test(line), "the reconnect line still rebuilds Ara's memory of the save (Oct 28): " + line.slice(0, 300));
+  ok(/Carry on where you were/.test(line) && /Say "Sorry, I lost you for a moment\." with no other aside, then ask just one question/.test(line) && !/went through just before the drop|Saved so far/.test(line), "the reconnect line still rebuilds Ara's memory of the save (Oct 28): " + line.slice(0, 300)); /* Oct 30: after a save the drop goes to Ara (asked and checked), not to a line of the app's */
+  ok(await p.evaluate(() => ACT.q.some(a => /Reconnected: Ara is asked to say where we were herself \((saved|last line)\)/.test(a.text))), "the drop after the save didn't go to Ara: " + await p.evaluate(() => ACT.q.slice(-4).map(a => a.text).join(" | ")));
   const again = await ara(p, "save_form", { confirmed: true });
   ok(again.saved === true && again.already && /already saved/.test(again.status || again.note || ""), "saving again after the drop didn't say it was already saved: " + JSON.stringify(again));
 });
@@ -716,6 +717,13 @@ test("Carverhill's 10:36 AM call (Oct 30): after a drop with no form open Ara sa
   // 6. Closed Won: the top Needs attention item is recommended, with the yes-or-no question, instead of "what would you like to do next?"
   const cw = await p.evaluate(() => ({ line: nextStepLine(S.contacts[0], true), top: (attentionItems()[0] || {}).say || "", first: S.contacts[0].first }));
   ok(cw.top ? cw.line === `That completes the process for ${cw.first}. Next on your list: ${cw.top}. Do you want to do that now, yes or no?` : /What would you like to do next\?$/.test(cw.line), "Closed Won line: " + JSON.stringify(cw));
+  // 8. the line drops right after the save line, which is still Ara's last line: she is asked to say it herself (the drop-after-save runs, Oct 30: every one took the app's path)
+  await p.evaluate(() => { G.lastSaved.at = Date.now(); G.lastBot = `${G.savedLine}. ${G.lastSaved.nextLine}`; G.lastBotAt = Date.now() - 2000; G.lastHeard = { text: "yes", at: Date.now() - 30000 }; G.staleRbAt = 0; });
+  n0 = (await asks()).length; f0 = (await forcedAll()).length; await p.evaluate(() => { G.forced = null; G.pendingForce = null; clearTimeout(G.forceTimer); __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1800);
+  a = await asks(); ok(a.length === n0 + 1 && new RegExp(`say in one sentence where we were \\(name ${first}\\): .*Then ask this question word for word: "Do you want to do that now, yes or no\\?"`).test(a[n0]) && /Reconnected: Ara is asked to say where we were herself \(last line\)/.test(await log()), "the save line wasn't handed to Ara after the drop: " + JSON.stringify({ asks: a.slice(n0), tail: (await log()).slice(-200) }));
+  ok((await forcedAll()).length === f0, "the app said its save line again itself: " + JSON.stringify((await forcedAll()).slice(f0)));
+  await words(`Sorry, I lost you for a moment. We saved ${first}. ${saved.next}`); await p.waitForTimeout(150);
+  ok(/Ara said where we were on try 1/.test(await log()) && await p.evaluate(() => !G.ctxWatch), "her save line didn't pass: " + (await log()).slice(-200));
   // 7. a bare "what would you like to do?" from Ara is never said again after a drop: where we were is
   await p.evaluate(() => { G.lastSaved.at = Date.now(); G.lastBot = "What would you like to do?"; G.lastBotAt = Date.now() - 2000; G.lastHeard = { text: "ok", at: Date.now() - 30000 }; });
   const q = await p.evaluate(() => lastQuestion()); ok(q.where && q.where.kind === "saved", "the bare question came back after a drop: " + JSON.stringify(q));
