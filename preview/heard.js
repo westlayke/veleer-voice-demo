@@ -6,6 +6,7 @@ const HEARD_WORDS = /\b(are you (still )?there|you (still )?there\?|can you hear
 const OUT_QUIET = 0.003;   // speaker-path level below this while a line plays: the phone produced no sound from it
 const SILENT_JUDGE_MS = 2000; // how long after a line should have ended before it counts as silent (Oct 28 10:03 PM: her sounded copy came 1.4 s after a words-only one)
 const AUDIO_MIN_S = 0.3;   // a spoken line of two words or more has at least this much voice audio
+let SILENT_STILL_MS = 6000, SILENT_RESEND_MS = 13000; /* after the judgement (2 s past the line's end): "Still waiting on Ara" at ~8 s, one resend at ~15 s (Carverhill, Oct 30: wait for the real response, fill the dead space with the recording; on the 12:45 PM call the late sound came 1-16 s after the words) */
 function outLevel() {
   const a = G.outAn; if (!a) return 0;
   const d = new Float32Array(a.fftSize); a.getFloatTimeDomainData(d); let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] * d[i];
@@ -36,14 +37,21 @@ function silentLine(rec) {
   if (G.lastHeard && G.lastHeard.at > rec.at) { act("step", "Ara's line came without sound, but the officer answered: not asked again"); return; }
   if (G.silentAgain && G.silentAgain.text === rec.text) { G.silentAgain = null; act("step", "Ara's line came without sound twice: the line is treated as dead"); reconnect("her line came without sound twice"); return; }
   if (playingLeft() > 0 || G.audioOn) { act("step", "Ara's line came without sound, but her sound is already playing or queued: a false alarm, nothing said"); return; } /* Oct 28 10:03 PM: her sounded copy was on the clock before the judgement, and the recording played over it */
-  G.silentAgain = { text: rec.text, at: Date.now() }; act("step", `Ara's line came without sound: the phone says she's taking a moment, then asks for it again ("${rec.text.slice(0, 60)}")`);
+  G.silentAgain = { text: rec.text, at: Date.now() }; act("step", `Ara's line came without sound: the phone says she's taking a moment and waits for the sound; it asks for the line again only after ${Math.round((SILENT_RESEND_MS + SILENT_JUDGE_MS) / 1000)} s ("${rec.text.slice(0, 60)}")`);
   sayLocal("Ara's taking a moment.", "slow"); G.slowSaid = true;
-  const wait = Math.round(((lineBuf.slow && lineBuf.slow.duration) || 1.6) * 1000) + 300;
-  setTimeout(() => { if (!G.live || (G.lastHeard && G.lastHeard.at > rec.at)) return;
+  const w = { rec, at: Date.now() }; G.silentWait = w;
+  w.still = setTimeout(() => { if (!G.live || G.silentWait !== w || playingLeft() > 0 || G.audioOn) return; sayLocal(STILL_WAIT_TEXT, "", STILL_WAIT_TEXT); }, SILENT_STILL_MS);
+  w.resend = setTimeout(() => { if (!G.live || G.silentWait !== w) return; G.silentWait = null; if (G.lastHeard && G.lastHeard.at > rec.at) return;
     const same = (t) => typeof sameWords === "function" && t && sameWords(t) === sameWords(rec.text);
-    if (G.respSeq !== rec.resp || playingLeft() > 0 || G.audioOn || same(G.forced && G.forced.text) || same(G.pendingForce)) { act("step", "Ara's line is being said again already: the phone's resend stands down"); return; } /* 10:05 AM call: the app's own copy was already on its way */ /* Oct 28 10:03 PM: the real copy arrived while the resend was waiting, and the line played twice */
+    if (G.respSeq !== rec.resp || playingLeft() > 0 || G.audioOn || same(G.forced && G.forced.text) || same(G.pendingForce)) { act("step", "Ara's line is being said again already: the phone's resend stands down"); return; } /* 10:05 AM call: the app's own copy was already on its way */
     const own = rec.text === G.lastForcedText; G.lastBot = ""; /* else the resend is cut as a doubled reply */
-    if (own) forceSay(rec.text); else askReply(`Your last line reached the officer as text only, with no sound. Say it again now, word for word: "${rec.text}"`); }, wait);
+    act("step", `No sound for Ara's line in ${Math.round((Date.now() - rec.at) / 1000)} s: asked for it again, once (a late copy of either telling is cut)`); G.resend = { text: rec.text, at: Date.now(), seq: G.respSeq, resp: 0, firstAudio: 0 };
+    if (own) forceSay(rec.text); else askReply(`Your last line reached the officer as text only, with no sound. Say it again now, word for word: "${rec.text}"`); }, SILENT_RESEND_MS);
+}
+// the sound arrived after all (a sounded copy of the words-only line): the wait ends, nothing is asked again
+function silentSoundArrived(text) {
+  const w = G.silentWait; if (!w || sameWords(w.rec.text) !== sameWords(text)) return;
+  clearTimeout(w.still); clearTimeout(w.resend); G.silentWait = null; G.silentAgain = null; act("step", `The sound for Ara's line arrived ${((Date.now() - w.rec.at) / 1000).toFixed(1)} s after the words: nothing asked again`);
 }
 // the officer asks whether Ara is there: log what the phone knows about her last line, wake the sound if it's paused, and have her say it again
 function heardAsk(text) {

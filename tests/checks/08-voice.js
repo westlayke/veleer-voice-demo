@@ -289,10 +289,10 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   await ara(p, "show_contact_draft", { first: "Pauline", last: "Smith" });
   ok(/The "New contact" form is still open on screen, not saved yet\. Filled in so far: First name: Pauline; Last name: Smith[^\n]*If the officer asks about it, carry on with it/.test(await p.evaluate(() => ctxNow())), "the open form isn't in Right now: " + await p.evaluate(() => ctxNow().replace(/\n/g, " / ").slice(0, 400)));
   // a line with words and no sound, once a line has been heard in the call: "Ara's taking a moment", then the line is asked for again; a second silent copy reconnects (Carverhill, Oct 28)
-  const nS = await p.evaluate(() => { G.audioEver = true; __sent.length = 0; return __sent.length; });
+  const nS = await p.evaluate(() => { G.audioEver = true; __sent.length = 0; SILENT_STILL_MS = 1200; SILENT_RESEND_MS = 3000; return __sent.length; }); /* the real waits are 6 and 13 s past the judgement (Oct 30) */
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
-  await p.waitForTimeout(5000);
-  ok(/came without sound: the phone says she's taking a moment, then asks for it again/.test(await logged()) && await p.evaluate(() => __sent.some(s => /Say it again now, word for word: \\"Which campaign: National, or Idaho\?\\"/.test(s))), "a silent line wasn't asked for again: " + (await logged()).slice(-300));
+  await p.waitForTimeout(6500);
+  ok(/came without sound: the phone says she's taking a moment and waits for the sound; it asks for the line again only after \d+ s/.test(await logged()) && /No sound for Ara's line in \d+ s: asked for it again, once/.test(await logged()) && await p.evaluate(() => __sent.some(s => /Say it again now, word for word: \\"Which campaign: National, or Idaho\?\\"/.test(s))), "a silent line wasn't asked for again after the wait: " + (await logged()).slice(-300));
   // her sound already on the clock when the judgement runs (Oct 28 10:03 PM: the recording played over her sounded copy): a false alarm, no recording, no resend
   await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }, { type: "response.created" }, { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(4800))) }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForTimeout(2600);
@@ -302,11 +302,45 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Pennsylvania?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForTimeout(2600);
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(4800))) }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Pennsylvania?" }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); G.audioSamples = 30000; G.outPeak = 0.2; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
-  await p.waitForTimeout(3000);
-  ok(/resend stands down/.test(await logged()) && await p.evaluate(() => !__sent.some(s => /Pennsylvania/.test(s))), "the resend went out although a reply had started: " + (await logged()).slice(-300));
+  await p.waitForTimeout(3500);
+  ok(/The sound for Ara's line arrived [\d.]+ s after the words: nothing asked again/.test(await logged()) && await p.evaluate(() => !__sent.some(s => /Pennsylvania/.test(s))), "the resend went out although the sound had arrived: " + (await logged()).slice(-300));
   await p.evaluate(() => { G.silentAgain = { text: "Which campaign: National, or Idaho?", at: Date.now() }; window.__wsS = __ws; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForFunction(() => __ws !== __wsS, null, { timeout: 8000 }).catch(() => {});
   ok(/came without sound twice: the line is treated as dead/.test(await logged()) && await p.evaluate(() => __ws !== __wsS), "a second silent copy didn't reconnect: " + (await logged()).slice(-300));
+});
+test("Carverhill's 12:45 PM call (Oct 30): a tool call's reply is never taken for the scripted line; a soundless line waits 15 s for its sound before one resend; a late second telling is cut", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const logged = () => p.evaluate(() => ACT.q.map(a => a.text).join(" | "));
+  const ev = (list) => p.evaluate((list) => { list.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }, list);
+  const audio = { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(24000))) }; /* 0.5 s of sound */
+  await p.evaluate(() => { window.__noAutoForce = true; G.audioEver = true; SILENT_STILL_MS = 1200; SILENT_RESEND_MS = 3000; });
+  // 1. the save line is sent; save_form's own reply (a tool call, no sound) comes first: it is not the scripted line, which still waits and then plays once, no resend
+  const line = "Contact saved for Sylvia. The next step in the process to move Sylvia to Qualification is to create an opportunity. Do you want to do that now, yes or no?";
+  await p.evaluate((line) => forceSay(line), line); await p.waitForTimeout(100);
+  await ev([{ type: "response.created" }, { type: "response.function_call_arguments.done", call_id: "t1", name: "get_process_faq", arguments: JSON.stringify({ question: "what is capacity" }) }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  ok(/A tool call's reply came while the scripted line was still to come: not taken for it/.test(await logged()) && await p.evaluate(() => G.forced && !G.forced.started), "the tool call's reply was taken for the scripted line: " + (await logged()).slice(-300));
+  ok(await p.evaluate((line) => !(G.lastLine && G.lastLine.text === line), line), "the unplayed scripted line was recorded as said");
+  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: line }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(3000);
+  ok(/Scripted line played/.test(await logged()) && await p.evaluate(() => !G.forced) && !/came without sound/.test(await logged()), "the scripted line didn't play once, cleanly: " + (await logged()).slice(-300));
+  ok(await p.evaluate(() => __sent.filter(s => /force_message/.test(s) && /Contact saved for Sylvia/.test(s)).length === 1), "the save line was sent more than once");
+  // 2. a words-only line whose sound arrives 4 s later as a response of its own: the phone fills the wait, the sound ends it, nothing is asked again, heard once
+  const t2 = "Sylvia is now in Cultivation. The next step in the process to move Sylvia to Ask Planning is to add a planned ask. Do you want to do that now, yes or no?";
+  await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; });
+  await ev([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: t2 }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(2600);
+  ok(/came without sound: the phone says she's taking a moment and waits for the sound/.test(await logged()) && await p.evaluate(() => !!G.silentWait), "the wait didn't start: " + (await logged()).slice(-200));
+  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t2 }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(3500);
+  ok(/arrived again, this time with sound/.test(await logged()) && /The sound for Ara's line arrived [\d.]+ s after the words: nothing asked again/.test(await logged()) && await p.evaluate(() => !G.silentWait && !__sent.some(s => /Say it again now/.test(s))), "the late sound didn't end the wait: " + (await logged()).slice(-300));
+  // 3. no sound at all: one resend after the wait; the first telling with sound plays, the second telling is cut before it plays
+  const t3 = "Planned ask saved for Sylvia. The next step in the process to move Sylvia to Ask Made is to record the ask. Do you want to do that now, yes or no?";
+  await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; G.lastForcedText = ""; });
+  await ev([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: t3 }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(6000);
+  ok(/No sound for Ara's line in \d+ s: asked for it again, once/.test(await logged()) && await p.evaluate(() => __sent.some(s => /Say it again now, word for word/.test(s)) && !!G.resend), "no resend after the wait: " + (await logged()).slice(-300));
+  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t3 }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  const n1 = await p.evaluate(() => __sent.filter(s => /response\.cancel/.test(s)).length);
+  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t3 }]); await p.waitForTimeout(200);
+  ok(/Late copy cut: the line was already heard with sound after the phone asked for it again/.test(await logged()) && await p.evaluate((n1) => __sent.filter(s => /response\.cancel/.test(s)).length === n1 + 1 && G.dropNext, n1), "the second telling wasn't cut: " + (await logged()).slice(-300));
+  await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
+  ok(await p.evaluate(() => !G.resend && !G.dropNext), "the cut didn't clear");
 });
 test("Ara: after a reconnect the app says where the form stands and asks the pending question itself (an optional question, or the read-back waiting for a yes)", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);

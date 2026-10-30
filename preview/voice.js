@@ -723,7 +723,7 @@ function endCall(why) {
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
-  vlog("=== conversation ended"); if (!/^interrupted/.test(why || "")) dropResume(); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "") + syncSummary()); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; G.lastBot = ""; G.lastBotAt = 0; G.unheard = null; G.unheardResp = 0; clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
+  vlog("=== conversation ended"); if (!/^interrupted/.test(why || "")) dropResume(); if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "") + syncSummary()); G.session = null; } G.ws = G.stream = G.ctx = G.node = null; G.buf = []; G.audioOn = false; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.drops = 0; G.lastMsg = 0; G.retriedAt = 0; G.dropNext = false; G.speechSince = 0; G.probing = false; G.stalled = false; G.spokeInGap = false; G.undoSaid = false; G.forced = null; G.lateForced = null; G.lastBot = ""; G.lastBotAt = 0; G.unheard = null; G.unheardResp = 0; G.resend = null; if (G.silentWait) { clearTimeout(G.silentWait.still); clearTimeout(G.silentWait.resend); G.silentWait = null; } clearTimeout(G.forceTimer); G.soundPausedAt = 0; G.micMutedAt = 0; G.hiddenAt = 0; G.lockPaused = 0; G.lockResume = false; G.saveAck = null; G.idleAt = 0; clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.pingTick);
   paintCall(); render();
   // a form left open gets its voice button back, keeping what was filled in
   if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
@@ -858,7 +858,8 @@ function onEvent(e) {
     if (typeof heardAsk === "function" && heardAsk(e.transcript)) guide("The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."); }
   if (G.forced) forcedEvent(t, e);
   if (t === "response.done" && G.bot && G.unheardResp === G.respSeq) G.unheard = G.bot; /* said into a paused sound engine: said again when it is back */
-  if (t === "response.done" && G.bot && soundedCopy(G.bot)) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("step", `Ara's line arrived again, this time with sound (${((G.audioSamples || 0) / 24000).toFixed(1)} s): the officer hears it once`); if (typeof lineHeard === "function") lineHeard(G.bot); } /* real Ara run, Oct 29: 13 "said twice" rows were a words-only response followed by its sounded copy */
+  if (t === "response.done" && G.resend && G.respSeq === G.resend.resp) G.resend.firstAudio = G.audioSamples || 0; /* how much sound the first telling after the resend had: a second telling is cut only if the first was heard */
+  if (t === "response.done" && G.bot && soundedCopy(G.bot)) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("step", `Ara's line arrived again, this time with sound (${((G.audioSamples || 0) / 24000).toFixed(1)} s): the officer hears it once`); if (typeof silentSoundArrived === "function") silentSoundArrived(G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); } /* real Ara run, Oct 29: 13 "said twice" rows were a words-only response followed by its sounded copy */
   else if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { contextCheck(e.response || {}); toolCheck(e.response || {}); replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } truncateSpoken(); stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall();
@@ -870,7 +871,7 @@ function onEvent(e) {
     G.retriedAt = 0; vlog("doubled reply: cancelled"); act("step", "Grok started a second answer to the same ask; cut it off"); send({ type: "response.cancel" }); G.dropNext = true; return; }
   else if (t === "response.created") { G.createAt = 0; G.slowSaid = false; if (G.dropIdle) { if (Date.now() - G.dropIdle < 5000 && !G.asked && !G.qCreate) { G.dropNext = true; send({ type: "response.cancel" }); act("step", "The voice service's own check-in after its idle timer: dropped"); } G.dropIdle = 0; } G.respSeq = (G.respSeq || 0) + 1; G.respAudio = { itemId: null, t0: null, end: 0 }; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.respAsked = G.asked; G.asked = false; G.respTool = false; G.respItems = []; G.bot = ""; G.responding = true; G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
   else if (/audio\.delta$/.test(t) && (e.delta || e.pcm)) { if (G.muteResp === G.respSeq) { /* a cut late copy: its audio is dropped, not played */ } else if (e.pcm) playPcm(e.pcm); else playChunk(e.delta); const paused = !G.ctx || G.ctx.state !== "running"; if (paused) G.unheardResp = G.respSeq; const want = paused ? "Ara is talking, but the phone's sound is paused" : "Speaking"; if (G.status !== want) { G.status = want; paintCall(); if (paused && !G.noSoundSaid) { G.noSoundSaid = true; act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } } if (!paused) G.noSoundSaid = false; }
-  else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); lateForcedCheck(); }
+  else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); lateForcedCheck(); resendCheck(); }
   else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
@@ -902,6 +903,19 @@ function lateForcedCheck() {
   if (!(lf.firstAudio > 12000)) { G.lateForced = null; vlog("scripted line played late, but the first telling had no sound: let it play"); return; } // the officer may not have heard the first one (Oct 25)
   G.lateForced = null; vlog("scripted line played late: duplicate cut"); act("step", "Scripted line played late after Ara said it: cut the repeat");
   send({ type: "response.cancel" }); stopResp(G.respSeq); G.dropNext = true;
+}
+// after the phone asked for a soundless line again, two tellings can arrive (the late sound of the first, and the answer to the ask): the first one heard
+// with sound plays, the other is cut before it plays (Carverhill's 12:45 PM call, Oct 30: two save lines heard twice, 6 and 4 s apart)
+function resendCheck() {
+  const r = G.resend; if (!r) return;
+  if (Date.now() - r.at > LATE_FORCE_MS / 3) { G.resend = null; return; }
+  if (G.respSeq === r.seq) return; /* the words-only response itself */
+  const said = sameWords(G.bot), want = sameWords(r.text);
+  if (said.length < 12 || !want.startsWith(said.slice(0, 40))) return;
+  if (!r.resp) { r.resp = G.respSeq; return; } /* the first telling after the ask plays, whichever it is */
+  if (r.resp === G.respSeq) return;
+  if (!(r.firstAudio / 24000 >= AUDIO_MIN_S)) { G.resend = null; vlog("the line came again, but the first telling had no sound: let it play"); return; }
+  G.resend = null; act("step", "Late copy cut: the line was already heard with sound after the phone asked for it again"); send({ type: "response.cancel" }); stopResp(G.respSeq); G.dropNext = true;
 }
 function sentInstructions() { G.sentRules = rulesKey(); G.sentCtx = ctxNow(); return grokInstructions(); }
 const playingLeft = () => G.ctx && G.playHead > G.ctx.currentTime + 0.05 ? G.playHead - G.ctx.currentTime : 0;

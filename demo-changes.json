@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 1:10 PM",
+      "change": "Preview: a save line is no longer heard twice. A tool call's reply is never taken for the app's scripted line; a line that arrives as words without sound gets \"Ara's taking a moment\" at 2 s and \"Still waiting on Ara\" at 8 s, and is asked for again only after 15 s; when the sound arrives late nothing is asked again, and a second telling after a resend is cut before it plays. Patient Pat now throws late-arriving sound.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 12:58 PM: \"I am hearing Ara's voice confirming things twice with similar language when only 1 time is necessary\"; 1:02 PM: \"let's just wait for the real response from Ara and fill the dead space with our 'Ara is taking a moment' recording\"; 1:02 PM: Build"
+    },
+    {
       "date": "Oct 30, 11:39 AM",
       "change": "Preview: after a dropped line with no form open Ara herself says where we were (the last save and its next step, or the contact on screen) and asks the pending question; the app checks her reply, asks again up to three times, then says its own line. A late yes after a save gets \"that was already saved\" and the next step, not \"what's next\". Closed Won recommends the top Needs attention item. Setting reconnectBy \"app\" keeps the app's scripted line; Patient Pat measures both ways.",
       "area": "Voice",
