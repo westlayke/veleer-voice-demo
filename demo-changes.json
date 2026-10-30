@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 1:22 PM",
+      "change": "Preview: every scripted line the app sends to Ara carries its own id, and the ids xAI returns for it (the item it added, the reply, the reply's item, the audio's item) are written to the activity log with whether our id came back. If xAI refuses a line with an id, the app sends it again without one and stops adding ids for that call. Nothing else changes; this is to learn whether words and sound can be matched by id instead of by their text.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 2:40 PM: \"can we get Ara to append a unique, matching id onto each combination of words returned to us and audio returned to us so we don't have to parse the actual text\"; 3:10 PM: \"Can you try to read xai documentation first\" (the docs promise a shared response id per reply, no client item id echo; this build measures it)"
+    },
+    {
       "date": "Oct 30, 1:10 PM",
       "change": "Preview: a save line is no longer heard twice. A tool call's reply is never taken for the app's scripted line; a line that arrives as words without sound gets \"Ara's taking a moment\" at 2 s and \"Still waiting on Ara\" at 8 s, and is asked for again only after 15 s; when the sound arrives late nothing is asked again, and a second telling after a resend is cut before it plays. Patient Pat now throws late-arriving sound.",
       "area": "Voice",

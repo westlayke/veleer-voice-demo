@@ -323,6 +323,15 @@ test("Carverhill's 12:45 PM call (Oct 30): a tool call's reply is never taken fo
   await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: line }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(3000);
   ok(/Scripted line played/.test(await logged()) && await p.evaluate(() => !G.forced) && !/came without sound/.test(await logged()), "the scripted line didn't play once, cleanly: " + (await logged()).slice(-300));
   ok(await p.evaluate(() => __sent.filter(s => /force_message/.test(s) && /Contact saved for Sylvia/.test(s)).length === 1), "the save line was sent more than once");
+  // the scripted line carries our own item id, and the ids xAI returns are logged, so a call shows whether the id comes back (Carverhill, Oct 30)
+  ok(await p.evaluate(() => __sent.some(s => { try { const e = JSON.parse(s); return e.item && e.item.type === "force_message" && /^force_[a-z0-9]+$/.test(e.item.id || ""); } catch (x) { return false; } })), "the scripted line has no item id of ours");
+  ok(/Scripted line ids: sent force_[a-z0-9]+; item added none; reply none, item none, audio item none; our id echoed: no/.test(await logged()), "the ids weren't logged: " + (await logged()).slice(-300));
+  // a service that refuses an item with our id: the line goes again without one, and ids stay off for the call
+  await p.evaluate(() => { __sent.length = 0; forceSay("Which campaign: National, or Idaho?"); }); await p.waitForTimeout(50);
+  await ev([{ type: "error", error: { code: "invalid_request", message: "unknown field id" } }]); await p.waitForTimeout(100);
+  ok(/Scripted line with our own id refused \(unknown field id\): sent again without an id/.test(await logged()) && await p.evaluate(() => G.forceIdOff && G.forced && !G.forced.id && __sent.filter(s => /force_message/.test(s)).length === 2 && !/"id":"force_/.test(__sent[__sent.length - 1])), "a refused id didn't fall back to a plain scripted line: " + (await logged()).slice(-200));
+  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !G.forced), "the plain scripted line didn't play");
   // 2. a words-only line whose sound arrives 4 s later as a response of its own: the phone fills the wait, the sound ends it, nothing is asked again, heard once
   const t2 = "Sylvia is now in Cultivation. The next step in the process to move Sylvia to Ask Planning is to add a planned ask. Do you want to do that now, yes or no?";
   await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; });
