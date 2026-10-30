@@ -23,6 +23,9 @@ on:
       reconnect:
         description: "Who says where we were after a drop: ara (checked by the app) or app (scripted line)"
         default: "ara"
+      drop_after_save:
+        description: "Share of saves followed by a dropped line 2.5-5.5 s later (0 = none; 0.5 = half), the 10:36 AM call's case"
+        default: "0"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -52,6 +55,7 @@ jobs:
           SEED: ${{ matrix.seed }}
           MAX_MIN: ${{ inputs.max_minutes }}
           RECONNECT: ${{ inputs.reconnect }}
+          DROP_AFTER_SAVE: ${{ inputs.drop_after_save }}
         run: MAX_MS=$(( ${MAX_MIN:-30} * 60000 )) node tests/patience/run.js
       - name: Report (in the log, since artifacts can't be fetched from the cloud session; the summary last, so a tail of the log has it)
         if: always()
