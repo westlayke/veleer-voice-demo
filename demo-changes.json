@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 4:03 PM",
+      "change": "Preview: the follow-up task suggestion for an ask still awaiting its answer is a yes-or-no decision: \"I suggest 'Follow up with X to get an answer on the ask', due in 14 days, on <date>. Shall I use that, yes or no?\" A short answer that isn't a no counts as yes (the rule the other app questions use), so \"Use that\" fills the task; a no gets one question, \"What should the task say, and when is it due?\", and the officer's words replace the suggestion. The reconnect line after a drop asks whichever question is pending.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 3:22 PM: on his 3:12 PM call Ara didn't say to answer yes or no; he said \"Use that\", which wasn't taken as a yes, and the question was asked three times until he said \"Yes\". 3:57 PM: phrase it as a yes-or-no decision so all user choices are yes-or-no decisions. Build 4:01 PM."
+    },
+    {
       "date": "Oct 30, 3:37 PM",
       "change": "Preview: one quiet clock for the phone's status recordings. Whenever the app is waiting on anything (the line, a scripted line, a reply, Ara's sound) and nothing has sounded for 5 s, the phone plays one short recording (the still-trying lines while the line is down; otherwise \"Ara's taking a moment\" first, then \"Still waiting on Ara\", \"Still here. Hang on.\", \"Ara's line is slow. Hang on.\" in turn). Until now the recordings came from four separate timers with gaps of 10 s and more between them.",
       "area": "Voice",

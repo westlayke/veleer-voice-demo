@@ -1253,8 +1253,8 @@ test("Awaiting answer (Oct 28): Ara explains the follow-up task is required and 
   await said(p, `Let's record the ask for ${name}. It was in person yesterday. He's going to think about it.`);
   let r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-27", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it." });
   const want = `Follow up with ${first} to get an answer on the ask`;
-  ok(r.field === "nextStep" && (r.ask_exactly || "").includes(`needs a follow-up task, which becomes a Task for you. I suggest "${want}", due in 14 days, on Nov 10. Shall I use that, or do you want different words?`) && /nextDue 2026-11-10/.test(r.next || ""), "the app didn't ask the follow-up question with the suggested words: " + JSON.stringify(r));
-  await said(p, "Yes, use that.");
+  ok(r.field === "nextStep" && (r.ask_exactly || "").includes(`needs a follow-up task, which becomes a Task for you. I suggest "${want}", due in 14 days, on Nov 10. Shall I use that, yes or no?`) && /nextDue 2026-11-10/.test(r.next || ""), "the app didn't ask the follow-up question as a yes-or-no decision: " + JSON.stringify(r));
+  await said(p, "Use that."); /* Carverhill's 3:12 PM call (Oct 30): "Use that" looped three times, it wasn't in the yes words */
   r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-27", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextStep: want, nextDue: "2026-11-10" });
   let d = await p.evaluate(() => V.data);
   ok(d.nextStep === want && d.nextDue === "2026-11-10" && !r.still_needed, "the officer's yes didn't keep the suggested task (the evidence rule dropped Ara's words?): " + JSON.stringify({ nextStep: d.nextStep, nextDue: d.nextDue, still: r.still_needed }));
@@ -1262,11 +1262,23 @@ test("Awaiting answer (Oct 28): Ara explains the follow-up task is required and 
   await p.evaluate(() => { V = null; G.recent = []; G.hands = true; renderOverlay(); });
   await said(p, `Record the ask for ${name}, in person yesterday, awaiting his answer, he'll talk to his wife.`);
   r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-27", meetingType: "In person", response: "Awaiting", summary: "He'll talk to his wife." });
-  ok(r.field === "nextStep" && /needs a follow-up task, which becomes a Task for you\. I suggest "Follow up with \w+ to get an answer on the ask", due in 14 days, on Nov 10\. Shall I use that, or do you want different words\?$/.test(r.ask_exactly || ""), "hands-free didn't ask with the suggestion: " + JSON.stringify(r));
-  await said(p, "Yes.");
+  ok(r.field === "nextStep" && /needs a follow-up task, which becomes a Task for you\. I suggest "Follow up with \w+ to get an answer on the ask", due in 14 days, on Nov 10\. Shall I use that, yes or no\?$/.test(r.ask_exactly || ""), "hands-free didn't ask with the suggestion: " + JSON.stringify(r));
+  await said(p, "Sounds fine.");
   r = await ara(p, "save_form", { confirmed: false });
   d = await p.evaluate(() => V.data);
-  ok(d.nextStep === want && d.nextDue === "2026-11-10" && /next step, Follow up with/.test(r.ask_exactly || r.read_back || ""), "a bare yes didn't fill the suggested task before the read-back: " + JSON.stringify({ nextStep: d.nextStep, r }));
+  ok(d.nextStep === want && d.nextDue === "2026-11-10" && /next step, Follow up with/.test(r.ask_exactly || r.read_back || ""), "a short yes in other words didn't fill the suggested task before the read-back: " + JSON.stringify({ nextStep: d.nextStep, r }));
+  // a no gets one question for the officer's own words, and after a drop the reconnect line asks that same question
+  await p.evaluate(() => { V = null; G.recent = []; renderOverlay(); });
+  await said(p, `Record the ask for ${name}, in person yesterday, awaiting his answer.`);
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-27", meetingType: "In person", response: "Awaiting", summary: "Awaiting." });
+  ok(/Shall I use that, yes or no\?$/.test(r.ask_exactly || ""), "the suggestion wasn't asked again on a new form: " + JSON.stringify(r));
+  await said(p, "No.");
+  r = await ara(p, "save_form", { confirmed: false });
+  ok(r.ask_exactly === "What should the task say, and when is it due?" && await p.evaluate(() => V.askedFollow === "own" && formPosition().ask === "What should the task say, and when is it due?"), "a no to the suggestion didn't get the own-words question (and the reconnect line with it): " + JSON.stringify([r.ask_exactly, await p.evaluate(() => [V.askedFollow, formPosition().ask])]));
+  await said(p, "Call him Tuesday about the ask, due November third.");
+  r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-27", meetingType: "In person", response: "Awaiting", summary: "Awaiting.", nextStep: "Call him Tuesday about the ask", nextDue: "2026-11-03" });
+  d = await p.evaluate(() => V.data);
+  ok(d.nextStep === "Call him Tuesday about the ask" && d.nextDue === "2026-11-03" && !/task say/.test(r.ask_exactly || ""), "the officer's own task words after a no weren't kept: " + JSON.stringify({ nextStep: d.nextStep, nextDue: d.nextDue, r }));
 });
 // Carverhill's Oct 28 11:51 AM call: "B. B." refused as a rating, his yes to Ara's own opportunity offer refused, a saved rating re-asked after a reconnect, the A to E ranges read twice
 test("Oct 28 11:51 AM call: a repeated letter rates, a yes to Ara's offer opens the form, a saved rating isn't re-asked, the ranges are read once", async (p) => {
