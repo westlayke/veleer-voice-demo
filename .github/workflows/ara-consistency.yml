@@ -38,6 +38,12 @@ on:
       faults:
         description: "Cellular drops and quiet mics at Patient Pat's rates times this (0 = none, 1 = the driveway: a drop every 40 turns, a third of them dead spots of 10-70 s, a quiet mic every 40 turns)"
         default: "0"
+      soundless:
+        description: "Share of Ara's replies that reach the app as words with no sound while a scripted line is pending (half that for her other replies); on half of them the sound comes 4-20 s later (Carverhill's 12:45 PM call, Oct 30). 0 = none"
+        default: "0"
+      drop_after_save:
+        description: "Share of saves followed 2.5-5.5 s later by a drop, so Ara has to say where we were (Carverhill's 10:36 AM call, Oct 30). 0 = none"
+        default: "0"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -84,6 +90,8 @@ jobs:
           TURN: ${{ inputs.turn }}
           MIC_HP: ${{ inputs.mic_hp }}
           FAULTS: ${{ inputs.faults }}
+          SOUNDLESS: ${{ inputs.soundless }}
+          DROP_AFTER_SAVE: ${{ inputs.drop_after_save }}
         run: node tests/ara-consistency/run.js
       - uses: actions/upload-artifact@v4 # spoken runs: the sound clips on their own (one conversation per flow, officer + Ara + noise, with transcripts), to download from the run page and listen to
         if: always() && inputs.spoken == '1'

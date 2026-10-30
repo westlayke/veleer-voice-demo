@@ -23,6 +23,10 @@ const TURN = process.env.TURN ? JSON.parse(process.env.TURN) : null, MIC_HP = Nu
 // 10-70 s, a plain drop 0.3-3 s. Seeded per conversation, so a rerun of the same run gets the same drops.
 // A quiet mic (Carverhill: "we should be able to simulate mic going quiet"): the officer's line plays into the microphone at no volume, as when the
 // phone mutes the mic in a dead spot or behind a dialog; the officer waits 4-10 s for an answer, then says the line again out loud.
+// SOUNDLESS=<rate> (Oct 30, Carverhill: "run 10 real Ara calls where you simulate the fault / try the technique"): that share of Ara's replies while a scripted line is pending
+// (and half that share of her other replies) reach the app as words with no sound, as in his 12:45 PM call; on half of those the sound (a copy of the whole reply, with its words) arrives 4-20 s later.
+// DROP_AFTER_SAVE=<rate>: that share of saves is followed 2.5-5.5 s later by a drop (his 10:36 AM call), so Ara has to say where we were.
+const SOUNDLESS = Number(process.env.SOUNDLESS || 0), DROP_AFTER_SAVE = Number(process.env.DROP_AFTER_SAVE || 0);
 const FAULTS = Number(process.env.FAULTS || 0), FAULT_RATES = { drop: 0.025 /* per turn */, deadspot: 0.35 /* of drops */, quietMic: 0.025 /* per turn */ };
 const RECORD = SPOKEN ? Number(process.env.RECORD == null ? 1 : process.env.RECORD) : 0; // spoken runs: keep the first RECORD conversations of each flow as a sound clip (officer, Ara, noise) with a transcript, to listen to end to end
 const { execFileSync } = require("child_process");
@@ -104,7 +108,7 @@ async function converse(browser, base, flow, n) {
       if (e.type === "response.create" && e.response && e.response.instructions) { conv.lastGuide = e.response.instructions; const m = e.response.instructions.match(/Left out of the form because the officer never said it: ([^.]*)/); if (m) (conv.leftOut = conv.leftOut || []).push(m[1]); }
   };
   const onGot = (e) => { lastFrame = Date.now();
-      if (/audio\.delta$/.test(e.type)) { if (conv.askedAt) { (conv.firstMs = conv.firstMs || []).push(Date.now() - conv.askedAt); conv.askedAt = 0; } return; } /* first sound of the reply, from the officer's words going out: the engine's own latency */
+      if (/audio\.delta$/.test(e.type)) { if (cur) cur.audioN = (cur.audioN || 0) + 1; if (conv.askedAt) { (conv.firstMs = conv.firstMs || []).push(Date.now() - conv.askedAt); conv.askedAt = 0; } return; } /* first sound of the reply, from the officer's words going out: the engine's own latency */
       if (e.type === "response.created") cur = { text: "", at: Date.now(), turn: conv.turns.length, forced: sentForced.length ? sentForced[sentForced.length - 1] : null, forcedN: sentForced.length };
       else if (/transcript\.delta$/.test(e.type) && !/input_audio/.test(e.type) && cur) { (conv.kinds = conv.kinds || {})[e.type] = 1; if (!cur.kind) cur.kind = e.type; if (cur.kind === e.type) cur.text += e.delta || ""; }
       else if (e.type === "response.function_call_arguments.done") { let a = {}; try { a = JSON.parse(e.arguments || "{}"); } catch (x) {} conv.tools.push({ name: e.name, args: a, turn: conv.turns.length, at: Date.now() }); if (cur) cur.tool = true; }
@@ -117,7 +121,7 @@ async function converse(browser, base, flow, n) {
   try {
     await p.goto(base + "preview-flow.html"); await p.waitForTimeout(800);
     await p.tap("text=I'd rather type my name"); await p.fill("#wlName", "Dana"); await p.tap("text=Start"); await p.waitForTimeout(600);
-    await p.evaluate(({ prov, spoken, noise, turn, micHp }) => { window.__provider = prov; if (turn) window.__turn = turn; if (micHp) window.__micHp = micHp;
+    await p.evaluate(({ prov, spoken, noise, turn, micHp, plan }) => { window.__provider = prov; if (turn) window.__turn = turn; if (micHp) window.__micHp = micHp;
       if (spoken) { // the microphone is a stream this script plays the officer's lines into (plus a steady noise), through the app's own capture path
         const mctx = new AudioContext({ sampleRate: 24000 }), dst = mctx.createMediaStreamDestination();
         if (noise > 0) { const n = mctx.createBuffer(1, 24000 * 4, 24000), d = n.getChannelData(0); let last = 0, sq = 0; for (let i = 0; i < d.length; i++) { last = 0.97 * last + 0.03 * (Math.random() * 2 - 1); d[i] = last; sq += last * last; }
@@ -135,6 +139,17 @@ async function converse(browser, base, flow, n) {
       const tapSend = (proto) => { const real = proto.send; proto.send = function (d) { try { const t = String(d); if (!t.includes('"input_audio_buffer.append"') && !t.includes('"realtimeInput"')) window.__tap("sent", t); } catch (x) {} return real.call(this, d); }; };
       tapSend(WebSocket.prototype); if (typeof GeminiSocket !== "undefined") tapSend(GeminiSocket.prototype); // what the app sends, as app events (Gemini's raw frames carry no type and are ignored by the tap)
       const realOn = onEvent; onEvent = function (e) { try { if (window.__ara && (e.type === "response.created" || /audio\.delta$/.test(e.type) && e.delta)) window.__ara.push([Date.now(), e.type === "response.created" ? null : e.delta]); window.__tap("got", /audio\.delta$/.test(e.type) ? '{"type":"audio.delta"}' : JSON.stringify(e)); } catch (x) {} return realOn.apply(this, arguments); };
+      if (plan) { // SOUNDLESS: a reply reaches the app as words only; its sound comes later as a whole copy, or never (the app has to ask for it)
+        window.__soundless = []; let mute = null, drawn = 0;
+        const prevOn = onEvent; onEvent = function (e) {
+          if (e && !e.__copy) {
+            if (e.type === "response.created") { const forced = !!(G.forced || G.pendingForce); const d = plan.draw[drawn++]; mute = d != null && d < (forced ? plan.rate : plan.rate / 2) ? { id: e.response && e.response.id, forced, events: [], text: "", at: Date.now(), late: plan.late[drawn % plan.late.length], delay: plan.delay[drawn % plan.delay.length], audioN: 0 } : null; if (mute) window.__soundless.push(mute); }
+            if (mute) { mute.events.push(e); if (/audio_transcript\.delta$/.test(e.type)) mute.text += e.delta || ""; if (/audio\.delta$/.test(e.type)) { mute.audioN++; return; } /* the sound is withheld */
+              if (e.type === "response.done") { const m = mute; mute = null; m.doneAt = Date.now(); if (!m.audioN) { m.late = false; m.skipped = true; } /* a reply with no sound of its own (a tool call) is nothing to withhold */
+                else if (m.late) setTimeout(() => { m.copyAt = Date.now(); m.events.forEach(x => { const c = Object.assign({}, x, { __copy: true }); onEvent(c); }); }, m.delay); } }
+          }
+          return prevOn.apply(this, arguments); };
+      }
       S.settings.speed = spoken ? 1 : 1.3; S.settings.provider = window.__provider; save(); // typed runs: Ara talks faster (her words are the same) so each conversation costs less line time; spoken runs keep her normal speed, so the clips sound as the officer would hear them (Gemini ignores the setting either way)
       window.__officer = (text) => {
         send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
@@ -143,7 +158,7 @@ async function converse(browser, base, flow, n) {
       };
       document.querySelectorAll(".scrim").forEach(s => s.remove());
       startCall(null);
-    }, { prov: PROVIDER, spoken: SPOKEN, noise: NOISE, turn: TURN, micHp: MIC_HP });
+    }, { prov: PROVIDER, spoken: SPOKEN, noise: NOISE, turn: TURN, micHp: MIC_HP, plan: SOUNDLESS ? { rate: SOUNDLESS, draw: Array.from({ length: 60 }, () => rnd()), late: Array.from({ length: 7 }, () => rnd() < 0.5), delay: Array.from({ length: 7 }, () => 4000 + Math.round(rnd() * 16000)) } : null });
     conv.record = SPOKEN && n <= RECORD; if (!conv.record) await p.evaluate(() => { window.__ara = null; });
     const t0 = Date.now();
     const drop = async (when) => { // a cellular drop: offline, line closed, back after downMs; recovery = the first reply sound after the network is back
@@ -206,6 +221,8 @@ async function converse(browser, base, flow, n) {
       const settled = await settle();
       conv.turns[conv.turns.length - 1].heard = conv.replies.slice(nBefore).some(r => r.text);
       conv.turns[conv.turns.length - 1].settled = settled;
+      if (DROP_AFTER_SAVE && !stopAll) { const saves = await p.evaluate(() => window.__acts.filter(a => a.role === "saved").map(a => a.at)); const s = saves[saves.length - 1];
+        if (s && s > at && rnd() < DROP_AFTER_SAVE) { const wait = s + 2500 + Math.round(rnd() * 3000) - Date.now(); if (wait > 0) await p.waitForTimeout(wait); await drop("after a save"); await settle(); } } // the line goes right after a save (Carverhill's 10:36 AM call): Ara should say where we were
       if (flow.saved.test((await p.evaluate(() => window.__acts.filter(a => a.role === "saved").map(a => a.text))).join("\n"))) doneAt = Date.now(); // the task is done: Ara's answer to the save was heard, so hang up
     }
     conv.cut = stopAll;
@@ -217,6 +234,7 @@ async function converse(browser, base, flow, n) {
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
     conv.forms = await p.evaluate(() => window.__forms || []);
     conv.drops = await p.evaluate(() => window.__drops || []);
+    conv.soundless = (await p.evaluate(() => (window.__soundless || []).map(m => ({ id: m.id, forced: m.forced, text: m.text, at: m.at, doneAt: m.doneAt, late: m.late, delay: m.delay, copyAt: m.copyAt, skipped: m.skipped, audioN: m.audioN })))).filter(m => !m.skipped);
     conv.faults.forEach(f => { if (!f.backAt) return; const next = conv.replies.find(r => r.at > f.backAt); f.recoverMs = next ? next.at - f.backAt : null; f.lostLine = !!next && /lost you|line dropped|reconnect/i.test(next.text); const heard = conv.acts.filter(a => a.role === "grok" && a.at > f.backAt).slice(0, 2).map(a => a.text); f.said = heard.join(" | ").slice(0, 300); }); // what the officer heard first once the network was back
     if (DIAG) conv.vlog = await p.evaluate(() => window.__vlog || []);
     // the engine closing the line with a reason (code 1011 "prepayment credits are depleted" on Gemini, Oct 28, which two runs reported only as "no answer") is an error of this conversation
@@ -333,6 +351,16 @@ function report(convs, extra) {
     md += `## Drops and quiet mics (FAULTS ${FAULTS}: drops at ${FAULT_RATES.drop * FAULTS} per turn, ${Math.round(FAULT_RATES.deadspot * 100)}% of them dead spots of 10-70 s; quiet mics at ${FAULT_RATES.quietMic * FAULTS} per turn)\n\n${fs_.length} faults in ${hit.length} of ${convs.length} conversations (${fs_.filter(f => f.kind === "drop").length} drops, ${fs_.filter(f => f.kind === "dead spot").length} dead spots, ${fs_.filter(f => f.kind === "quiet mic").length} quiet mics; for a quiet mic, "down" is how long the officer waited before repeating and "back to first words" counts from the repeat). Of the conversations with a drop, ${hit.filter(c => c.score && c.score.task_saved && !c.score.task_saved.broke).length} still ended saved. From the network coming back to Ara's first words: median ${q(0.5)}, 90th percentile ${q(0.9)}, slowest ${q(1)}; ${fs_.filter(f => f.recoverMs == null).length} never answered. First line after the drop was the app's "lost you" line ${fs_.filter(f => f.lostLine).length} times.\n\n| Flow | When | Kind | Down | Back to first words | Officer then heard |\n|---|---|---|---:|---:|---|\n` + fs_.map(f => `| ${f.flow} #${f.n} | ${f.when} at ${(f.at / 1000).toFixed(0)} s | ${f.kind} | ${(f.downMs / 1000).toFixed(1)} s | ${f.recoverMs == null ? "never" : (f.recoverMs / 1000).toFixed(1) + " s"} | ${((f.meanwhile ? "(while quiet: " + f.meanwhile + ") " : "") + (f.said || "")).replace(/\|/g, "/")} |`).join("\n") + "\n\n"; }
   { const ss = convs.map(c => c.sync).filter(Boolean); if (ss.length) { const sum = (k) => ss.reduce((a, s) => a + (s[k] || 0), 0), meds = ss.map(s => s.medianMs).filter(Boolean).sort((a, b) => a - b), guards = {}; ss.forEach(s => Object.entries(s.guards || {}).forEach(([k, v]) => { guards[k] = (guards[k] || 0) + v; }));
     md += `## Ara's state sync and the guards\n\nState updates sent ${sum("sent")}, confirmed ${sum("confirmed")} (median receipt ${meds.length ? meds[Math.floor(meds.length / 2)] : 0} ms, slowest ${Math.max(0, ...ss.map(s => s.maxMs))} ms), missed ${sum("missed")}, resent ${sum("resent")}.\n\n| Guard | Fired | Conversations |\n|---|---:|---:|\n` + Object.entries(guards).sort((a, b) => b[1] - a[1]).map(([k, v]) => `| ${k} | ${v} | ${ss.filter(s => s.guards && s.guards[k]).length} |`).join("\n") + `\n| all guards | ${Object.values(guards).reduce((a, b) => a + b, 0)} | ${ss.filter(s => Object.keys(s.guards || {}).length).length} |\n| of which after a confirmed receipt | ${sum("guardsAfterReceipt")} | ${ss.filter(s => s.guardsAfterReceipt).length} |\n\n`; } }
+  if (SOUNDLESS) { const ms = convs.flatMap(c => (c.soundless || []).map(m => Object.assign({ flow: c.flow, n: c.n, conv: c }, m)));
+    const rowsAfter = (c, at, secs) => c.acts.filter(a => a.role === "step" && a.at >= at && a.at < at + secs * 1000).map(a => a.text);
+    const tell = (m) => { const rows = rowsAfter(m.conv, m.at, 45); const pick = (re) => rows.filter(r => re.test(r)).map(r => r.replace(/\(".*$/, "").slice(0, 90)); return [].concat(pick(/came without sound/), pick(/sound for Ara's line arrived/), pick(/No sound for Ara's line/), pick(/Late copy cut/), pick(/arrived again, this time with sound/), pick(/scripted line played late|resend stands down|not asked again|false alarm|treated as dead/i)).join("; ") || "(nothing logged)"; };
+    const sounded = (m) => m.conv.replies.filter(r => r.at >= m.at && r.status !== "cancelled" && (r.audioN || 0) >= 3 && sameWords(r.text).slice(0, 30) && sameWords(r.text).slice(0, 30) === sameWords(m.text).slice(0, 30)).length; /* tellings of the line the officer heard with sound after the fault */
+    const heardOnce = ms.filter(m => sounded(m) === 1).length, never = ms.filter(m => sounded(m) === 0).length, twice = ms.filter(m => sounded(m) >= 2).length;
+    const idRows = convs.flatMap(c => c.acts.filter(a => a.role === "step" && /^Scripted line ids: /.test(a.text)).map(a => a.text)), echoed = idRows.filter(r => /our id echoed: yes/.test(r)).length, refused = convs.flatMap(c => c.acts.filter(a => a.role === "step" && /Scripted line with our own id refused/.test(a.text))).length;
+    md += `## Words without sound (SOUNDLESS ${SOUNDLESS}): the app waits for Ara's sound, asks once, cuts a late copy\n\n${ms.length} replies reached the app as words only (${ms.filter(m => m.forced).length} of them scripted lines; ${ms.filter(m => m.late).length} got their sound 4-20 s later as a whole copy, ${ms.filter(m => !m.late).length} never did). Heard with sound exactly once afterwards: ${heardOnce}; never heard with sound: ${never}; heard twice or more: ${twice}.\n\n| Flow | Line | Scripted | Sound | Heard with sound | What the app did |\n|---|---|---|---|---:|---|\n` + ms.map(m => `| ${m.flow} #${m.n} | ${m.text.replace(/\|/g, "/").slice(0, 70)} | ${m.forced ? "yes" : "no"} | ${m.late ? "copy after " + (m.delay / 1000).toFixed(0) + " s" : "never"} | ${sounded(m)} | ${tell(m).replace(/\|/g, "/")} |`).join("\n") + "\n\n";
+    md += `### Our own id on scripted lines\n\n${idRows.length} scripted lines logged their ids (the first three per call); our id came back on ${echoed} of them; xAI refused a line with our id ${refused} times.\n\n` + idRows.slice(0, 6).map(r => `- ${r}`).join("\n") + "\n\n"; }
+  if (DROP_AFTER_SAVE) { const rows = convs.flatMap(c => c.acts.filter(a => a.role === "step" && /where we were|^(Reconnected|Line reopened): /.test(a.text)).map(a => `${c.flow} #${c.n}: ${a.text.slice(0, 160)}`)), n = convs.flatMap(c => c.faults.filter(f => f.when === "after a save")).length;
+    md += `## Drops after a save (DROP_AFTER_SAVE ${DROP_AFTER_SAVE}): Ara says where we were\n\n${n} drops right after a save. Ara said where we were herself on the first try ${rows.filter(r => /said where we were on try 1/.test(r)).length} times, on a later try ${rows.filter(r => /said where we were on try [2-9]/.test(r)).length}, and the app said it itself ${rows.filter(r => /didn't say where we were in/.test(r)).length} times.\n\n` + rows.map(r => `- ${r.replace(/\|/g, "/")}`).join("\n") + "\n\n"; }
   md += `## Rule breaks\n\n| Rule | Checked | Broken | Rate |\n|---|---:|---:|---:|\n` + rows.map(r => `| ${r.rule} | ${r.checked} | ${r.broken} | ${r.rate}% |`).join("\n") + "\n\n";
   md += `## By flow\n\n| Flow | Conversations | Ended saved | Avg cost | Avg minutes |\n|---|---:|---:|---:|---:|\n` + Object.entries(byFlow).map(([k, f]) => `| ${k} | ${f.n} | ${f.saved} | ${money(f.cost / f.n)} | ${(f.min / f.n).toFixed(2)} |`).join("\n") + "\n\n";
   // reply time by flow: mean, standard deviation, median, 90th percentile (Carverhill, Oct 27: "compare standard deviation on response times too")
