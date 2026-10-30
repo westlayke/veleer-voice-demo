@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 11:39 AM",
+      "change": "Preview: after a dropped line with no form open Ara herself says where we were (the last save and its next step, or the contact on screen) and asks the pending question; the app checks her reply, asks again up to three times, then says its own line. A late yes after a save gets \"that was already saved\" and the next step, not \"what's next\". Closed Won recommends the top Needs attention item. Setting reconnectBy \"app\" keeps the app's scripted line; Patient Pat measures both ways.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 10:43 AM: after a long pause or connectivity drop she always needs to explain what we were doing, not just say \"what do you want to do\" or \"what's next\"; 10:52 AM: \"How do we make it so Ara - not the app - plays these messages\"; 11:02 AM: \"evaluate efficacy using patient pat harness\""
+    },
+    {
       "date": "Oct 30, 9:58 AM",
       "change": "Preview: when Ara answers in words but sends no tool call (a form asked for and not opened, or an answer not filled in), the app asks her again for the tool call at once, up to three times, and never opens or fills the form itself; a slow retry gets \"Ara's taking a moment\" as usual, a fast one nothing. Patient Pat's stand-in Grok now skips tool calls on a draw, and the real-Ara run scores the misses and recoveries.",
       "area": "Voice",

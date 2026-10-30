@@ -160,7 +160,7 @@ function grokSaved(action, r, d = {}) {
   const line = `${ACTIONS[action].saved}${who ? " for " + who : ""}${closed ? " (Closed " + o.closed + ")" : ""}`;
   (G.saves = G.saves || []).push(line); G.savedAt = Date.now(); G.savedLine = line; recent("App", "Saved: " + line); // a reconnect after this must not save it again
   const next = nextStepLine(c, !!closed), undo = G.hfTry && !G.undoSaid;
-  G.lastSaved = { who: who || "the same record", contactId: c ? c.id : null, next: `say exactly: "${next}"`, at: Date.now() }; // a drop with no form open comes back to this person (Carverhill, Oct 25)
+  G.lastSaved = { who: who || "the same record", contactId: c ? c.id : null, next: `say exactly: "${next}"`, nextLine: next, at: Date.now() }; // a drop with no form open comes back to this person (Carverhill, Oct 25)
   const spoken = [moodLine(action, d), savedShort(action, who, d) + closed, undo ? "Say undo if that's wrong." : "", r && r.note ? r.note : "", next].filter(Boolean).join(" ");
   G.justNow = { at: Date.now(), text: `the app saved and closed the ${ACTIONS[action].title} form (${line}) and is saying so itself, ending with: "${next}" A yes from the officer means that next step: open it with its tool. Never call save_form for it; the form is gone.` };
   syncState("form saved"); /* at the instant of the save, not after the line plays (Carverhill, Oct 29: Ara called save_form 16 s after a save by words, and the app said the save line twice) */
@@ -168,6 +168,14 @@ function grokSaved(action, r, d = {}) {
     G.hfTry.force = spoken; G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} Say in a few words that it's saved (for example "${savedShort(action, who, d)}")${r && r.note ? `, then state (don't ask) "${r.note}"` : ""}, then carry on.`; return; }
   G.saveAck = { at: Date.now(), action, who, next: `say exactly: "${next}"` };
   act("step", "The app says the save and the next step itself"); forceSay(spoken);
+}
+// a late yes after the save with no question on record: Ara says it was already saved and asks the next step herself (checked, retried), or the app does
+function lateYesNote() {
+  const next = G.lastSaved.nextLine, q = lastQuestionOf(next);
+  if (RECONNECT_BY() === "ara") { const guide = `That form was already saved (${G.savedLine}) and closed; nothing to save. Say in a few words that it was already saved, then ask this question word for word: "${q}". Never ask what's next or what they'd like to do; nothing else.`;
+    contextWatch("late-yes", { who: "", q, line: `That was already saved. ${next}`, guide }); return guide; }
+  act("step", "The app says it was already saved and the next step itself"); forceSay(`That was already saved. ${next}`);
+  return `That form was already saved (${G.savedLine}) and closed; the app is saying so itself now, with the next step. Say nothing; wait for the officer.`;
 }
 // "Planned ask saved for Jen." (the item's name once, not "Saved: Planned ask saved")
 // a tapped save Ara talked past (Oct 24: the officer said "uh, yes" right after tapping, and Ara answered "go ahead and tap it"):
@@ -195,7 +203,7 @@ function nextStepNo(text) {
 }
 function nextStepLine(c, closed) {
   if (!c) return "What would you like to do next?";
-  if (closed) return `That completes the process for ${c.first}. What would you like to do next?`;
+  if (closed) { const it = typeof attentionItems === "function" ? attentionItems()[0] : null; return it ? `That completes the process for ${c.first}. Next on your list: ${it.say}.${NEXT_Q}` : `That completes the process for ${c.first}. What would you like to do next?`; } /* Carverhill, 10:36 AM call Oct 30: Closed Won ended in "what would you like to do next?"; the top Needs attention item is recommended instead */
   const o = openOpp(c.id), n = o ? nextStep(o) : null;
   if (o) {
     if (!n) return `What would you like to do next for ${c.first}?`;
@@ -317,6 +325,7 @@ async function hfSave(callId, data, lead, short) { /* short: only the changed fi
     if (spokeSince) { const bot = String(G.lastBot || G.savedByWordsLine || "").trim(), nextQ = new RegExp(NEXT_Q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$").test(bot), yes = appYes(spokeSince.text);
       guardFired("late save_form after the save, officer had spoken", `"${spokeSince.text}" ${nextQ ? "to the next-step question" : "since the save line"}`);
       toolReply(callId, { ok: true, saved: true, already: true, note: nextQ && yes ? `That form was already saved (${G.savedLine}) and closed; nothing to save. The officer's "${spokeSince.text}" answers the app's question "${bot.replace(/^.*?(The next step in the process)/, "$1")}": a yes to the next step. Open that step now with its tool. Don't say the save line again.`
+        : yes && G.lastSaved && G.lastSaved.nextLine ? lateYesNote() /* a yes with her last line gone (10:36 AM call, Oct 30: Ara answered "What's next?"): it was already saved, the next step is said again */
         : `That form was already saved (${G.savedLine}) and closed; the officer heard it. Don't say it again. Answer their last words instead: "${spokeSince.text}"` }); return; }
     if (G.savedByWords && Date.now() - G.savedByWords < SAVE_ECHO_MS) { guardFired("save_form within 8 s of a save by words"); toolReply(callId, { ok: true, saved: true, already: true, said: G.savedByWordsLine, note: `The app already saved it on the officer's yes (${G.savedLine}) and said so itself. Say nothing; wait for the officer.` }, false); return; } /* the yes was taken from the officer's words (hfYesHeard) */
     if (recentSave) guardFired(Date.now() - G.savedAt < SAVE_ECHO_MS ? "save_form within 8 s of a save" : "save_form after a save, officer silent since");
@@ -431,6 +440,18 @@ function formPosition() {
   return { where: `Every required field of the "${A.title}" form is in; the app says so itself and asks the officer to check the draft and tap "${A.saveLabel}".`, ask: `Everything required is in on the ${formName(A)} form. Check the draft and tap "${A.saveLabel}", or tell me what to change.` };
 }
 // where we are, said before a pending question when the line comes back (Carverhill, 1:14 PM call Oct 29: "she needs to repeat what we were working on")
+// where we are, for the line after a drop with no question pending (Carverhill's 10:36 AM call, Oct 30: "after a long pause or connectivity drop she always needs
+// to explain what we were doing, not just say what do you want to do"): the open form and its question; else the last save (10 minutes) and its next step;
+// else the contact on screen and their next step; else nothing started yet. Said by Ara herself (reconnectBy "ara", checked and retried) or by the app ("app").
+function whereWeAre() {
+  const fp = typeof formPosition === "function" ? formPosition() : null;
+  if (fp && fp.ask) return { kind: "form", line: `${formIntro()} ${fp.ask}`.trim(), who: V.target && V.target.contact ? V.target.contact.first : (readDraft().first || ""), q: lastQuestionOf(fp.ask) };
+  if (G.lastSaved && G.lastSaved.nextLine && Date.now() - G.lastSaved.at < 600000) return { kind: "saved", line: `${G.savedLine}. ${G.lastSaved.nextLine}`, who: G.lastSaved.contactId ? (G.lastSaved.who || "").split(" ")[0] : "", q: lastQuestionOf(G.lastSaved.nextLine) };
+  const f = typeof focusContact === "function" ? focusContact() : null;
+  if (f) { const n = nextStepLine(f); return { kind: "focus", line: `We were on ${f.first}. ${n}`, who: f.first, q: lastQuestionOf(n) }; }
+  return { kind: "none", line: `We hadn't started anything yet. ${NEXT_NO_Q}`, who: "", q: NEXT_NO_Q };
+}
+const lastQuestionOf = (s) => { const q = (String(s || "").match(/[^.?!]*\?/g) || []).pop(); return (q || String(s || "")).trim(); };
 function formIntro() { if (!V || !ACTIONS[V.action]) return ""; const A = ACTIONS[V.action], who = V.target && V.target.contact ? V.target.contact.first : V.action === "contact" ? (readDraft().first || "") : ""; return `We're on the ${formName(A)}${who ? " for " + who : ""}.`; }
 // "What fields are left?": the app answers with the list itself, in one scripted line (Jacqueline's call, Oct 27: Ara's answer was vague)
 function fieldsLeft() {

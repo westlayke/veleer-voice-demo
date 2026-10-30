@@ -689,7 +689,7 @@ test("Ara: no reply at the first tick on a slow line gets a fresh line at once, 
   // Oct 29: with no form open the app says the whole line itself (sorry + the open question); Ara is told not to say it again
   await p.waitForFunction(() => __sent.some(s => /force_message/.test(s) && s.includes("Sorry, I lost you")), null, { timeout: 6000 }).catch(() => {}); /* the sorry line waits for the state receipt, 3 s at most when the line never confirms (Oct 29) */
   const sorry = await p.evaluate(() => ({ forced: __sent.filter(s => /force_message/.test(s) && s.includes("Sorry, I lost you")).pop() || "", told: __sent.some(s => /don't say it or anything like it again/.test(s)), oneQ: __sent.some(s => /then ask just one question/.test(s)) }));
-  ok(/Sorry, I lost you for a moment\. What would you like to do\?/.test(sorry.forced) && sorry.told && !sorry.oneQ, "after a drop with no form open the app didn't say the whole reconnect line itself: " + JSON.stringify(sorry).slice(0, 400));
+  ok(/Sorry, I lost you for a moment\. We hadn't started anything yet\. What would you like to do\?/.test(sorry.forced) && sorry.told && !sorry.oneQ, "after a drop with no form open the app didn't say the whole reconnect line itself: " + JSON.stringify(sorry).slice(0, 400));
 });
 test("Reconnect with no form open (Oct 29): the app says the sorry and the question itself, so Ara can't stop after the sorry", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -728,7 +728,7 @@ test("Reconnect with no form open (Oct 29): the app says the sorry and the quest
   // nothing waiting: the open question
   await p.evaluate(() => { G.lastBot = "Noted."; G.lastBotAt = Date.now(); G.lastHeard = null; });
   await drop();
-  ok((await lastForced()) === "Sorry, I lost you for a moment. What would you like to do?", "with nothing waiting the app didn't ask what to do: " + (await lastForced()));
+  ok((await lastForced()) === "Sorry, I lost you for a moment. We hadn't started anything yet. What would you like to do?", "with nothing waiting the app didn't say so and ask what to do: " + (await lastForced()));
 });
 test("Scripted line (Oct 29): nothing back 4 s after it gets \"Ara's taking a moment\" and a line test; a slow line gets a fresh one that says the line again", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);

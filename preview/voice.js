@@ -221,10 +221,10 @@ function grokInstructions() {
 - When the tool reply says nothing more is needed, ask them to check the draft and tap the button named in the reply's "button", using that exact label (say "tap Record pledge", never "tap Save" when the button says something else).
 - Only say something is saved after the app tells you so. If a tool returns an error, explain it in one sentence and offer the fix or the step it suggests.
 - The officer can say "cancel", "undo", "go back", "start over" or "say that again" at any time: the app carries these out itself and tells you what it did, so don't act on those words yourself. If they ask in other words to close, cancel or clear the open form and the app said nothing, call close_form. Never say a form was closed, cancelled, cleared or reset unless the app says so.
-- After a save the app itself says it's saved and the next step, then "Do you want to do that now, yes or no?": don't repeat it. Yes opens that step (its tool, never save_form); "no, <something>" means do that; a bare no is answered by the app. Never ask an open "what would you like to do?" when a next step exists. The officer can stop any time, so never ask if they want to stop or are done. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
+- After a save the app itself says it's saved and the next step, then "Do you want to do that now, yes or no?": don't repeat it. Yes opens that step (its tool, never save_form); "no, <something>" means do that; a bare no is answered by the app. Never ask an open "what would you like to do?" or "what's next?" when a next step exists. After a drop, say where we were ("Where we are" under Right now) before the pending question. Never ask if they want to stop or are done. Never start another task on your own. If they want to stop, say a brief goodbye and call stop_conversation.
 - You can see saves: the app tells you each one and lists them under Right now. If the officer asks whether something saved, answer from that; never say you can't see saves.
 ### Task by task
-- New contact: always ask for their email and their mobile number (one question at a time, skipping any the officer already gave), explaining briefly that a contact needs at least one; without either it can't be saved. Then the app has you ask once whether they'd like to add more details; if yes, call optional_fields with step start and let the app lead: it asks one question at a time and fills in each answer itself. Pass every answer to optional_fields (step answer, their words as value); "skip" and "that's enough" are steps skip and stop. Never list all the optional fields at once, and never jump ahead of the app's questions. The same goes for a new opportunity's optional details.
+- New contact: always ask for their email and their mobile number (one at a time, skipping any already given); a contact needs at least one to save. Then the app has you ask once whether they'd like to add more details; if yes, call optional_fields with step start and let the app lead: it asks one question at a time and fills in each answer itself. Pass every answer to optional_fields (step answer, their words as value); "skip" and "that's enough" are steps skip and stop. Never list the optional fields or jump ahead of the app's questions. The same goes for a new opportunity's optional details.
 - Existing contact: to change their details call show_contact_edit_draft with only what changes; never use show_contact_draft for someone who is already a contact.
 - Logging a meeting (show_interaction_draft) or recording an ask (show_ask_result_draft): if the officer hasn't said how it happened, ask "Was it in person, a phone call, or a video call?" Always pass date (resolved, e.g. yesterday) and meetingType; left out, the draft shows today and In person.
 - A substantive meeting whose outcome isn't Not interested or Referred elsewhere needs a next step and its due date, and so does an ask unless the investor declined: if not said, explain in one sentence that it becomes a Task for them, then ask whether they want to set it now and what it is and when it's due, before asking them to save. Never suggest the step, the date or the way of contacting anyone.
@@ -290,7 +290,7 @@ ${ctxNow()}`;
 function ctxNow() {
   const f = focusContact();
   return `${(G.saves || []).length ? `Saved so far in this conversation: ${G.saves.join("; ")}.` : "Nothing has been saved yet in this conversation."}
-${f ? `On screen now: ${nameOf(f)}; an unnamed contact means them.\n` : ""}${V && document.getElementById("draftForm") ? draftSummary() + " If the officer asks about it, carry on with it; don't open a new form for the same person.\n" : ""}${G.justNow && Date.now() - G.justNow.at < 180000 ? "Just now: " + G.justNow.text + "\n" : ""}${!(V && document.getElementById("draftForm")) ? "No form is open now (nothing to save).\n" : ""}State v${G.syncN || 0}. Contacts and opportunities: ${crmSnapshot()}.`;
+${f ? `On screen now: ${nameOf(f)}; an unnamed contact means them.\n` : ""}${V && document.getElementById("draftForm") ? draftSummary() + " If the officer asks about it, carry on with it; don't open a new form for the same person.\n" : ""}${G.justNow && Date.now() - G.justNow.at < 180000 ? "Just now: " + G.justNow.text + "\n" : ""}${!(V && document.getElementById("draftForm")) ? "No form is open now (nothing to save).\n" + (typeof whereWeAre === "function" && whereWeAre().kind !== "none" ? "Where we are: " + whereWeAre().line + "\n" : "") : ""}State v${G.syncN || 0}. Contacts and opportunities: ${crmSnapshot()}.`;
 }
 // what changes Ara's rules, so the full instructions go again only when one of these does
 const rulesKey = () => JSON.stringify([!!G.hands, S.settings.userName || "", botName(), spookyMode(), xmasMode()]);
@@ -719,7 +719,7 @@ function resumeModal() {
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " + (r.where ? r.where + " " : "") : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
-  G.live = false; G.hands = false; G.saveCheck = null; G.savedByWords = 0; G.sync = null; G.syncN = 0; G.syncPending = null; G.nudge = null; G.stateOkAt = 0; clearTimeout(G.syncTimer); G.hfYesAt = 0; G.resumedHeardN = 0; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();
+  G.live = false; G.hands = false; G.saveCheck = null; G.savedByWords = 0; G.sync = null; G.syncN = 0; G.syncPending = null; G.nudge = null; G.ctxWatch = null; G.stateOkAt = 0; clearTimeout(G.syncTimer); G.hfYesAt = 0; G.resumedHeardN = 0; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
@@ -833,7 +833,7 @@ function onEvent(e) {
   const t = e.type || "";
   if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; G.responding = false; flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
-  if (t === "input_audio_buffer.speech_started") { if (G.nudge) { act("step", "The officer spoke: the ask for the tool call stands down"); G.nudge = null; } G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true;
+  if (t === "input_audio_buffer.speech_started") { if (G.nudge) { act("step", "The officer spoke: the ask for the tool call stands down"); G.nudge = null; } if (G.ctxWatch) { act("step", "The officer spoke: the ask for where we were stands down"); G.ctxWatch = null; } G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true;
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0; clearTimeout(G.idleTimer); if (G.responding) send({ type: "response.cancel" }); stopPlayback(); if (G.forced) { G.forced = null; clearTimeout(G.forceTimer); } /* a goodbye still waiting to be said is dropped */ vlog("hang-up called off: the officer spoke"); act("step", "Quiet hang-up called off: the officer spoke"); } }
   if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += e.pcm ? e.pcm.length : Math.floor(atob(e.delta || "").length / 2); if (e.item_id && G.respAudio && !G.respAudio.itemId) G.respAudio.itemId = e.item_id; }
@@ -860,7 +860,7 @@ function onEvent(e) {
   if (t === "response.done" && G.bot && G.unheardResp === G.respSeq) G.unheard = G.bot; /* said into a paused sound engine: said again when it is back */
   if (t === "response.done" && G.bot && soundedCopy(G.bot)) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("step", `Ara's line arrived again, this time with sound (${((G.audioSamples || 0) / 24000).toFixed(1)} s): the officer hears it once`); if (typeof lineHeard === "function") lineHeard(G.bot); } /* real Ara run, Oct 29: 13 "said twice" rows were a words-only response followed by its sounded copy */
   else if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
-  if (t === "response.done") { toolCheck(e.response || {}); replyCheck(e.response || {}); G.bot = ""; }
+  if (t === "response.done") { contextCheck(e.response || {}); toolCheck(e.response || {}); replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } truncateSpoken(); stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall();
     if (G.asked && !G.responding && PROV().forceItem) { if (G.savedAt && Date.now() - G.savedAt < SAVE_ECHO_MS) act("step", "The officer spoke right after a save: the save confirmation is still coming (not cancelled)"); /* Oct 28 12:54 PM call: a repeated "yes, save it" cancelled the confirmation and the officer heard nothing */
       else { clearTimeout(G.askWatch); G.askWatch = null; clearTimeout(G.tickWatch); G.asked = false; act("step", "The officer spoke while a reply was still requested: that request is dropped (one question, one answer)"); } } } /* no response.cancel here: nothing is being generated yet and the service answers "Cancellation failed: no active response found" (Oct 28) */ /* Oct 25 review item 10: stacked re-asks gave three "I'm here" in a row */
@@ -970,6 +970,30 @@ function toolCheck(r) {
   if (!kind) return;
   G.nudge = { kind, tries: 1, guide, at: Date.now() }; guardFired("Ara talked but didn't " + kind, `"${G.bot.slice(0, 80)}" after "${heard.slice(0, 60)}"`);
   act("step", `Ara talked but didn't ${kind} ("${G.bot.slice(0, 80)}"): asked again for the tool call (1 of ${TOOL_ASKS})`); setTimeout(() => { if (G.live && G.nudge) askReply(guide); }, 0);
+}
+// After a drop with no form open, Ara herself says where we were (Carverhill, 10:36 AM call Oct 30: "she always needs to explain what we were doing", and
+// "How do we make it so Ara, not the app, plays these messages"): the app asks her for it, checks the reply (the person named, her closing question the
+// pending one, no open "what would you like to do") and asks again up to CONTEXT_ASKS times; then its own scripted line is the floor. The same check
+// covers a late yes after a save. reconnectBy "app" (Settings, or window.__reconnectBy in the harness) keeps the scripted line: both ways measured by Patient Pat.
+const CONTEXT_ASKS = 3;
+const RECONNECT_BY = () => window.__reconnectBy || (typeof S !== "undefined" && S.settings && S.settings.reconnectBy) || "ara";
+function contextWatch(kind, w) { G.ctxWatch = { kind, need: { who: w.who || "", q: w.q }, tries: 1, at: Date.now(), seq: G.respSeq || 0, line: w.line, guide: w.guide }; } /* seq: the reply this was armed in (a tool call's) is not the answer */
+function contextAsk(kind, w) {
+  const guide = `The line was down and is back. Say sorry in a few words, then say in one sentence where we were${w.who ? ` (name ${w.who})` : ""}: ${(w.q && w.line.endsWith(w.q) ? w.line.slice(0, -w.q.length) : w.line).trim().replace(/"/g, "'")} Then ask this question word for word: "${w.q}". Never ask what they'd like to do or what's next; nothing else.`;
+  contextWatch(kind, Object.assign({ guide }, w)); act("step", `Ara is asked to say where we were herself (${kind}, 1 of ${CONTEXT_ASKS})`); askReply(guide);
+}
+function contextCheck(r) {
+  const c = G.ctxWatch; if (!c || !G.live) return;
+  if (r.status === "cancelled" || G.respForcedSeq === G.respSeq || G.dropNext || G.respSeq === c.seq) return;
+  if (!G.bot) { if (G.respTool) G.ctxWatch = null; return; } /* she opened something instead: not a context line, but she acted */
+  const bot = G.bot.trim(), q = lastQuestionOf(bot), named = !c.need.who || new RegExp("\\b" + c.need.who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(bot);
+  const asked = /\?\s*$/.test(bot) && wordOverlap(sameWords(q), sameWords(c.need.q)) >= 0.5, open = /what (would you like|do you want) to do|what'?s next/i.test(bot) && !/what (would you like|do you want) to do|what'?s next/i.test(c.need.q);
+  const secs = Math.round((Date.now() - c.at) / 100) / 10;
+  if (named && asked && !open) { act("step", `Ara said where we were on try ${c.tries} (${secs} s after the first ask): "${bot.slice(0, 80)}"`); G.ctxWatch = null; return; }
+  const why = open ? "asked an open question" : !named ? `didn't name ${c.need.who}` : "didn't ask the pending question";
+  if (c.tries >= CONTEXT_ASKS) { act("step", `Ara didn't say where we were in ${CONTEXT_ASKS} tries (${why}, "${bot.slice(0, 80)}"): the app says it itself`); guardFired("Ara didn't say where we were", `"${bot.slice(0, 80)}"`); G.ctxWatch = null; forceSay(c.kind === "reconnect" ? `Sorry, I lost you for a moment. ${c.line}` : c.line); return; }
+  c.tries++; act("step", `Ara's reply ${why} ("${bot.slice(0, 80)}"): asked again for where we were (${c.tries} of ${CONTEXT_ASKS})`);
+  const g = `${c.guide} Your last reply ("${bot.slice(0, 100)}") ${why}.`; setTimeout(() => { if (G.live && G.ctxWatch === c) askReply(g); }, 0);
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;

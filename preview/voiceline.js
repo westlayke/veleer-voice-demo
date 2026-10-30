@@ -298,7 +298,9 @@ async function openAgain(lock) {
     const back = lock ? "Line reopened" : "Reconnected", say = (line, why) => { G.justNow = { text: reconnectLine(lock, line) + (fp ? " " + fp.where : ""), at: Date.now() }; act("step", `${back}: ${why}`); whenIdle("instr"); syncWait(() => forceSay(`Sorry, I lost you for a moment. ${line}`)); }; /* the sorry line goes once the service has confirmed Ara's state for the new line (or after SYNC_RECEIPT_MS), so she has the picture before the officer answers (Carverhill, Oct 29) */
     if (fp && fp.ask) { if (fp.arm) fp.arm(); say(`${typeof formIntro === "function" ? formIntro() + " " : ""}${fp.ask}`, `the app says where we are and asks the pending question itself (${fp.where})`); } /* "We're on the interaction report for Elon." first: the officer may have been away a while */
     else if (pf) say(pf, "the app says the scripted line the old line never started");
-    else { const q = lastQuestion(); say(q.line, q.why); if (q.then) guide(q.then); } }); /* no form open: the app still says the whole line, so Ara can't stop after the sorry (9:45 AM call, Oct 29: 12 s of dead air); q.then = the officer's heard answer, for Ara to act on */
+    else { const q = lastQuestion();
+      if (q.where && q.where.kind !== "none" && RECONNECT_BY() === "ara") { G.justNow = { text: reconnectLine(lock, ""), at: Date.now() }; act("step", `${back}: Ara is asked to say where we were herself (${q.where.kind}); the app checks her reply`); whenIdle("instr"); syncWait(() => contextAsk("reconnect", q.where)); } /* Ara composes it from "Where we are" in her instructions; the app's line is the floor after CONTEXT_ASKS misses */
+      else { say(q.line, q.why); if (q.then) guide(q.then); } } }); /* no form open: the app still says the whole line, so Ara can't stop after the sorry (9:45 AM call, Oct 29: 12 s of dead air); q.then = the officer's heard answer, for Ara to act on */
 }
 // what the app asks after a drop with no form open: the question Ara had just asked and the officer hadn't answered, "say that again" when the officer had spoken last, else the open question
 function lastQuestion() {
@@ -310,8 +312,10 @@ function lastQuestion() {
   if (G.spokeInGap || cut) return asked ? { line: `${bot} I didn't catch your answer.`, why: `the app says Ara's whole last line again and that the officer's answer was lost ${cut ? "(the line went while they were still talking)" : "while the line was down"}` } : statement;
   if (answered) { const heard = String(G.lastHeard.text || "").trim().replace(/[.!?]+$/, ""); return asked && heard ? { line: `${bot} You said: "${heard.slice(0, 80)}".`, why: "the app says Ara's whole last line again and the answer it heard, for Ara to act on", then: `The officer had already answered that question before the line dropped: "${heard.slice(0, 160)}". Act on that answer now, as if they had just said it; don't ask the question again.` } : statement; }
   // her whole last line when it is short and ends in her question (10:05 AM call: the last sentence alone, "which fits?", lost the choices); else just the question
-  if (/\?\s*$/.test(bot) && bot.length > 3 && bot.length <= 220) return { line: bot, why: "the app says Ara's whole last line again itself" };
-  const q = (bot.match(/[^.?!]*\?/g) || []).pop(); if (q && q.trim().length > 3 && q.trim().length <= 200) return { line: q.trim(), why: "the app asks Ara's last question again itself" };
+  const bare = /^(what would you like to do( next)?|what'?s next)\?$/i.test(bot); /* her bare open question is never said again after a drop: where we were is (10:36 AM call, Oct 30) */
+  if (/\?\s*$/.test(bot) && bot.length > 3 && bot.length <= 220 && !bare) return { line: bot, why: "the app says Ara's whole last line again itself" };
+  const q = (bot.match(/[^.?!]*\?/g) || []).pop(); if (q && q.trim().length > 3 && q.trim().length <= 200 && !bare) return { line: q.trim(), why: "the app asks Ara's last question again itself" };
+  const w = typeof whereWeAre === "function" ? whereWeAre() : null; if (w) return { line: w.line, why: `no question was waiting: where we were (${w.kind})`, where: w }; /* Carverhill, 10:36 AM call Oct 30: a bare "What would you like to do?" after a drop lost him the context */
   return { line: typeof NEXT_NO_Q === "string" ? NEXT_NO_Q : "What would you like to do?", why: "no question was waiting: the app asks what the officer would like to do" };
 }
 // after a drop the app no longer rebuilds Ara's memory of the call (what was said, what was saved): she resumes her own conversation and the
