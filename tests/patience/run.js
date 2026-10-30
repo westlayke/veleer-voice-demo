@@ -25,7 +25,7 @@ const server = http.createServer((req, res) => {
 
 // ---------- in the page: the stand-in line with its faults, the silent mic, the key holder ----------
 const FAKES = (cfg) => {
-  window.__sent = []; window.__logs = []; window.__lines = []; window.__events = []; window.__cfg = cfg;
+  window.__sent = []; window.__logs = []; window.__lines = []; window.__events = []; window.__cfg = cfg; window.__reconnectBy = cfg.reconnect || "ara"; /* who says where we were after a drop: Ara (checked by the app) or the app's scripted line */
   let s = cfg.seed >>> 0; const rnd = () => { s += 0x6D2B79F5; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; window.__rnd = rnd;
   const R = cfg.rate, P = cfg.rates;
   // the voice service's reply delay: lognormal around Jim's measured median (1.7 s quiet), with a long tail; a "slow" draw adds 10-25 s
@@ -61,7 +61,7 @@ const FAKES = (cfg) => {
     return f(u, o); };
   // the phone's own recordings count as sound the officer heard
   window.__phoneSaid = []; const origAct = window.act; /* act() is defined later by the app: wrap it once it exists */
-  const wrapAct = () => { if (typeof window.act !== "function" || window.act.__wrapped) return false; const a = window.act; const w = function (role, text, sess) { if (/^The phone said/.test(String(text))) window.__phoneSaid.push({ at: Date.now(), text: String(text) }); return a.apply(this, arguments); }; w.__wrapped = true; window.act = w; return true; };
+  const wrapAct = () => { if (typeof window.act !== "function" || window.act.__wrapped) return false; const a = window.act; const w = function (role, text, sess) { if (/^The phone said/.test(String(text))) window.__phoneSaid.push({ at: Date.now(), text: String(text) }); if (/where we were|^(Reconnected|Line reopened): /.test(String(text))) (window.__ctxRows = window.__ctxRows || []).push({ at: Date.now(), text: String(text).slice(0, 160) }); return a.apply(this, arguments); }; w.__wrapped = true; window.act = w; return true; };
   const iv = setInterval(() => { if (wrapAct()) clearInterval(iv); }, 50);
 };
 
@@ -70,11 +70,23 @@ const STAND_IN = () => {
   window.__standIn = {
     pendingTool: null, /* the tool call the officer's last words call for; sent when the app asks for a reply (response.create) or straight away in hands-free */
     state: { formOpen: false, saved: 0, version: 0 }, /* Ara's picture of the form, from the instructions the service confirmed (applyState); a draft tool she sent opens a form in her picture until the state says it closed */
-    applyState(instr) { this.state = { formOpen: !/No form is open now/.test(instr), saved: ((instr.match(/Saved so far in this conversation: ([^\n]*)/) || [, ""])[1].split("; ").filter(Boolean).length), version: Number((instr.match(/State version (\d+)/) || [, 0])[1]) }; },
+    applyState(instr) { const where = (instr.match(/Where we are: ([^\n]*)/) || [, ""])[1]; if (this.state.where && this.state.where !== where) this.prevWhere = this.state.where; /* her picture before this update: a stale answer draws on it */
+      this.state = { formOpen: !/No form is open now/.test(instr), saved: ((instr.match(/Saved so far in this conversation: ([^\n]*)/) || [, ""])[1].split("; ").filter(Boolean).length), version: Number((instr.match(/State version (\d+)/) || [, 0])[1]), where }; },
+    // the app asks Ara to say where we were (after a drop, or a late yes after a save): the stand-in composes it from the state the service confirmed; on a draw it misses
+    // the way Grok did on Oct 30 (a bare "what would you like to do?", or a stale line from its old picture), and the app's retry gets a fresh draw
+    context(ws, instr) { const retry = /Your last reply \(/.test(instr), late = /already saved, then ask this question/.test(instr); const rec = (window.__ctxAsks = window.__ctxAsks || []); let a = rec[rec.length - 1];
+      if (!a || a.done || !retry) { a = { at: Date.now(), kind: late ? "late-yes" : "reconnect", asks: 0, done: false, misses: [] }; rec.push(a); } a.asks++;
+      const q = (instr.match(/word for word: "([^"]+)"/) || [])[1] || "What would you like to do?", R = window.__cfg.rate, draw = window.__rnd(), missRate = (retry ? 0.3 : 0.25) * (R || 0); let line, miss = "";
+      if (draw < missRate * 0.6) { miss = "bare"; line = late ? "That's saved. What's next?" : "Sorry, I lost you for a moment. What would you like to do?"; }
+      else if (draw < missRate && this.prevWhere) { miss = "stale"; line = "Sorry, I lost you for a moment. " + this.prevWhere; }
+      else line = late ? "That was already saved. " + q : "Sorry, I lost you for a moment. " + (this.state.where || q);
+      if (miss) { a.misses.push(miss); window.__events.push({ at: Date.now(), fault: "where-we-were miss (" + miss + ")" }); } else { a.done = true; a.on = a.asks; } ws.say(line, window.__latency()); },
     // the tool the stand-in actually sends for a next-step yes: save_form when its picture still has the form open (no state yet, or lost) or on the stale-Ara draw, as Grok did on Oct 29
     pick(tool) { if (!tool || !/^show_|^set_capacity/.test(tool[0]) || !this.stepYes) return tool; this.stepYes = false; const stale = this.state.formOpen, draw = window.__cfg.rate && window.__rnd() < window.__cfg.rates.staleAra * window.__cfg.rate;
       if (!stale && !draw) return tool; this.intended = tool; (window.__staleSaves = window.__staleSaves || []).push({ at: Date.now(), why: stale ? "the state still showed the form open" : "stale-Ara draw", intended: tool[0], recovered: false }); window.__events.push({ at: Date.now(), fault: stale ? "stale picture (no state yet)" : "stale Ara" }); return ["save_form", { confirmed: true }]; },
     reply(ws, e) { const t = this.pendingTool; const instr = (e.response && e.response.instructions) || "";
+      { const CTX = /say in one sentence where we were|already saved, then ask this question word for word/, note = this.lastOut && this.lastOut.note || ""; /* the first late-yes ask rides in the tool result's note ("Reply to the officer from the tool result"); the retries come as guidance */
+        if (CTX.test(instr)) { this.context(ws, instr); return; } if (/Reply to the officer from the tool result/.test(instr) && CTX.test(note)) { this.context(ws, note); return; } }
       if (/your last reply had no tool call/.test(instr)) { const held = this.heldTool, w = (window.__wordsOnly || []).slice(-1)[0]; /* the app's ask for the missing tool call */
         if (!held || !w || w.recovered) { (window.__falseNudges = window.__falseNudges || []).push({ at: Date.now(), instr: instr.slice(0, 160) }); ws.say("Okay.", window.__latency()); return; }
         w.asks++; if (w.asks < 3 && window.__rnd() < 0.3) { ws.say("Okay.", window.__latency()); return; } /* misses again */
@@ -145,7 +157,7 @@ const AGENDA_TOOL = [["show_contact_draft", { first: "Jordan", last: "Pike" }], 
 
 // ---------- one conversation ----------
 async function conversation(browser, base, n) {
-  const seed = SEED * 1000 + n, cfg = { seed, rate: RATE, rates: RATES };
+  const seed = SEED * 1000 + n, cfg = { seed, rate: RATE, rates: RATES, reconnect: process.env.RECONNECT || "ara" };
   const conv = { n, seed, asks: [], faults: [], saves: [], unanswered: [], started: Date.now(), errors: [], turns: 0, hungUp: false, closedWon: false };
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true, permissions: ["microphone"] });
   await ctx.addInitScript(FAKES, cfg); await ctx.addInitScript(STAND_IN);
@@ -217,7 +229,10 @@ async function conversation(browser, base, n) {
   conv.longest = Math.max(0, ...conv.asks.map(a => a.silence));
   conv.sync = await p.evaluate(() => { const s = G.sync || { sent: 0, confirmed: 0, ms: [], missed: 0, resent: 0, guards: {}, guardsAfterReceipt: 0 }; const ms = s.ms.slice().sort((a, b) => a - b);
     const lines = (window.__lines || []).filter(l => l.from !== "officer"); let twice = 0; for (let i = 1; i < lines.length; i++) if (lines[i].text === lines[i - 1].text && lines[i].at - lines[i - 1].at < 30000 && !lines[i - 1].noaudio) twice++; /* the same line said twice within 30 s, the first with sound (the 7:41 PM repeat) */
-    return { sent: s.sent, confirmed: s.confirmed, medianMs: ms.length ? ms[Math.floor(ms.length / 2)] : 0, maxMs: ms.length ? ms[ms.length - 1] : 0, missed: s.missed, resent: s.resent, guards: s.guards, guardsAfterReceipt: s.guardsAfterReceipt, lostReceipts: (window.__receipts || []).filter(r => r.lost).length, staleSaves: (window.__staleSaves || []).map(x => ({ why: x.why, recovered: x.recovered })), wordsOnly: (window.__wordsOnly || []).map(x => ({ tool: x.tool, asks: x.asks, recovered: x.recovered, on: x.recoveredOn || 0 })), falseNudges: (window.__falseNudges || []).length, falseNudgeNotes: (window.__falseNudges || []).map(x => x.instr), linesTwice: twice }; }).catch(() => null);
+    return { sent: s.sent, confirmed: s.confirmed, medianMs: ms.length ? ms[Math.floor(ms.length / 2)] : 0, maxMs: ms.length ? ms[ms.length - 1] : 0, missed: s.missed, resent: s.resent, guards: s.guards, guardsAfterReceipt: s.guardsAfterReceipt, lostReceipts: (window.__receipts || []).filter(r => r.lost).length, staleSaves: (window.__staleSaves || []).map(x => ({ why: x.why, recovered: x.recovered })), wordsOnly: (window.__wordsOnly || []).map(x => ({ tool: x.tool, asks: x.asks, recovered: x.recovered, on: x.recoveredOn || 0 })), falseNudges: (window.__falseNudges || []).length, falseNudgeNotes: (window.__falseNudges || []).map(x => x.instr), linesTwice: twice,
+      ctx: { mode: window.__reconnectBy, asks: (window.__ctxAsks || []).map(a => ({ kind: a.kind, asks: a.asks, done: a.done, on: a.on || 0, misses: a.misses })), rows: (window.__ctxRows || []).map(r => r.text),
+        // each reopen with no form open: what the officer heard next and how long after the line came back (the app's scripted line or Ara's composed one)
+        heard: (window.__ctxRows || []).filter(r => /^(Reconnected|Line reopened): (no question was waiting: where we were|Ara is asked to say where we were)/.test(r.text)).map(r => { const l = (window.__lines || []).find(x => x.at > r.at && /^Sorry, I lost you for a moment/.test(x.text)); return { secs: l ? Math.round((l.at - r.at) / 100) / 10 : null, from: l ? l.from : "", bare: !!l && /^Sorry, I lost you for a moment\. What would you like to do\?$/.test(l.text), text: l ? l.text.slice(0, 120) : "" }; }) } }; }).catch(() => null);
   await p.evaluate(() => { try { endCall("harness conversation finished"); } catch (e) {} }).catch(() => {});
   await ctx.close(); return conv;
 }

@@ -20,6 +20,9 @@ on:
       max_minutes:
         description: "Minutes a conversation may take before it is cut off"
         default: "30"
+      reconnect:
+        description: "Who says where we were after a drop: ara (checked by the app) or app (scripted line)"
+        default: "ara"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -48,6 +51,7 @@ jobs:
           JOBS: ${{ inputs.jobs }}
           SEED: ${{ matrix.seed }}
           MAX_MIN: ${{ inputs.max_minutes }}
+          RECONNECT: ${{ inputs.reconnect }}
         run: MAX_MS=$(( ${MAX_MIN:-30} * 60000 )) node tests/patience/run.js
       - name: Report (in the log, since artifacts can't be fetched from the cloud session; the summary last, so a tail of the log has it)
         if: always()
