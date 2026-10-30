@@ -6,7 +6,7 @@
       "change": "Preview: every scripted line the app sends to Ara carries its own id, and the ids xAI returns for it (the item it added, the reply, the reply's item, the audio's item) are written to the activity log with whether our id came back. If xAI refuses a line with an id, the app sends it again without one and stops adding ids for that call. Nothing else changes; this is to learn whether words and sound can be matched by id instead of by their text.",
       "area": "Voice",
       "requestedBy": "Carverhill",
-      "why": "Carverhill, Oct 30 2:40 PM: \"can we get Ara to append a unique, matching id onto each combination of words returned to us and audio returned to us so we don't have to parse the actual text\"; 3:10 PM: \"Can you try to read xai documentation first\" (the docs promise a shared response id per reply, no client item id echo; this build measures it)"
+      "why": "Carverhill, Oct 30 1:13 PM: \"can we get Ara to append a unique, matching id onto each combination of words returned to us and audio returned to us so we don't have to parse the actual text\"; 1:15 PM: \"Can you try to read xai documentation first\" (the docs promise a shared response id per reply, no client item id echo; this build measures it)"
     },
     {
       "date": "Oct 30, 1:10 PM",
