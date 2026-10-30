@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 4:31 PM",
+      "change": "Preview: the next-step question after a substantive interaction is a yes-or-no decision in two steps: \"A substantive interaction needs a next step, which becomes a Task for you. Do you want to set it now, yes or no?\", then on yes \"What's the next step, and when is it due?\"; on no the report goes to the read-back without one. The answer is judged by the short-answer rule (any short answer that isn't a no is a yes). Ara's guidance for the same moment carries the same two lines, and the reconnect line after a drop asks whichever is pending.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 4:26 PM: on the move from Qualification to Cultivation the app asked whether to set a next step without phrasing it as a yes-or-no question (\"Do you want to set that now? If so, tell me the step and when it's due.\", heard on his 3:12 and 4:19 PM calls). Build 4:27 PM."
+    },
+    {
       "date": "Oct 30, 4:20 PM",
       "change": "Preview: the quiet hang-up is a yes-or-no decision. After 20 s of quiet (50 s with a form open) Ara asks \"Should I hang up now, yes or no?\"; a yes, or no answer in 10 s, gets her goodbye (\"Goodbye for now. Tap the mic when you need me.\" / \"Your form stays on the screen.\") and then the hang-up; any other words keep the call going. The phone's \"I'll hang up for now\" recording only stands in when her goodbye can't play. The quiet allowance is 30 s in both modes (tap mode was 12 s).",
       "area": "Voice",

@@ -151,7 +151,7 @@ test("Ara: an interaction report keeps only what the officer said (substantive, 
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true, nextStep: "Follow up on Ken's interest in the North Dakota work", nextDue: "2026-11-01" });
   ok(r.still_needed && r.still_needed.some(x => /Next step/.test(x)), "after the officer's yes the next step wasn't asked for: " + JSON.stringify(r));
   // Carverhill's 9:14 AM call (Oct 29): the invented next step was dropped and the officer heard only "I didn't catch the next step from you", so the app now asks its own question in the same line
-  ok(/^I didn't catch the next step from you, so it's not on the form\. A substantive interaction needs a next step, which becomes a Task for you\. Do you want to set that now\? If so, tell me the step and when it's due\.$/.test(r.ask_exactly || "") && /The app asked whether to set the next step itself/.test(r.next || ""), "a dropped invented next step didn't get the app's own next-step question: " + JSON.stringify(r));
+  ok(/^I didn't catch the next step from you, so it's not on the form\. A substantive interaction needs a next step, which becomes a Task for you\. Do you want to set it now, yes or no\?$/.test(r.ask_exactly || "") && /The app asked whether to set the next step itself/.test(r.next || ""), "a dropped invented next step didn't get the app's own next-step question: " + JSON.stringify(r));
   ok(/the app asks its own next-step question/.test(await p.evaluate(() => ACT.q.map(a => a.text).join(" | "))), "the app's next-step question wasn't logged");
   await said(p, "I'll give him a call next Tuesday.");
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", nextStep: "Call Ken", nextDue: "2026-10-27" });
@@ -207,7 +207,7 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   await said(p, "Yes, it was substantive.");
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true });
   const need = (r.still_needed || []).find(x => /^Next step/.test(x)) || "";
-  ok(/becomes a Task for the officer/.test(need) && /ask whether they want to set it now/.test(need) && /never suggest/.test(need) && !/follow-up call next week/.test(need), "the next-step prompt still suggests a step or doesn't explain it: " + need);
+  ok(/becomes a Task for the officer/.test(need) && /ask 'Do you want to set it now, yes or no\?'/.test(need) && /on yes ask 'What's the next step, and when is it due\?'/.test(need) && /never suggest/.test(need) && !/follow-up call next week/.test(need), "the next-step prompt still suggests a step or doesn't explain it: " + need);
   // 1. the optional campaign question: a repeat of the entity answer after a drop is not a campaign answer
   await p.evaluate(() => { V = null; renderOverlay(); const c = S.contacts.find(x => x.first === "Ken"); c.capacity = "B"; S.opps = S.opps.filter(o => o.contactId !== c.id); save(); });
   await said(p, "Yes, create an opportunity for Ken.");

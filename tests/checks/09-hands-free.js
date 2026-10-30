@@ -323,12 +323,23 @@ test("Hands-free: an interaction report is never read back without the substanti
   ok(r.saved === false && /substantive interaction/i.test(r.ask_exactly || "") && !r.read_back, "save_form read back without the substantive answer: " + JSON.stringify(r));
   await said(p, "Yes, it was.");
   r = await ara(p, "save_form", { confirmed: false });
-  ok(r.saved === false && /Do you want to set that now\? If so, tell me the step and when it.s due/.test(r.ask_exactly || "") && (await p.isChecked("#f_substantive")), "the yes wasn't taken, or the next step wasn't asked: " + JSON.stringify(r));
+  ok(r.saved === false && /Do you want to set it now, yes or no\?$/.test(r.ask_exactly || "") && (await p.isChecked("#f_substantive")), "the yes wasn't taken, or the next step wasn't asked as a yes-or-no decision (Oct 30): " + JSON.stringify(r));
+  await said(p, "Sure."); // a short answer that isn't a no is a yes
+  r = await ara(p, "save_form", { confirmed: false });
+  ok(r.saved === false && r.ask_exactly === "What's the next step, and when is it due?" && await p.evaluate(() => V.askedNext === "own" && formPosition().ask === "What's the next step, and when is it due?"), "a yes to the next-step question didn't get the own-words question (and the reconnect line with it): " + JSON.stringify([r.ask_exactly, await p.evaluate(() => [V.askedNext, formPosition().ask])]));
   const today = await p.evaluate(() => todayISO());
   await said(p, "Make the ask, today."); // the officer answers the next-step question (Oct 25: a next step the officer never said is dropped)
   r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", nextStep: "Make the ask", nextDue: today });
   ok(/due [A-Z][a-z]+ \d+, today\. Yes to save, or no to change something\?$/.test(r.read_back || ""), "the read-back doesn't say the due date is today: " + JSON.stringify(r));
   ok(await p.evaluate((d) => dateSaid(d).endsWith("(today)"), today), "dateSaid has no day word");
+  // a no to the next-step question: the report goes to the read-back without one (Oct 30)
+  await p.evaluate(() => { V = null; G.recent = []; renderOverlay(); });
+  await said(p, "Log a phone call with Ken Ito today, we talked about the gala.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: today, meetingType: "Phone call", summary: "Talked about the gala." });
+  await said(p, "Yes, it was."); r = await ara(p, "save_form", { confirmed: false });
+  ok(/Do you want to set it now, yes or no\?$/.test(r.ask_exactly || ""), "the second report didn't ask the next-step question: " + JSON.stringify(r));
+  await said(p, "No."); r = await ara(p, "save_form", { confirmed: false });
+  ok(/Yes to save, or no to change something\?$/.test(r.read_back || "") && !/next step/.test(r.read_back || "") && await p.evaluate(() => V.nextSkipped && !formPosition().ask.includes("next step")) && /The officer said no to setting a next step now: the report goes on without one/.test(await p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "))), "a no to the next-step question didn't go on to the read-back without one: " + JSON.stringify([r.read_back, r.ask_exactly, await p.evaluate(() => [V.nextSkipped, formPosition().ask])]));
 });
 
 test("Hands-free: a yes to a read-back saves the form even when Ara opens another form instead of calling save_form; without the yes the other form waits", async (p) => {
