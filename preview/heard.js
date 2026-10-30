@@ -38,9 +38,8 @@ function silentLine(rec) {
   if (G.silentAgain && G.silentAgain.text === rec.text) { G.silentAgain = null; act("step", "Ara's line came without sound twice: the line is treated as dead"); reconnect("her line came without sound twice"); return; }
   if (playingLeft() > 0 || G.audioOn) { act("step", "Ara's line came without sound, but her sound is already playing or queued: a false alarm, nothing said"); return; } /* Oct 28 10:03 PM: her sounded copy was on the clock before the judgement, and the recording played over it */
   G.silentAgain = { text: rec.text, at: Date.now() }; act("step", `Ara's line came without sound: the phone says she's taking a moment and waits for the sound; it asks for the line again only after ${Math.round((SILENT_RESEND_MS + SILENT_JUDGE_MS) / 1000)} s ("${rec.text.slice(0, 60)}")`);
-  sayLocal("Ara's taking a moment.", "slow"); G.slowSaid = true;
+  quietSay("the sound of Ara's line"); /* and the quiet clock keeps the recordings coming every 5 s while G.silentWait stands (Oct 30) */
   const w = { rec, at: Date.now() }; G.silentWait = w;
-  w.still = setTimeout(() => { if (!G.live || G.silentWait !== w || playingLeft() > 0 || G.audioOn) return; sayLocal(STILL_WAIT_TEXT, "", STILL_WAIT_TEXT); }, SILENT_STILL_MS);
   w.resend = setTimeout(() => { if (!G.live || G.silentWait !== w) return; G.silentWait = null; if (G.lastHeard && G.lastHeard.at > rec.at) return;
     const same = (t) => typeof sameWords === "function" && t && sameWords(t) === sameWords(rec.text);
     if (G.respSeq !== rec.resp || playingLeft() > 0 || G.audioOn || same(G.forced && G.forced.text) || same(G.pendingForce)) { act("step", "Ara's line is being said again already: the phone's resend stands down"); return; } /* 10:05 AM call: the app's own copy was already on its way */
@@ -51,7 +50,7 @@ function silentLine(rec) {
 // the sound arrived after all (a sounded copy of the words-only line): the wait ends, nothing is asked again
 function silentSoundArrived(text) {
   const w = G.silentWait; if (!w || sameWords(w.rec.text) !== sameWords(text)) return;
-  clearTimeout(w.still); clearTimeout(w.resend); G.silentWait = null; G.silentAgain = null; act("step", `The sound for Ara's line arrived ${((Date.now() - w.rec.at) / 1000).toFixed(1)} s after the words: nothing asked again`);
+  clearTimeout(w.resend); G.silentWait = null; G.silentAgain = null; act("step", `The sound for Ara's line arrived ${((Date.now() - w.rec.at) / 1000).toFixed(1)} s after the words: nothing asked again`);
 }
 // the officer asks whether Ara is there: log what the phone knows about her last line, wake the sound if it's paused, and have her say it again
 function heardAsk(text) {

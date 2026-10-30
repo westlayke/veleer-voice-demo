@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 3:37 PM",
+      "change": "Preview: one quiet clock for the phone's status recordings. Whenever the app is waiting on anything (the line, a scripted line, a reply, Ara's sound) and nothing has sounded for 5 s, the phone plays one short recording (the still-trying lines while the line is down; otherwise \"Ara's taking a moment\" first, then \"Still waiting on Ara\", \"Still here. Hang on.\", \"Ara's line is slow. Hang on.\" in turn). Until now the recordings came from four separate timers with gaps of 10 s and more between them.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 3:10 PM: \"If the log shows I had a silent period for 11 seconds how do we fix that so it's never more than say 5 or 6 seconds?\"; Build 3:12 PM."
+    },
+    {
       "date": "Oct 30, 3:09 PM",
       "change": "Preview: after a drop, a tool call the app refuses (such as a save the service replays from before the drop) no longer ends the check that Ara says where we were; her \"What next?\" is caught and she is asked again, up to three times, with the app's own line as the floor. Ara is also told never to ask \"what next?\" or \"what would you like to do?\" after a save: say the next step and ask yes or no.",
       "area": "Voice",

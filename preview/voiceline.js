@@ -7,7 +7,7 @@
 /* ---------- timings: tune here ---------- */
 const IDLE_MS = 12000, IDLE_HF_MS = 30000;   // hang up after this much quiet (hands-free: a driver may take a while to answer)
 const IDLE_FORM_MS = 60000;                  // with a form open and waiting on the officer, twice that (Carverhill Oct 28 4:12 PM: the service took 20 to 29 s a reply, then the call hung up with the form open)
-const STILL_WAIT_MS = 10000;                 // while a reply is outstanding, after "Ara's taking a moment." the phone says "Still waiting on Ara." this often (never a long silence)
+const QUIET_MS = 5000, QUIET_SPACING_MS = 2500; // the quiet clock: while the app waits on anything, a status recording every 5 s of silence (Carverhill, Oct 30: never more than 5 or 6 s of silence); a site that speaks early keeps this spacing
 const NOISE_CAP_MS = 60000;                  // sound on the mic counts as talking, but not for longer than this (road noise)
 const STALL_MS = 5000, SPEAK_RMS = 0.04, GAP_SPEECH_MS = 400; // GAP_SPEECH_MS: sound on the mic this long while the line is down counts as the officer talking (a bump of road noise doesn't)     // officer's voice on the mic this long with no word from the voice service: the line may be dead
 const LINE_TEST_MS = 3000;                   // how long a line test (a tiny request to the key holder) may take before it counts as failed
@@ -35,9 +35,8 @@ const TOKEN_WAIT_MS = 6000;                  // a voice pass that takes longer c
 const TOKEN_RETRY_MS = 2000;                 // between tries for a voice pass while the line is down
 const DOWN_GIVE_UP_MS = 600000;              // a line down this long (no voice pass to be had) ends the call with the phone's spoken notice (10 minutes, as above)
 const WARN_GIVE_UP_MS = 480000, LAST_TRY_MS = 40000;  // a try that starts within 40 s of the limit is the last one, and said so              // from 8 minutes down the phone says it will stop trying at 10, and the last try is announced (Carverhill, Oct 29)
-const SAY_DOWN_MS = 5000, SAY_STILL_MS = 12000, SAY_REPEAT_MS = 10000; // the phone's own spoken lines while the line is down (Carverhill, Oct 25)
-const SAY_SLOW_AFTER_MS = 60000, SAY_REPEAT_LATER_MS = 30000; // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (a long dead spot shouldn't nag)
-const downRepeatMs = () => Date.now() - (G.downAt || Date.now()) >= SAY_SLOW_AFTER_MS ? SAY_REPEAT_LATER_MS : SAY_REPEAT_MS;
+const SAY_DOWN_MS = 5000; // the phone says the line dropped this long after the drop (Carverhill, Oct 25); the still-trying lines then come from the quiet clock, every 5 s of silence (Oct 30; until then every 10 s, every 30 s after a minute)
+// // after the first minute down, "Still trying" comes every 30 s instead of every 10 s (a long dead spot shouldn't nag)
 const DOWN_LINES = ["The line dropped. Reconnecting you to Ara.", "Still trying to reconnect.", "Still no signal. I'll keep trying for two more minutes, then hang up.", "This is my last try."]; // recorded in sounds/ (line-dropped, still-trying, line-back): the phone's own speech is silent during a call on an iPhone (Oct 25)
 const LINE_FILES = { dropped: "line-dropped.mp3", still: "still-trying.mp3", back: "line-back.mp3", slow: "ara-slow.mp3", warn: "line-warn.mp3", last: "line-last.mp3" }, lineRaw = {}, lineBuf = {};
 // the same lines with the officer's name, in the phone's stand-in voice (Eve, the same voice as the stock recordings since Oct 28: one voice for every phone line), made by the key holder's text-to-speech while the phone has signal and kept on the
@@ -49,10 +48,10 @@ const NAMED_LINES = {
   back: (n) => `You're back with Ara, ${n}.`,
   warn: (n) => `Still no signal, ${n}. I'll keep trying for two more minutes, then hang up.`, last: (n) => `This is my last try, ${n}.`,
 };
-const NAMED_VOICE = "eve", NAMED_KEY = "namedLines:v4", namedRaw = {}, namedBuf = {};
+const NAMED_VOICE = "eve", NAMED_KEY = "namedLines:v5", namedRaw = {}, namedBuf = {};
 // phone lines without a name, made and kept the same way (the stock recordings have no words for these)
-const STILL_WAIT_TEXT = "Still waiting on Ara.", HANGUP_TEXT = "I'll hang up for now. Tap the mic when you need me.", HANGUP_FORM_TEXT = "I'll hang up for now. Your form stays on the screen.";
-const PHONE_LINES = [STILL_WAIT_TEXT, HANGUP_TEXT, HANGUP_FORM_TEXT];
+const STILL_WAIT_TEXT = "Still waiting on Ara.", QUIET_LINES = [STILL_WAIT_TEXT, "Still here. Hang on.", "Ara's line is slow. Hang on."], HANGUP_TEXT = "I'll hang up for now. Tap the mic when you need me.", HANGUP_FORM_TEXT = "I'll hang up for now. Your form stays on the screen.";
+const PHONE_LINES = [...QUIET_LINES, HANGUP_TEXT, HANGUP_FORM_TEXT];
 const officerFirst = () => { const n = String((typeof S !== "undefined" && S.settings && S.settings.userName) || "").trim().split(/\s+/)[0] || ""; return n ? n[0].toUpperCase() + n.slice(1) : ""; };
 const namedTexts = (n) => (n ? [NAMED_LINES.dropped(n), ...NAMED_LINES.still.map(f => f(n)), NAMED_LINES.back(n), NAMED_LINES.warn(n), NAMED_LINES.last(n)] : []).concat(PHONE_LINES);
 const namedText = (kind, i) => { const n = officerFirst(); if (!n) return ""; return kind === "still" ? NAMED_LINES.still[i % NAMED_LINES.still.length](n) : NAMED_LINES[kind] ? NAMED_LINES[kind](n) : ""; };
@@ -114,7 +113,7 @@ function turnWatch() {
   if (!G.live || !G.turnOpen || G.asked || G.forced || G.pendingForce || G.responding || G.audioOn || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
   const heard = G.lastHeard && G.lastHeard.at >= G.turnOpen - 1500 ? String(G.lastHeard.text || "") : "", dt = Date.now() - G.turnOpen;
   if (!heard) { if (dt > TURN_TEST_MS) G.turnOpen = 0; return; }
-  if (dt >= TICK_MS && !G.turnStep) { G.turnStep = 1; if (!G.slowSaid) { if (sayLocal("Ara's taking a moment.", "slow")) { G.slowSaid = true; G.slowAt = Date.now(); } else cue("wait"); }
+  if (dt >= TICK_MS && !G.turnStep) { G.turnStep = 1; quietSay("Ara's answer");
     act("step", `No reply started ${TICK_MS / 1000} s after the officer spoke ("${heard.slice(0, 60)}"): the phone says Ara's taking a moment`); }
   else if (dt >= TURN_TEST_MS && G.turnStep === 1) { G.turnStep = 2; const ws = G.ws, at = G.turnOpen;
     pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.turnOpen !== at || G.ws !== ws || G.responding || G.asked || /^(Connecting|Reconnecting)/.test(G.status)) return;
@@ -124,13 +123,10 @@ function turnWatch() {
       askReply(`The officer just said: "${heard}". Answer that now, out loud in one or two sentences, or call the tool it needs.`); }); }
   else if (dt >= TURN_GIVE_UP_MS && G.turnStep === 2) { G.turnOpen = 0; act("step", `No reply ${TURN_GIVE_UP_MS / 1000} s after the officer spoke: fresh line`); G.retried = 0; reconnect("the voice service stopped answering"); }
 }
-function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWatch();
+function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWatch(); quietWatch();
   // a driver can't see the screen: a soft tick every 4 s while Ara is slow to answer or the line is reconnecting
   // Oct 27 (Carverhill), back on Oct 28 after the 1.0 reset dropped it: a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
-  if (G.live && G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now();
-    if (!G.slowSaid) { if (sayLocal("Ara's taking a moment.", "slow")) { G.slowSaid = true; G.slowAt = Date.now(); } else { cue("wait"); vlog("still working: tick"); } }
-    else if (Date.now() - (G.slowAt || 0) >= STILL_WAIT_MS && sayLocal(STILL_WAIT_TEXT, "", STILL_WAIT_TEXT)) G.slowAt = Date.now(); /* every 10 s until Ara answers (Oct 28: 29 s gaps with one line in them) */
-    else { cue("wait"); vlog("still working: tick"); } }
+  if (G.live && G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); if (!quietSay("a reply")) { cue("wait"); vlog("still working: tick"); } } /* the quiet clock keeps the recordings coming every 5 s after this (Oct 30) */
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
   if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
@@ -351,9 +347,43 @@ function downSay(kind) { // the dropped line, then the still-trying lines in tur
   return sayLocal(DOWN_LINES[0], "dropped", namedText("dropped"));
 }
 function downStart() {
-  if (G.downAt) return; G.downAt = G.lastDropAt = Date.now(); G.downN = 0; G.slowSaid = false; linePrep();
-  const again = () => { if (!G.live || !G.downAt || G.lastTry) return; downSay("still"); G.downTimer = setTimeout(again, downRepeatMs()); };
-  G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; downSay("dropped"); G.downTimer = setTimeout(again, SAY_STILL_MS - SAY_DOWN_MS); }, SAY_DOWN_MS);
+  if (G.downAt) return; G.downAt = G.lastDropAt = Date.now(); G.downN = 0; G.slowSaid = false; G.quietAt = Date.now(); linePrep();
+  G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; G.downSaid = true; downSay("dropped"); }, SAY_DOWN_MS); /* then the quiet clock says the still-trying lines, every 5 s of silence */
+}
+// ---------- the quiet clock: while the app waits on anything, the officer never hears more than QUIET_MS of silence (Carverhill, Oct 30: an 11 s gap on his 2:52 PM call) ----------
+// What is being waited on, or "" when nothing is: the line itself, a scripted line, a reply the app asked for, the sound of a words-only line, Ara's words
+// after a reply started, or Ara's answer to the officer's own turn. The hang-up countdown and a paused sound are not waits.
+function waitingOn() {
+  if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || G.lockPaused) return "";
+  if (G.downAt || /^(Connecting|Reconnecting)/.test(G.status)) return G.downSaid ? "the line" : ""; /* the dropped line itself comes at SAY_DOWN_MS */
+  if ((G.forced && !G.forced.started) || G.pendingForce) return "a scripted line";
+  if (G.asked) return "a reply";
+  if (G.silentWait) return "the sound of Ara's line";
+  if (G.responding && !G.audioOn) return "Ara's words";
+  if (G.turnOpen && G.lastHeard && G.lastHeard.at >= G.turnOpen - 1500) return "Ara's answer";
+  return "";
+}
+const lastSoundAt = () => Math.max(G.t0 || 0, G.lastSoundAt || 0, G.lineEndAt || 0, G.lastHeard ? G.lastHeard.at || 0 : 0, G.speechStopAt || 0, G.quietAt || 0);
+function quietWatch() {
+  if (!G.live) return;
+  if (playingLeft() > 0 || G.audioOn || (G.lineEndAt && Date.now() < G.lineEndAt)) { G.lastSoundAt = Date.now(); return; } /* Ara or the phone is sounding */
+  if (G.speechOn) { G.speechStopAt = Date.now(); return; } /* the officer is talking */
+  const on = waitingOn(); if (!on) return;
+  const gap = Date.now() - lastSoundAt(); if (gap < QUIET_MS) return;
+  quietSay(on, gap);
+}
+// one status recording now, from the clock or from a site that used to speak on its own timer: the still-trying lines while the line is down, "Ara's taking a moment."
+// the first time, then the quiet lines in turn (the named ones from the phone's store, else the stock recording). Never within QUIET_SPACING_MS of the last sound.
+function quietSay(on, gap) {
+  if (!G.live || playingLeft() > 0 || G.audioOn || (G.lineEndAt && Date.now() < G.lineEndAt) || G.speechOn) return false;
+  if (Date.now() - lastSoundAt() < QUIET_SPACING_MS) return false;
+  G.quietAt = Date.now(); const secs = Math.round((gap || Date.now() - lastSoundAt()) / 1000);
+  let said;
+  if (G.downAt) said = downSay("still");
+  else if (!G.slowSaid) { said = sayLocal("Ara's taking a moment.", "slow"); if (said) { G.slowSaid = true; G.slowAt = Date.now(); } }
+  else { const i = G.quietN = (G.quietN || 0) + 1, t = QUIET_LINES[(i - 1) % QUIET_LINES.length]; said = sayLocal(t, "", t) || sayLocal("Ara's taking a moment.", "slow"); }
+  if (said) act("step", `Quiet for ${secs} s while waiting on ${on}: the phone filled it`); else vlog(`quiet clock: nothing to play (sound not running) while waiting on ${on}`);
+  return said;
 }
 // a status recording still playing is stopped when the line comes back, so it can't overlap Ara (Oct 25 call)
 function cutStatusLine(why) {
@@ -364,7 +394,7 @@ function cutStatusLine(why) {
 function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;
   const cut = cutStatusLine("the line came back");
   if (G.downAt) { vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && !cut && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back", namedText("back")); }
-  G.downAt = 0; G.warnSaid = false; G.lastTry = false; }
+  G.downAt = 0; G.downSaid = false; G.warnSaid = false; G.lastTry = false; }
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {
   downEnd();
@@ -523,7 +553,7 @@ function forceSay(text, then, fallback, waited = 0) {
 function forceTick(now) {
   clearTimeout(G.forceTick); const f = G.forced, ws = G.ws; if (!f || f.viaReply) return; /* a line said through a reply request is covered by askReply's own watch */
   G.forceTick = setTimeout(() => { if (!G.live || G.forced !== f || f.started || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
-    if (!G.slowSaid) { if (sayLocal("Ara's taking a moment.", "slow")) { G.slowSaid = true; G.slowAt = Date.now(); } else cue("wait"); }
+    if (!quietSay("a scripted line")) cue("wait");
     act("step", `Nothing back ${TICK_MS / 1000} s after a scripted line: the phone says Ara's taking a moment and tests the line (${forcedTrace(f)})`);
     pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.forced !== f || f.started || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
       if (typeof ms === "number" && ms <= SLOW_LINE_MS) return; // a healthy line: the voice service is just slow, the 8 s fallback still applies
