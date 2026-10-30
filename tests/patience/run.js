@@ -146,7 +146,7 @@ const BOOK = [
   { q: /Shall I use that/i, say: "Use that.", tool: (line, ctx) => forForm(ctx, { nextStep: "Follow up with Jordan to get an answer on the ask", nextDue: F }) },
   { q: /Move \w+ to Cultivation, or defer\?/i, say: "Move to Cultivation.", tool: ["show_cultivation_decision", { contact_name: C, decision: "Move to Cultivation" }] },
   { q: /Move \w+ to Cultivation\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
-  { q: /Which entity, and which campaign/i, say: "The North Dakota Fed PAC, North Dakota.", tool: (line, ctx) => forForm(ctx, { fund: ND, campaign: "North Dakota" }) },
+  { q: /Which entity, and which campaign|Which entity\?/i, say: "The North Dakota Fed PAC, North Dakota.", tool: (line, ctx) => forForm(ctx, { fund: ND, campaign: "North Dakota" }) },
   { q: /Which campaign/i, say: "North Dakota.", tool: (line, ctx) => forForm(ctx, { campaign: "North Dakota" }) },
   { q: /Which entity\?/i, say: "The North Dakota Fed PAC.", tool: (line, ctx) => forForm(ctx, { fund: ND }) },
   { q: /planned ask date/i, say: "Today, twenty-five thousand dollars.", tool: ["show_ask_plan_draft", { contact_name: C, plannedDate: T, amount: 25000 }] },

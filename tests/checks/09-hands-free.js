@@ -402,6 +402,8 @@ test("The phone locking (page hidden) closes the line a few seconds later and re
   ok(await p.evaluate(() => G.live && !!G.hiddenAt && !G.lockPaused && G.ws === window.__lockWs), "the line was closed within 1.5 s of the page going hidden (a quick app switch shouldn't drop it)");
   await p.evaluate(() => { const tr = G.stream.getAudioTracks()[0]; Object.defineProperty(tr, "muted", { get: () => true, configurable: true }); tr.onmute && tr.onmute(); soundPaused(G.ctx); }); /* the phone mutes the mic and pauses the sound at the lock (Oct 26) */
   await p.waitForTimeout(3000);
+  ok(await p.evaluate(() => G.live && !!G.hiddenAt && !G.lockPaused && G.ws === window.__lockWs), "the line was closed within 4.5 s of the page going hidden (Oct 30: an auto-lock undone within 7 s keeps the line)");
+  await p.waitForTimeout(7000);
   ok(await p.evaluate(() => G.live && !!G.lockPaused && G.ws === null && window.__lockWs.readyState === 3 && /Paused/.test(G.status)), "the line wasn't closed after the lock (xAI would charge for a locked phone): " + await p.evaluate(() => G.status));
   await p.evaluate(() => { Object.defineProperty(document, "visibilityState", { get: () => "visible", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
   await p.waitForFunction(() => G.ws && G.ws !== window.__lockWs && G.status === "Listening", null, { timeout: 5000 }).catch(() => {});

@@ -428,7 +428,7 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   n0 = await p.evaluate(() => __sent.length);
   await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1800);
-  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return /Sorry, I lost you for a moment\. We're on the add planned ask for \w+\. (Which entity, and which campaign|When is the planned ask date|Which campaign)/.test(s); }), n0), "a form with required fields missing wasn't asked its first required question after the reconnect");
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => { const x = JSON.parse(s); return /Sorry, I lost you for a moment\. We're on the add planned ask for \w+\. (The entities: National has C3, C4 and Federal PAC|Which entity\\?|When is the planned ask date|Which campaign)/.test(s); }), n0), "a form with required fields missing wasn't asked its first required question after the reconnect");
 });
 test("Ara: a task named in full is found even when another task shares a word with it; the hands-free filter lists the saves to check; Ara's own answer isn't taken for a scripted line", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
