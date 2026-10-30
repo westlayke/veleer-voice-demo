@@ -506,3 +506,14 @@ Now one clock, `quietWatch()` in voiceline.js, runs on the 1 s tick. `waitingOn(
 
 Checks: "the quiet clock: during a 30 s outage..." in 08-voice.js (start-to-start gaps under 8 s with 2 s recordings), the dead-spot and named-lines checks updated (15 phone lines now). Patient Pat reports "Silence": the longest stretch with no sound starting and the stretches over 6.5 s, speaking time estimated.
 
+
+## A line counts as said only once it was heard with sound (Oct 30, 4:50 PM call)
+
+On Carverhill's 4:50 PM call the capacity question with the A to E ranges arrived as words with no voice audio. The app had marked the ranges as read when it sent the line, so the next rating question was the short "A to E?", and a late copy of his "No." to the question before (the service transcribes the same words two or three times over a few seconds) made the resend stand down as "the officer answered". One rule replaces the per-flag fixes:
+
+- `lineSaid(text)` in heard.js runs only from the heard check's pass branch (voice audio came and the phone played it). It sets the once-per-call flags: `G.rangesSaidAt` (the A to E ranges) and `G.undoSaid` (the undo reminder). Nothing sets them when a line is built or sent.
+- The resend in `silentLine` stands down only for a new utterance of the officer's after the line would have finished playing (`answeredAfter(rec)`): a transcript that repeats or extends the previous one within `REPEAT_MS` 6 s carries `G.lastHeard.repeat` and doesn't count.
+- The typed-run guard is "no voice audio and no sound yet in this call" (`G.audioEver || G.soundEver`; `G.soundEver` is set by `heardTick` once the speaker path carries sound), so a real call's first line is covered as soon as a recording has played.
+- The judgement row for a soundless line starts with "(no sound)".
+
+Lists: a question with a fixed list of choices reads the list every time it is asked afresh; the short form ("A to E?") only when the same question comes again within `RANGES_HEARD_MS` 2 min of the ranges being heard (`rangesHeard()` in voiceforms.js; `rateQ` and `capRanges` use it). A selection that saves on its own is confirmed as a yes-or-no decision: "Set Carver's capacity to A, $250,000 and up, yes or no?" and "Mark 'Call Ruth', due Nov 3, as done, yes or no?". A selection inside a form stays confirmed once, in the form's read-back. Check "Said means heard (Oct 30)" in 08-voice.js.

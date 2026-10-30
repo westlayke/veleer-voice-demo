@@ -559,7 +559,6 @@ function micMuted(tr) {
 // Used where the words matter and Ara used to stop or change them (Oct 24: "Say only ..." left her silent mid-form).
 // If xAI doesn't play it, Ara is asked to say it instead (fallback), so the officer always hears it.
 function forceSay(text, then, fallback, waited = 0) {
-  if (/A is \$250,000 and up/.test(String(text || ""))) G.rangesSaid = true; /* the A to E ranges are read once per call (Oct 28) */
   if (!G.live) { G.pendingForce = null; return; }
   if (!waited) G.pendingForce = text;
   if ((replyBusy() || playingLeft() > 0 || G.forced || Date.now() - (G.cancelAt || 0) < CANCEL_SETTLE_MS) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }

@@ -19,7 +19,9 @@ function officerSubstantive() { const t = ((G.recent || []).filter(l => l.starts
 const OPT_OFFER = `The required details are in. Before anything else, ask exactly this: "Would you like to add more details? I can take you through them one at a time." If yes, call optional_fields with step start. If no, ask them to check the draft and tap the button.`;
 // the A to E ranges are read out once per call; after that the question is short, so it can be cut in on (Oct 28: the long line was said twice and couldn't be interrupted)
 const CAP_RANGES = "A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000.";
-const capRanges = (who) => G.rangesSaid ? ` A to E: which fits ${who}, or move on?` : ` ${CAP_RANGES} Which fits ${who}, or move on?`; /* the flag is set when the ranges are actually spoken (forceSay), since lines are also built for prefetch */
+const RANGES_HEARD_MS = 120000; /* a list is read in full every time it is asked afresh; the short form only when the same question comes again within two minutes, after a drop or a miss (Carverhill, Oct 30) */
+const rangesHeard = () => !!(G.rangesSaidAt && Date.now() - G.rangesSaidAt < RANGES_HEARD_MS); /* set by lineSaid() in heard.js, only when the ranges were heard with sound */
+const capRanges = (who) => rangesHeard() ? ` A to E: which fits ${who}, or move on?` : ` ${CAP_RANGES} Which fits ${who}, or move on?`;
 // ---- Voice form policy (Carverhill, Oct 28): one engine for every form. The optional fields of a form are its declared fields that are not
 // required, fixed or prefilled; each is asked with the question below (a field with none gets the generic one for its type), one at a time,
 // and the officer can move on or save at any question. What differs between forms is in VOICE_RULES (core.js), never in a branch here.
@@ -167,7 +169,7 @@ function grokSaved(action, r, d = {}) {
   const spoken = [moodLine(action, d), savedShort(action, who, d) + closed, undo ? "Say undo if that's wrong." : "", r && r.note ? r.note : "", next].filter(Boolean).join(" ");
   G.justNow = { at: Date.now(), text: `the app saved and closed the ${ACTIONS[action].title} form (${line}) and is saying so itself, ending with: "${next}" A yes from the officer means that next step: open it with its tool. Never call save_form for it; the form is gone.` };
   syncState("form saved"); /* at the instant of the save, not after the line plays (Carverhill, Oct 29: Ara called save_form 16 s after a save by words, and the app said the save line twice) */
-  if (G.hfTry) { if (undo) G.undoSaid = true; // the undo reminder once per conversation: every save repeating it got tiresome (Oct 24)
+  if (G.hfTry) { /* the undo reminder once per conversation (every save repeating it got tiresome, Oct 24): the flag is set in heard.js once the line was heard with sound */
     G.hfTry.force = spoken; G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} Say in a few words that it's saved (for example "${savedShort(action, who, d)}")${r && r.note ? `, then state (don't ask) "${r.note}"` : ""}, then carry on.`; return; }
   G.saveAck = { at: Date.now(), action, who, next: `say exactly: "${next}"` };
   act("step", "The app says the save and the next step itself"); forceSay(spoken);

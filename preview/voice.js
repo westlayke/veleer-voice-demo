@@ -109,7 +109,7 @@ function normDate(v) {
   return null;
 }
 // Ara named no rating, or one the app doesn't know: she asks which
-const rateQ = (who) => G.rangesSaid ? `What's ${who}'s capacity rating, A to E?` : `What's ${who}'s capacity rating? ${CAP_RANGES}`; // the ranges in full once per call, then just the letters
+const rateQ = (who) => rangesHeard() ? `What's ${who}'s capacity rating, A to E?` : `What's ${who}'s capacity rating? ${CAP_RANGES}`; // the ranges in full unless they were heard in the last two minutes (Oct 30)
 function askRating(callId, who) { toolReply(callId, { ok: false, error: "The officer hasn't named a rating; the app is asking them. After the answer, call the tool again with it.", ask_exactly: rateQ(who || "this contact") }); }
 const FOR = { contact_name: { type: "string", description: "Full name of the contact this is for, as the officer said it" } };
 const TOOLS = [
@@ -643,7 +643,7 @@ async function startCall(opening) {
   if (navigator.audioSession) vlog("audio session: " + navigator.audioSession.type);
   G.session = deviceId().slice(0, 8) + "-" + Date.now().toString(36); logReady(); act("start", opening ? opening.replace(/^The officer opened the conversation from the app: /, "Tapped: ") : "Tapped the mic");
   if (!G.keepRecent) { G.recent = []; G.saves = []; G.convId = null; } G.keepRecent = false;
-  G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; G.rangesSaid = false; G.audioRetried = false; dropResume(); act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
+  G.live = true; if (typeof locStart === "function") locStart(); G.hands = true; G.rangesSaidAt = 0; G.soundEver = false; G.audioRetried = false; dropResume(); act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)"); G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */ { const vb = document.querySelector("#overlay .vfill"); if (vb) vb.remove(); } G.status = "Connecting…"; G.bot = ""; G.caps = []; G.tour = G.tourEnding = false; G.tourItems = []; G.respItems = []; G.handled = new Set(); G.idleEnding = false; busy(); clearInterval(G.idleTick); G.idleTick = setInterval(idleCheck, 1000); paintCall(); render(); keepAwake();
   try {
     const warm = typeof takeWarm === "function" ? takeWarm() : null; /* a line that started opening when the mic button was first touched (Oct 28) */
     G.t0 = Date.now(); G.heardAt = 0; G.passReady = !!TOK.p || !!warm;
@@ -855,7 +855,7 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.heardWait = null; if (!G.turnOpen && !G.responding && !G.speechOn) { G.turnOpen = Date.now(); G.turnStep = 0; } /* the officer's turn is open until a reply starts (turnWatch); a partial transcript while they are still talking opens nothing (real-line runs Oct 29: "taking a moment" 4 s into a long sentence) */ G.lastHeard = { text: e.transcript, n: G.heardN, at: Date.now() }; act("user", e.transcript); recent("Officer", e.transcript); if (typeof idleAnswer === "function" && idleAnswer(e.transcript)) {} else if (!(typeof hfYesHeard === "function" && hfYesHeard(e.transcript)) && !voiceCommand(e.transcript) && typeof nextStepNo === "function") nextStepNo(e.transcript);
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1; G.heardWait = null; if (!G.turnOpen && !G.responding && !G.speechOn) { G.turnOpen = Date.now(); G.turnStep = 0; } /* the officer's turn is open until a reply starts (turnWatch); a partial transcript while they are still talking opens nothing (real-line runs Oct 29: "taking a moment" 4 s into a long sentence) */ G.lastHeard = { text: e.transcript, n: G.heardN, at: Date.now(), repeat: !!(G.lastHeard && Date.now() - G.lastHeard.at < REPEAT_MS && sameWords(e.transcript).startsWith(sameWords(G.lastHeard.text))) }; act("user", e.transcript); recent("Officer", e.transcript); if (typeof idleAnswer === "function" && idleAnswer(e.transcript)) {} else if (!(typeof hfYesHeard === "function" && hfYesHeard(e.transcript)) && !voiceCommand(e.transcript) && typeof nextStepNo === "function") nextStepNo(e.transcript);
     if (typeof heardAsk === "function" && heardAsk(e.transcript)) guide("The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."); }
   if (G.forced) forcedEvent(t, e);
   if (t === "response.done" && G.bot && G.unheardResp === G.respSeq) G.unheard = G.bot; /* said into a paused sound engine: said again when it is back */
@@ -893,6 +893,7 @@ function onEvent(e) {
 // (Oct 25: the read-back twice, then "Are you there?"). The second telling is cut as soon as its words match.
 // the same words as the last line, which came without voice audio less than 15 s ago, now with audio: the sounded copy of that line, not a second telling
 const soundedCopy = (text) => { const r = G.lastLine; return !!(r && typeof AUDIO_MIN_S !== "undefined" && r.audioS < AUDIO_MIN_S && Date.now() - r.at < 15000 && (G.audioSamples || 0) / 24000 >= AUDIO_MIN_S && sameWords(r.text) === sameWords(text)); };
+const REPEAT_MS = 6000; /* the service sends the same transcript again, sometimes grown by a word, within a few seconds: that is no new answer */
 const sameWords = (s) => String(s).toLowerCase().replace(/[^a-z0-9$ ]/g, " ").replace(/\s+/g, " ").trim();
 function lateForcedCheck() {
   const lf = G.lateForced; if (!lf) return;

@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 5:12 PM",
+      "change": "Preview: a line of Ara's counts as said only once the heard check passes (voice audio came and the phone played it). The once-per-call flags (the A to E ranges read, the undo reminder said) are set there, never when a line is built or sent; the resend of a soundless line stands down only for a new answer of the officer's after the line would have finished (a repeated transcript of earlier words doesn't count); the typed-run guard lifts as soon as the phone has produced sound; the log row for a soundless line starts with \"(no sound)\". Lists: a question with a fixed list of choices reads the list every time it is asked afresh, and the short form (\"A to E?\") only when the same question comes again within two minutes of the list being heard. A selection that saves on its own is confirmed as a yes-or-no decision: \"Set Carver's capacity to A, $250,000 and up, yes or no?\" and \"Mark 'Call Ruth', due Nov 3, as done, yes or no?\". A selection inside a form stays confirmed once, in the form's read-back.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 4:54-5:00 PM, from his 4:50 PM call: Ara asked for a capacity rating without listing the ranges, and his \"A\" was not confirmed as \"set capacity to A, yes or no\"; the ranges had arrived as words with no sound and the app had marked them as read anyway (\"Isn't that the bug?\"), and he asked whether any other place records Ara's words as said with no sound. Build 5:02 PM."
+    },
+    {
       "date": "Oct 30, 4:31 PM",
       "change": "Preview: the next-step question after a substantive interaction is a yes-or-no decision in two steps: \"A substantive interaction needs a next step, which becomes a Task for you. Do you want to set it now, yes or no?\", then on yes \"What's the next step, and when is it due?\"; on no the report goes to the read-back without one. The answer is judged by the short-answer rule (any short answer that isn't a no is a yes). Ara's guidance for the same moment carries the same two lines, and the reconnect line after a drop asks whichever is pending.",
       "area": "Voice",

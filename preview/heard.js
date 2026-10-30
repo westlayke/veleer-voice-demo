@@ -12,7 +12,7 @@ function outLevel() {
   const d = new Float32Array(a.fftSize); a.getFloatTimeDomainData(d); let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] * d[i];
   return Math.sqrt(s / (d.length / 4));
 }
-function heardTick() { if (!G.live || !G.ctx || !(playingLeft() > 0)) return; const l = outLevel(); if (l > (G.outPeak || 0)) G.outPeak = l; }
+function heardTick() { if (!G.live || !G.ctx || !(playingLeft() > 0)) return; const l = outLevel(); if (l > (G.outPeak || 0)) G.outPeak = l; if (l > OUT_QUIET) G.soundEver = true; } /* the phone has produced sound in this call: a typed run never does */
 setInterval(heardTick, 250);
 function heardProblem(r) {
   const words = r.text.trim().split(/\s+/).length;
@@ -27,20 +27,30 @@ function lineHeard(text) {
   const rec = { text, at: Date.now(), resp: G.respSeq, audioS: (G.audioSamples || 0) / 24000, out: G.outPeak || 0, echo: G.echoPeak || 0, state: G.ctx ? G.ctx.state : "none", left: playingLeft() };
   G.lastLine = rec; G.outPeak = 0;
   setTimeout(() => { if (!G.live || G.lastLine !== rec) return; rec.out = Math.max(rec.out, G.outPeak || 0); rec.state = G.ctx ? G.ctx.state : "none";
-    const prob = heardProblem(rec); if (prob) { act("step", `Ara's line may not have been heard: ${prob} ("${text.slice(0, 80)}")`); vlog("not heard? " + prob); if (/^no voice audio|^the phone produced no sound/.test(prob) && rec.state === "running") silentLine(rec); }
-    else { G.silentAgain = null; if (rec.audioS >= AUDIO_MIN_S) G.audioEver = true; } }, Math.max(0, rec.left * 1000) + SILENT_JUDGE_MS);
+    const prob = heardProblem(rec); if (prob) { act("step", `${/^no voice audio/.test(prob) ? "(no sound) " : ""}Ara's line may not have been heard: ${prob} ("${text.slice(0, 80)}")`); vlog("not heard? " + prob); if (/^no voice audio|^the phone produced no sound/.test(prob) && rec.state === "running") silentLine(rec); }
+    else { G.silentAgain = null; if (rec.audioS >= AUDIO_MIN_S) { G.audioEver = true; lineSaid(text); } } }, Math.max(0, rec.left * 1000) + SILENT_JUDGE_MS);
 }
+// a line counts as said only here, once it was heard with sound (Carverhill, Oct 30 4:50 PM call: the A to E ranges came as text only, and the
+// next rating question was the short "A to E?"): the once-per-call flags are set from the heard line, never when a line is built or sent
+function lineSaid(text) {
+  const s = String(text || "");
+  if (/\$250,000 and up/.test(s)) G.rangesSaidAt = Date.now();
+  if (/say undo if that's wrong/i.test(s)) G.undoSaid = true;
+}
+// the officer answered the line: only a new utterance of theirs after the line would have finished playing counts (the service transcribes the same
+// words two or three times over a few seconds; on the 4:50 PM call a late copy of "No." to the question before made the resend stand down)
+const answeredAfter = (rec) => !!(G.lastHeard && !G.lastHeard.repeat && G.lastHeard.at > rec.at + rec.left * 1000);
 // her line came with words but no sound (Carverhill, Oct 28: 33 s of silence until "are you there?"): the phone says "Ara's taking a moment", then asks for the line again,
 // once; a second silent copy means the line is dead and the phone reconnects. Only once a line of hers has been heard in this call (a typed test sends no audio).
 function silentLine(rec) {
-  if (!G.audioEver || !G.live) return;
-  if (G.lastHeard && G.lastHeard.at > rec.at) { act("step", "Ara's line came without sound, but the officer answered: not asked again"); return; }
+  if (!G.live || (!G.audioEver && !G.soundEver)) return; /* a typed run has neither voice audio nor sound; a real call has sound from its first recording */
+  if (answeredAfter(rec)) { act("step", "Ara's line came without sound, but the officer answered after it: not asked again"); return; }
   if (G.silentAgain && G.silentAgain.text === rec.text) { G.silentAgain = null; act("step", "Ara's line came without sound twice: the line is treated as dead"); reconnect("her line came without sound twice"); return; }
   if (playingLeft() > 0 || G.audioOn) { act("step", "Ara's line came without sound, but her sound is already playing or queued: a false alarm, nothing said"); return; } /* Oct 28 10:03 PM: her sounded copy was on the clock before the judgement, and the recording played over it */
   G.silentAgain = { text: rec.text, at: Date.now() }; act("step", `Ara's line came without sound: the phone says she's taking a moment and waits for the sound; it asks for the line again only after ${Math.round((SILENT_RESEND_MS + SILENT_JUDGE_MS) / 1000)} s ("${rec.text.slice(0, 60)}")`);
   quietSay("the sound of Ara's line"); /* and the quiet clock keeps the recordings coming every 5 s while G.silentWait stands (Oct 30) */
   const w = { rec, at: Date.now() }; G.silentWait = w;
-  w.resend = setTimeout(() => { if (!G.live || G.silentWait !== w) return; G.silentWait = null; if (G.lastHeard && G.lastHeard.at > rec.at) return;
+  w.resend = setTimeout(() => { if (!G.live || G.silentWait !== w) return; G.silentWait = null; if (answeredAfter(rec)) { act("step", "Ara's line came without sound, but the officer answered after it: the resend stands down"); return; }
     const same = (t) => typeof sameWords === "function" && t && sameWords(t) === sameWords(rec.text);
     if (G.respSeq !== rec.resp || playingLeft() > 0 || G.audioOn || same(G.forced && G.forced.text) || same(G.pendingForce)) { act("step", "Ara's line is being said again already: the phone's resend stands down"); return; } /* 10:05 AM call: the app's own copy was already on its way */
     const own = typeof sameWords === "function" ? sameWords(rec.text) === sameWords(G.lastForcedText || "") : rec.text === G.lastForcedText; G.lastBot = ""; /* else the resend is cut as a doubled reply */ /* the transcript's trailing space made every app line "not own" (diagnostic run, Oct 30): the resend went as a reply request the service never answered, and the line reconnected */
