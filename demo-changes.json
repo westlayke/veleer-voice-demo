@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 6:28 PM",
+      "change": "Preview: the app's watch that cuts a late duplicate of a line now ends whenever a repeat is wanted: on a new line after a drop, on \"are you there?\" and on \"say that again\", so a re-ask is never cut (a save's stale read-back is still cut). With a form open and 13 seconds of quiet, the app asks Ara to put the pending question again in her own words, once per quiet spell; the app says nothing itself. Whatever the form is waiting on is what she asks: a required field, the email or mobile, the substantive question, the next step, the save-or-optional choice, an optional field, the follow-up suggestion or the read-back's yes.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 5:57 PM: on his 5:50 PM call there was a long dead silence with no prompts until he asked \"are you there?\" (the re-ask after a second drop was cut as a duplicate of the first telling, and the app took it for his turn). 6:06 PM: \"Yes\" to the re-ask, done by Ara, not the app; 6:07 PM: \"make it 13 seconds\"."
+    },
+    {
       "date": "Oct 30, 5:30 PM",
       "change": "Preview: the planned ask's entity question reads the list by state every time it is asked afresh (\"The entities: National has C3, C4 and Federal PAC. Idaho has C4 and PAC. North Dakota has C4, State PAC and Federal PAC. New Hampshire has C4. Pennsylvania has C4 and State PAC. Which entity?\"), and the short \"Which entity?\" only within two minutes of the list being heard; the campaign question follows as before. The line is kept open 10 s after the phone locks or the app is switched away (was 3 s), so a quick unlock carries on with nothing re-said.",
       "area": "Voice",

@@ -413,7 +413,7 @@ function staleReadback() {
   const rb = G.saveCheck && G.saveCheck.key ? "" : ""; const f = G.forced, t = f && f.text || "";
   if (f && /\?\s*$/.test(t) && new RegExp(SAVE_Q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$").test(t)) { clearTimeout(G.forceTimer); clearTimeout(G.forceTick); G.forced = null; guardFired("stale read-back dropped after the save"); }
   const last = (G.lastBot || "").trim(); const want = /Yes to save, or no to change something\?\s*$/.test(last) ? last : t;
-  if (want && /Yes to save, or no to change something\?\s*$/.test(want)) { G.lateForced = { text: want.replace(/^(Sorry, I lost you for a moment\.\s*)+/, ""), said: 0, at: Date.now(), resp: G.respSeq, firstAudio: 99999 }; } /* lateForcedCheck cuts a later reply that starts with these words */
+  if (want && /Yes to save, or no to change something\?\s*$/.test(want)) { G.lateForced = { text: want.replace(/^(Sorry, I lost you for a moment\.\s*)+/, ""), said: 0, at: Date.now(), resp: G.respSeq, firstAudio: 99999, keep: true }; } /* lateForcedCheck cuts a later reply that starts with these words */
   G.staleRbAt = Date.now(); void rb;
 }
 function hfCommit() {

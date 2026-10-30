@@ -7,6 +7,7 @@
 /* ---------- timings: tune here ---------- */
 const IDLE_MS = 30000, IDLE_HF_MS = 30000;   // hang up after this much quiet, in both modes (Carverhill, Oct 30: Ara asks first, 10 s before)
 const IDLE_ASK_BEFORE_MS = 10000;            // Ara asks "Should I hang up now, yes or no?" this long before the quiet limit; yes or no answer by then = goodbye
+const FORM_REASK_MS = 13000;                 // with a form open and waiting on the officer, after this much quiet Ara is asked to put the pending question again, once per quiet spell (Carverhill, Oct 30 6:07 PM: "13 seconds")
 const IDLE_FORM_MS = 60000;                  // with a form open and waiting on the officer, twice that (Carverhill Oct 28 4:12 PM: the service took 20 to 29 s a reply, then the call hung up with the form open)
 const QUIET_MS = 5000, QUIET_SPACING_MS = 2500; // the quiet clock: while the app waits on anything, a status recording every 5 s of silence (Carverhill, Oct 30: never more than 5 or 6 s of silence); a site that speaks early keeps this spacing
 const NOISE_CAP_MS = 60000;                  // sound on the mic counts as talking, but not for longer than this (road noise)
@@ -139,6 +140,7 @@ function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWat
   const talking = G.speechSince && Date.now() - G.speechSince > STALL_MS && Date.now() - (G.lastMsg || 0) > STALL_MS;
   const since = Date.now() - (G.lastAct || Date.now());
   const quiet = since >= idleAskMs() && (Date.now() - (G.loudAt || 0) >= idleAskMs() || since >= NOISE_CAP_MS) && !G.turnOpen; /* the question comes IDLE_ASK_BEFORE_MS before the limit (Oct 30) */ /* never a goodbye while the officer's words are unanswered (turnWatch reconnects instead) */ // sound on the mic counts as talking, but not for more than a minute (road noise)
+  formReask(since);
   if (!talking && !quiet) return;
   G.probing = true; const ws = G.ws;
   pingMs(LINE_TEST_MS).then(ms => { G.probing = false; if (!G.live || G.ws !== ws || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
@@ -146,6 +148,15 @@ function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWat
     if (!fresh && (typeof ms !== "number" || (talking && ms > STALL_SLOW_MS))) { G.stalled = true; G.speechSince = 0; netLog(`Line stalled (${talking ? "officer talking, nothing heard back" : "12 s of quiet"})`, ms); reconnect("the line stalled"); if (talking) G.spokeInGap = true; /* what they said never reached the voice service: the new line asks them to say it again */ return; }
     if (talking) { G.speechSince = 0; return; } // the line is fine: it was background noise
     if (Date.now() - (G.lastAct || Date.now()) >= idleAskMs()) idleStart(); });
+}
+// With a form open, quiet for FORM_REASK_MS and nothing awaited: Ara is asked to put the pending question again, in her own words; the app says
+// nothing itself (Carverhill, Oct 30 6:06 PM: "don't want the app to do the re-ask"). Once per quiet spell; the hang-up question still comes at 50 s.
+function formReask(since) {
+  if (typeof formPosition !== "function" || !V || !ACTIONS[V.action] || G.turnOpen || G.asked || G.forced || G.pendingForce || G.silentWait || G.downAt) return;
+  if (since < FORM_REASK_MS || !(Date.now() - (G.loudAt || 0) >= FORM_REASK_MS || since >= NOISE_CAP_MS) || G.formReaskAt > (G.lastAct || 0)) return;
+  const fp = formPosition(); if (!fp || !fp.ask) return; G.formReaskAt = Date.now();
+  act("step", `Quiet for ${Math.round(since / 1000)} s with the ${ACTIONS[V.action].title} form open: Ara is asked to put the pending question again`);
+  askReply(`The officer has been quiet for ${Math.round(since / 1000)} seconds and the "${ACTIONS[V.action].title}" form is still open. Ask them the pending question again, briefly and in your own words, the question only: "${fp.ask.slice(-220)}"`);
 }
 // The quiet hang-up (Carverhill, Oct 30: "at 20 seconds say 'should I hang up now, yes or no', and just before the hang-up have Ara say goodbye"):
 // after idleAskMs() of quiet Ara asks the hang-up question as a scripted line; a yes brings the goodbye, any other words keep the call going (speech_started calls
@@ -289,6 +300,7 @@ async function reconnect(why) {
   if (G.speechOn) { G.cutMidSpeech = true; G.speechOn = false; } /* the officer was mid-sentence when the line went: what was heard is a fragment, not their answer (real-line run, Oct 29: "You said: Record the") */
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
+  if (typeof watchOff === "function") watchOff("a new line"); /* whatever the app asks on the new line is its first telling there */
   if (G.drops === 1) cue("drop");
   downStart();
   vlog(`reconnecting (${G.drops}): ${why}`); act("step", `Reconnecting (${G.drops}): ${why}`);

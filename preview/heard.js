@@ -69,5 +69,6 @@ function heardAsk(text) {
   const r = G.lastLine, ago = r ? Math.round((Date.now() - r.at) / 1000) : null;
   act("step", `The officer asked whether Ara is there: ${r ? `her last line was ${ago} s ago ("${r.text.slice(0, 80)}"): ${heardWords(r)}` : "she hasn't said anything yet"}; sound now ${G.ctx ? G.ctx.state : "none"}, ${playingLeft().toFixed(1)} s still to play`);
   if (G.ctx && G.ctx.state !== "running") G.ctx.resume().catch(() => {});
+  if (typeof watchOff === "function") watchOff("the officer asked whether Ara is there"); /* her repeat of the last line must play, even within the watch */
   return true;
 }

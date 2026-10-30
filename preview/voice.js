@@ -764,7 +764,7 @@ function voiceCommand(text) {
   const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim().replace(/^((please|okay|ok|um|uh|hey|ara|so) )+/, "").replace(/ please$/, "");
   const hit = VOICE_CMDS.find(([re]) => re.test(t)), cmd = hit ? hit[1] : formCommand(t); if (!cmd) return false;
   const who = botName() + ": "; let say;
-  if (cmd === "repeat") { const last = (G.recent || []).filter(l => l.startsWith(who)).slice(-1)[0]; if (!last) return false; say = { force: last.slice(who.length) }; }
+  if (cmd === "repeat") { const last = (G.recent || []).filter(l => l.startsWith(who)).slice(-1)[0]; if (!last) return false; watchOff("the officer asked for the line again"); say = { force: last.slice(who.length) }; }
   else if (cmd === "left") { if (!V || !ACTIONS[V.action]) return false; say = fieldsLeft(); }
   else if (cmd === "cancel") { if (!V) return false; const what = cancelForm(); say = { force: "Cancelled, nothing was saved. What would you like to do?" }; }
   else if (cmd === "hfon" || cmd === "hfoff") { setHandsFree(cmd === "hfon"); say = null; }
@@ -895,6 +895,13 @@ function onEvent(e) {
 const soundedCopy = (text) => { const r = G.lastLine; return !!(r && typeof AUDIO_MIN_S !== "undefined" && r.audioS < AUDIO_MIN_S && Date.now() - r.at < 15000 && (G.audioSamples || 0) / 24000 >= AUDIO_MIN_S && sameWords(r.text) === sameWords(text)); };
 const REPEAT_MS = 6000; /* the service sends the same transcript again, sometimes grown by a word, within a few seconds: that is no new answer */
 const sameWords = (s) => String(s).toLowerCase().replace(/[^a-z0-9$ ]/g, " ").replace(/\s+/g, " ").trim();
+// the late-copy watches (G.lateForced, G.resend) cut a second telling of the same words; they end when a repeat is wanted: a new line after a
+// drop (the re-ask is the first telling on it), "are you there?" (Ara repeats her last line) or "say that again" (Carverhill's 5:50 PM call, Oct 30:
+// the re-ask after a second drop was cut as a duplicate of the first telling, and 38 s of dead air followed). The after-save cut keeps standing.
+function watchOff(why) {
+  const had = (G.lateForced && !G.lateForced.keep) || G.resend; if (G.lateForced && !G.lateForced.keep) G.lateForced = null; G.resend = null;
+  if (had) act("step", `The late-copy watch is off (${why}): a repeat of the line is wanted`);
+}
 function lateForcedCheck() {
   const lf = G.lateForced; if (!lf) return;
   if (Date.now() - lf.at > LATE_FORCE_MS) { G.lateForced = null; return; }
