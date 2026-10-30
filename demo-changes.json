@@ -2,8 +2,8 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
-      "date": "Oct 29, 10:12 PM",
-      "change": "Preview: a yes said after the save line has started playing answers its next-step question even inside the 8-second same-yes window (Patient Pat lost 6 such yeses); a scripted line that the voice service delivers twice, first words-only then with sound, is logged once as heard.",
+      "date": "Oct 29, 11:22 PM",
+      "change": "Preview: a yes said after the save line has started playing answers its next-step question even inside the 8-second same-yes window (Patient Pat lost 6 such yeses), also when the save line fell back to Ara's own voice; a scripted line that the voice service delivers twice, first words-only then with sound, is logged once as heard.",
       "area": "Voice",
       "requestedBy": "Carverhill",
       "why": "Carverhill: \"Build\" (after the two harness runs on the state sync: 6 stale saves unrecovered, 13 'said twice' rows that were the sounded copy)"

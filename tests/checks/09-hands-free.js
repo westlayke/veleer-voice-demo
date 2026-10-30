@@ -593,6 +593,10 @@ test("Carverhill's 7:41 PM call (Oct 29): the state goes to Ara at the save with
   await p.evaluate(() => { G.savedAt = Date.now() - 5000; G.savedByWords = Date.now() - 5000; G.forceStartAt = Date.now() - 3000; G.lastHeard = { text: "Yes.", n: G.heardN, at: Date.now() - 200 }; G.lastBot = G.savedByWordsLine; G.lastBotAt = Date.now() - 3000; });
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.already && /a yes to the next step\. Open that step now with its tool/.test(r.note || ""), "a quick yes inside the 8 s window wasn't routed to the next step: " + JSON.stringify(r));
+  // 7b. the save line fell back to Ara (no scripted start): her finished line counts the same way
+  await p.evaluate(() => { G.savedAt = Date.now() - 5000; G.savedByWords = Date.now() - 5000; G.forceStartAt = 0; G.lastBot = G.savedByWordsLine; G.lastBotAt = Date.now() - 1000; G.lastHeard = { text: "Yes.", n: G.heardN, at: Date.now() - 200 }; });
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.already && /a yes to the next step\. Open that step now with its tool/.test(r.note || ""), "a quick yes after Ara's own telling of the save line wasn't routed: " + JSON.stringify(r));
   // 8. the same words again with sound, after a words-only copy: one line, not two rows
   const rows = () => p.evaluate(() => ACT.q.filter(a => a.role === "grok").length);
   const before = await rows();
