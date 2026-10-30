@@ -45,9 +45,9 @@ jobs:
           JOBS: ${{ inputs.jobs }}
           SEED: ${{ matrix.seed }}
         run: node tests/patience/run.js
-      - name: Report (in the log, since artifacts can't be fetched from the cloud session)
+      - name: Report (in the log, since artifacts can't be fetched from the cloud session; the summary last, so a tail of the log has it)
         if: always()
-        run: cat tests/patience/results/report-*.md
+        run: cat tests/patience/results/report-*.md && echo "===== SUMMARY (without the conversation logs)" && sed '/^<details>/,/^<\/details>/d' tests/patience/results/report-*.md
       - uses: actions/upload-artifact@v4
         if: always()
         with:

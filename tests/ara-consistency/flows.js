@@ -33,9 +33,9 @@ module.exports = [
     tool: "show_opportunity_draft", saved: /Opportunity created/, rated: true, heard: { last: "Pike", email: "jpike@gmail.com" } }, // 1.0 saves the opportunity before entity and amount are asked, so the script never says them
   // Carverhill's 7:41 PM call, Oct 29: an accepted ask saved by the officer's yes, then a yes to the app's next-step question (record the gift)
   { id: "ask-then-gift", title: "Record an accepted ask, then the gift on the app's next-step question",
-    lines: ["Let's go into hands-free mode.", "Record the ask for Elena Vasquez. It was a video call yesterday and she accepted the forty thousand. She's excited to write the check.", "I need to collect the check from her later today.",
+    lines: ["Let's go into hands-free mode.", "Record the ask for Elena Vasquez. It was a video call yesterday and she accepted the forty thousand. She's excited to write the check.", "Yes, it was substantive. The next step is to collect the check from her, due today.",
       "Yes, let's do that.", "By wire."],
-    tool: "show_gift_draft", saved: /Gift recorded/, heard: { response: /accepted/i, method: /wire/i } },
+    tool: "show_gift_draft", saved: /Gift recorded/, subst: "Yes, it was substantive. The next step is to collect the check from her, due today.", heard: { response: /accepted/i, method: /wire/i } },
   { id: "plan-then-record", title: "Plan an ask, then record it",
     lines: ["Let's go into hands-free mode.", "Let's plan an ask for Priya Sandaruwan.", "The Pennsylvania C4.", "Pennsylvania.", "Today.", "Twenty-five thousand dollars.",
       "Yes, let's do that.", "It was an in-person meeting today, and she accepted.", "I need to collect the check from her later today."],
