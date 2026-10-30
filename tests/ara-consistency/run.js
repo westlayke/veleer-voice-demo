@@ -283,6 +283,8 @@ const RULES = [
   { id: "heard_right", text: "Fields reach the form as the officer said them (names, emails, amounts)" },
   { id: "state_honoured", text: "Acts on the state she was given (no guard fired after a confirmed receipt)" },
   { id: "step_yes_opens", text: "A yes to the app's next-step question opens that step (not save_form)" },
+  { id: "tool_called", text: "Calls the form's tool when the officer asks for a form or answers its question (never words only)" },
+  { id: "tool_after_ask", text: "Sends the missing tool call when the app asks again (within three asks)" },
 ];
 const fieldOk = (want, got) => got != null && (want instanceof RegExp ? want.test(String(got)) : typeof want === "number" ? Number(got) === want : String(got).trim().toLowerCase() === String(want).trim().toLowerCase());
 function score(conv, flow) {
@@ -309,6 +311,8 @@ function score(conv, flow) {
   if (conv.sync && conv.sync.confirmed) hit("state_honoured", !conv.sync.guardsAfterReceipt, "guards after a confirmed receipt: " + JSON.stringify(conv.sync.guards));
   conv.acts.forEach((a, i) => { if (a.role !== "grok" || !/Do you want to do that now, yes or no\?\s*$/.test(a.text)) return; const after = conv.acts.slice(i + 1); const u = after.find(x => x.role === "user"); if (!u || !/^(yes|yeah|yep|sure|ok|okay)\b/i.test(u.text)) return;
     const t = after.find(x => x.role === "step" && /^(show_|save_form|set_capacity)/.test(x.text)); if (t) hit("step_yes_opens", !/^save_form/.test(t.text), `after "${u.text}": ${t.text.slice(0, 80)}`); });
+  conv.acts.forEach((a, i) => { if (a.role !== "step" || !/^Guard: Ara talked but didn't/.test(a.text)) return; hit("tool_called", false, a.text.slice(0, 120)); const after = conv.acts.slice(i + 1); const end = after.findIndex(x => x.role === "step" && /^(Ara called \S+ on ask|Ara still didn't call the tool|The officer spoke: the ask for the tool call stands down)/.test(x.text)); const r = end >= 0 ? after[end] : null; hit("tool_after_ask", !!r && /^Ara called/.test(r.text), r ? r.text.slice(0, 120) : "no outcome logged"); });
+  conv.acts.forEach(a => { if (a.role === "step" && /^(show_|set_capacity)/.test(a.text)) hit("tool_called", true); });
   const heard = conv.acts.filter(a => a.role === "grok"); // what the app played and logged, as the officer heard it
   for (let i = 1; i < heard.length; i++) hit("no_double_reply", sameWords(heard[i - 1].text) !== sameWords(heard[i].text), heard[i].text);
   return res;
