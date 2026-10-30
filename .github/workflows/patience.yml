@@ -17,6 +17,9 @@ on:
       jobs:
         description: "Conversations at once per machine"
         default: "6"
+      max_minutes:
+        description: "Minutes a conversation may take before it is cut off"
+        default: "30"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -28,7 +31,7 @@ jobs:
   talk:
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -44,7 +47,8 @@ jobs:
           RATE: ${{ inputs.rate }}
           JOBS: ${{ inputs.jobs }}
           SEED: ${{ matrix.seed }}
-        run: node tests/patience/run.js
+          MAX_MIN: ${{ inputs.max_minutes }}
+        run: MAX_MS=$(( ${MAX_MIN:-30} * 60000 )) node tests/patience/run.js
       - name: Report (in the log, since artifacts can't be fetched from the cloud session; the summary last, so a tail of the log has it)
         if: always()
         run: cat tests/patience/results/report-*.md && echo "===== SUMMARY (without the conversation logs)" && sed '/^<details>/,/^<\/details>/d' tests/patience/results/report-*.md

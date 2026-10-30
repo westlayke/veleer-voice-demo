@@ -41,7 +41,7 @@ const FAKES = (cfg) => {
     // a line said by the voice service, as audio + words (or words only when the fault says so)
     say(text, ms, forced) { const w = this; if (window.__standIn && !/^I'm here\.|^Okay\.$/.test(text)) window.__standIn.lastLine = text; /* the last line said in Ara's voice, scripted ones included: what she repeats after "are you there" */ const noaudio = R && rnd() < P.noaudio * R; if (noaudio) window.__events.push({ at: Date.now(), fault: "words without sound", text: text.slice(0, 50) });
       w.deliver({ type: "response.created" }, ms); if (!noaudio) w.deliver({ type: "response.output_audio.delta", delta: window.__silence }, ms + 40); w.deliver({ type: "response.output_audio_transcript.delta", delta: text }, ms + 50);
-      w.deliver({ type: "response.done", response: { status: "completed" } }, ms + 80); setTimeout(() => window.__lines.push({ text, at: Date.now(), from: forced ? "app" : "ara", noaudio }), ms + 90); }
+      setTimeout(() => { if (w.readyState !== 1) return; const cut = !!(window.G && G.dropNext); w.deliver({ type: "response.done", response: { status: "completed" } }, 0); if (!cut) window.__lines.push({ text, at: Date.now(), from: forced ? "app" : "ara", noaudio }); else window.__events.push({ at: Date.now(), fault: "late copy cut by the app" }); }, ms + 80); } /* a copy the app cut (lateForcedCheck sets G.dropNext on its words) is never heard: not a line said twice */
     send(d) { window.__sent.push(d); let e; try { e = JSON.parse(d); } catch (x) { return; }
       if (e.type === "session.update") { const w = this, instr = e.session && e.session.instructions; if (R && rnd() < P.lostReceipt * R) { window.__events.push({ at: Date.now(), fault: "lost receipt", bytes: d.length }); (window.__receipts = window.__receipts || []).push({ at: Date.now(), lost: true }); }
         else { const ms = 50 + Math.round(d.length / 50) + Math.round(rnd() * 150); setTimeout(() => { if (w.readyState !== 1) return; if (instr && window.__standIn) window.__standIn.applyState(instr); (window.__receipts = window.__receipts || []).push({ at: Date.now(), ms }); w.deliver({ type: "session.updated" }, 0); }, ms); } } /* one receipt per update, in order (the state sync, Oct 29) */
@@ -164,8 +164,8 @@ async function conversation(browser, base, n) {
   const spokenMs = (text) => Math.round((String(text).split(/\s+/).filter(Boolean).length / 2.7) * 1000) + 300; /* about 160 words a minute */
   const t0 = Date.now(); let seenLines = 0, seenEvents = 0;
   try {
-    while (Date.now() - t0 < MAX_MS) {
-      await p.waitForTimeout(150); const st = await state(); if (!st.live) { conv.ended = "the conversation ended"; break; }
+    while (true) { if (Date.now() - t0 >= MAX_MS) { conv.ended = `ran out of time (${Math.round(MAX_MS / 60000)} min cap)`; break; }
+      await p.waitForTimeout(150); const st = await state(); if (!st.live) { conv.ended = "the app ended the call: " + ((await p.evaluate(() => (ACT.q.filter(a => a.role === "end").pop() || { text: "" }).text).catch(() => "")) || "?").replace(/^Conversation ended\s*/, "").slice(0, 80); break; }
       bookCtx.form = st.form; form = st.form; bookCtx.saves = st.saves;
       if (st.events > seenEvents) { const ev = await p.evaluate((n) => window.__events.slice(n), seenEvents); conv.faults.push(...ev.map(e => Object.assign({}, e, { at: e.at - t0 }))); seenEvents = st.events; } /* the page's faults are stamped in page time; the report counts from the start */
       if (st.saves > conv.saves.length) { const sv = await p.evaluate(() => G.saves.slice()); conv.saves = sv; asksInRow = 0; if (/Closed Won|Gift recorded/.test(sv.join(" "))) { conv.closedWon = true; } }
