@@ -4,6 +4,7 @@
 // The officer's words are typed (sent as text, plus the transcript event the app sees for speech); Ara still answers in her voice.
 // Nothing reaches the activity log or the Cloudflare Worker: the token comes from this script and log posts stay here.
 const http = require("http"), fs = require("fs"), path = require("path");
+const { stepsInPage, stepsLines } = require("../steps.js");
 let chromium; try { ({ chromium } = require("playwright")); } catch (e) { ({ chromium } = require("/opt/node-tools/node_modules/playwright")); }
 const FLOWS = require("./flows");
 
@@ -136,7 +137,7 @@ async function converse(browser, base, flow, n) {
       window.__acts = []; const real = act; act = function (role, text, sess) { window.__acts.push({ at: Date.now(), role, text: String(text || "") }); return real.apply(this, arguments); };
       window.__forms = []; const realSave = saveDraft; saveDraft = function () { try { if (typeof V !== "undefined" && V && V.data) window.__forms.push(Object.assign({}, readDraft())); } catch (x) {} return realSave.apply(this, arguments); }; /* the form as saved: fields the app filled itself (an optional answer, a pick-list from the officer's answer) never pass through Grok's arguments */
       window.__drops = []; window.__vlog = []; const vt0 = Date.now(); const realV = vlog; vlog = function (text) { if (/: dropped |: left out /.test(String(text))) window.__drops.push(String(text)); if (window.__vlog.length < 900) window.__vlog.push(((Date.now() - vt0) / 1000).toFixed(1) + " " + String(text).slice(0, 220)); return realV.apply(this, arguments); }; // the evidence rule's Voice log lines, and the whole voice log for a diagnostic run (DIAG=1)
-      const tapSend = (proto) => { const real = proto.send; proto.send = function (d) { try { const t = String(d); if (!t.includes('"input_audio_buffer.append"') && !t.includes('"realtimeInput"')) window.__tap("sent", t); } catch (x) {} return real.call(this, d); }; };
+      const tapSend = (proto) => { const real = proto.send; proto.send = function (d) { try { const t = String(d); if (!t.includes('"input_audio_buffer.append"') && !t.includes('"realtimeInput"')) { window.__tap("sent", t); (window.__sent = window.__sent || []).push(t); } } catch (x) {} return real.call(this, d); }; };
       tapSend(WebSocket.prototype); if (typeof GeminiSocket !== "undefined") tapSend(GeminiSocket.prototype); // what the app sends, as app events (Gemini's raw frames carry no type and are ignored by the tap)
       const realOn = onEvent; onEvent = function (e) { try { const dropped = /audio\.delta$/.test(e.type) && !!G.dropNext; /* a reply the app has cut (a late copy, a doubled answer): its sound is never played, so it is neither heard nor in the clip */ if (window.__ara && !dropped && (e.type === "response.created" || /audio\.delta$/.test(e.type) && e.delta)) window.__ara.push([Date.now(), e.type === "response.created" ? null : e.delta]); window.__tap("got", /audio\.delta$/.test(e.type) ? (dropped ? '{"type":"audio.delta","dropped":true}' : '{"type":"audio.delta"}') : JSON.stringify(e)); } catch (x) {} return realOn.apply(this, arguments); };
       if (plan) { // SOUNDLESS: a reply reaches the app as words only; its sound comes later as a whole copy, or never (the app has to ask for it)
@@ -233,6 +234,7 @@ async function converse(browser, base, flow, n) {
     await p.evaluate(() => { try { endCall("test done"); } catch (e) {} });
     await p.waitForTimeout(300);
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
+    conv.steps = await p.evaluate(stepsInPage).catch(() => null);
     conv.forms = await p.evaluate(() => window.__forms || []);
     conv.drops = await p.evaluate(() => window.__drops || []);
     conv.soundless = (await p.evaluate(() => (window.__soundless || []).map(m => ({ id: m.id, forced: m.forced, text: m.text, at: m.at, doneAt: m.doneAt, late: m.late, delay: m.delay, copyAt: m.copyAt, skipped: m.skipped, audioN: m.audioN })))).filter(m => !m.skipped);
@@ -362,6 +364,7 @@ function report(convs, extra) {
     md += `### Scripted lines paired by the service's id\n\n${idRows.length} scripted lines logged their ids (the first three per call): ${byId} paired by the service's id, ${byWords} taken by their words, ${byOrder} by order with no id; xAI refused a scripted line ${refused} times.\n\n` + idRows.slice(0, 6).map(r => `- ${r}`).join("\n") + "\n\n"; }
   if (DROP_AFTER_SAVE) { const rows = convs.flatMap(c => c.acts.filter(a => a.role === "step" && /where we were|^(Reconnected|Line reopened): /.test(a.text)).map(a => `${c.flow} #${c.n}: ${a.text.slice(0, 160)}`)), n = convs.flatMap(c => c.faults.filter(f => f.when === "after a save")).length;
     md += `## Drops after a save (DROP_AFTER_SAVE ${DROP_AFTER_SAVE}): Ara says where we were\n\n${n} drops right after a save. Ara said where we were herself on the first try ${rows.filter(r => /said where we were on try 1/.test(r)).length} times, on a later try ${rows.filter(r => /said where we were on try [2-9]/.test(r)).length}, and the app said it itself ${rows.filter(r => /didn't say where we were in/.test(r)).length} times.\n\n` + rows.map(r => `- ${r.replace(/\|/g, "/")}`).join("\n") + "\n\n"; }
+  md += `## Discrete steps and the app's scripted lines\n\n${stepsLines(convs).join("\n")}\n\n`;
   md += `## Rule breaks\n\n| Rule | Checked | Broken | Rate |\n|---|---:|---:|---:|\n` + rows.map(r => `| ${r.rule} | ${r.checked} | ${r.broken} | ${r.rate}% |`).join("\n") + "\n\n";
   md += `## By flow\n\n| Flow | Conversations | Ended saved | Avg cost | Avg minutes |\n|---|---:|---:|---:|---:|\n` + Object.entries(byFlow).map(([k, f]) => `| ${k} | ${f.n} | ${f.saved} | ${money(f.cost / f.n)} | ${(f.min / f.n).toFixed(2)} |`).join("\n") + "\n\n";
   // reply time by flow: mean, standard deviation, median, 90th percentile (Carverhill, Oct 27: "compare standard deviation on response times too")

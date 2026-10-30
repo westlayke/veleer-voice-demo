@@ -62,7 +62,7 @@ const FAKES = (cfg) => {
     return f(u, o); };
   // the phone's own recordings count as sound the officer heard
   window.__phoneSaid = []; const origAct = window.act; /* act() is defined later by the app: wrap it once it exists */
-  const wrapAct = () => { if (typeof window.act !== "function" || window.act.__wrapped) return false; const a = window.act; const w = function (role, text, sess) { if (/^The phone said/.test(String(text))) window.__phoneSaid.push({ at: Date.now(), text: String(text) }); if (/where we were|^(Reconnected|Line reopened): /.test(String(text))) (window.__ctxRows = window.__ctxRows || []).push({ at: Date.now(), text: String(text).slice(0, 160) }); return a.apply(this, arguments); }; w.__wrapped = true; window.act = w; return true; };
+  const wrapAct = () => { if (typeof window.act !== "function" || window.act.__wrapped) return false; const a = window.act; const w = function (role, text, sess) { (window.__acts = window.__acts || []).push({ at: Date.now(), role, text: String(text || "") }); if (/^The phone said/.test(String(text))) window.__phoneSaid.push({ at: Date.now(), text: String(text) }); if (/where we were|^(Reconnected|Line reopened): /.test(String(text))) (window.__ctxRows = window.__ctxRows || []).push({ at: Date.now(), text: String(text).slice(0, 160) }); return a.apply(this, arguments); }; w.__wrapped = true; window.act = w; return true; };
   const iv = setInterval(() => { if (wrapAct()) clearInterval(iv); }, 50);
 };
 
@@ -232,6 +232,10 @@ async function conversation(browser, base, n) {
   conv.log = await p.evaluate(() => VLOG.slice(-400)).catch(() => []); conv.lines = await p.evaluate(() => window.__lines.map(l => `${l.at} ${l.from}: ${l.text}`)).catch(() => []); conv.guidance = await p.evaluate(() => window.__guidance || []).catch(() => []);
   if (process.env.DEBUG) { console.log(conv.lines.join("\n")); console.log(conv.log.join("\n")); console.log("GUIDANCE\n" + conv.guidance.join("\n")); if (conv.sync && conv.sync.falseNudgeNotes && conv.sync.falseNudgeNotes.length) console.log("ASKS WITH NO TOOL MISSING\n" + conv.sync.falseNudgeNotes.join("\n")); }
   conv.longest = Math.max(0, ...conv.asks.map(a => a.silence));
+  conv.steps = await p.evaluate(stepsInPage).catch(() => null);
+  conv.quiet = await p.evaluate(() => { /* stretches of silence: between one sound starting and the next (Ara's sounded lines, the officer's words, the phone's recordings), less the estimated length of the earlier one (2.5 words a second, recordings 2 s); Carverhill, Oct 30: never more than 5 or 6 s */
+    const ev = (window.__lines || []).filter(l => !l.noaudio).map(l => ({ at: l.at, len: l.from === "officer" ? 0 : Math.min(12000, 400 * String(l.text).split(/\s+/).length) })).concat((window.__phoneSaid || []).map(s => ({ at: s.at, len: 2000 }))).sort((a, b) => a.at - b.at);
+    const gaps = []; for (let i = 1; i < ev.length; i++) gaps.push(Math.max(0, ev[i].at - ev[i - 1].at - ev[i - 1].len) / 1000); return { longest: Math.round(10 * Math.max(0, ...gaps)) / 10, over: gaps.filter(g => g > 6.5).length, n: gaps.length }; }).catch(() => null);
   conv.sync = await p.evaluate(() => { const s = G.sync || { sent: 0, confirmed: 0, ms: [], missed: 0, resent: 0, guards: {}, guardsAfterReceipt: 0 }; const ms = s.ms.slice().sort((a, b) => a - b);
     const lines = (window.__lines || []).filter(l => l.from !== "officer"); let twice = 0; for (let i = 1; i < lines.length; i++) if (lines[i].text === lines[i - 1].text && lines[i].at - lines[i - 1].at < 30000 && !lines[i - 1].noaudio) twice++; /* the same line said twice within 30 s, the first with sound (the 7:41 PM repeat) */
     return { sent: s.sent, confirmed: s.confirmed, medianMs: ms.length ? ms[Math.floor(ms.length / 2)] : 0, maxMs: ms.length ? ms[ms.length - 1] : 0, missed: s.missed, resent: s.resent, guards: s.guards, guardsAfterReceipt: s.guardsAfterReceipt, lostReceipts: (window.__receipts || []).filter(r => r.lost).length, staleSaves: (window.__staleSaves || []).map(x => ({ why: x.why, recovered: x.recovered })), wordsOnly: (window.__wordsOnly || []).map(x => ({ tool: x.tool, asks: x.asks, recovered: x.recovered, on: x.recoveredOn || 0 })), falseNudges: (window.__falseNudges || []).length, falseNudgeNotes: (window.__falseNudges || []).map(x => x.instr), linesTwice: twice,
@@ -243,6 +247,7 @@ async function conversation(browser, base, n) {
 }
 
 const { stateSection } = require("./state-section.js");
+const { stepsInPage, stepsLines } = require("../steps.js");
 if (require.main === module) (async () => {
   await new Promise(r => server.listen(0, r)); const base = `http://localhost:${server.address().port}/`;
   const args = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--autoplay-policy=no-user-gesture-required"];
@@ -261,6 +266,8 @@ if (require.main === module) (async () => {
     `**${asks.length} asks in ${mins} minutes: ${per10} per 10 minutes.** Median silence before an ask ${med} s, longest ${Math.max(0, ...sil)} s. ${convs.filter(c => c.closedWon).length} of ${convs.length} conversations reached Closed Won; ${convs.filter(c => c.hungUp).length} hung up after three asks. ${convs.flatMap(c => c.faults).length} faults thrown.`, "",
     "| Cause | Asks |", "|---|---|", ...Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `| ${k} | ${v} |`), "",
     "| Conversation | Minutes | Saves | Asks | Faults | Ended |", "|---|---|---|---|---|---|", ...convs.map(c => `| ${c.n} | ${c.minutes} | ${c.saves.length} | ${c.asks.map(a => `${a.silence} s (${a.cause})`).join("; ") || "none"} | ${c.faults.map(f => f.fault).join(", ") || "none"} | ${c.closedWon ? "Closed Won" : c.ended || ""}${c.errors.length ? " " + c.errors.join("; ") : ""} |`), "",
+    "## Discrete steps and the app's scripted lines", "", ...stepsLines(convs), "",
+    "## Silence", "", `Stretches with no sound (estimated, speaking time taken off): longest ${Math.max(0, ...convs.map(c => c.quiet ? c.quiet.longest : 0))} s; over 6.5 s: ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.over : 0), 0)} of ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.n : 0), 0)} stretches, in ${convs.filter(c => c.quiet && c.quiet.over).length} of ${convs.length} conversations.`, "",
     ...stateSection(convs),
     "## Each ask", "", "| Conv | At | Silence | Cause | Status | Form | Last heard |", "|---|---|---|---|---|---|---|", ...convs.flatMap(c => c.asks.map(a => `| ${c.n} | ${Math.round(a.at / 1000)} s | ${a.silence} s | ${a.cause} | ${a.status} | ${a.form || ""} | ${a.lastHeard.replace(/\|/g, "/")} |`)), "",
     "## Questions the answer book had no entry for", "", ...[...new Set(convs.flatMap(c => c.unanswered))].map(q => `- ${q}`), "",
