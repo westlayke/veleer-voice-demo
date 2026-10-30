@@ -148,8 +148,8 @@ function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWat
     if (Date.now() - (G.lastAct || Date.now()) >= idleAskMs()) idleStart(); });
 }
 // The quiet hang-up (Carverhill, Oct 30: "at 20 seconds say 'should I hang up now, yes or no', and just before the hang-up have Ara say goodbye"):
-// idleAskMs() of quiet -> Ara asks HANGUP_Q (a scripted line); yes -> idleGoodbye(); any other words -> the call carries on (speech_started calls it off);
-// no answer in IDLE_ASK_BEFORE_MS -> idleGoodbye() too. The goodbye is Ara's line; the hang-up follows once it has played, and the phone's recording stands in when her line doesn't start.
+// after idleAskMs() of quiet Ara asks the hang-up question as a scripted line; a yes brings the goodbye, any other words keep the call going (speech_started calls
+// the hang-up off), and no answer within IDLE_ASK_BEFORE_MS brings the goodbye too. The goodbye is Ara's line; the hang-up follows once it has played, and the phone's recording stands in when her line doesn't start.
 const idleAskMs = () => idleMs() - IDLE_ASK_BEFORE_MS;
 function idleStart() {
   G.idleEnding = true; G.idleAt = Date.now(); G.idleAsked = Date.now(); G.goodbye = false; vlog(`${idleAskMs() / 1000} seconds quiet: asking whether to hang up`);

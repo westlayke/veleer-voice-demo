@@ -2,7 +2,7 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
-      "date": "Oct 30, 4:03 PM",
+      "date": "Oct 30, 4:20 PM",
       "change": "Preview: the quiet hang-up is a yes-or-no decision. After 20 s of quiet (50 s with a form open) Ara asks \"Should I hang up now, yes or no?\"; a yes, or no answer in 10 s, gets her goodbye (\"Goodbye for now. Tap the mic when you need me.\" / \"Your form stays on the screen.\") and then the hang-up; any other words keep the call going. The phone's \"I'll hang up for now\" recording only stands in when her goodbye can't play. The quiet allowance is 30 s in both modes (tap mode was 12 s).",
       "area": "Voice",
       "requestedBy": "Carverhill",
