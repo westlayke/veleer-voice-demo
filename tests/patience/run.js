@@ -14,7 +14,7 @@ const NAME = process.env.OFFICER || "Patient Pat", MAX_MS = Number(process.env.M
 // Jim's 45 measured waits before "Are you there?" (Oct 27-28, seconds): the officer's patience is drawn from these
 const WAITS = [24.4, 9.9, 20.0, 2.6, 2.9, 7.6, 2.6, 13.7, 16.3, 9.8, 7.2, 15.6, 11.5, 5.0, 8.3, 5.5, 6.3, 8.4, 22.1, 5.7, 4.0, 5.0, 12.5, 30.2, 15.4, 2.6, 6.7, 2.6, 22.7, 28.3, 20.3, 11.4, 21.6, 4.8, 33.6, 2.6, 34.4, 5.1, 4.7, 6.3, 25.2, 25.0, 7.2, 14.8, 37.4];
 // fault rates per officer turn at RATE=1 (Jim's calls: about 55 connection problems in 38 conversations, one problem every 6 to 7 minutes, a turn is about 12 s)
-const RATES = { drop: 0.025, stall: 0.012, deadspot: 0.35 /* of drops: the voice pass then hangs 10-70 s */, noaudio: 0.06 /* per line of Ara's */, slow: 0.06 /* per reply: 10-25 s before it starts */, slowline: 0.02 };
+const RATES = { drop: 0.025, stall: 0.012, deadspot: 0.35 /* of drops: the voice pass then hangs 10-70 s */, noaudio: 0.06 /* per line of Ara's */, slow: 0.06 /* per reply: 10-25 s before it starts */, slowline: 0.02, lostReceipt: 0.05 /* per state update: the service never confirms it (and never applied it) */, staleAra: 0.1 /* per next-step yes: the stand-in acts on its old picture and calls save_form, as Grok did on Oct 29 */ };
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".css": "text/css", ".mp3": "audio/mpeg" };
 const server = http.createServer((req, res) => {
@@ -43,6 +43,8 @@ const FAKES = (cfg) => {
       w.deliver({ type: "response.created" }, ms); if (!noaudio) w.deliver({ type: "response.output_audio.delta", delta: window.__silence }, ms + 40); w.deliver({ type: "response.output_audio_transcript.delta", delta: text }, ms + 50);
       w.deliver({ type: "response.done", response: { status: "completed" } }, ms + 80); setTimeout(() => window.__lines.push({ text, at: Date.now(), from: forced ? "app" : "ara", noaudio }), ms + 90); }
     send(d) { window.__sent.push(d); let e; try { e = JSON.parse(d); } catch (x) { return; }
+      if (e.type === "session.update") { const w = this, instr = e.session && e.session.instructions; if (R && rnd() < P.lostReceipt * R) { window.__events.push({ at: Date.now(), fault: "lost receipt", bytes: d.length }); (window.__receipts = window.__receipts || []).push({ at: Date.now(), lost: true }); }
+        else { const ms = 50 + Math.round(d.length / 50) + Math.round(rnd() * 150); setTimeout(() => { if (w.readyState !== 1) return; if (instr && window.__standIn) window.__standIn.applyState(instr); (window.__receipts = window.__receipts || []).push({ at: Date.now(), ms }); w.deliver({ type: "session.updated" }, 0); }, ms); } } /* one receipt per update, in order (the state sync, Oct 29) */
       if (e.type === "response.cancel") this.deliver({ type: "response.done", response: { status: "cancelled" } }, 20);
       if (e.item && e.item.type === "force_message") this.say(e.item.content[0].text, window.__latency(), true);
       if (e.item && e.item.type === "message" && window.__standIn) { const m = String(e.item.content && e.item.content[0] && e.item.content[0].text || "").match(/Say exactly this[^"]*"([^"]+)"/); if (m) window.__standIn.pendingLine = m[1]; }
@@ -67,6 +69,11 @@ const FAKES = (cfg) => {
 const STAND_IN = () => {
   window.__standIn = {
     pendingTool: null, /* the tool call the officer's last words call for; sent when the app asks for a reply (response.create) or straight away in hands-free */
+    state: { formOpen: false, saved: 0, version: 0 }, /* Ara's picture of the form, from the instructions the service confirmed (applyState); a draft tool she sent opens a form in her picture until the state says it closed */
+    applyState(instr) { this.state = { formOpen: !/No form is open now/.test(instr), saved: ((instr.match(/Saved so far in this conversation: ([^\n]*)/) || [, ""])[1].split("; ").filter(Boolean).length), version: Number((instr.match(/State version (\d+)/) || [, 0])[1]) }; },
+    // the tool the stand-in actually sends for a next-step yes: save_form when its picture still has the form open (no state yet, or lost) or on the stale-Ara draw, as Grok did on Oct 29
+    pick(tool) { if (!tool || !/^show_|^set_capacity/.test(tool[0]) || !this.stepYes) return tool; this.stepYes = false; const stale = this.state.formOpen, draw = window.__cfg.rate && window.__rnd() < window.__cfg.rates.staleAra * window.__cfg.rate;
+      if (!stale && !draw) return tool; this.intended = tool; (window.__staleSaves = window.__staleSaves || []).push({ at: Date.now(), why: stale ? "the state still showed the form open" : "stale-Ara draw", intended: tool[0], recovered: false }); window.__events.push({ at: Date.now(), fault: stale ? "stale picture (no state yet)" : "stale Ara" }); return ["save_form", { confirmed: true }]; },
     reply(ws, e) { const t = this.pendingTool; const instr = (e.response && e.response.instructions) || "";
       if (this.pendingLine) { const l = this.pendingLine; this.pendingLine = null; ws.say(l, window.__latency()); return; }
       if (this.pendingSay) { const l = this.pendingSay; this.pendingSay = null; ws.say(l, window.__latency()); return; }
@@ -76,11 +83,13 @@ const STAND_IN = () => {
       const m = instr.match(/Say (?:this now|it again now), word for word[^"]*"([^"]+)"/); if (m) { ws.say(m[1], window.__latency()); return; }
       if (/whether you.?re there|whether you are there|are you there/i.test(instr) || /whether Ara is there/.test(instr)) { ws.say("I'm here." + (this.lastLine ? " " + this.lastLine : ""), window.__latency()); return; }
       if (/Say in a few words that it's saved|Confirm it once/.test(instr)) { ws.say("That's saved. What's next?", window.__latency()); return; }
+      if (this.intended && this.lastOut && /Open that step now with its tool/.test(this.lastOut.note || "")) { const t = this.intended; this.intended = null; const sv = (window.__staleSaves || []).slice(-1)[0]; if (sv) sv.recovered = true; this.pendingTool = null; const ms = window.__latency();
+        setTimeout(() => { if (ws.readyState !== 1) return; ws.deliver({ type: "response.created" }, 0); ws.deliver({ type: "response.output_audio.delta", delta: window.__silence }, 20); ws.deliver({ type: "response.function_call_arguments.done", call_id: "t" + Math.random().toString(36).slice(2), name: t[0], arguments: JSON.stringify(t[1]) }, 40); ws.deliver({ type: "response.done", response: { status: "completed" } }, 60); }, ms); return; } /* the app's guard routed the yes to the next step: Ara opens it */
       { const sn = instr.match(/Still needed: ([^.]+)\./); if (sn) { ws.say(`What's the ${sn[1].split(/,| and /)[0].replace(/\s*\(.*$/, "").trim().toLowerCase()}?`, window.__latency()); return; } }
       if (/never read it aloud/.test(instr) && /question/.test(instr)) { const q = (instr.match(/"([^"]+\?)"/) || [])[1]; if (q) { ws.say(q, window.__latency()); return; } }
       // nothing the stand-in understands: it says a short line (Grok never answers with nothing) and the guidance is kept for the report
       (window.__guidance = window.__guidance || []).push(instr.slice(0, 200) + " | last tool result: " + JSON.stringify(this.lastOut || {}).slice(0, 300)); ws.say("Okay.", window.__latency()); },
-    toolResult(ws, out) { this.lastOut = out; if (out.ask_exactly || out.asked || out.read_back || out.already) { this.pendingSay = null; return; } /* the app says those lines itself (forced), or wants silence */
+    toolResult(ws, out) { this.lastOut = out; if (this.lastTool && /^show_/.test(this.lastTool)) this.state.formOpen = true; if (out.already && /Open that step now/.test(out.note || "")) { this.pendingSay = null; return; } if (out.ask_exactly || out.asked || out.read_back || out.already) { this.pendingSay = null; return; } /* the app says those lines itself (forced), or wants silence */
       const q = out.still_needed && out.still_needed.length ? `What's the ${String(out.still_needed[0]).replace(/\s*\(.*$/, "").toLowerCase()}?` : out.say ? out.say : out.saved ? "Saved. What's next?" : out.error ? `${String(out.error).split(/(?<=\.)\s/)[0]} What would you like to do?` : "";
       if (!q) return; this.pendingSay = q; const me = this; setTimeout(() => { if (me.pendingSay === q) { me.pendingSay = null; ws.say(q, window.__latency()); } }, 1500); /* said as the answer to the app's reply request, or on its own when none comes */ } };
 };
@@ -146,11 +155,11 @@ async function conversation(browser, base, n) {
   const firstOpen = await p.evaluate(() => window.__ws.openedAt);
   const state = () => p.evaluate(() => { const last = (window.__lines || []).slice(-1)[0] || null; const ps = (window.__phoneSaid || []).slice(-1)[0] || null; const ws = window.__ws;
     return { lines: (window.__lines || []).length, last, phoneAt: ps ? ps.at : 0, phone: ps ? ps.text : "", status: G.status, live: G.live, forced: !!G.forced, forcedStarted: !!(G.forced && G.forced.started), pendingForce: !!G.pendingForce, asked: !!G.asked, responding: !!G.responding, playing: playingLeft() > 0, openedAt: ws ? ws.openedAt : 0, form: typeof V !== "undefined" && V ? V.action : "", saves: (G.saves || []).length, events: window.__events.length, lastHeardAt: G.lastHeard ? G.lastHeard.at : 0 }; });
-  const said = (text, tool) => p.evaluate(([text, tool]) => { window.__standIn.pendingTool = tool || null; window.__lines.push({ text, at: Date.now(), from: "officer" });
+  const said = (text, tool) => p.evaluate(([text, tool]) => { window.__standIn.pendingTool = tool || null; window.__standIn.stepYes = /^yes\.?$/i.test(text) && /Do you want to do that now, yes or no\?\s*$/.test(window.__standIn.lastLine || ""); window.__lines.push({ text, at: Date.now(), from: "officer" });
     __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_stopped" }) });
     __ws.onmessage({ data: JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: text }) });
     // hands-free: the app asks for no reply itself after a transcript, the service answers on its own; the stand-in sends the tool call now, after its latency
-    if (tool) setTimeout(() => { const ws = __ws; if (ws.readyState !== 1 || window.__standIn.pendingTool !== tool) return; window.__standIn.pendingTool = null; ws.deliver({ type: "response.created" }, 0); ws.deliver({ type: "response.output_audio.delta", delta: window.__silence }, 20); ws.deliver({ type: "response.function_call_arguments.done", call_id: "t" + Math.random().toString(36).slice(2), name: tool[0], arguments: JSON.stringify(tool[1]) }, 40); ws.deliver({ type: "response.done", response: { status: "completed" } }, 60); }, window.__latency()); }, [text, tool]);
+    if (tool) setTimeout(() => { const ws = __ws; if (ws.readyState !== 1 || window.__standIn.pendingTool !== tool) return; window.__standIn.pendingTool = null; tool = window.__standIn.pick(tool); window.__standIn.lastTool = tool[0]; ws.deliver({ type: "response.created" }, 0); ws.deliver({ type: "response.output_audio.delta", delta: window.__silence }, 20); ws.deliver({ type: "response.function_call_arguments.done", call_id: "t" + Math.random().toString(36).slice(2), name: tool[0], arguments: JSON.stringify(tool[1]) }, 40); ws.deliver({ type: "response.done", response: { status: "completed" } }, 60); }, window.__latency()); }, [text, tool]);
   const bookCtx = { form: "", saves: 0, agenda: () => AGENDA[Math.min(bookCtx.saves, AGENDA.length - 1)], again: () => lastSaid && !/^(yes|no|save it|move on|in person)\.?$/i.test(lastSaid) ? lastSaid : bookCtx.agenda() /* a bare yes means nothing on its own: the officer says what they were doing */ };
   const spokenMs = (text) => Math.round((String(text).split(/\s+/).filter(Boolean).length / 2.7) * 1000) + 300; /* about 160 words a minute */
   const t0 = Date.now(); let seenLines = 0, seenEvents = 0;
@@ -198,18 +207,32 @@ async function conversation(browser, base, n) {
   conv.log = await p.evaluate(() => VLOG.slice(-400)).catch(() => []); conv.lines = await p.evaluate(() => window.__lines.map(l => `${l.at} ${l.from}: ${l.text}`)).catch(() => []); conv.guidance = await p.evaluate(() => window.__guidance || []).catch(() => []);
   if (process.env.DEBUG) { console.log(conv.lines.join("\n")); console.log(conv.log.join("\n")); console.log("GUIDANCE\n" + conv.guidance.join("\n")); }
   conv.longest = Math.max(0, ...conv.asks.map(a => a.silence));
+  conv.sync = await p.evaluate(() => { const s = G.sync || { sent: 0, confirmed: 0, ms: [], missed: 0, resent: 0, guards: {}, guardsAfterReceipt: 0 }; const ms = s.ms.slice().sort((a, b) => a - b);
+    const lines = (window.__lines || []).filter(l => l.from !== "officer"); let twice = 0; for (let i = 1; i < lines.length; i++) if (lines[i].text === lines[i - 1].text && lines[i].at - lines[i - 1].at < 30000 && !lines[i - 1].noaudio) twice++; /* the same line said twice within 30 s, the first with sound (the 7:41 PM repeat) */
+    return { sent: s.sent, confirmed: s.confirmed, medianMs: ms.length ? ms[Math.floor(ms.length / 2)] : 0, maxMs: ms.length ? ms[ms.length - 1] : 0, missed: s.missed, resent: s.resent, guards: s.guards, guardsAfterReceipt: s.guardsAfterReceipt, lostReceipts: (window.__receipts || []).filter(r => r.lost).length, staleSaves: (window.__staleSaves || []).map(x => ({ why: x.why, recovered: x.recovered })), linesTwice: twice }; }).catch(() => null);
   await p.evaluate(() => { try { endCall("harness conversation finished"); } catch (e) {} }).catch(() => {});
   await ctx.close(); return conv;
 }
 
-(async () => {
+// Ara's state sync and the guards (Carverhill, Oct 29): receipts, misses, stale save_form calls thrown and recovered, guards fired, lines said twice
+function stateSection(convs) {
+  const ss = convs.map(c => c.sync).filter(Boolean); if (!ss.length) return [];
+  const sum = (k) => ss.reduce((a, s) => a + (s[k] || 0), 0), meds = ss.map(s => s.medianMs).filter(Boolean).sort((a, b) => a - b);
+  const guards = {}, after = sum("guardsAfterReceipt"); ss.forEach(s => Object.entries(s.guards || {}).forEach(([k, v]) => { guards[k] = (guards[k] || 0) + v; }));
+  const stale = ss.flatMap(s => s.staleSaves || []), rec = stale.filter(x => x.recovered).length, byWhy = {}; stale.forEach(x => { byWhy[x.why] = (byWhy[x.why] || 0) + 1; });
+  return ["## Ara's state sync", "", `State updates sent ${sum("sent")}, confirmed ${sum("confirmed")} (median receipt ${meds.length ? meds[Math.floor(meds.length / 2)] : 0} ms, slowest ${Math.max(0, ...ss.map(s => s.maxMs))} ms), receipts lost by the stand-in service ${sum("lostReceipts")}, missed by the app ${sum("missed")}, resent ${sum("resent")}.`, "",
+    `Stale save_form calls thrown ${stale.length} (${Object.entries(byWhy).map(([k, v]) => k + " " + v).join(", ") || "none"}), recovered by the app's routing ${rec}. Lines said twice ${sum("linesTwice")}.`, "",
+    "| Guard | Fired | After a confirmed receipt |", "|---|---|---|", ...Object.entries(guards).sort((a, b) => b[1] - a[1]).map(([k, v]) => `| ${k} | ${v} | |`), `| all guards | ${Object.values(guards).reduce((a, b) => a + b, 0)} | ${after} |`, ""];
+}
+module.exports = { stateSection };
+if (require.main === module) (async () => {
   await new Promise(r => server.listen(0, r)); const base = `http://localhost:${server.address().port}/`;
   const args = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--autoplay-policy=no-user-gesture-required"];
   const browser = await chromium.launch(Object.assign({ args }, process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : fs.existsSync("/opt/pw-browsers/chromium") ? { executablePath: "/opt/pw-browsers/chromium" } : {}));
   fs.mkdirSync(OUT, { recursive: true });
   const convs = new Array(CONVS); let next = 0;
   await Promise.all(Array.from({ length: Math.min(JOBS, CONVS) }, async () => { while (next < CONVS) { const i = next++; try { convs[i] = await conversation(browser, base, i + 1); } catch (e) { convs[i] = { n: i + 1, asks: [], faults: [], saves: [], errors: ["conversation failed: " + e.message], minutes: 0, unanswered: [] }; }
-    const c = convs[i]; console.log(`${c.closedWon ? "✓" : c.hungUp ? "✗" : "·"} conversation ${c.n}: ${c.minutes} min, ${c.saves.length} saves, ${c.asks.length} asks${c.asks.length ? " (" + c.asks.map(a => a.silence + " s " + a.cause).join("; ") + ")" : ""}, ${c.faults.length} faults${c.ended ? ", " + c.ended : ""}${c.errors.length ? " [" + c.errors[0] + "]" : ""}`); } }));
+    const c = convs[i]; console.log(`${c.closedWon ? "✓" : c.hungUp ? "✗" : "·"} conversation ${c.n}: ${c.minutes} min, ${c.saves.length} saves, ${c.asks.length} asks${c.asks.length ? " (" + c.asks.map(a => a.silence + " s " + a.cause).join("; ") + ")" : ""}, ${c.faults.length} faults${c.sync ? `, state ${c.sync.confirmed}/${c.sync.sent} confirmed (median ${c.sync.medianMs} ms${c.sync.missed ? ", " + c.sync.missed + " missed" : ""})${c.sync.staleSaves.length ? ", stale save_form " + c.sync.staleSaves.filter(x => x.recovered).length + "/" + c.sync.staleSaves.length + " recovered" : ""}${c.sync.linesTwice ? ", " + c.sync.linesTwice + " line(s) said twice" : ""}` : ""}${c.ended ? ", " + c.ended : ""}${c.errors.length ? " [" + c.errors[0] + "]" : ""}`); } }));
   await browser.close(); server.close();
   const mins = convs.reduce((a, c) => a + (c.minutes || 0), 0), asks = convs.flatMap(c => c.asks), per10 = mins ? Math.round(asks.length / mins * 100) / 10 : 0;
   const by = {}; asks.forEach(a => { by[a.cause] = (by[a.cause] || 0) + 1; });
@@ -220,6 +243,7 @@ async function conversation(browser, base, n) {
     `**${asks.length} asks in ${mins} minutes: ${per10} per 10 minutes.** Median silence before an ask ${med} s, longest ${Math.max(0, ...sil)} s. ${convs.filter(c => c.closedWon).length} of ${convs.length} conversations reached Closed Won; ${convs.filter(c => c.hungUp).length} hung up after three asks. ${convs.flatMap(c => c.faults).length} faults thrown.`, "",
     "| Cause | Asks |", "|---|---|", ...Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `| ${k} | ${v} |`), "",
     "| Conversation | Minutes | Saves | Asks | Faults | Ended |", "|---|---|---|---|---|---|", ...convs.map(c => `| ${c.n} | ${c.minutes} | ${c.saves.length} | ${c.asks.map(a => `${a.silence} s (${a.cause})`).join("; ") || "none"} | ${c.faults.map(f => f.fault).join(", ") || "none"} | ${c.closedWon ? "Closed Won" : c.ended || ""}${c.errors.length ? " " + c.errors.join("; ") : ""} |`), "",
+    ...stateSection(convs),
     "## Each ask", "", "| Conv | At | Silence | Cause | Status | Form | Last heard |", "|---|---|---|---|---|---|---|", ...convs.flatMap(c => c.asks.map(a => `| ${c.n} | ${Math.round(a.at / 1000)} s | ${a.silence} s | ${a.cause} | ${a.status} | ${a.form || ""} | ${a.lastHeard.replace(/\|/g, "/")} |`)), "",
     "## Questions the answer book had no entry for", "", ...[...new Set(convs.flatMap(c => c.unanswered))].map(q => `- ${q}`), "",
     ...convs.flatMap(c => [`<details><summary>Conversation ${c.n} log</summary>`, "", "```", (c.log || []).join("\n").slice(0, 40000), "```", "</details>", ""])].join("\n");
