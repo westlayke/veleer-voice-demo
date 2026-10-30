@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 2:10 PM",
+      "change": "Preview: the scripted-line id pairing (1:51 PM) now works whichever order the service sends its acceptance and the reply in; on the 1:51 PM build every line was still matched by order (\"the service gave the line item none\" in run 41101988185).",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 1:42 PM: Build (the real-Ara run on the 1:51 PM build showed the id was never paired)"
+    },
+    {
       "date": "Oct 30, 1:22 PM",
       "change": "Preview: every scripted line the app sends to Ara carries its own id, and the ids xAI returns for it (the item it added, the reply, the reply's item, the audio's item) are written to the activity log with whether our id came back. If xAI refuses a line with an id, the app sends it again without one and stops adding ids for that call. Nothing else changes; this is to learn whether words and sound can be matched by id instead of by their text.",
       "area": "Voice",
