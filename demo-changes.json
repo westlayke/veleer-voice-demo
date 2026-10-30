@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 3:09 PM",
+      "change": "Preview: after a drop, a tool call the app refuses (such as a save the service replays from before the drop) no longer ends the check that Ara says where we were; her \"What next?\" is caught and she is asked again, up to three times, with the app's own line as the floor. Ara is also told never to ask \"what next?\" or \"what would you like to do?\" after a save: say the next step and ask yes or no.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 3:00 PM: \"after a dropout period which we never want we always want her to explain what we did last and what is next\" (his 2:52 PM call: Ara came back with \"Tommy Toyota is saved. What next?\"); Build 3:04 PM."
+    },
+    {
       "date": "Oct 30, 2:25 PM",
       "change": "Preview: when one of the app's own lines reaches the phone as words with no sound and the sound never comes, the line is asked for again as the app's own scripted line. Until now Ara's transcript ended in a space, so the app treated every such line as hers and asked her to repeat it in a reply request that the service never answered; after 20 s the phone reconnected and said where we were instead.",
       "area": "Voice",

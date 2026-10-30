@@ -264,12 +264,13 @@ function grokInstructions() {
 ${flowScript()}
 ${G.hands ? "### Hands-free mode\n- " + HF_RULES + "\n" : ""}
 ## Guardrails
-${PROV().rules ? PROV().rules + "\n" : ""}- Ask at most one question at a time, and only for a required field the officer hasn't said. Never ask about optional fields, except the ones named above (email and mobile and the optional-fields questions the app gives you for a new contact or opportunity, and the next step for a substantive meeting).
-- Never make up details: leave out anything the officer didn't say, such as a capacity rating, whether a meeting was substantive, its outcome or a next step. Never suggest a next step, a date or a way of contacting someone: ask, and let the officer decide (Carverhill, Oct 25). A field you could guess from context is still a field to leave empty: the app asks the officer for what it needs, and a guessed value that the officer confirms by habit is worse than a question.
+${PROV().rules ? PROV().rules + "\n" : ""}- Ask at most one question at a time, and only for a required field the officer hasn't said. Never ask about optional fields, except the ones named above (email, mobile, the optional-field questions the app gives you, and the next step for a substantive meeting).
+- Never make up details: leave out anything the officer didn't say, such as a capacity rating, whether a meeting was substantive, its outcome or a next step. Never suggest a next step, a date or a way of contacting someone: ask, and let the officer decide. A field you could guess is still left empty: a guessed value the officer confirms by habit is worse than a question.
 - Call the money's recipient the "entity" (C3, C4 or PAC), never "fund". Use these short names (never "C.A." or "Citizens Alliance"), as the fund value too. The only entities, by state: ${ENTITIES_BY_STATE()}. Never name any other; for a state, list exactly those.
 - Say "gift", never "payment". Write spoken email addresses as real addresses. Resolve relative dates against today.
 - When the officer spells something letter by letter, use exactly those letters in the field they mean; "T as in Tom" and words like Tango or Delta stand for their first letter. When they correct how a name is spelled, ask once whether the email address should change to match.
 - Never joke about investors, money, Do Not Contact or Ally flags, or the officer's mistakes.
+- After a save, never ask "what next?" or "what would you like to do?": say the next step the app gives you and ask yes or no.
 
 ## Voice & Communication Style
 - Speak warmly and briefly: one or two short sentences per turn.
@@ -989,7 +990,7 @@ function toolCheck(r) {
 // "How do we make it so Ara, not the app, plays these messages"): the app asks her for it, checks the reply (the person named, her closing question the
 // pending one, no open "what would you like to do") and asks again up to CONTEXT_ASKS times; then its own scripted line is the floor. The same check
 // covers a late yes after a save. reconnectBy "app" (Settings, or window.__reconnectBy in the harness) keeps the scripted line: both ways measured by Patient Pat.
-const CONTEXT_ASKS = 3;
+const CONTEXT_ASKS = 3, OPEN_Q = /what (would you like|do you want) to do|what'?s next|what next/i; /* "What next?" too (Carverhill's 2:52 PM call, Oct 30) */
 const RECONNECT_BY = () => window.__reconnectBy || (typeof S !== "undefined" && S.settings && S.settings.reconnectBy) || "ara";
 function contextWatch(kind, w) { G.ctxWatch = { kind, need: { who: w.who || "", q: w.q }, tries: 1, at: Date.now(), seq: G.respSeq || 0, line: w.line, guide: w.guide }; } /* seq: the reply this was armed in (a tool call's) is not the answer */
 function contextAsk(kind, w) {
@@ -999,9 +1000,9 @@ function contextAsk(kind, w) {
 function contextCheck(r) {
   const c = G.ctxWatch; if (!c || !G.live) return;
   if (r.status === "cancelled" || G.respForcedSeq === G.respSeq || G.dropNext || G.respSeq === c.seq) return;
-  if (!G.bot) { if (G.respTool) G.ctxWatch = null; return; } /* she opened something instead: not a context line, but she acted */
+  if (!G.bot) { if (G.respTool) { if (G.toolRefusedSeq === G.respSeq) act("step", "A tool call a guard refused while Ara was asked where we were: her words are still awaited"); /* Carverhill's 2:52 PM call (Oct 30): the service replayed save_form after the pickup, the guard refused it, and clearing the watch here let her "Tommy Toyota is saved. What next?" through unchecked */ else G.ctxWatch = null; } return; } /* she opened something instead: not a context line, but she acted */
   const bot = G.bot.trim(), q = lastQuestionOf(bot), named = !c.need.who || new RegExp("\\b" + c.need.who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(bot);
-  const asked = /\?\s*$/.test(bot) && wordOverlap(sameWords(q), sameWords(c.need.q)) >= 0.5, open = /what (would you like|do you want) to do|what'?s next/i.test(bot) && !/what (would you like|do you want) to do|what'?s next/i.test(c.need.q);
+  const asked = /\?\s*$/.test(bot) && wordOverlap(sameWords(q), sameWords(c.need.q)) >= 0.5, open = OPEN_Q.test(bot) && !OPEN_Q.test(c.need.q);
   const secs = Math.round((Date.now() - c.at) / 100) / 10;
   if (named && asked && !open) { act("step", `Ara said where we were on try ${c.tries} (${secs} s after the first ask): "${bot.slice(0, 80)}"`); G.ctxWatch = null; return; }
   const why = open ? "asked an open question" : !named ? `didn't name ${c.need.who}` : "didn't ask the pending question";
@@ -1023,6 +1024,7 @@ function toolReply(callId, out, speak = true) {
   const { say, status, instructions, ask_exactly, read_back, ...data } = out || {};
   if (ask_exactly) data.asked = ask_exactly; if (read_back) data.read_back = read_back;
   if (data.ok === false && !ask_exactly && !read_back && !data.next) data.next = ESCAPE;
+  if (data.ok === false) G.toolRefusedSeq = G.respSeq; /* a refused call is not Ara acting: the where-we-were check keeps waiting for her words */
   send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(data) } });
   const line = ask_exactly || read_back;
   if (line) { forceSay(line); return; } // the scripted line is the turn: no reply request after it

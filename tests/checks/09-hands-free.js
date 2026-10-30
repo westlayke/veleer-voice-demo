@@ -86,6 +86,34 @@ test("Hands-free: a drop right after a save tells Ara it went through, and savin
   const again = await ara(p, "save_form", { confirmed: true });
   ok(again.saved === true && again.already && /already saved/.test(again.status || again.note || ""), "saving again after the drop didn't say it was already saved: " + JSON.stringify(again));
 });
+test("Carverhill's 2:52 PM call (Oct 30): a replayed tool call the guard refuses keeps the where-we-were check, so Ara's \"What next?\" is caught", async (p) => {
+  await signIn(p);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  const log = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  const words = (text) => p.evaluate((text) => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: text }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }, text);
+  await said(p, "Add a task for Ruth: send her the agenda, due November 30.");
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the agenda", due: "2026-11-30" });
+  await ara(p, "save_form", { confirmed: false });
+  await said(p, "Yes."); const r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved === true, "not saved: " + JSON.stringify(r));
+  // the line drops right after the save; on the pickup Ara is asked to say where we were
+  await p.evaluate(() => { G.forced = null; G.pendingForce = null; clearTimeout(G.forceTimer); window.__ws0 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1800);
+  ok(await p.evaluate(() => G.ctxWatch && G.ctxWatch.kind === "reconnect"), "no where-we-were check after the drop: " + (await log()).slice(-300));
+  await p.evaluate(() => { G.resumedAt = Date.now(); G.resumedHeardN = G.heardN || 0; }); /* the pretend service doesn't pick up the same conversation; the real one did, and replayed the call */
+  // the service replays the save_form from before the drop (a reply of its own): the guard refuses it, and the check stays armed
+  await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }));
+  const again = await ara(p, "save_form", { confirmed: true });
+  ok(again.ok === false && /already handled before the line dropped/.test(again.error || ""), "the replayed save wasn't refused: " + JSON.stringify(again));
+  ok(/Guard: tool call replayed after a pickup \(save_form\)/.test(await log()) && /A tool call a guard refused while Ara was asked where we were: her words are still awaited/.test(await log()), "the refusal wasn't logged as keeping the check: " + (await log()).slice(-300));
+  ok(await p.evaluate(() => !!G.ctxWatch), "the refused tool call cleared the where-we-were check");
+  // her open question is caught and she is asked again; her proper line passes
+  await words("Ruth's task is saved. What next?"); await p.waitForTimeout(150);
+  ok(/asked an open question \("Ruth's task is saved\. What next\?"\): asked again for where we were \(2 of 3\)/.test(await log()), "her \"What next?\" wasn't caught: " + (await log()).slice(-300));
+  const need = await p.evaluate(() => G.ctxWatch.need);
+  await words(`Sorry, I lost you for a moment. The task for ${need.who || "Ruth"} is saved. ${need.q}`); await p.waitForTimeout(150);
+  ok(/Ara said where we were on try 2/.test(await log()) && await p.evaluate(() => !G.ctxWatch), "her proper line didn't pass: " + (await log()).slice(-300));
+  ok(await p.evaluate(() => grokInstructions().includes('After a save, never ask "what next?"')), "the guardrail line is missing from the instructions");
+});
 test("Hands-free: a line that stalls without closing (officer talking, nothing heard back) is reconnected instead of hung up", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); }); // this check starts in tap mode; hands-free is on by default since Oct 25
