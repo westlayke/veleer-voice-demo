@@ -225,8 +225,9 @@ test("Spooky mode: a creak when a form opens, thunder on Save, bats and a cackle
 test("Halloween: an owl asks for a tap so sounds can play, hoots when tapped, and comes back on every load until someone taps", async (p) => {
   if (new Date().getMonth() !== 9) return;
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Home"); await p.waitForTimeout(300);
+  await p.waitForFunction(() => !G.live && !V && !document.querySelector(".owlhint"), null, { timeout: 8000 }).catch(() => {}); /* the owl waits for the call to end and the welcome to close; GitHub's machines took longer than the 5 s allowed (failed most runs since Oct 29 afternoon, passed here) */
   await p.evaluate(() => { spkCtx = null; delete window.__demo.state.settings.seenOwlHint; document.getElementById("modal").innerHTML = ""; window.__demo.owlHint(); });
-  const seen = await p.waitForSelector(".owlhint >> text=Tap me to hear me hoot!", { timeout: 5000 }).then(() => true, () => false); // waits as long as a busy machine needs
+  const seen = await p.waitForSelector(".owlhint >> text=Tap me to hear me hoot!", { timeout: 15000 }).then(() => true, () => false); // waits as long as a busy machine needs
   ok(seen, "the owl with its speech bubble didn't appear");
   const n = await p.evaluate(() => window.__demo.spkPlayed);
   await p.tap(".owlhint-owl"); await p.waitForTimeout(500);
