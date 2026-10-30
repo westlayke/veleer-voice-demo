@@ -3,6 +3,13 @@
   "changes": [
     {
       "date": "Oct 30, 4:03 PM",
+      "change": "Preview: the quiet hang-up is a yes-or-no decision. After 20 s of quiet (50 s with a form open) Ara asks \"Should I hang up now, yes or no?\"; a yes, or no answer in 10 s, gets her goodbye (\"Goodbye for now. Tap the mic when you need me.\" / \"Your form stays on the screen.\") and then the hang-up; any other words keep the call going. The phone's \"I'll hang up for now\" recording only stands in when her goodbye can't play. The quiet allowance is 30 s in both modes (tap mode was 12 s).",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 4:09 PM: he opened the app and got the \"I will hang up now\" recording; at 20 seconds ask \"should I hang up now, yes or no\", and just before the hang-up have Ara say goodbye. Build 4:11 PM."
+    },
+    {
+      "date": "Oct 30, 4:03 PM",
       "change": "Preview: the follow-up task suggestion for an ask still awaiting its answer is a yes-or-no decision: \"I suggest 'Follow up with X to get an answer on the ask', due in 14 days, on <date>. Shall I use that, yes or no?\" A short answer that isn't a no counts as yes (the rule the other app questions use), so \"Use that\" fills the task; a no gets one question, \"What should the task say, and when is it due?\", and the officer's words replace the suggestion. The reconnect line after a drop asks whichever question is pending.",
       "area": "Voice",
       "requestedBy": "Carverhill",

@@ -5,7 +5,8 @@
 // What Ara is told after a reconnect is reconnectLine() below; the doubled-reply guard is in onEvent() in voice.js.
 
 /* ---------- timings: tune here ---------- */
-const IDLE_MS = 12000, IDLE_HF_MS = 30000;   // hang up after this much quiet (hands-free: a driver may take a while to answer)
+const IDLE_MS = 30000, IDLE_HF_MS = 30000;   // hang up after this much quiet, in both modes (Carverhill, Oct 30: Ara asks first, 10 s before)
+const IDLE_ASK_BEFORE_MS = 10000;            // Ara asks "Should I hang up now, yes or no?" this long before the quiet limit; yes or no answer by then = goodbye
 const IDLE_FORM_MS = 60000;                  // with a form open and waiting on the officer, twice that (Carverhill Oct 28 4:12 PM: the service took 20 to 29 s a reply, then the call hung up with the form open)
 const QUIET_MS = 5000, QUIET_SPACING_MS = 2500; // the quiet clock: while the app waits on anything, a status recording every 5 s of silence (Carverhill, Oct 30: never more than 5 or 6 s of silence); a site that speaks early keeps this spacing
 const NOISE_CAP_MS = 60000;                  // sound on the mic counts as talking, but not for longer than this (road noise)
@@ -50,7 +51,8 @@ const NAMED_LINES = {
 };
 const NAMED_VOICE = "eve", NAMED_KEY = "namedLines:v5", namedRaw = {}, namedBuf = {};
 // phone lines without a name, made and kept the same way (the stock recordings have no words for these)
-const STILL_WAIT_TEXT = "Still waiting on Ara.", QUIET_LINES = [STILL_WAIT_TEXT, "Still here. Hang on.", "Ara's line is slow. Hang on."], HANGUP_TEXT = "I'll hang up for now. Tap the mic when you need me.", HANGUP_FORM_TEXT = "I'll hang up for now. Your form stays on the screen.";
+const STILL_WAIT_TEXT = "Still waiting on Ara.", QUIET_LINES = [STILL_WAIT_TEXT, "Still here. Hang on.", "Ara's line is slow. Hang on."], HANGUP_TEXT = "I'll hang up for now. Tap the mic when you need me.", HANGUP_FORM_TEXT = "I'll hang up for now. Your form stays on the screen."; /* the phone's stand-ins when Ara's goodbye can't play */
+const HANGUP_Q = "Should I hang up now, yes or no?", GOODBYE_TEXT = "Goodbye for now. Tap the mic when you need me.", GOODBYE_FORM_TEXT = "Goodbye for now. Your form stays on the screen."; /* Ara's own lines (Oct 30): a yes-or-no decision, then her goodbye */
 const PHONE_LINES = [...QUIET_LINES, HANGUP_TEXT, HANGUP_FORM_TEXT];
 const officerFirst = () => { const n = String((typeof S !== "undefined" && S.settings && S.settings.userName) || "").trim().split(/\s+/)[0] || ""; return n ? n[0].toUpperCase() + n.slice(1) : ""; };
 const namedTexts = (n) => (n ? [NAMED_LINES.dropped(n), ...NAMED_LINES.still.map(f => f(n)), NAMED_LINES.back(n), NAMED_LINES.warn(n), NAMED_LINES.last(n)] : []).concat(PHONE_LINES);
@@ -136,22 +138,44 @@ function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWat
   // the officer is talking but the voice service hasn't heard anything: the line may have stalled without closing (seen Oct 24 in a dead spot)
   const talking = G.speechSince && Date.now() - G.speechSince > STALL_MS && Date.now() - (G.lastMsg || 0) > STALL_MS;
   const since = Date.now() - (G.lastAct || Date.now());
-  const quiet = since >= idleMs() && (Date.now() - (G.loudAt || 0) >= idleMs() || since >= NOISE_CAP_MS) && !G.turnOpen; /* never a goodbye while the officer's words are unanswered (turnWatch reconnects instead) */ // sound on the mic counts as talking, but not for more than a minute (road noise)
+  const quiet = since >= idleAskMs() && (Date.now() - (G.loudAt || 0) >= idleAskMs() || since >= NOISE_CAP_MS) && !G.turnOpen; /* the question comes IDLE_ASK_BEFORE_MS before the limit (Oct 30) */ /* never a goodbye while the officer's words are unanswered (turnWatch reconnects instead) */ // sound on the mic counts as talking, but not for more than a minute (road noise)
   if (!talking && !quiet) return;
   G.probing = true; const ws = G.ws;
   pingMs(LINE_TEST_MS).then(ms => { G.probing = false; if (!G.live || G.ws !== ws || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
     const fresh = Date.now() - (G.lastMsg || 0) < LINE_TEST_MS; // the voice service is still sending: the line is alive, however slow the test (seen Oct 24: a 2.7 s test while Grok was answering)
     if (!fresh && (typeof ms !== "number" || (talking && ms > STALL_SLOW_MS))) { G.stalled = true; G.speechSince = 0; netLog(`Line stalled (${talking ? "officer talking, nothing heard back" : "12 s of quiet"})`, ms); reconnect("the line stalled"); if (talking) G.spokeInGap = true; /* what they said never reached the voice service: the new line asks them to say it again */ return; }
     if (talking) { G.speechSince = 0; return; } // the line is fine: it was background noise
-    if (Date.now() - (G.lastAct || Date.now()) >= idleMs()) idleStart(); });
+    if (Date.now() - (G.lastAct || Date.now()) >= idleAskMs()) idleStart(); });
 }
+// The quiet hang-up (Carverhill, Oct 30: "at 20 seconds say 'should I hang up now, yes or no', and just before the hang-up have Ara say goodbye"):
+// idleAskMs() of quiet -> Ara asks HANGUP_Q (a scripted line); yes -> idleGoodbye(); any other words -> the call carries on (speech_started calls it off);
+// no answer in IDLE_ASK_BEFORE_MS -> idleGoodbye() too. The goodbye is Ara's line; the hang-up follows once it has played, and the phone's recording stands in when her line doesn't start.
+const idleAskMs = () => idleMs() - IDLE_ASK_BEFORE_MS;
 function idleStart() {
-  G.idleEnding = true; G.idleAt = Date.now(); vlog(`${idleMs() / 1000} seconds quiet: hanging up`);
-  const form = typeof V !== "undefined" && V && ACTIONS[V.action], text = form ? HANGUP_FORM_TEXT : HANGUP_TEXT;
-  // the phone's own line when it has it (it always plays; Oct 28 4:16 PM the forced line never came), else Ara is asked to say it
-  if (sayLocal(text, "", text)) { G.idleTimer = setTimeout(idleHangUp, Math.max(1500, (G.lineEndAt || Date.now()) - Date.now() + 700)); return; }
+  G.idleEnding = true; G.idleAt = Date.now(); G.idleAsked = Date.now(); G.goodbye = false; vlog(`${idleAskMs() / 1000} seconds quiet: asking whether to hang up`);
+  act("step", `Quiet for ${idleAskMs() / 1000} s: Ara asks whether to hang up, yes or no`);
+  forceSay(HANGUP_Q);
+  G.idleTimer = setTimeout(() => idleGoodbye("no answer in " + IDLE_ASK_BEFORE_MS / 1000 + " s"), IDLE_ASK_BEFORE_MS);
+}
+// the officer's answer to HANGUP_Q (from the transcript): a yes ends the call with the goodbye; anything else was already a call-off (speech_started)
+function idleAnswer(text) {
+  if (!G.idleAsked || Date.now() - G.idleAsked > IDLE_ASK_BEFORE_MS + 15000 || G.goodbye) return false;
+  const yes = typeof appYes === "function" && appYes(text); G.idleAsked = 0;
+  if (yes) { idleGoodbye(`the officer said yes ("${String(text).slice(0, 40)}")`); return true; }
+  act("step", `The officer answered the hang-up question with other words: the call carries on`); return false;
+}
+function idleGoodbye(why) {
+  clearTimeout(G.idleTimer); if (!G.live) return;
+  G.idleEnding = true; G.idleAt = Date.now(); G.goodbye = true; G.idleAsked = 0;
+  const form = typeof V !== "undefined" && V && ACTIONS[V.action], text = form ? GOODBYE_FORM_TEXT : GOODBYE_TEXT, standIn = form ? HANGUP_FORM_TEXT : HANGUP_TEXT;
+  act("step", `Hanging up (${why}): Ara says goodbye first`); vlog("goodbye: " + why);
+  if (G.responding && !G.forced) { send({ type: "response.cancel" }); G.dropNext = true; } /* her own answer to the yes gives way to the goodbye line */
   forceSay(text);
-  G.idleTimer = setTimeout(idleHangUp, 12000); // in case Grok doesn't answer
+  // her line not started in time: the phone's recording stands in (Oct 28 4:16 PM the forced line never came), then the hang-up
+  G.idleTimer = setTimeout(() => { if (!G.live) return;
+    if (G.forced && G.forced.text === text && !G.forced.started) { G.forced = null; clearTimeout(G.forceTimer); act("step", "Ara's goodbye didn't play: the phone's recording stands in");
+      if (sayLocal(standIn, "", standIn)) { G.idleTimer = setTimeout(idleHangUp, Math.max(1500, (G.lineEndAt || Date.now()) - Date.now() + 700)); return; } }
+    idleHangUp(); }, FORCE_WAIT_MS - 500); /* just before the scripted line's own fallback would hand the goodbye to Ara as guidance */
 }
 function idleHangUp() { clearTimeout(G.idleTimer); if (!G.live) return; const secs = idleMs() / 1000; endCall(`${secs} seconds of quiet`); toast(`Hung up after ${secs} seconds of quiet. Tap the mic when you need me.`); }
 /* ---------- a line warmed on the first touch of the mic (Oct 28): the socket handshake runs while the finger is still on the button ---------- */

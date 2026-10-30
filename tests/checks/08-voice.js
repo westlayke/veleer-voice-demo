@@ -95,7 +95,7 @@ test("xAI review items (Oct 28): service idle timer, streaming transcription, tr
   ok(!xs.some(e => e.type === "session.update" && e.session.reasoning), "reasoning effort was sent although the setting is the default");
   // hands-free off: the service's idle timer follows the shorter wait
   let n = await p.evaluate(() => __sent.length); await p.evaluate(() => setHandsFree(false)); await p.waitForTimeout(100);
-  ok((await sent()).slice(-6).some(e => e.type === "session.update" && e.session.turn_detection && e.session.turn_detection.idle_timeout_ms === 15000 && !e.session.tools), "hands-free off didn't shorten the service's idle timer to 15 s");
+  ok((await sent()).slice(-6).some(e => e.type === "session.update" && e.session.turn_detection && e.session.turn_detection.idle_timeout_ms === 33000 && !e.session.tools), "hands-free off didn't send the service's idle timer (33 s: the phone's 30 s limit plus 3, the same in both modes since Oct 30)");
   // the officer's words as they speak, and the session.created time, are logged
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "session.created", session: {} }) }); __ws.onmessage({ data: JSON.stringify({ type: "conversation.item.input_audio_transcription.updated", transcript: "new contact priya" }) }); });
   ok(await p.evaluate(() => G.heardLive === "new contact priya" && VLOG.some(l => /session created \d+ ms after the tap/.test(l)) && VLOG.some(l => /officer \(so far\) "new contact priya"/.test(l))), "the live transcript or the session.created time wasn't logged");
@@ -120,7 +120,7 @@ test("xAI review items (Oct 28): service idle timer, streaming transcription, tr
   await p.evaluate(() => { window.__noAutoForce = true; G.lastAct = Date.now() - 40000; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.timeout_triggered" }) }); }); await p.waitForTimeout(300); /* quiet longer than the phone allows (no form open) */
   ok(await p.evaluate((n) => __sent.slice(n).some(s => /"response\.cancel"/.test(s)) && G.idleEnding && G.dropNext, n), "the service's idle timer didn't start the hang-up");
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }); await p.waitForTimeout(300);
-  ok(await p.evaluate((n) => !G.dropNext && !G.responding && __sent.slice(n).some(s => /force_message/.test(s) && /hang up for now/.test(s)), n), "the check-in wasn't dropped, or the goodbye line wasn't sent");
+  ok(await p.evaluate((n) => !G.dropNext && !G.responding && __sent.slice(n).some(s => /force_message/.test(s) && /Should I hang up now, yes or no\?/.test(s)), n), "the check-in wasn't dropped, or the hang-up question wasn't sent (Oct 30: Ara asks first)");
   await p.evaluate(() => { G.idleEnding = false; clearTimeout(G.idleTimer); G.forced = null; window.__noAutoForce = false; });
   // an error event is logged as a step (a refused session.update keeps the previous settings)
   await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "error", error: { code: "invalid_session_update", message: "unknown field" } }) }));
@@ -1353,8 +1353,8 @@ test("Reconnect lines with the officer's name (Oct 28): fetched once from the ke
   await p.evaluate(() => { ACT.q.length = 0; G.lastAct = Date.now(); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.timeout_triggered" }) }); });
   ok(await p.evaluate(() => !G.idleEnding && ACT.q.some(a => /its idle timer\): ignored, a form is open and the phone allows 60 s/.test(a.text))), "the service's idle timer hung up although a form is open and the phone allows 60 s: " + JSON.stringify(await p.evaluate(() => [G.idleEnding, ACT.q.map(a => a.text)])));
   await p.evaluate(() => { ACT.q.length = 0; idleStart(); });
-  ok(await p.evaluate(() => G.idleEnding && !!G.idleTimer && ACT.q.some(a => a.text === 'The phone said (recording): "I\'ll hang up for now. Your form stays on the screen."') && !G.forced), "the hang-up line with a form open wasn't the phone's own recording: " + JSON.stringify(await p.evaluate(() => ACT.q.map(a => a.text))));
-  await p.evaluate(() => { clearTimeout(G.idleTimer); G.idleEnding = false; G.idleAt = 0; V = null; });
+  ok(await p.evaluate(() => G.idleEnding && !!G.idleTimer && G.forced && G.forced.text === HANGUP_Q && ACT.q.some(a => /^Quiet for 50 s: Ara asks whether to hang up, yes or no/.test(a.text))), "with a form open the hang-up question didn't come at 50 s as Ara's line (Oct 30): " + JSON.stringify(await p.evaluate(() => [G.forced && G.forced.text, ACT.q.map(a => a.text)])));
+  await p.evaluate(() => { clearTimeout(G.idleTimer); G.idleEnding = false; G.idleAt = 0; G.idleAsked = 0; G.forced = null; clearTimeout(G.forceTimer); V = null; });
   // Ara's audio arriving while a phone line still plays is queued until the line ends (no overlap)
   const q = await p.evaluate(() => { G.lineEndAt = Date.now() + 1500; G.playHead = 0; const t0 = G.ctx.currentTime; playPcm(new Int16Array(2400)); const d = G.playHead - 0.1 - t0; G.lineEndAt = 0; G.playHead = 0; return d; });
   ok(q > 2.4 && q < 3.2, /* the line's 1.5 s plus the 1 s gap (LINE_GAP_S, Oct 28 10:43 PM) */ "Ara's audio wasn't held until the phone's line had finished: started " + q.toFixed(2) + " s out");

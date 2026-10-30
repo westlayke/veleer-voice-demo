@@ -140,10 +140,10 @@ test("Hands-free: a new opportunity always asks the campaign when the entity has
   await p.evaluate(() => { clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.asked = false; window.__noAutoForce = true; }); // the pretend service never answered the earlier reply requests, and leaves the goodbye line pending
   await p.evaluate(() => { window.__ws0 = __ws; G.lastAct = Date.now() - 61000; G.loudAt = 0; /* a form is open: the phone allows 60 s of quiet (Oct 28) */ const keep = setInterval(() => { if (!G.live) return clearInterval(keep); G.lastMsg = Date.now(); G.loudAt = 0; G.speechSince = 0; }, 100); window.__keep = keep; }); // the test browser's pretend mic beeps
   await p.waitForTimeout(4500);
-  ok(await p.evaluate(() => __ws === __ws0 && G.idleEnding && G.forced && /hang up for now/.test(G.forced.text)), "a live line with a slow test was reconnected instead of the normal quiet hang-up (a scripted goodbye)");
+  ok(await p.evaluate(() => __ws === __ws0 && G.idleEnding && G.forced && /Should I hang up now/.test(G.forced.text)), "a live line with a slow test was reconnected instead of the normal quiet hang-up (Ara's scripted question)");
   await p.evaluate(() => { clearInterval(__keep); G.responding = true; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
   await p.waitForTimeout(3400); // long enough for a pending scripted line's fallback, which must not happen
-  const off = await p.evaluate(() => ({ live: G.live, ending: G.idleEnding, forced: !!G.forced, fallback: __sent.some(s => s.includes("hang up for now") && JSON.parse(s).type === "response.create"), cancel: __sent.some(s => JSON.parse(s).type === "response.cancel") }));
+  const off = await p.evaluate(() => ({ live: G.live, ending: G.idleEnding, forced: !!G.forced, fallback: __sent.some(s => s.includes("Should I hang up now") && JSON.parse(s).type === "response.create"), cancel: __sent.some(s => JSON.parse(s).type === "response.cancel") }));
   ok(off.live && !off.ending && !off.forced && !off.fallback && off.cancel, "the officer's late answer didn't call off the hang-up cleanly: " + JSON.stringify(off));
 });
 
@@ -755,5 +755,46 @@ test("Carverhill's 10:36 AM call (Oct 30): after a drop with no form open Ara sa
   // 7. a bare "what would you like to do?" from Ara is never said again after a drop: where we were is
   await p.evaluate(() => { G.lastSaved.at = Date.now(); G.lastBot = "What would you like to do?"; G.lastBotAt = Date.now() - 2000; G.lastHeard = { text: "ok", at: Date.now() - 30000 }; });
   const q = await p.evaluate(() => lastQuestion()); ok(q.where && q.where.kind === "saved", "the bare question came back after a drop: " + JSON.stringify(q));
+});
+// Carverhill, Oct 30 4:09 PM: he opened the app, said nothing, and got the "I'll hang up for now" recording. Now Ara asks first, as a yes-or-no decision, and says goodbye before the hang-up.
+test("Quiet hang-up (Oct 30): at 20 s Ara asks whether to hang up, yes or no; no carries on; no answer in 10 s gets her goodbye, the recording when it doesn't play, then the hang-up; yes gets the goodbye at once", async (p) => {
+  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
+  const log = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.live && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const quietStart = () => p.evaluate(() => { window.__noAutoForce = true; window.__quietMic = true; const f = window.__fetch0 || window.fetch; window.__fetch0 = f; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise(res => setTimeout(() => res(new Response("{}")), 50)) : f(u, o);
+    clearInterval(window.__keep); window.__keep = setInterval(() => { if (!G.live) return clearInterval(window.__keep); G.lastMsg = Date.now(); G.loudAt = 0; G.speechSince = 0; }, 100); /* the test browser's pretend mic beeps */ });
+  await quietStart();
+  ok(await p.evaluate(() => IDLE_MS === 30000 && IDLE_HF_MS === 30000 && IDLE_ASK_BEFORE_MS === 10000 && idleAskMs() === 20000), "the quiet allowance isn't 30 s in both modes with the question 10 s before");
+  // 1. 20 s of quiet: Ara asks, as a scripted line; nothing hangs up yet
+  await p.evaluate(() => { G.lastAct = Date.now() - 20500; }); await p.waitForTimeout(2500);
+  ok(await p.evaluate(() => G.live && G.idleEnding && !G.goodbye && G.idleAsked > 0 && G.forced && G.forced.text === "Should I hang up now, yes or no?") && /Quiet for 20 s: Ara asks whether to hang up, yes or no/.test(await log()), "20 s of quiet didn't get Ara's hang-up question: " + JSON.stringify(await p.evaluate(() => [G.live, G.idleEnding, G.forced && G.forced.text])) + (await log()).slice(-300));
+  // 2. "No.": the call carries on, the clock starts over
+  await fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }]); await said(p, "No."); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => G.live && !G.idleEnding && !G.idleAt && !G.goodbye && !G.idleAsked && !G.forced) && /The officer answered the hang-up question: their words decide/.test(await log()) && /The officer answered the hang-up question with other words: the call carries on/.test(await log()), "a no to the hang-up question didn't keep the call going: " + JSON.stringify(await p.evaluate(() => [G.live, G.idleEnding, G.idleAt, G.goodbye, G.idleAsked, !!G.forced])) + (await log()).slice(-300));
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: btoa("\0\0\0\0") }, { type: "response.done", response: { status: "completed" } }]); /* Ara answers the no; the officer's turn is over */
+  await p.waitForTimeout(3000);
+  ok(await p.evaluate(() => G.live && !G.idleEnding && !G.turnOpen), "the hang-up came back although the officer said no: " + JSON.stringify(await p.evaluate(() => [G.idleEnding, G.turnOpen])));
+  // 3. the question again, no answer for 10 s: Ara's goodbye; her line doesn't start in 8 s, so the phone's recording stands in, then the hang-up
+  await p.evaluate(() => { G.lastAct = Date.now() - 20500; G.forced = null; clearTimeout(G.forceTimer); }); await p.waitForTimeout(2500);
+  ok(await p.evaluate(() => G.idleEnding && G.forced && G.forced.text === "Should I hang up now, yes or no?"), "the question wasn't asked a second time");
+  await p.evaluate(() => { G.forced = null; clearTimeout(G.forceTimer); window.__said = []; window.__sayLocal0 = window.sayLocal; window.sayLocal = (t, k, name) => { __said.push(t); G.lineEndAt = Date.now() + 1500; return true; }; }); /* the question's own line is out of the way; the recording is pretend */
+  await p.waitForTimeout(10500);
+  ok(await p.evaluate(() => G.live && G.goodbye && G.forced && G.forced.text === "Goodbye for now. Tap the mic when you need me.") && /Hanging up \(no answer in 10 s\): Ara says goodbye first/.test(await log()), "10 s without an answer didn't get Ara's goodbye: " + JSON.stringify(await p.evaluate(() => [G.live, G.goodbye, G.forced && G.forced.text])) + (await log()).slice(-300));
+  await p.waitForTimeout(8500);
+  ok(await p.evaluate(() => __said.includes("I'll hang up for now. Tap the mic when you need me.")) && /Ara's goodbye didn't play: the phone's recording stands in/.test(await log()), "the phone's recording didn't stand in for a goodbye that never played: " + JSON.stringify(await p.evaluate(() => __said)) + (await log()).slice(-300));
+  await p.waitForFunction(() => !G.live, null, { timeout: 5000 }).catch(() => {});
+  ok(await p.evaluate(() => !G.live) && /Conversation ended \(30 seconds of quiet\)/.test(await log()), "the call didn't end after the stand-in recording: " + (await log()).slice(-200));
+  await p.evaluate(() => { window.sayLocal = window.__sayLocal0; });
+  // 4. a fresh call, the question, "Yes.": the goodbye at once, and the hang-up once it has played
+  if (await p.isVisible("#rsmGo")) await p.tap("#rsmGo"); else await p.tap("[data-act2=mic]");
+  await p.waitForFunction(() => window.__ws && G.live && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(500);
+  await quietStart(); await p.evaluate(() => { G.forced = null; clearTimeout(G.forceTimer); G.lastAct = Date.now() - 20500; }); await p.waitForTimeout(2500);
+  ok(await p.evaluate(() => G.idleEnding && G.forced && G.forced.text === "Should I hang up now, yes or no?"), "the fresh call didn't ask at 20 s: " + JSON.stringify(await p.evaluate(() => [G.live, G.idleEnding, G.forced && G.forced.text])));
+  await fire([{ type: "input_audio_buffer.speech_started" }, { type: "input_audio_buffer.speech_stopped" }]); await said(p, "Yes."); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => G.live && G.goodbye && G.idleEnding && G.forced && G.forced.text === "Goodbye for now. Tap the mic when you need me.") && /Hanging up \(the officer said yes \("Yes\."\)\): Ara says goodbye first/.test(await log()), "a yes didn't get the goodbye line: " + JSON.stringify(await p.evaluate(() => [G.live, G.goodbye, G.forced && G.forced.text])) + (await log()).slice(-300));
+  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: btoa("\0\0\0\0") }, { type: "response.done", response: { status: "completed" } }]);
+  await p.waitForFunction(() => !G.live, null, { timeout: 5000 }).catch(() => {});
+  ok(await p.evaluate(() => !G.live) && /Conversation ended \(30 seconds of quiet\)/.test(await log()), "the call didn't end after Ara's goodbye played: " + (await log()).slice(-200));
+  await p.evaluate(() => { clearInterval(window.__keep); window.fetch = window.__fetch0; window.__noAutoForce = false; });
 });
 };

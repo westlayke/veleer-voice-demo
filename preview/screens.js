@@ -149,7 +149,7 @@ function helpModal() {
     <ol class="hm-steps"><li>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> at the bottom of the screen.</li>
       <li>Say what you want, like <b>“Log a meeting with Ruth”</b> or <b>“What are my open tasks?”</b> You can interrupt at any time.</li>
       <li>${esc(botName())} fills in the form on screen. Check it, then tap <b>Save</b>.</li>
-      <li>Tap the mic again to hang up. After ${IDLE_MS / 1000} seconds of quiet (${IDLE_HF_MS / 1000} in hands-free mode), the call ends by itself.</li></ol>
+      <li>Tap the mic again to hang up. After ${(IDLE_MS - IDLE_ASK_BEFORE_MS) / 1000} seconds of quiet ${esc(botName())} asks whether to hang up; say no to carry on. With no answer the call ends at ${IDLE_MS / 1000} seconds (${IDLE_FORM_MS / 1000} with a form open).</li></ol>
     <p class="wl-hint">Tap any option under “Say things like…” to get started with that request.</p>
     <button type="button" class="btn blue" data-helpx="1">Close</button></div></div>`;
 }

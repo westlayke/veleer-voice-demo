@@ -31,10 +31,24 @@ in the address. Logged as "line warmed on touch" and "(warmed on touch)" on the 
 
 ## The service's own idle timer (Oct 28)
 
-`turn_detection.idle_timeout_ms` is set `IDLE_SERVER_EXTRA_MS` (3 s) after the phone's own quiet limit (`idleMs()`: 12 s, 30 s
-hands-free; it follows a hands-free switch with a `turn_detection` update). The phone's timer normally fires first; the service's
-acts when road noise kept the phone's from firing. On `input_audio_buffer.timeout_triggered` the app cancels the service's
-check-in reply (`response.cancel`, `G.dropNext`) and says its own goodbye through `idleStart()`.
+`turn_detection.idle_timeout_ms` is set `IDLE_SERVER_EXTRA_MS` (3 s) after the phone's own quiet limit (`idleMs()`: 30 s in both
+modes since Oct 30, 60 s with a form open). The phone's timer normally fires first; the service's acts when road noise kept the
+phone's from firing. On `input_audio_buffer.timeout_triggered` the app cancels the service's check-in reply (`response.cancel`,
+`G.dropNext`) and starts the hang-up through `idleStart()`.
+
+## The quiet hang-up is a yes-or-no decision (Oct 30)
+
+Carverhill opened the app, said nothing after the greeting, and 30 s later heard the phone's "I'll hang up for now" recording.
+Now, `IDLE_ASK_BEFORE_MS` (10 s) before the limit, `idleStart()` has Ara ask `HANGUP_Q` ("Should I hang up now, yes or no?") as a
+scripted line and sets `G.idleAsked`. The officer's next transcript goes through `idleAnswer()`: a yes by `appYes` (a short answer
+that isn't a no) calls `idleGoodbye()`; anything else keeps the call going (the `speech_started` call-off had already cleared the
+hang-up; the clock starts over). No answer in those 10 s calls `idleGoodbye()` too. `idleGoodbye()` sets `G.goodbye`, cancels a
+reply of Ara's own, and has her say `GOODBYE_TEXT` ("Goodbye for now. Tap the mic when you need me."; with a form open "Your form
+stays on the screen."); the hang-up follows once that reply is done and played (`response.done` with `G.goodbye`). If her line
+hasn't started `FORCE_WAIT_MS - 0.5` s later, the phone's `HANGUP_TEXT` recording stands in, then the hang-up. Rows: "Quiet for
+20 s: Ara asks whether to hang up, yes or no", "The officer answered the hang-up question: their words decide", "... with other
+words: the call carries on", "Hanging up (the officer said yes / no answer in 10 s): Ara says goodbye first", "Ara's goodbye
+didn't play: the phone's recording stands in". Check "Quiet hang-up (Oct 30)" in 09-hands-free.js; Patient Pat answers "No.".
 
 ## Noticing that the line is in trouble
 
