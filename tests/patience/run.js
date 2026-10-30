@@ -139,6 +139,7 @@ const BOOK = [
   { q: /What happened\?|How did it go\?|A sentence or two/i, say: "We talked about his interest in the North Dakota work, and he's keen.", tool: (line, ctx) => forForm(ctx, { summary: "Talked about his interest in the North Dakota work; he's keen." }) },
   { q: /substantive interaction, one that moved/i, say: "Yes, it was.", tool: (line, ctx) => forForm(ctx, { substantive: true }) },
   { q: /next step/i, say: "Yes. Call him on Friday about the donation.", tool: (line, ctx) => forForm(ctx, { nextStep: "Call Jordan about the donation", nextDue: F }) },
+  { q: /What should the task say/i, say: "Call Jordan about the ask, due Friday.", tool: (line, ctx) => forForm(ctx, { nextStep: "Call Jordan about the ask", nextDue: F }) },
   { q: /Shall I use that/i, say: "Use that.", tool: (line, ctx) => forForm(ctx, { nextStep: "Follow up with Jordan to get an answer on the ask", nextDue: F }) },
   { q: /Move \w+ to Cultivation, or defer\?/i, say: "Move to Cultivation.", tool: ["show_cultivation_decision", { contact_name: C, decision: "Move to Cultivation" }] },
   { q: /Move \w+ to Cultivation\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
