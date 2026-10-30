@@ -16,7 +16,7 @@ test("Settings: speaking speed saves, Restart asks first", async (p) => {
   ok((await state(p)).tasks.length === n, "Cancel still restarted");
 });
 test("Activity log records opening the app and taps outside a conversation", async (p) => {
-  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForTimeout(4600);
+  await signIn(p); await tab(p, "Contacts"); await p.tap("text=Abernathy, Ruth"); await p.waitForFunction(() => __logs.length > 0, null, { timeout: 12000 }).catch(() => {}); /* the batch goes 4 s after the last row; the state receipt and the 4 s "taking a moment" line can push it (Oct 29) */
   const ev = (await p.evaluate(() => __logs)).flatMap(b => b.events.map(e => e.role + ": " + e.text));
   ok(ev.filter(x => /^open: Opened the app \(build /.test(x)).length === 1, "opening the app was not logged exactly once: " + ev.slice(0, 4).join(" | ") + " " + JSON.stringify(await p.evaluate(() => ({ q: ACT.q.length, logs: __logs.length }))));
   ok(ev.some(x => /^tap: .*Contacts/.test(x)) && ev.some(x => /^tap: .*Abernathy/.test(x)), "taps were not sent to the activity log: " + ev.slice(0, 6).join(" | "));

@@ -162,7 +162,8 @@ function grokSaved(action, r, d = {}) {
   const next = nextStepLine(c, !!closed), undo = G.hfTry && !G.undoSaid;
   G.lastSaved = { who: who || "the same record", contactId: c ? c.id : null, next: `say exactly: "${next}"`, at: Date.now() }; // a drop with no form open comes back to this person (Carverhill, Oct 25)
   const spoken = [moodLine(action, d), savedShort(action, who, d) + closed, undo ? "Say undo if that's wrong." : "", r && r.note ? r.note : "", next].filter(Boolean).join(" ");
-  whenIdle("instr");
+  G.justNow = { at: Date.now(), text: `the app saved and closed the ${ACTIONS[action].title} form (${line}) and is saying so itself, ending with: "${next}" A yes from the officer means that next step: open it with its tool. Never call save_form for it; the form is gone.` };
+  syncState("form saved"); /* at the instant of the save, not after the line plays (Carverhill, Oct 29: Ara called save_form 16 s after a save by words, and the app said the save line twice) */
   if (G.hfTry) { if (undo) G.undoSaid = true; // the undo reminder once per conversation: every save repeating it got tiresome (Oct 24)
     G.hfTry.force = spoken; G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} Say in a few words that it's saved (for example "${savedShort(action, who, d)}")${r && r.note ? `, then state (don't ask) "${r.note}"` : ""}, then carry on.`; return; }
   G.saveAck = { at: Date.now(), action, who, next: `say exactly: "${next}"` };
@@ -312,9 +313,15 @@ function reqQuestion(action, fields, d) {
 function hfHeardAfter(n, ms = 2500) { return new Promise(res => { const t0 = Date.now(); (function poll() { if ((G.heardN || 0) > n) return res(G.lastHeard); if (Date.now() - t0 > ms) return res(null); setTimeout(poll, 100); })(); }); }
 async function hfSave(callId, data, lead, short) { /* short: only the changed field was re-read (lead), then the save question */
   if (!V) { const recentSave = G.savedAt && Date.now() - G.savedAt < 3 * 60e3;
-    if (G.savedByWords && Date.now() - G.savedByWords < SAVE_ECHO_MS) { toolReply(callId, { ok: true, saved: true, already: true, said: G.savedByWordsLine, note: `The app already saved it on the officer's yes (${G.savedLine}) and said so itself. Say nothing; wait for the officer.` }, false); return; } /* the yes was taken from the officer's words (hfYesHeard) */
+    const spokeSince = recentSave && G.lastHeard && G.lastHeard.at > G.savedAt + HF_YES_AGAIN_MS ? G.lastHeard : null; /* the officer has said something since the save: they heard the save line, so it is never said again (7:41 PM call, Oct 29: a late save_form 16 s after the save re-said the next step) */
+    if (spokeSince) { const bot = String(G.lastBot || G.savedByWordsLine || "").trim(), nextQ = new RegExp(NEXT_Q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$").test(bot), yes = appYes(spokeSince.text);
+      guardFired("late save_form after the save, officer had spoken", `"${spokeSince.text}" ${nextQ ? "to the next-step question" : "since the save line"}`);
+      toolReply(callId, { ok: true, saved: true, already: true, note: nextQ && yes ? `That form was already saved (${G.savedLine}) and closed; nothing to save. The officer's "${spokeSince.text}" answers the app's question "${bot.replace(/^.*?(The next step in the process)/, "$1")}": a yes to the next step. Open that step now with its tool. Don't say the save line again.`
+        : `That form was already saved (${G.savedLine}) and closed; the officer heard it. Don't say it again. Answer their last words instead: "${spokeSince.text}"` }); return; }
+    if (G.savedByWords && Date.now() - G.savedByWords < SAVE_ECHO_MS) { guardFired("save_form within 8 s of a save by words"); toolReply(callId, { ok: true, saved: true, already: true, said: G.savedByWordsLine, note: `The app already saved it on the officer's yes (${G.savedLine}) and said so itself. Say nothing; wait for the officer.` }, false); return; } /* the yes was taken from the officer's words (hfYesHeard) */
+    if (recentSave) guardFired(Date.now() - G.savedAt < SAVE_ECHO_MS ? "save_form within 8 s of a save" : "save_form after a save, officer silent since");
     toolReply(callId, recentSave && Date.now() - G.savedAt < SAVE_ECHO_MS ? { ok: true, saved: true, already: true, status: `The officer repeated their yes; the form was already saved a moment ago (${G.savedLine}) and your confirmation of it is what they are waiting for. Confirm it once, in your words, with the undo offer and what's next; never say "checking on that save".` }
-      : recentSave ? (() => { const line = G.savedByWordsLine || `It's saved. ${NEXT_NO_Q}`; forceSay(line); return { ok: true, saved: true, already: true, said: line, note: `That form was already saved (${G.savedLine}); it closed when it saved. The app is saying so itself now, with what's next. Say nothing; wait for the officer. Don't open it again.` }; })() /* 10:05 AM call: Ara's own "it's saved, what's next" came on top of the app's */ : { ok: false, saved: false, error: "No form is open, so there's nothing to save." }, false); return; }
+      : recentSave ? (() => { const line = G.savedByWordsLine || `It's saved. ${NEXT_NO_Q}`; forceSay(line); return { ok: true, saved: true, already: true, said: line, note: `That form was already saved (${G.savedLine}); it closed when it saved. The app is saying so itself now, with what's next. Say nothing; wait for the officer. Don't open it again.` }; })() /* 10:05 AM call: Ara's own "it's saved, what's next" came on top of the app's; kept only while the officer hasn't spoken since the save (they may not have heard it) */ : { ok: false, saved: false, error: "No form is open, so there's nothing to save." }, false); return; }
   const A = ACTIONS[V.action];
   // the optional questions are still going (Oct 24: Ara jumped to the read-back before the amount and notes)
   const lastSaid = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9);
@@ -339,7 +346,7 @@ async function hfSave(callId, data, lead, short) { /* short: only the changed fi
     G.saveCheck = { key, step: "read", n: G.heardN || 0 }; paintCall();
     toolReply(callId, { ok: true, saved: false, read_back: short ? `${lead} ${SAVE_Q}` : `${lead ? lead + " " : ""}${hfReadback()}${saveQ(hfReadback())}`, next: "The app said read_back aloud. After the officer's yes, call save_form again with confirmed true; if they want a change, call the draft tool with just the changed field (the app re-reads that field and asks again)." }); return;
   }
-  if (c.askedByApp && c.step === "amount" && (G.heardN || 0) <= c.n) { toolReply(callId, { ok: true, saved: false, already: true, note: "The app took the officer's yes and asked its own amount check; after their next yes it saves. Say nothing; wait for the officer." }, false); return; } /* hfYesHeard is ahead of this call */
+  if (c.askedByApp && c.step === "amount" && (G.heardN || 0) <= c.n) { guardFired("save_form while the app asks its own amount check"); toolReply(callId, { ok: true, saved: false, already: true, note: "The app took the officer's yes and asked its own amount check; after their next yes it saves. Say nothing; wait for the officer." }, false); return; } /* hfYesHeard is ahead of this call */
   const heard = await hfHeardAfter(c.n);
   if (!V || G.saveCheck !== c) { toolReply(callId, { ok: false, saved: false, error: "The form changed while waiting. Nothing was saved. Read it back again and ask for a yes." }); return; }
   if (!heard) { toolReply(callId, { ok: false, saved: false, error: "Not saved: the officer hasn't answered yet. Wait for them to say yes, then call save_form with confirmed true." }); return; }
@@ -383,7 +390,7 @@ function hfYesHeard(text) {
 // after a save, the read-back that was still waiting to play (a slow line) is dropped, and Ara's late telling of it is cut when it comes
 function staleReadback() {
   const rb = G.saveCheck && G.saveCheck.key ? "" : ""; const f = G.forced, t = f && f.text || "";
-  if (f && /\?\s*$/.test(t) && new RegExp(SAVE_Q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$").test(t)) { clearTimeout(G.forceTimer); clearTimeout(G.forceTick); G.forced = null; act("step", "The read-back still waiting to play is dropped: the form is saved"); }
+  if (f && /\?\s*$/.test(t) && new RegExp(SAVE_Q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$").test(t)) { clearTimeout(G.forceTimer); clearTimeout(G.forceTick); G.forced = null; guardFired("stale read-back dropped after the save"); }
   const last = (G.lastBot || "").trim(); const want = /Yes to save, or no to change something\?\s*$/.test(last) ? last : t;
   if (want && /Yes to save, or no to change something\?\s*$/.test(want)) { G.lateForced = { text: want.replace(/^(Sorry, I lost you for a moment\.\s*)+/, ""), said: 0, at: Date.now(), resp: G.respSeq, firstAudio: 99999 }; } /* lateForcedCheck cuts a later reply that starts with these words */
   G.staleRbAt = Date.now(); void rb;

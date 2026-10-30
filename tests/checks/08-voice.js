@@ -687,6 +687,7 @@ test("Ara: no reply at the first tick on a slow line gets a fresh line at once, 
   const q = await logged();
   ok(/trying a second line alongside/.test(q) && /\(the second line\)/.test(q), "the second line wasn't logged");
   // Oct 29: with no form open the app says the whole line itself (sorry + the open question); Ara is told not to say it again
+  await p.waitForFunction(() => __sent.some(s => /force_message/.test(s) && s.includes("Sorry, I lost you")), null, { timeout: 6000 }).catch(() => {}); /* the sorry line waits for the state receipt, 3 s at most when the line never confirms (Oct 29) */
   const sorry = await p.evaluate(() => ({ forced: __sent.filter(s => /force_message/.test(s) && s.includes("Sorry, I lost you")).pop() || "", told: __sent.some(s => /don't say it or anything like it again/.test(s)), oneQ: __sent.some(s => /then ask just one question/.test(s)) }));
   ok(/Sorry, I lost you for a moment\. What would you like to do\?/.test(sorry.forced) && sorry.told && !sorry.oneQ, "after a drop with no form open the app didn't say the whole reconnect line itself: " + JSON.stringify(sorry).slice(0, 400));
 });
@@ -913,7 +914,7 @@ test("Carverhill's Bugs call (Oct 28): \"in-person\" is in person; \"a follow-up
   await p.evaluate(() => { G.resumedAt = Date.now(); G.resumedHeardN = G.heardN || 0; }); /* nothing said yet on the new line */
   r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextStep: `Follow up with ${first} to get an answer on the ask`, nextDue: "2026-11-04" });
   ok(r.ok === false && /already handled before the line dropped/.test(r.error || "") && /Every required field of the "Interaction report · the ask" form is in|form has been read back|still needs/.test(r.error || ""), "the replayed call wasn't refused with where the form stands: " + JSON.stringify(r));
-  ok(/came again after the line was picked up/.test(await p.evaluate(() => ACT.q.map(a => a.text).join(" | "))), "the replay wasn't logged");
+  ok(/Guard: tool call replayed after a pickup/.test(await p.evaluate(() => ACT.q.map(a => a.text).join(" | "))), "the replay wasn't logged");
   await p.evaluate(() => { G.resumedAt = 0; });
   r = await ara(p, "show_ask_result_draft", { contact_name: name, date: "2026-10-28", meetingType: "In person", response: "Awaiting", summary: "He needs to talk to his wife about it.", nextStep: `Follow up with ${first} to get an answer on the ask`, nextDue: "2026-11-04", amount: 50000 });
   ok(r.ok !== false, "a different call after the replay window was refused: " + JSON.stringify(r));

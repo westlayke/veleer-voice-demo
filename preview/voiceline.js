@@ -172,7 +172,7 @@ function warmLine() {
       // Ara's whole configuration (about 55 KB) goes up now, while the phone is still opening its mic: the call-start harness (Oct 29) showed
       // the phone's uplink carrying it was the 1.3 s wait for session.updated, not xAI. Built as the call will start: hands-free on, nothing saved yet.
       const hands = G.hands, saves = G.saves, name = S.settings.userName, el = document.getElementById("wlName"), typed = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : ""; G.hands = true; G.saves = []; if (typed) S.settings.userName = typed; /* the name being typed on the welcome is the officer's name once Start is tapped */
-      try { const cfg = sessionCfg(), msgs = [{ type: "session.update", session: provider() !== "openai" ? cfg : providerSession(cfg) }, ...extraUpdates()]; /* the same shaping as sessUpdate (OpenAI puts audio under audio.input and needs type/model) */ msgs.forEach(m => ws.send(JSON.stringify(m))); w.cfg = { at: Date.now(), n: msgs.length, rules: G.sentRules, ctx: G.sentCtx }; vlog(`configuration sent on the warmed line (${msgs.length} updates)`); }
+      try { const cfg = sessionCfg(), msgs = [{ type: "session.update", session: provider() !== "openai" ? cfg : providerSession(cfg) }, ...extraUpdates()]; /* the same shaping as sessUpdate (OpenAI puts audio under audio.input and needs type/model) */ msgs.forEach(m => ws.send(JSON.stringify(m))); ws.upN = (ws.upN || 0) + msgs.length; w.cfg = { at: Date.now(), n: msgs.length, rules: G.sentRules, ctx: G.sentCtx }; vlog(`configuration sent on the warmed line (${msgs.length} updates)`); }
       catch (e) { w.cfg = null; } finally { G.hands = hands; G.saves = saves; S.settings.userName = name; } };
     setTimeout(() => { if (G.warm === w && !G.live) { G.warm = null; try { ws.close(); } catch (e) {} vlog("warmed line closed unused"); } }, WARM_MAX_MS); }).catch(() => {});
 }
@@ -207,6 +207,7 @@ function openSocket(token, first, second, warm) {
       else vlog("configuration from the warmed line (" + warm.cfg.n + " updates sent " + (Date.now() - warm.cfg.at) + " ms before the line was taken)");
       act("step", `Ara's configuration went up on the warmed line ${Date.now() - warm.cfg.at} ms before the tap finished${G.sentRules !== warm.cfg.rules || G.sentCtx !== warm.cfg.ctx ? " (instructions sent again: changed since)" : ""}`); }
     else { sessUpdate(sessionCfg()); sendExtras(); }
+    syncMark(ws.resumed ? "line picked up" : G.drops ? "new line" : "call start"); /* the configuration just sent carries Ara's state: its receipt is logged, and resent if none comes */
     if (G.drops && P.replay) replayRecent(); if (typeof first === "function") first(); else guide(first);
     downEnd(true); G.openedAt = Date.now(); linePrep(); setTimeout(() => prepNamedLines("line open"), 4000);
     if (ws.resumed) { netLog("Picked up the same conversation"); G.resumedAt = Date.now(); G.resumedHeardN = G.heardN || 0; } /* a replayed tool call can only come before the officer's first words on the new line (Oct 29) */
@@ -294,7 +295,7 @@ async function openAgain(lock) {
   // the app says where the form stands and, when a question is pending, asks it again itself as a scripted line; the context goes in Ara's instructions (Right now)
   openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null;
     const pf = G.pendingForce; G.pendingForce = null; /* a scripted line the old line never started (forceTick): said again on this one unless the form question covers it */
-    const back = lock ? "Line reopened" : "Reconnected", say = (line, why) => { G.justNow = { text: reconnectLine(lock, line) + (fp ? " " + fp.where : ""), at: Date.now() }; act("step", `${back}: ${why}`); whenIdle("instr"); forceSay(`Sorry, I lost you for a moment. ${line}`); };
+    const back = lock ? "Line reopened" : "Reconnected", say = (line, why) => { G.justNow = { text: reconnectLine(lock, line) + (fp ? " " + fp.where : ""), at: Date.now() }; act("step", `${back}: ${why}`); whenIdle("instr"); syncWait(() => forceSay(`Sorry, I lost you for a moment. ${line}`)); }; /* the sorry line goes once the service has confirmed Ara's state for the new line (or after SYNC_RECEIPT_MS), so she has the picture before the officer answers (Carverhill, Oct 29) */
     if (fp && fp.ask) { if (fp.arm) fp.arm(); say(`${typeof formIntro === "function" ? formIntro() + " " : ""}${fp.ask}`, `the app says where we are and asks the pending question itself (${fp.where})`); } /* "We're on the interaction report for Elon." first: the officer may have been away a while */
     else if (pf) say(pf, "the app says the scripted line the old line never started");
     else { const q = lastQuestion(); say(q.line, q.why); if (q.then) guide(q.then); } }); /* no form open: the app still says the whole line, so Ara can't stop after the sorry (9:45 AM call, Oct 29: 12 s of dead air); q.then = the officer's heard answer, for Ara to act on */

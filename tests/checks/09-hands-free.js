@@ -530,11 +530,64 @@ test("Carverhill's 6:22 and 6:23 PM calls (Oct 29): a question is never a yes, a
   await ara(p, "save_form", { confirmed: false }); /* the read-back is forced again and, on this slow line, never starts */
   ok(await p.evaluate(() => G.forced && /Yes to save, or no to change something\?$/.test(G.forced.text)), "no read-back waiting to play");
   await said(p, "Yes."); await p.waitForTimeout(400);
-  ok((await state(p)).tasks.some(t => t.text === "Send Ruth the board deck") && await p.evaluate(() => !G.forced || !/Yes to save/.test(G.forced.text)) && /The read-back still waiting to play is dropped: the form is saved/.test(await log()), "the save didn't drop the waiting read-back: " + JSON.stringify(await p.evaluate(() => G.forced && G.forced.text)));
+  ok((await state(p)).tasks.some(t => t.text === "Send Ruth the board deck") && await p.evaluate(() => !G.forced || !/Yes to save/.test(G.forced.text)) && /Guard: stale read-back dropped after the save/.test(await log()), "the save didn't drop the waiting read-back: " + JSON.stringify(await p.evaluate(() => G.forced && G.forced.text)));
   await p.evaluate(() => { window.__noAutoForce = false; G.forced = null; });
   await p.evaluate(() => { G.bot = ""; G.respSeq = (G.respSeq || 0) + 1; __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio_transcript.delta", delta: "New task for Ruth Abernathy: Send Ruth the board deck, due Nov 30. Yes to save, or no to change something?" }) }); }); await p.waitForTimeout(200);
   ok(/scripted line played late: duplicate cut|Scripted line played late after Ara said it: cut the repeat/.test(await log()) || await p.evaluate(() => G.dropNext), "Ara's late telling of the saved read-back wasn't cut");
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "cancelled" } }) }); G.dropNext = false; G.lastBot = "New task for Ruth Abernathy: Send Ruth the board deck, due Nov 30. Yes to save, or no to change something?"; G.lastBotAt = Date.now(); G.lastHeard = null; });
   ok(await p.evaluate(() => !V && /^(Task added for Ruth|It's saved)/.test(lastQuestion().line)), "the reconnect line after a save still asks the old read-back: " + JSON.stringify(await p.evaluate(() => lastQuestion())));
+});
+test("Carverhill's 7:41 PM call (Oct 29): the state goes to Ara at the save with a receipt, a late save_form after the next-step yes opens the step, the save line is never said twice", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(400);
+  const log = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  ok(/Ara's state confirmed by the voice service in \d+ ms \(call start\)/.test(await log()), "the call-start configuration got no receipt: " + (await log()).slice(-300));
+  // 1. the ask is saved by the officer's yes; the state goes up at that instant and is confirmed
+  await said(p, "Record the ask for Elena Vasquez. It was a video call yesterday and she accepted the forty thousand. She's excited to write the check. Next step, pick up the check from Elena, due today.");
+  await ara(p, "show_ask_result_draft", { contact_name: "Elena Vasquez", date: new Date(Date.now() - 864e5).toISOString().slice(0, 10), meetingType: "Video call", amount: 40000, response: "Accepted", summary: "She's excited to write the check.", nextStep: "Pick up the check from Elena", nextDue: new Date().toISOString().slice(0, 10) });
+  let r = await ara(p, "save_form", { confirmed: false });
+  ok(/Yes to save, or no to change something\?$/.test(r.read_back || ""), "no read-back: " + JSON.stringify(r));
+  const sentBefore = await p.evaluate(() => __sent.length);
+  await said(p, "Yes."); await p.waitForTimeout(500);
+  ok((await state(p)).opps.some(o => /Vasquez/.test(o.name) && o.stage === "Commitment"), "the yes didn't save the ask: " + JSON.stringify(await p.evaluate(() => [G.hands, G.saveCheck, !!V, (window.__demo.state.opps || []).map(o => o.name + " " + o.stage), ACT.q.slice(-6).map(a => a.text.slice(0, 100))])));
+  const sync = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "session.update" && e.session && e.session.instructions), sentBefore);
+  ok(sync.length >= 1 && /No form is open now/.test(sync[0].session.instructions) && /Just now: the app saved and closed the .*Never call save_form/.test(sync[0].session.instructions), "the state didn't go up at the save: " + sync.length);
+  ok(/Ara's state sent \(form saved\)/.test(await log()) && /Ara's state confirmed by the voice service in \d+ ms \(form saved\)/.test(await log()), "no receipt logged for the save: " + (await log()).slice(-400));
+  ok(await p.evaluate(() => G.sync && G.sync.confirmed >= 2 && G.sync.missed === 0), "the tally is off: " + JSON.stringify(await p.evaluate(() => G.sync)));
+  // 2. the save line plays; 13 s later the officer says yes to its next-step question; Grok answers with a late save_form (16 s after the save)
+  const line = await p.evaluate(() => G.savedByWordsLine); ok(/Do you want to do that now, yes or no\?$/.test(line) && /record the gift/.test(line), "the save line doesn't end with the next-step question: " + line);
+  await p.evaluate((line) => { G.lastBot = line; G.lastBotAt = Date.now(); G.savedAt -= 13000; G.savedByWords -= 13000; G.lastBotAt -= 2000; }, line);
+  await said(p, "Yes."); await p.waitForTimeout(300);
+  const forcedBefore = await p.evaluate(() => __sent.filter(s => /force_message/.test(s)).length);
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.already && r.saved && /answers the app's question .*a yes to the next step\. Open that step now with its tool/.test(r.note || ""), "the late save_form wasn't routed to the next step: " + JSON.stringify(r));
+  ok(await p.evaluate((n) => __sent.filter(s => /force_message/.test(s)).length === n, forcedBefore), "the save line was said again (the 7:41 PM repeat)");
+  ok(await p.evaluate(() => __sent.filter(x => !/input_audio_buffer/.test(x)).slice(-3).some(s => /response\.create/.test(s))), "Ara wasn't asked to act on the yes: " + JSON.stringify(await p.evaluate(() => [__sent.slice(-4).map(x => x.slice(0, 120)), G.qCreate, !!G.qTimer, playingLeft(), G.responding, G.asked, G.qGuide])));
+  ok(/Guard: late save_form after the save, officer had spoken \("Yes\." to the next-step question\); Ara had the state confirmed \d+ s before, so she acted on an old picture/.test(await log()), "the guard wasn't counted as after a confirmed receipt: " + (await log()).slice(-300));
+  // 3. the same late save_form when the officer said something else: answered silently with their words, never the save line
+  await said(p, "What's Elena's capacity?"); await p.waitForTimeout(200);
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.already && /the officer heard it\. Don't say it again\. Answer their last words instead: "What's Elena's capacity\?"/.test(r.note || ""), "other words after the save weren't answered: " + JSON.stringify(r));
+  ok(await p.evaluate((n) => __sent.filter(s => /force_message/.test(s)).length === n, forcedBefore), "the save line was said again after other words");
+  // 4. the officer silent since the save: the line is still said again (they may not have heard it), and counted
+  await p.evaluate(() => { G.lastHeard = { text: "Yes.", n: G.heardN, at: G.savedAt + 100 }; });
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.already && r.said === line && /Guard: save_form after a save, officer silent since/.test(await log()), "the re-say for a silent officer is gone: " + JSON.stringify(r));
+  // 5. no receipt: the state goes again after 3 s, then the call carries on; the tally shows the miss
+  await p.evaluate(() => { window.__noReceipt = true; });
+  await p.evaluate(() => syncState("test"));
+  await p.waitForTimeout(3400);
+  ok(/No receipt for Ara's state in 3 s \(test\): sent again/.test(await log()) && await p.evaluate(() => G.sync.resent === 1 && G.sync.missed === 1), "no resend after a missed receipt: " + (await log()).slice(-300));
+  await p.evaluate(() => { window.__noReceipt = false; });
+  await p.waitForTimeout(3400);
+  ok(/Ara's state not confirmed after the resend \(test\)/.test(await log()) && await p.evaluate(() => !G.syncPending), "the second miss didn't stand down: " + (await log()).slice(-200));
+  // 6. a reconnect waits for the receipt before the sorry line (and goes on without one)
+  await p.evaluate(() => { window.__noReceipt = true; });
+  const openBefore = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { __ws.onclose && __ws.onclose({ code: 1006, reason: "" }); });
+  await p.waitForFunction((n) => __sent.length > n && __sent.slice(n).some(s => /session\.update/.test(s)), openBefore, { timeout: 8000 }); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => !__sent.filter(x => !/input_audio_buffer/.test(x)).slice(-6).some(s => /force_message/.test(s) && /Sorry, I lost you/.test(s))) && /Ara's state sent \((line picked up|new line)\)/.test(await log()), "the sorry line didn't wait for the receipt: " + (await log()).slice(-300));
+  await p.evaluate(() => { window.__noReceipt = false; for (let i = __ws.ackN || 0; i < (__ws.upN || 0); i++) __ws.onmessage({ data: JSON.stringify({ type: "session.updated" }) }); }); await p.waitForTimeout(300); /* one receipt per update the new line was sent */
+  ok(await p.evaluate(() => __sent.filter(x => !/input_audio_buffer/.test(x)).slice(-4).some(s => /force_message/.test(s) && /Sorry, I lost you/.test(s))), "the sorry line didn't follow the receipt: " + JSON.stringify(await p.evaluate(() => __sent.filter(x => !/input_audio_buffer/.test(x)).slice(-4).map(x => x.slice(0, 100)))));
+  ok(/State syncs \d+, confirmed \d+ \(median \d+ ms\), missed \d+, resent \d+; guards .*after a confirmed receipt \d+\./.test(await p.evaluate(() => syncSummary())), "no tally for the end row: " + await p.evaluate(() => syncSummary()));
 });
 };

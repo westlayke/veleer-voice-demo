@@ -289,10 +289,10 @@ function onTool(callId, name, args, held) {
   act("step", name + " " + JSON.stringify(data));
   // a picked-up conversation replays the last tool call (Oct 28, twice: the interaction form reopened with the type from the saved report, then "I didn't catch the type"): once is enough
   const key = name + " " + JSON.stringify(data); if (G.resumedAt && Date.now() - G.resumedAt < REPLAY_MS && (G.heardN || 0) <= (G.resumedHeardN || 0) && (G.toolKeys || []).some(k => k.key === key && k.at < G.resumedAt && (G.lastDropAt || 0) - k.at < REPLAY_BEFORE_MS)) { /* only a call from just before the drop, and only before the officer has said anything on the new line: anything they say after the pickup is answered for real, whatever it matches (Oct 29 7:39 AM: a yes to the opportunity matched the contact's save 60 s earlier and was refused) */
-    const pos = typeof formPosition === "function" ? formPosition() : null; act("step", `${name} came again after the line was picked up: already handled before the drop, not done twice`);
+    const pos = typeof formPosition === "function" ? formPosition() : null; guardFired("tool call replayed after a pickup", name);
     toolReply(callId, { ok: false, error: `This call was already handled before the line dropped; nothing changed. ${pos ? pos.where : G.savedLine ? `The last form was saved (${G.savedLine}); no form is open.` : "No form is open."} Don't repeat it: go on with what the officer says next.` }); return; }
   (G.toolKeys = (G.toolKeys || []).slice(-5)).push({ key, at: Date.now() });
-  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command. Don't repeat it; go on with what the officer says next." }); return; }
+  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); guardFired("tool call right after a voice command", name); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command. Don't repeat it; go on with what the officer says next." }); return; }
   if (Object.hasOwn(TOOL_HANDLERS, name)) { TOOL_HANDLERS[name](callId, data, name); return; }
   draftTool(callId, name, data);
 }

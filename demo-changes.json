@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 29, 8:34 PM",
+      "change": "Preview: Ara's state (what's saved, no form open, the question in the air) is sent to her the instant a form saves, and the voice service's receipt is waited for and logged (resent once if none in 3 s); the reconnect line waits for the receipt so Ara has the state before the officer answers; a late save_form after the officer has answered the next-step question opens that step instead of re-saying the save line; every guard that catches a call made on an old picture of the form is counted in the end-of-call row, with whether Ara had the state confirmed already.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, 7:41 PM call: \"On my last call Ara repeated the details of my next step twice\"; \"Can we add a fourth step - that we confirm Ara knows the form has been saved, so in this way we know we keep her 'state' in sync with us?\"; \"Should we also just have a rule requiring a state check after a disconnect or other error conditions?\"; \"Do the 30, and can you also measure how often the '5 guards' still get exercised even with this state synchronization change?\""
+    },
+    {
       "date": "Oct 29, 7:40 PM",
       "change": "Preview: a question (\"Are you there?\") is never taken as a yes to a read-back; while the phone has the microphone muted the voice service's idle timer no longer hangs up (the app says the mic is muted and waits); after a save, a read-back still waiting to play is dropped, Ara's late copy of it is cut, and the reconnect line says it's saved instead of asking again.",
       "area": "Voice",
