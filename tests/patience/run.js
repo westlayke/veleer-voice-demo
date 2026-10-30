@@ -138,6 +138,7 @@ const BOOK = [
   { q: /What was the (response|answer)/i, say: "He accepted.", tool: (line, ctx) => forForm(ctx, { response: "Accepted" }) },
   { q: /What happened\?|How did it go\?|A sentence or two/i, say: "We talked about his interest in the North Dakota work, and he's keen.", tool: (line, ctx) => forForm(ctx, { summary: "Talked about his interest in the North Dakota work; he's keen." }) },
   { q: /substantive interaction, one that moved/i, say: "Yes, it was.", tool: (line, ctx) => forForm(ctx, { substantive: true }) },
+  { q: /What's the next step, and when is it due/i, say: "Call him on Friday about the donation.", tool: (line, ctx) => forForm(ctx, { nextStep: "Call Jordan about the donation", nextDue: F }) },
   { q: /next step/i, say: "Yes. Call him on Friday about the donation.", tool: (line, ctx) => forForm(ctx, { nextStep: "Call Jordan about the donation", nextDue: F }) },
   { q: /What should the task say/i, say: "Call Jordan about the ask, due Friday.", tool: (line, ctx) => forForm(ctx, { nextStep: "Call Jordan about the ask", nextDue: F }) },
   { q: /Should I hang up now/i, say: "No.", tool: null },
