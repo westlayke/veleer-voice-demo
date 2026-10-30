@@ -70,7 +70,7 @@ Carry on) waits `SOUND_START_MS` (2 s) for the fresh sound engine to run (`sound
 is told on screen and the call waits up to `SOUND_HELD_MS` (30 s) instead of 6 s; a line Ara says into a paused sound engine is
 kept (`G.unheard`) and said again as a scripted line when the sound is back (`soundBack`). The **page going hidden**
 (the phone locking, or a switch to another app) is **lock = pause** since October 26: a locked iPhone mutes the mic and
-pauses the sound anyway, so `appHidden` closes the line `LOCK_CLOSE_MS` (3 s) after the page hides (`lockPause`; nothing is
+pauses the sound anyway, so `appHidden` closes the line `LOCK_CLOSE_MS` (10 s since Oct 30; 3 s before: the phone auto-locked three times on Oct 30 and was unlocked within 7 s each time) after the page hides (`lockPause`; nothing is
 charged while the phone sits locked), keeps the conversation id, and the moment the app is back `lockResume` reopens the
 line on the same conversation through `openAgain`, the shared tail of `reconnect`: a voice pass, then `openSocket`, then
 the pending question asked again as a scripted line. No drop tone, no "line dropped" recording, no Carry on tap. Before the
@@ -517,3 +517,5 @@ On Carverhill's 4:50 PM call the capacity question with the A to E ranges arrive
 - The judgement row for a soundless line starts with "(no sound)".
 
 Lists: a question with a fixed list of choices reads the list every time it is asked afresh; the short form ("A to E?") only when the same question comes again within `RANGES_HEARD_MS` 2 min of the ranges being heard (`rangesHeard()` in voiceforms.js; `rateQ` and `capRanges` use it). A selection that saves on its own is confirmed as a yes-or-no decision: "Set Carver's capacity to A, $250,000 and up, yes or no?" and "Mark 'Call Ruth', due Nov 3, as done, yes or no?". A selection inside a form stays confirmed once, in the form's read-back. Check "Said means heard (Oct 30)" in 08-voice.js.
+
+Oct 30, 5:14 PM call: the planned ask's entity question never read the list. `REQ_Q["plan.fund"]` now reads `ENTITY_LIST_SPOKEN()` (core.js, by state: "National has C3, C4 and Federal PAC. Idaho has C4 and PAC. ...") before "Which entity?", and the short "Which entity?" only within two minutes of the list being heard (`G.entityListAt`, set by `lineSaid`; `entityListHeard()`). The campaign question follows as before.

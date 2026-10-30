@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 5:30 PM",
+      "change": "Preview: the planned ask's entity question reads the list by state every time it is asked afresh (\"The entities: National has C3, C4 and Federal PAC. Idaho has C4 and PAC. North Dakota has C4, State PAC and Federal PAC. New Hampshire has C4. Pennsylvania has C4 and State PAC. Which entity?\"), and the short \"Which entity?\" only within two minutes of the list being heard; the campaign question follows as before. The line is kept open 10 s after the phone locks or the app is switched away (was 3 s), so a quick unlock carries on with nothing re-said.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 5:23 PM: on his 5:14 PM call the lock screen appeared twice (the phone locked itself about 3 minutes after the app took the wake lock, three times that day, and was unlocked within 7 s each time; the line closed at 3 s and Ara re-read the read-back) and Ara asked which entity without reading the list. \"Go ahead and build it\" 5:28 PM."
+    },
+    {
       "date": "Oct 30, 5:12 PM",
       "change": "Preview: a line of Ara's counts as said only once the heard check passes (voice audio came and the phone played it). The once-per-call flags (the A to E ranges read, the undo reminder said) are set there, never when a line is built or sent; the resend of a soundless line stands down only for a new answer of the officer's after the line would have finished (a repeated transcript of earlier words doesn't count); the typed-run guard lifts as soon as the phone has produced sound; the log row for a soundless line starts with \"(no sound)\". Lists: a question with a fixed list of choices reads the list every time it is asked afresh, and the short form (\"A to E?\") only when the same question comes again within two minutes of the list being heard. A selection that saves on its own is confirmed as a yes-or-no decision: \"Set Carver's capacity to A, $250,000 and up, yes or no?\" and \"Mark 'Call Ruth', due Nov 3, as done, yes or no?\". A selection inside a form stays confirmed once, in the form's read-back.",
       "area": "Voice",

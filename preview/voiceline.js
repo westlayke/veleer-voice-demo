@@ -78,7 +78,7 @@ const LOC_FRESH_MS = 120000;                // a position older than this is not
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;
 const MIC_BACK_MS = 45000;
-const LOCK_CLOSE_MS = 3000;                  // the phone locking (or a switch to another app) hides the page: the line is closed this long after, so nothing is charged while the phone sits locked, and reopened when the app is back (Oct 26 pocket tests: a locked iPhone mutes the mic and pauses the sound anyway)
+const LOCK_CLOSE_MS = 10000;                 // (3 s until Oct 30: the phone auto-locked three times that day and was unlocked within 7 s; now a quick unlock keeps the line) the phone locking (or a switch to another app) hides the page: the line is closed this long after, so nothing is charged while the phone sits locked, and reopened when the app is back (Oct 26 pocket tests: a locked iPhone mutes the mic and pauses the sound anyway)
 const LOCK_MAX_MS = RESUME_MS;               // hidden longer than this (the conversation can no longer be picked up on xAI) ends the call with the Carry on card
 /* MIC_BACK_MS: a muted mic gets longer than the sound, since iOS shows "Audio Recording / Stop audio recording?" and the mic is back on Cancel, which takes a reach (Oct 26 drive). SOUND_BACK_MS: when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back */
 

@@ -21,6 +21,7 @@ const OPT_OFFER = `The required details are in. Before anything else, ask exactl
 const CAP_RANGES = "A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000.";
 const RANGES_HEARD_MS = 120000; /* a list is read in full every time it is asked afresh; the short form only when the same question comes again within two minutes, after a drop or a miss (Carverhill, Oct 30) */
 const rangesHeard = () => !!(G.rangesSaidAt && Date.now() - G.rangesSaidAt < RANGES_HEARD_MS); /* set by lineSaid() in heard.js, only when the ranges were heard with sound */
+const entityListHeard = () => !!(G.entityListAt && Date.now() - G.entityListAt < RANGES_HEARD_MS); /* same rule for the entity list */
 const capRanges = (who) => rangesHeard() ? ` A to E: which fits ${who}, or move on?` : ` ${CAP_RANGES} Which fits ${who}, or move on?`;
 // ---- Voice form policy (Carverhill, Oct 28): one engine for every form. The optional fields of a form are its declared fields that are not
 // required, fixed or prefilled; each is asked with the question below (a field with none gets the generic one for its type), one at a time,
@@ -298,7 +299,7 @@ const REQ_Q = {
   "contact.first": (w) => "What's their first and last name?", "contact.last": (w) => "And their last name?",
   "interaction.date": () => "When was it, and was it in person, a phone call, a video call, an email, or an event?", "ask.date": () => "When was the ask made, and was it in person, a phone call, a video call, an email, or an event?",
   "interaction.summary": () => "What happened? A sentence or two.", "ask.summary": () => "How did it go? A sentence or two.",
-  "plan.fund": (w, d) => "Which entity, and which campaign?", "plan.plannedDate": () => "When is the planned ask date, and for how much?",
+  "plan.fund": () => entityListHeard() ? "Which entity?" : `The entities: ${ENTITY_LIST_SPOKEN()} Which entity?`, /* the list is read every time the question is asked afresh (Oct 30), the campaign follows on its own */ "plan.plannedDate": () => "When is the planned ask date, and for how much?",
   "ask.amount": () => "How much was the ask, and for which entity?", "ask.response": () => "What was the response: accepted, countered, declined, or still waiting?",
   "response.response": () => "What was the answer: accepted, countered, or declined?", "response.date": () => "When did you hear?",
   "pledge.amount": () => "How much is the pledge, and for which entity?", "pledge.confirmedBy": () => "How was it confirmed, by email, phone or in person, and when?", "pledge.firstDue": () => "When is the first payment due?",

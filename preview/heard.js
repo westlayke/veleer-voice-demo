@@ -36,6 +36,7 @@ function lineSaid(text) {
   const s = String(text || "");
   if (/\$250,000 and up/.test(s)) G.rangesSaidAt = Date.now();
   if (/say undo if that's wrong/i.test(s)) G.undoSaid = true;
+  if (/National has C3/.test(s)) G.entityListAt = Date.now();
 }
 // the officer answered the line: only a new utterance of theirs after the line would have finished playing counts (the service transcribes the same
 // words two or three times over a few seconds; on the 4:50 PM call a late copy of "No." to the question before made the resend stand down)
