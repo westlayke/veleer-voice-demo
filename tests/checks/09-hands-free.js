@@ -589,5 +589,16 @@ test("Carverhill's 7:41 PM call (Oct 29): the state goes to Ara at the save with
   await p.evaluate(() => { window.__noReceipt = false; for (let i = __ws.ackN || 0; i < (__ws.upN || 0); i++) __ws.onmessage({ data: JSON.stringify({ type: "session.updated" }) }); }); await p.waitForTimeout(300); /* one receipt per update the new line was sent */
   ok(await p.evaluate(() => __sent.filter(x => !/input_audio_buffer/.test(x)).slice(-4).some(s => /force_message/.test(s) && /Sorry, I lost you/.test(s))), "the sorry line didn't follow the receipt: " + JSON.stringify(await p.evaluate(() => __sent.filter(x => !/input_audio_buffer/.test(x)).slice(-4).map(x => x.slice(0, 100)))));
   ok(/State syncs \d+, confirmed \d+ \(median \d+ ms\), missed \d+, resent \d+; guards .*after a confirmed receipt \d+\./.test(await p.evaluate(() => syncSummary())), "no tally for the end row: " + await p.evaluate(() => syncSummary()));
+  // 7. a quick yes: the next-step question answered 5 s after the save, inside the 8 s same-yes window, but after the save line started playing (Patient Pat, Oct 29: 6 lost)
+  await p.evaluate(() => { G.savedAt = Date.now() - 5000; G.savedByWords = Date.now() - 5000; G.forceStartAt = Date.now() - 3000; G.lastHeard = { text: "Yes.", n: G.heardN, at: Date.now() - 200 }; G.lastBot = G.savedByWordsLine; G.lastBotAt = Date.now() - 3000; });
+  r = await ara(p, "save_form", { confirmed: true });
+  ok(r.already && /a yes to the next step\. Open that step now with its tool/.test(r.note || ""), "a quick yes inside the 8 s window wasn't routed to the next step: " + JSON.stringify(r));
+  // 8. the same words again with sound, after a words-only copy: one line, not two rows
+  const rows = () => p.evaluate(() => ACT.q.filter(a => a.role === "grok").length);
+  const before = await rows();
+  await p.evaluate(() => { G.lastLine = { text: "Gift recorded for Elena. What would you like to do next?", at: Date.now() - 1500, resp: G.respSeq, audioS: 0, out: 0, echo: 0, state: "running", left: 0 }; G.bot = "Gift recorded for Elena. What would you like to do next?"; G.audioSamples = 48000; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  ok(await rows() === before && /Ara's line arrived again, this time with sound \(2\.0 s\): the officer hears it once/.test(await log()), "the sounded copy was logged as a second telling: " + (await log()).slice(-200));
+  await p.evaluate(() => { G.bot = "Gift recorded for Elena. What would you like to do next?"; G.audioSamples = 48000; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  ok(await rows() === before + 1, "a real second telling (after a sounded one) wasn't logged");
 });
 };

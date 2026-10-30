@@ -858,7 +858,8 @@ function onEvent(e) {
     if (typeof heardAsk === "function" && heardAsk(e.transcript)) guide("The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."); }
   if (G.forced) forcedEvent(t, e);
   if (t === "response.done" && G.bot && G.unheardResp === G.respSeq) G.unheard = G.bot; /* said into a paused sound engine: said again when it is back */
-  if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
+  if (t === "response.done" && G.bot && soundedCopy(G.bot)) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("step", `Ara's line arrived again, this time with sound (${((G.audioSamples || 0) / 24000).toFixed(1)} s): the officer hears it once`); if (typeof lineHeard === "function") lineHeard(G.bot); } /* real Ara run, Oct 29: 13 "said twice" rows were a words-only response followed by its sounded copy */
+  else if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } truncateSpoken(); stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall();
     if (G.asked && !G.responding && PROV().forceItem) { if (G.savedAt && Date.now() - G.savedAt < SAVE_ECHO_MS) act("step", "The officer spoke right after a save: the save confirmation is still coming (not cancelled)"); /* Oct 28 12:54 PM call: a repeated "yes, save it" cancelled the confirmation and the officer heard nothing */
@@ -888,6 +889,8 @@ function onEvent(e) {
 // until the current response is done AND its audio has finished playing on the phone (xAI: wait for playback before the next response).
 // A scripted line that didn't start in time was said by Ara instead; if xAI then plays it anyway, the officer would hear it twice
 // (Oct 25: the read-back twice, then "Are you there?"). The second telling is cut as soon as its words match.
+// the same words as the last line, which came without voice audio less than 15 s ago, now with audio: the sounded copy of that line, not a second telling
+const soundedCopy = (text) => { const r = G.lastLine; return !!(r && typeof AUDIO_MIN_S !== "undefined" && r.audioS < AUDIO_MIN_S && Date.now() - r.at < 15000 && (G.audioSamples || 0) / 24000 >= AUDIO_MIN_S && sameWords(r.text) === sameWords(text)); };
 const sameWords = (s) => String(s).toLowerCase().replace(/[^a-z0-9$ ]/g, " ").replace(/\s+/g, " ").trim();
 function lateForcedCheck() {
   const lf = G.lateForced; if (!lf) return;

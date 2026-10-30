@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 29, 10:12 PM",
+      "change": "Preview: a yes said after the save line has started playing answers its next-step question even inside the 8-second same-yes window (Patient Pat lost 6 such yeses); a scripted line that the voice service delivers twice, first words-only then with sound, is logged once as heard.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill: \"Build\" (after the two harness runs on the state sync: 6 stale saves unrecovered, 13 'said twice' rows that were the sounded copy)"
+    },
+    {
       "date": "Oct 29, 8:34 PM",
       "change": "Preview: Ara's state (what's saved, no form open, the question in the air) is sent to her the instant a form saves, and the voice service's receipt is waited for and logged (resent once if none in 3 s); the reconnect line waits for the receipt so Ara has the state before the officer answers; a late save_form after the officer has answered the next-step question opens that step instead of re-saying the save line; every guard that catches a call made on an old picture of the form is counted in the end-of-call row, with whether Ara had the state confirmed already.",
       "area": "Voice",

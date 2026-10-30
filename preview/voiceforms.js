@@ -313,7 +313,7 @@ function reqQuestion(action, fields, d) {
 function hfHeardAfter(n, ms = 2500) { return new Promise(res => { const t0 = Date.now(); (function poll() { if ((G.heardN || 0) > n) return res(G.lastHeard); if (Date.now() - t0 > ms) return res(null); setTimeout(poll, 100); })(); }); }
 async function hfSave(callId, data, lead, short) { /* short: only the changed field was re-read (lead), then the save question */
   if (!V) { const recentSave = G.savedAt && Date.now() - G.savedAt < 3 * 60e3;
-    const spokeSince = recentSave && G.lastHeard && G.lastHeard.at > G.savedAt + HF_YES_AGAIN_MS ? G.lastHeard : null; /* the officer has said something since the save: they heard the save line, so it is never said again (7:41 PM call, Oct 29: a late save_form 16 s after the save re-said the next step) */
+    const spokeSince = recentSave && G.lastHeard && (G.lastHeard.at > G.savedAt + HF_YES_AGAIN_MS || (G.forceStartAt > G.savedAt && G.lastHeard.at > G.forceStartAt + LINE_HEARD_MS)) ? G.lastHeard : null; /* said after the save line began playing: an answer to it, not the saving yes heard again */ /* the officer has said something since the save: they heard the save line, so it is never said again (7:41 PM call, Oct 29: a late save_form 16 s after the save re-said the next step) */
     if (spokeSince) { const bot = String(G.lastBot || G.savedByWordsLine || "").trim(), nextQ = new RegExp(NEXT_Q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$").test(bot), yes = appYes(spokeSince.text);
       guardFired("late save_form after the save, officer had spoken", `"${spokeSince.text}" ${nextQ ? "to the next-step question" : "since the save line"}`);
       toolReply(callId, { ok: true, saved: true, already: true, note: nextQ && yes ? `That form was already saved (${G.savedLine}) and closed; nothing to save. The officer's "${spokeSince.text}" answers the app's question "${bot.replace(/^.*?(The next step in the process)/, "$1")}": a yes to the next step. Open that step now with its tool. Don't say the save line again.`
@@ -372,6 +372,7 @@ function araReadBack() {
 // The officer's yes to the app's own read-back saves the form straight away, from their words, with no tool call in the way
 // (Oct 29: a real yes was refused as a replay after a pickup and Ara said "That save didn't go through"). Money forms get the
 // app's own amount check first. Ara's save_form, when it comes, finds the form saved (hfSave) and says nothing more.
+const LINE_HEARD_MS = 1500; // a word said this long after the save line started playing answers the line (its question is what they heard)
 const HF_YES_AGAIN_MS = 2500; // the service sends a transcript several times as it grows: one yes, not three
 function hfYesHeard(text) {
   const c = G.saveCheck; if (!V || !c || !G.hands || !appYes(text)) return false;
