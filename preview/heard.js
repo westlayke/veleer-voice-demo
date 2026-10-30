@@ -44,7 +44,7 @@ function silentLine(rec) {
   w.resend = setTimeout(() => { if (!G.live || G.silentWait !== w) return; G.silentWait = null; if (G.lastHeard && G.lastHeard.at > rec.at) return;
     const same = (t) => typeof sameWords === "function" && t && sameWords(t) === sameWords(rec.text);
     if (G.respSeq !== rec.resp || playingLeft() > 0 || G.audioOn || same(G.forced && G.forced.text) || same(G.pendingForce)) { act("step", "Ara's line is being said again already: the phone's resend stands down"); return; } /* 10:05 AM call: the app's own copy was already on its way */
-    const own = rec.text === G.lastForcedText; G.lastBot = ""; /* else the resend is cut as a doubled reply */
+    const own = typeof sameWords === "function" ? sameWords(rec.text) === sameWords(G.lastForcedText || "") : rec.text === G.lastForcedText; G.lastBot = ""; /* else the resend is cut as a doubled reply */ /* the transcript's trailing space made every app line "not own" (diagnostic run, Oct 30): the resend went as a reply request the service never answered, and the line reconnected */
     act("step", `No sound for Ara's line in ${Math.round((Date.now() - rec.at) / 1000)} s: asked for it again, once (a late copy of either telling is cut)`); G.resend = { text: rec.text, at: Date.now(), seq: G.respSeq, resp: 0, firstAudio: 0 };
     if (own) forceSay(rec.text); else askReply(`Your last line reached the officer as text only, with no sound. Say it again now, word for word: "${rec.text}"`); }, SILENT_RESEND_MS);
 }

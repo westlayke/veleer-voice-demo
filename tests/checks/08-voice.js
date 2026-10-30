@@ -359,6 +359,14 @@ test("Carverhill's 12:45 PM call (Oct 30): a tool call's reply is never taken fo
   ok(/Late copy cut: the line was already heard with sound after the phone asked for it again/.test(await logged()) && await p.evaluate((n1) => __sent.filter(s => /response\.cancel/.test(s)).length === n1 + 1 && G.dropNext, n1), "the second telling wasn't cut: " + (await logged()).slice(-300));
   await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
   ok(await p.evaluate(() => !G.resend && !G.dropNext), "the cut didn't clear");
+  // 4. the app's own line, soundless, with the service's transcript ending in a space (as it does): the resend is the line itself as a scripted line, not a reply request (the diagnostic run, Oct 30: the request was never answered and the line reconnected)
+  const t4 = "That's everything the new contact form needs for Sylvia. Save it, or add the optional details first?";
+  await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; G.resend = null; G.lateForced = null; });
+  await p.evaluate((t4) => forceSay(t4), t4); await p.waitForFunction(() => G.forced && __sent.some(s => /force_message/.test(s)), null, { timeout: 9000 }); await p.waitForTimeout(50);
+  await ev([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: t4 + " " }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(6000);
+  ok(/No sound for Ara's line in \d+ s: asked for it again, once/.test(await logged()) && await p.evaluate((t4) => __sent.filter(s => /force_message/.test(s) && s.includes(t4.slice(0, 50))).length === 2 && !__sent.some(s => /Say it again now, word for word/.test(s)), t4), "the app's own soundless line wasn't resent as a scripted line: " + (await logged()).slice(-300));
+  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t4 + " " }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => !G.forced), "the resent scripted line didn't play");
 });
 test("Ara: after a reconnect the app says where the form stands and asks the pending question itself (an optional question, or the read-back waiting for a yes)", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
