@@ -605,4 +605,54 @@ test("Carverhill's 7:41 PM call (Oct 29): the state goes to Ara at the save with
   await p.evaluate(() => { G.bot = "Gift recorded for Elena. What would you like to do next?"; G.audioSamples = 48000; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
   ok(await rows() === before + 1, "a real second telling (after a sounded one) wasn't logged");
 });
+
+test("Carverhill's 8:58 AM call (Oct 30): Ara talks but doesn't call the tool; the app asks her again for the tool call at once, up to three times, never opens or fills the form itself", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const log = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
+  const words = (text) => p.evaluate((text) => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: text }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }, text);
+  const asks = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && e.response.instructions).map(e => e.response.instructions));
+  const forced = () => p.evaluate(() => __sent.filter(s => /force_message/.test(s)).length);
+  // 1. "Let's create a new contact form": Ara promises the form, no tool call: asked again at once, no form opened by the app, no scripted line
+  await said(p, "Let's create a new contact form."); await words("We'll fill in the form together as you talk."); await p.waitForTimeout(150);
+  let a = await asks(); ok(a.length === 1 && /Your reply \("We'll fill in the form together as you talk\."\) promised a form but had no tool call, so nothing opened on the screen\. Call that form's tool now/.test(a[0]), "no retry for the promised form: " + JSON.stringify(a));
+  ok(await p.evaluate(() => !V), "the app opened the form itself (split brain)"); ok(await forced() === 0, "a scripted line went out instead of the retry: " + await forced());
+  ok(/Guard: Ara talked but didn't open the form/.test(await log()) && /asked again for the tool call \(1 of 3\)/.test(await log()), "the first ask wasn't logged: " + (await log()).slice(-300));
+  // 2. the retry comes back as words again: asked a second time, no "taking a moment" (the retry was fast)
+  await words("Sure, let's add them."); await p.waitForTimeout(150);
+  a = await asks(); ok(a.length === 2 && a[1] === a[0], "no second ask: " + a.length); ok(!/taking a moment/.test(await log()), "the phone said taking a moment on a fast retry");
+  ok(/Ara answered again without the tool call .*asked again \(2 of 3\)/.test(await log()), "the second ask wasn't logged");
+  // 3. the tool call arrives on the second ask: the ask stands down and the form's scripted first question plays as usual
+  let r = await ara(p, "show_contact_draft", {});
+  ok(/Ara called show_contact_draft on ask 2 of 3/.test(await log()), "the tool call didn't close the ask: " + (await log()).slice(-200));
+  ok(await p.evaluate(() => V && V.action === "contact"), "the contact form isn't open"); ok(/first and last name/.test(r.ask_exactly || ""), "no name question: " + JSON.stringify(r));
+  ok(await p.evaluate(() => !G.nudge), "the ask is still pending after the tool call");
+  // 4. "Joe Jones" answered with words only and nothing filled: asked again to fill the form with what they said
+  await said(p, "Joe Jones."); await words("Joe Jones it is."); await p.waitForTimeout(150);
+  a = await asks(); ok(a.length === 3 && /answered the open New contact form's question with "Joe Jones\.", and your last reply had no tool call, so nothing was filled in\. Call show_contact_draft now with what they said/.test(a[2]), "no retry for the unfilled answer: " + JSON.stringify(a.slice(2)));
+  ok(await p.evaluate(() => !(V.data && V.data.first)), "the app filled the name itself (split brain)");
+  r = await ara(p, "show_contact_draft", { first: "Joe", last: "Jones" }); ok(/Ara called show_contact_draft on ask 1 of 3/.test(await log()), "the fill didn't close the ask");
+  ok(/email/i.test(r.ask_exactly || r.status || ""), "the next question didn't follow the fill: " + JSON.stringify(r));
+  // 4b. an answer already filled by a tool call, then words to the app's guidance: no ask (Patient Pat drew three on "In person.")
+  await said(p, "The mobile is 555 0100."); await ara(p, "show_contact_draft", { first: "Joe", last: "Jones", mobile: "555 0100" }); await words("Okay."); await p.waitForTimeout(150);
+  ok((await asks()).length === 3, "words after a tool call that already took the answer drew an ask");
+  // 4c. no form open, a bare yes to the next-step question, Ara promises the form in words with no tool call: her own promise draws the ask
+  await p.evaluate(() => { V = null; });
+  await said(p, "Yes."); await words("Sure, let's add that."); await p.waitForTimeout(150);
+  a = await asks(); ok(a.length === 4 && /Your reply \("Sure, let's add that\."\) promised a form but had no tool call, so nothing opened/.test(a[3]), "Ara's promise after a yes drew no ask: " + JSON.stringify(a.slice(3)));
+  await ara(p, "show_contact_draft", {}); ok(await p.evaluate(() => !G.nudge), "the ask didn't close on the tool call");
+  await said(p, "Joe Jones."); await ara(p, "show_contact_draft", { first: "Joe", last: "Jones" });
+  // 5. a side question answered in words is not a missing tool call; a question from Ara isn't either
+  const n = (await asks()).length;
+  await said(p, "What's the capacity rating for?"); await words("It's the gift range you think they could give."); await p.waitForTimeout(150);
+  ok((await asks()).length === n, "a side question was taken for an unfilled answer");
+  await said(p, "joe@example.com"); await words("Is that joe at example dot com?"); await p.waitForTimeout(150);
+  ok((await asks()).length === n, "Ara's own question was taken for an unfilled answer");
+  // 6. three misses: the app stops asking and waits for the officer; the officer speaking stands an ask down
+  await said(p, "The email is joe at example dot com."); await words("Got it."); await words("Noted."); await words("Okay."); await words("Fine."); await p.waitForTimeout(150);
+  ok((await asks()).length === n + 3 && /Ara still didn't call the tool after 3 asks .*waiting for the officer/.test(await log()), "the asks didn't stop at three: " + ((await asks()).length - n));
+  ok(await p.evaluate(() => !G.nudge), "an ask is still pending after three misses");
+  await said(p, "Mobile is 555 0100."); await words("Thanks."); await p.waitForTimeout(100);
+  await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) })); await p.waitForTimeout(100);
+  ok(await p.evaluate(() => !G.nudge) && /The officer spoke: the ask for the tool call stands down/.test(await log()), "the officer's words didn't stand the ask down");
+});
 };

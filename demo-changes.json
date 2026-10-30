@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 9:58 AM",
+      "change": "Preview: when Ara answers in words but sends no tool call (a form asked for and not opened, or an answer not filled in), the app asks her again for the tool call at once, up to three times, and never opens or fills the form itself; a slow retry gets \"Ara's taking a moment\" as usual, a fast one nothing. Patient Pat's stand-in Grok now skips tool calls on a draw, and the real-Ara run scores the misses and recoveries.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 9:01 AM: \"Ara does not prompt me - didn't ask for first name or email was silent\"; 9:08 AM: \"minimize our app standing in for Ara ... just retrying the request to ara to send the tool call\"; 9:10 AM: no taking-a-moment line on a fast retry; add the failure to both harnesses"
+    },
+    {
       "date": "Oct 29, 11:22 PM",
       "change": "Preview: a yes said after the save line has started playing answers its next-step question even inside the 8-second same-yes window (Patient Pat lost 6 such yeses), also when the save line fell back to Ara's own voice; a scripted line that the voice service delivers twice, first words-only then with sound, is logged once as heard.",
       "area": "Voice",

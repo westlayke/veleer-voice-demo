@@ -529,7 +529,7 @@ function forcedTrace(f) { const ev = f.events || [], out = []; ev.forEach(x => {
 function forcedEvent(t) {
   const f = G.forced;
   if (f.events && f.events.length < 60) f.events.push({ t, dt: Date.now() - f.at });
-  if (t === "response.created") { f.started = true; G.forceStartAt = Date.now(); clearTimeout(G.forceTimer); clearTimeout(G.forceTick); /* forceStartAt: a yes after this is an answer to the line, whatever the clock since the save says (Patient Pat, Oct 29: 6 next-step yeses inside the 8 s same-yes window were lost) */
+  if (t === "response.created") { f.started = true; G.forceStartAt = Date.now(); G.respForcedSeq = G.respSeq; clearTimeout(G.forceTimer); clearTimeout(G.forceTick); /* forceStartAt: a yes after this is an answer to the line, whatever the clock since the save says (Patient Pat, Oct 29: 6 next-step yeses inside the 8 s same-yes window were lost) */
     clearTimeout(f.soundTimer); f.soundTimer = setTimeout(() => { if (G.forced !== f || f.sound || !G.live) return; f.started = false; act("step", `Scripted line's reply started but no sound in ${SOUND_WAIT_MS / 1000} s: treated as not started`); /* 5:59 PM call, Oct 29: acknowledged at once, silent for 23 s, the watchdogs stood down */
       G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(g)})`); guide(g.fallback); } }, FORCE_WAIT_MS / 2); forceTick(true); }, SOUND_WAIT_MS); }
   else if (/audio\.delta$/.test(t) && f.started) { f.sound = true; clearTimeout(f.soundTimer); }

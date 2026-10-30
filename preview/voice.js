@@ -719,7 +719,7 @@ function resumeModal() {
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " + (r.where ? r.where + " " : "") : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
-  G.live = false; G.hands = false; G.saveCheck = null; G.savedByWords = 0; G.sync = null; G.syncN = 0; G.syncPending = null; G.stateOkAt = 0; clearTimeout(G.syncTimer); G.hfYesAt = 0; G.resumedHeardN = 0; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();
+  G.live = false; G.hands = false; G.saveCheck = null; G.savedByWords = 0; G.sync = null; G.syncN = 0; G.syncPending = null; G.nudge = null; G.stateOkAt = 0; clearTimeout(G.syncTimer); G.hfYesAt = 0; G.resumedHeardN = 0; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
@@ -833,7 +833,7 @@ function onEvent(e) {
   const t = e.type || "";
   if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; G.responding = false; flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
-  if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true;
+  if (t === "input_audio_buffer.speech_started") { if (G.nudge) { act("step", "The officer spoke: the ask for the tool call stands down"); G.nudge = null; } G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true;
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0; clearTimeout(G.idleTimer); if (G.responding) send({ type: "response.cancel" }); stopPlayback(); if (G.forced) { G.forced = null; clearTimeout(G.forceTimer); } /* a goodbye still waiting to be said is dropped */ vlog("hang-up called off: the officer spoke"); act("step", "Quiet hang-up called off: the officer spoke"); } }
   if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += e.pcm ? e.pcm.length : Math.floor(atob(e.delta || "").length / 2); if (e.item_id && G.respAudio && !G.respAudio.itemId) G.respAudio.itemId = e.item_id; }
@@ -860,7 +860,7 @@ function onEvent(e) {
   if (t === "response.done" && G.bot && G.unheardResp === G.respSeq) G.unheard = G.bot; /* said into a paused sound engine: said again when it is back */
   if (t === "response.done" && G.bot && soundedCopy(G.bot)) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("step", `Ara's line arrived again, this time with sound (${((G.audioSamples || 0) / 24000).toFixed(1)} s): the officer hears it once`); if (typeof lineHeard === "function") lineHeard(G.bot); } /* real Ara run, Oct 29: 13 "said twice" rows were a words-only response followed by its sounded copy */
   else if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
-  if (t === "response.done") { replyCheck(e.response || {}); G.bot = ""; }
+  if (t === "response.done") { toolCheck(e.response || {}); replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } truncateSpoken(); stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall();
     if (G.asked && !G.responding && PROV().forceItem) { if (G.savedAt && Date.now() - G.savedAt < SAVE_ECHO_MS) act("step", "The officer spoke right after a save: the save confirmation is still coming (not cancelled)"); /* Oct 28 12:54 PM call: a repeated "yes, save it" cancelled the confirmation and the officer heard nothing */
       else { clearTimeout(G.askWatch); G.askWatch = null; clearTimeout(G.tickWatch); G.asked = false; act("step", "The officer spoke while a reply was still requested: that request is dropped (one question, one answer)"); } } } /* no response.cancel here: nothing is being generated yet and the service answers "Cancellation failed: no active response found" (Oct 28) */ /* Oct 25 review item 10: stacked re-asks gave three "I'm here" in a row */
@@ -947,6 +947,30 @@ function guardFired(name, detail) { const s = syncStats(); s.guards[name] = (s.g
   act("step", `Guard: ${name}${detail ? " (" + detail + ")" : ""}${late ? "; Ara had the state confirmed " + Math.round((Date.now() - G.stateOkAt) / 1000) + " s before, so she acted on an old picture" : "; her state was still on its way"}`); }
 function syncSummary() { const s = G.sync; if (!s || !s.sent) return ""; const ms = s.ms.slice().sort((a, b) => a - b), med = ms.length ? ms[Math.floor(ms.length / 2)] : 0;
   return ` State syncs ${s.sent}, confirmed ${s.confirmed} (median ${med} ms), missed ${s.missed}, resent ${s.resent}; guards ${Object.entries(s.guards).map(([k, v]) => k + " " + v).join(", ") || "none"}, after a confirmed receipt ${s.guardsAfterReceipt}.`; }
+// Ara talked but didn't call the tool (Carverhill's 8:58 AM call, Oct 30: "We'll fill in the form together as you talk" with no show_contact_draft, then
+// "Joe Jones it is" with nothing filled; the call went quiet). The app never opens or fills a form for her (split-brain risk, Carverhill): it asks
+// her again for the tool call, at once, up to TOOL_ASKS times; a slow retry gets "Ara's taking a moment" from the usual reply ladder, a fast one nothing.
+const TOOL_ASKS = 3;
+const PROMISE_RE = /fill in the form|let'?s (add|create|record|log|start|open|make|set up|get)|i'?ll (open|start|pull up|add|create|record|log|set up|get)|(opening|starting|pulling up|adding|creating|setting up) (the|a|an|your)/i;
+const FORM_REQ_RE = /\bform\b|\b(new|create|add|make|open|start|record|log|schedule|enter)\b.{0,40}\b(contact|task|opportunit|meeting|interaction|pledge|gift|ask|plan|report|payment)/i;
+const NOT_ANSWER_RE = /\?\s*$|^(what|who|when|where|how|why|is|are|do|does|did|can|could|would|should|which|tell me|show|read|repeat|say (that|it) again|cancel|undo|never mind|stop|wait|hold on|go back|i'?ve parked|i'?m parked|hey ara|are you|hello|yes|yeah|yep|no|nope|skip|none|nothing|save|ok|okay|sure|thanks|thank you)\b/i;
+function toolCheck(r) {
+  if (!G.live || G.idleEnding || G.respTool || !G.bot || r.status === "cancelled" || G.respForcedSeq === G.respSeq || G.dropNext) { if (G.nudge && G.respTool) G.nudge = null; return; }
+  const heard = G.lastHeard && Date.now() - (G.lastHeard.at || 0) < 45000 ? String(G.lastHeard.text || "").trim() : "";
+  if (G.nudge) { // a retry came back, still without the tool call
+    if (G.nudge.tries >= TOOL_ASKS) { act("step", `Ara still didn't call the tool after ${TOOL_ASKS} asks ("${G.bot.slice(0, 80)}"): waiting for the officer`); G.nudge = null; return; }
+    G.nudge.tries++; act("step", `Ara answered again without the tool call ("${G.bot.slice(0, 80)}"): asked again (${G.nudge.tries} of ${TOOL_ASKS})`); const g = G.nudge.guide; setTimeout(() => { if (G.live && G.nudge) askReply(g); }, 0); return; }
+  let kind = "", guide = "";
+  const acted = (G.heardN || 0) <= (G.toolHeardN || 0); /* a tool call already answered the officer's last words (Patient Pat: "In person." was filled, then Ara's "Okay." to the app's guidance drew three asks) */
+  if (acted) return;
+  if (!V && heard && (PROMISE_RE.test(G.bot) || FORM_REQ_RE.test(heard) && !NOT_ANSWER_RE.test(heard))) { kind = "open the form"; /* her own promise counts even after a bare yes (Patient Pat: "Sure, let's add that." to the next-step yes, no tool) */
+    guide = (PROMISE_RE.test(G.bot) ? `Your reply ("${G.bot.slice(0, 120)}") promised a form but had no tool call` : `The officer asked for a form ("${heard.slice(0, 120)}") and your last reply had no tool call`) + `, so nothing opened on the screen. Call that form's tool now, with whatever fields you have (none is fine); the app then asks the first question. Say nothing else.`; }
+  else if (V && V.fromVoice && !V.opt && heard && !NOT_ANSWER_RE.test(heard) && !hfYes(heard) && !/\?\s*$/.test(G.bot) && heard.split(/\s+/).length <= 40) { const tl = TOOLS.find(x => x.action === V.action); if (!tl) return; kind = "fill the form";
+    guide = `The officer answered the open ${ACTIONS[V.action] && ACTIONS[V.action].title ? ACTIONS[V.action].title : "form"} form's question with "${heard.slice(0, 120)}", and your last reply had no tool call, so nothing was filled in. Call ${tl.name} now with what they said (keep the fields already in). Say nothing else; the app asks the next question.`; }
+  if (!kind) return;
+  G.nudge = { kind, tries: 1, guide, at: Date.now() }; guardFired("Ara talked but didn't " + kind, `"${G.bot.slice(0, 80)}" after "${heard.slice(0, 60)}"`);
+  act("step", `Ara talked but didn't ${kind} ("${G.bot.slice(0, 80)}"): asked again for the tool call (1 of ${TOOL_ASKS})`); setTimeout(() => { if (G.live && G.nudge) askReply(guide); }, 0);
+}
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;
   if (!G.responding) { flushQueued(); return; }
