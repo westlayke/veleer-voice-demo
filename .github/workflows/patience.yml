@@ -9,7 +9,7 @@ on:
         description: "Conversations per machine"
         default: "24"
       machines:
-        description: "Machines at once (1-8); each gets its own seed"
+        description: "Machines at once (1-20); each gets its own seed"
         default: "4"
       rate:
         description: "Fault rate: 0 = none (baseline), 1 = Jim's calls, 2 = twice as rough"
@@ -33,7 +33,7 @@ jobs:
       seeds: ${{ steps.m.outputs.seeds }}
     steps:
       - id: m
-        run: echo "seeds=$(node -e "const n=Math.max(1,Math.min(8,Number('${{ inputs.machines }}')||4));console.log(JSON.stringify(Array.from({length:n},(_,i)=>i+1)))")" >> "$GITHUB_OUTPUT"
+        run: echo "seeds=$(node -e "const n=Math.max(1,Math.min(20,Number('${{ inputs.machines }}')||4));console.log(JSON.stringify(Array.from({length:n},(_,i)=>i+1)))")" >> "$GITHUB_OUTPUT"
   talk:
     needs: plan
     runs-on: ubuntu-latest
