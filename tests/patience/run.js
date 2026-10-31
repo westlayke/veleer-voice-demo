@@ -50,7 +50,7 @@ const FAKES = (cfg) => {
     deliver(e, ms) { const w = this; setTimeout(() => { if (w.readyState !== 1) return; if (w.held) { w.q.push(e); return; } w.onmessage && w.onmessage({ data: JSON.stringify(e) }); }, ms || 0); }
     // a line said by the voice service, as audio + words (or words only when the fault says so)
     say(text, ms, forced, sounded) { const w = this; if (window.__standIn && !/^I'm here\.|^Okay\.$/.test(text)) { window.__standIn.lastLine = text; if (/Do you want to do that now/i.test(text) && window.__stepTool && window.__stepTool(text)) window.__standIn.stepLine = text; } /* stepLine: the last next-step offer that named its step (an "already saved" re-ask doesn't) */ /* the last line said in Ara's voice, scripted ones included: what she repeats after "are you there" */ const noaudio = !sounded && R && rnd() < P.noaudio * R; if (noaudio) { const late = rnd() < 0.5 ? 5000 + Math.round(rnd() * 11000) : 0; window.__events.push({ at: Date.now(), fault: late ? "words without sound, the sound " + Math.round(late / 1000) + " s later" : "words without sound", text: text.slice(0, 50) }); if (late) setTimeout(() => { if (w.readyState === 1) w.say(text, 0, forced, true); }, ms + late); } /* Carverhill's 12:45 PM call, Oct 30: the sound came 1-16 s after the words, as a response of its own */
-      w.deliver({ type: "response.created" }, ms); if (!noaudio) w.deliver({ type: "response.output_audio.delta", delta: window.__silence }, ms + 40); w.deliver({ type: "response.output_audio_transcript.delta", delta: text }, ms + 50);
+      w.deliver({ type: "response.created" }, ms); if (!noaudio) { const n = Math.min(40, Math.max(1, Math.round((String(text).split(/\s+/).filter(Boolean).length / 2.7 * 1000 + 300) / 500))); for (let i = 0; i < n; i++) w.deliver({ type: "response.output_audio.delta", delta: window.__silence }, ms + 40); } /* as much sound as the words take to say (0.5 s a chunk), so the app's quiet clocks start when the officer hears the line end (until Oct 31 every line was 0.5 s long) */ w.deliver({ type: "response.output_audio_transcript.delta", delta: text }, ms + 50);
       setTimeout(() => { if (w.readyState !== 1) return; const cut = !!(window.G && G.dropNext); w.deliver({ type: "response.done", response: { status: "completed" } }, 0); if (!cut) window.__lines.push({ text, at: Date.now(), from: forced ? "app" : "ara", noaudio: noaudio || window.__deaf(), deaf: !noaudio && window.__deaf() }); else window.__events.push({ at: Date.now(), fault: "late copy cut by the app" }); }, ms + 80); } /* a copy the app cut (lateForcedCheck sets G.dropNext on its words) is never heard: not a line said twice */
     send(d) { window.__sent.push(d); let e; try { e = JSON.parse(d); } catch (x) { return; }
       if (e.type === "session.update") { const w = this, instr = e.session && e.session.instructions; if (R && rnd() < P.lostReceipt * R) { window.__events.push({ at: Date.now(), fault: "lost receipt", bytes: d.length }); (window.__receipts = window.__receipts || []).push({ at: Date.now(), lost: true }); }
@@ -195,7 +195,7 @@ async function conversation(browser, base, n) {
   // a seeded random number stream in Node for the officer's side (patience, turn faults)
   let s = (seed * 7919) >>> 0; const rnd = () => { s += 0x6D2B79F5; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const patience = () => WAITS[Math.floor(rnd() * WAITS.length)] * 1000;
-  let agendaAt = 0, lastSaid = "", answered = 0, lastAnswerAt = Date.now(), waitLimit = patience() + 10000 /* the greeting is expected: the officer gives it 10 s more */, asksInRow = 0, form = "", dropAgainAt = 0 /* a drop armed to strike again right after the line comes back */;
+  let agendaAt = 0, lastSaid = "", answered = 0, lastAnswerAt = Date.now(), waitLimit = patience() + 10000 /* the greeting is expected: the officer gives it 10 s more */, asksInRow = 0, form = "", lastTool = null, dropAgainAt = 0 /* a drop armed to strike again right after the line comes back */;
   const firstOpen = await p.evaluate(() => window.__ws.openedAt);
   const state = () => p.evaluate(() => { const last = (window.__lines || []).slice(-1)[0] || null; const ps = (window.__phoneSaid || []).slice(-1)[0] || null; const ws = window.__ws;
     return { lines: (window.__lines || []).length, last, phoneAt: ps ? ps.at : 0, phone: ps ? ps.text : "", status: G.status, live: G.live, forced: !!G.forced, forcedStarted: !!(G.forced && G.forced.started), pendingForce: !!G.pendingForce, asked: !!G.asked, responding: !!G.responding, playing: playingLeft() > 0, openedAt: ws ? ws.openedAt : 0, form: typeof V !== "undefined" && V ? V.action : "", saves: (G.saves || []).length, events: window.__events.length, lastHeardAt: G.lastHeard ? G.lastHeard.at : 0 }; });
@@ -231,6 +231,7 @@ async function conversation(browser, base, n) {
         conv.asks.push({ at: Date.now() - t0, silence: Math.round(silence / 100) / 10, cause, status: st.status, form: st.form, lastHeard: (st.phoneAt > (st.last ? st.last.at : 0) ? st.phone : st.last ? st.last.text : "").slice(0, 90), phoneLast: st.phoneAt > (st.last ? st.last.at : 0) });
         asksInRow++; lastAnswerAt = Date.now(); waitLimit = Math.max(patience(), 4000);
         if (asksInRow >= 3) { conv.hungUp = true; conv.ended = "hung up after three asks"; break; }
+        const st3 = await state(); if (asksInRow >= 2 && lastSaid && st3.last && st3.last.from !== "officer" && /^I'm here\./.test(st3.last.text) && !/\?\s*$/.test(st3.last.text)) { conv.repeats = (conv.repeats || 0) + 1; await said(lastSaid, lastTool); continue; } /* "I'm here." and nothing more: Pat says what they wanted again, as a person would */
         await said("Are you there?", null); continue; }
       // officer turn faults
     }
@@ -242,7 +243,7 @@ async function conversation(browser, base, n) {
     if ((!entry.tool && /What would you like to do|What's next/i.test(line)) || (say === bookCtx.agenda() && !tool)) tool = AGENDA_TOOL[Math.min(bookCtx.saves, AGENDA_TOOL.length - 1)];
     await p.waitForTimeout(800 + Math.round(rnd() * 1200)); /* a person takes a moment */
     const st = await state(); if (!st.live) return;
-    conv.turns++; lastSaid = say; lastAnswerAt = Date.now(); waitLimit = patience(); asksInRow = 0;
+    conv.turns++; lastSaid = say; lastTool = tool; lastAnswerAt = Date.now(); waitLimit = patience(); asksInRow = 0;
     // the line drops again right after it came back: the officer's answer goes into the dead line and the app must ask again (Carverhill's 5:50 PM call, Oct 30)
     if (dropAgainAt && st.openedAt > dropAgainAt) { dropAgainAt = 0; if (Date.now() - st.openedAt < 20000) { conv.faults.push({ at: Date.now() - t0, fault: "second drop took the answer" });
       await p.evaluate((t) => { window.__lines.push({ text: t, at: Date.now(), from: "officer", lost: true }); __ws.drop(); }, say); return; } }
