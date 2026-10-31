@@ -147,7 +147,7 @@ test("Hands-free: a new opportunity always asks the campaign when the entity has
 });
 
 test("Hands-free: words said while the line was down make Ara ask for them again, and she doesn't start over", async (p) => {
-  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await signIn(p); await p.evaluate(() => { window.__reconnectBy = "app"; }); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the agenda" });
   await p.evaluate(() => { G.spokeInGap = true; window.__ws0 = __ws; __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1500);
   const line = await p.evaluate(() => __sent.filter(s => s.includes("Sorry, I lost you")).pop() || ""), now = await p.evaluate(() => (G.justNow || {}).text || "");
@@ -527,7 +527,7 @@ test("Officer's turn watch (Oct 29): no reply after the officer's words gets the
 });
 
 test("Carverhill's 1:14 PM call (Oct 29): a form with every required field in still has a pending question after a drop, and the reconnect line says where we are first", async (p) => {
-  await signIn(p); await p.waitForFunction(() => window.__ws && G.live && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await signIn(p); await p.evaluate(() => { window.__reconnectBy = "app"; }); /* the app's own reconnect line (Settings "app"); Ara's route: the 5:34 PM call check */ await p.waitForFunction(() => window.__ws && G.live && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await p.evaluate(() => { window.__quietMic = true; });
   await said(p, "Log an interaction with James Okafor.");
   await ara(p, "show_interaction_draft", { contact_name: "James Okafor" });
@@ -925,5 +925,30 @@ test("Carverhill's 5:08 PM call (Oct 31): \"C-3\" is not an amount or a date, a 
   ok(await p.evaluate(() => V && G.saveCheck && G.saveCheck.step === "amount") && await p.evaluate(() => __sent.some(s => s.includes("Just to be sure, the amount is $25,000"))), "the planned ask didn't get the amount check after the yes");
   await said(p, "The amount."); await p.waitForTimeout(300);
   ok(await p.evaluate(() => V && V.action === "plan"), "\"The amount\" was taken as a yes to the amount check");
+});
+
+test("Carverhill's 5:34 PM call (Oct 31): a confirmation lost in a reconnect is said by Ara with the form's question, a soundless line's answer counts only after it would have played, and \"Save it\" after a save is never a yes to the next step", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const creates = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "response.create" && x.response && x.response.instructions).map(x => x.response.instructions), n);
+  const forced = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "force_message").map(x => x.item.content[0].text), n);
+  // 1. the rating's confirmation never played; the line reconnects: Ara is asked to say it with the form's question, the app doesn't say it
+  await ara(p, "show_contact_draft", { first: "Pink", last: "Ribbon", email: "pr@example.org", mobile: "(555) 010-0190" });
+  await p.evaluate(() => { const q = formPosition().ask; G.forced = null; clearTimeout(G.forceTimer); G.pendingForce = "Rating B is on the form. " + lastQuestionOf(q); });
+  let n0 = await p.evaluate(() => __sent.length);
+  await p.evaluate(() => { G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(2200);
+  const c = await creates(n0), f = await forced(n0);
+  ok(c.some(g => /The line was down and is back/.test(g) && /Rating B is on the form/.test(g) && /word for word/.test(g)) && !f.some(t => /Sorry, I lost you/.test(t)), "the lost confirmation wasn't handed to Ara (or the app said the sorry line itself): " + JSON.stringify({ c: c.slice(-2), f }).slice(0, 500));
+  ok(/Ara is asked to say where we were herself \(form, with the line the old line never played\)/.test(await p.log()), "the form reconnect didn't go to Ara");
+  await p.evaluate(() => { G.ctxWatch = null; V = null; renderOverlay(); });
+  // 2. a soundless next-step line: "Save it." 1.4 s after it is not an answer to it
+  const ans = await p.evaluate(() => { const rec = { text: "Opportunity created for Pink. The next step in the process to move Pink to Cultivation is to log a substantive interaction. Do you want to do that now, yes or no?", at: Date.now() - 1400, left: 0, audioS: 0 };
+    rec.sayS = rec.text.split(/\s+/).length / 2.6; G.lastHeard = { text: "Save it.", at: Date.now(), repeat: false }; const early = answeredAfter(rec);
+    G.lastHeard = { text: "Yes.", at: rec.at + rec.sayS * 1000 + 500, repeat: false }; return [early, answeredAfter(rec)]; });
+  ok(JSON.stringify(ans) === "[false,true]", "an answer to a soundless line was judged wrongly (early, after): " + JSON.stringify(ans));
+  // 3. Ara's late save_form after "Save it." to a save line that ends in the next-step question: nothing opens
+  await p.evaluate(() => { G.savedAt = Date.now() - 6000; G.savedLine = "Opportunity created"; G.savedByWords = 0; G.lastSaved = null;
+    G.lastBot = "Opportunity created for Pink. " + nextStepLine(S.contacts[0]).replace(/^.*?(The next step)/, "$1"); G.lastBotAt = Date.now() - 4000; G.lastHeard = { text: "Save it.", at: Date.now() - 1000 }; });
+  const r = await ara(p, "save_form", { confirmed: true });
+  ok(r.already && !/Open that step now/.test(JSON.stringify(r)) && /was about that form/.test(JSON.stringify(r)), "\"Save it\" after a save was taken as a yes to the next step: " + JSON.stringify(r).slice(0, 400));
 });
 };

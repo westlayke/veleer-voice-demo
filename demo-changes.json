@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 5:57 PM",
+      "change": "After a reconnect with a form open, Ara (not the app) says where we were, including any confirmation the dropped line never played (\"Rating B is on the form\"), and the app checks her reply (asked again up to 3 times). A line that arrived with no sound counts as answered only by words that start after it would have finished playing; otherwise it is asked for again. \"Save it\" after a save is never a yes to the next step. The where-we-were check moved into voiceline.js with the rest of the reconnect.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "5:34 PM call: the rating confirmation was lost in a reconnect, and a soundless next-step line plus \"Save it\" opened the interaction report unheard. \"I don't want the app saying things\" (5:43 PM); \"Yes go\" (5:44 PM)."
+    },
+    {
       "date": "Oct 31, 5:32 PM",
       "change": "One validation module (preview/validate.js, was evidence.js) holds every check on the officer's own words: did they say this value, and is this a yes or a no. Words that name a list value (\"C-3\") are no longer read as an amount or a date. A no to a read-back closes it: nothing counts as a yes until it is read back again, and a reply naming a field (\"The amount\") is never a yes. A short reply counts as a yes only straight after the app's own question. Planned asks (new and edited) now get the amount check after the yes, as gifts and pledges do.",
       "area": "Voice",

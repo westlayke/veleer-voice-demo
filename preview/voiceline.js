@@ -351,12 +351,47 @@ async function openAgain(lock) {
       act("step", `${back}: ${why}`);
       whenIdle("instr");
       syncWait(() => forceSay(`Sorry, I lost you for a moment. ${line}`)); }; /* the sorry line goes once the service has confirmed Ara's state for the new line (or after SYNC_RECEIPT_MS), so she has the picture before the officer answers (Carverhill, Oct 29) */
-    if (fp && fp.ask) { if (fp.arm) fp.arm(); say(`${typeof formIntro === "function" ? formIntro() + " " : ""}${fp.ask}`, `the app says where we are and asks the pending question itself (${fp.where})`); } /* "We're on the interaction report for Elon." first: the officer may have been away a while */
+    if (fp && fp.ask) { if (fp.arm) fp.arm();
+      // the line the old line never started ("Rating B is on the form. Save it, or...") is what the officer missed: it is said in full when it ends in the same
+      // question, else its lead goes before the form's question. Ara says it, the app checks her reply (Carverhill, Oct 31 5:43 PM: "I don't want the app saying things")
+      const fq = lastQuestionOf(fp.ask), pq = pf ? lastQuestionOf(pf) : "", same = pf && wordOverlap(sameWords(pq), sameWords(fq)) >= 0.6;
+      const lead = pf && !same && /\?\s*$/.test(pf) ? pf.slice(0, pf.length - pq.length).trim() : pf && !/\?\s*$/.test(pf) ? pf.trim() : "";
+      const line = `${typeof formIntro === "function" ? formIntro() + " " : ""}${same ? pf.trim() : (lead ? lead + " " : "") + fp.ask}`;
+      if (RECONNECT_BY() === "ara") { G.justNow = { text: reconnectLine(lock, "") + " " + fp.where, at: Date.now() }; act("step", `${back}: Ara is asked to say where we were herself (form${pf ? ", with the line the old line never played" : ""}); the app checks her reply`); whenIdle("instr");
+        const w = lastLineContext(line); w.kind = "form"; syncWait(() => contextAsk("reconnect", w)); }
+      else say(line, `the app says where we are and asks the pending question itself (${fp.where})`); } /* "We're on the interaction report for Elon." first: the officer may have been away a while */
     else if (pf) say(pf, "the app says the scripted line the old line never started");
     else { const q = lastQuestion();
       const w = q.where && q.where.kind !== "none" ? q.where : /last line again itself|last question again itself|form was saved/.test(q.why) ? lastLineContext(q.line) : null; /* her last line, or the app's own save line, is said by Ara too (real-Ara and Patient Pat drops after a save, Oct 30: every one took the app's path) */
       if (w && RECONNECT_BY() === "ara") { G.justNow = { text: reconnectLine(lock, ""), at: Date.now() }; act("step", `${back}: Ara is asked to say where we were herself (${w.kind}); the app checks her reply`); whenIdle("instr"); syncWait(() => contextAsk("reconnect", w)); } /* Ara composes it from "Where we are" in her instructions; the app's line is the floor after CONTEXT_ASKS misses */
       else { say(q.line, q.why); if (q.then) guide(q.then); } } }); /* no form open: the app still says the whole line, so Ara can't stop after the sorry (9:45 AM call, Oct 29: 12 s of dead air); q.then = the officer's heard answer, for Ara to act on */
+}
+// After a drop (Oct 31: with a form open too), Ara herself says where we were (Carverhill, 10:36 AM call Oct 30: "she always needs to explain what we were doing", and
+// "How do we make it so Ara, not the app, plays these messages"): the app asks her for it, checks the reply (the person named, her closing question the
+// pending one, no open "what would you like to do") and asks again up to CONTEXT_ASKS times; then its own scripted line is the floor. The same check
+// covers a late yes after a save. reconnectBy "app" (Settings, or window.__reconnectBy in the harness) keeps the scripted line: both ways measured by Patient Pat.
+const CONTEXT_ASKS = 3, OPEN_Q = /what (would you like|do you want) to do|what'?s next|what next/i; /* "What next?" too (Carverhill's 2:52 PM call, Oct 30) */
+const RECONNECT_BY = () => window.__reconnectBy || (typeof S !== "undefined" && S.settings && S.settings.reconnectBy) || "ara";
+function contextWatch(kind, w) { G.ctxWatch = { kind, need: { who: w.who || "", q: w.q }, tries: 1, at: Date.now(), seq: G.respSeq || 0, line: w.line, guide: w.guide }; } /* seq: the reply this was armed in (a tool call's) is not the answer */
+function contextAsk(kind, w) {
+  const guide = `The line was down and is back. Say sorry in a few words, then say in one sentence where we were${w.who ? ` (name ${w.who})` : ""}: ${(w.q && w.line.endsWith(w.q) ? w.line.slice(0, -w.q.length) : w.line).trim().replace(/"/g, "'")} ${G.spokeInGap ? " Say too that you missed what they said while the line was down." : ""} Then ask this question word for word: "${w.q}". Never ask what they'd like to do or what's next; nothing else.`;
+  contextWatch(kind, Object.assign({ guide }, w)); act("step", `Ara is asked to say where we were herself (${kind}, 1 of ${CONTEXT_ASKS})`); askReply(guide);
+}
+function contextCheck(r) {
+  const c = G.ctxWatch; if (!c || !G.live) return;
+  if (r.status === "cancelled" || G.respForcedSeq === G.respSeq || G.dropNext || G.respSeq === c.seq) return;
+  // Carverhill's 2:52 PM call (Oct 30): the service replayed save_form after the pickup, the guard refused it, and clearing the watch here let her "Tommy
+  // Toyota is saved. What next?" through unchecked
+  if (!G.bot) { if (G.respTool) { if (G.toolRefusedSeq === G.respSeq) act("step", "A tool call a guard refused while Ara was asked where we were: her words are still awaited"); else G.ctxWatch = null; }
+    return; } /* she opened something instead: not a context line, but she acted */
+  const bot = G.bot.trim(), q = lastQuestionOf(bot), named = !c.need.who || new RegExp("\\b" + c.need.who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(bot);
+  const asked = /\?\s*$/.test(bot) && wordOverlap(sameWords(q), sameWords(c.need.q)) >= 0.5, open = OPEN_Q.test(bot) && !OPEN_Q.test(c.need.q);
+  const secs = Math.round((Date.now() - c.at) / 100) / 10;
+  if (named && asked && !open) { act("step", `Ara said where we were on try ${c.tries} (${secs} s after the first ask): "${bot.slice(0, 80)}"`); G.ctxWatch = null; return; }
+  const why = open ? "asked an open question" : !named ? `didn't name ${c.need.who}` : "didn't ask the pending question";
+  if (c.tries >= CONTEXT_ASKS) { act("step", `Ara didn't say where we were in ${CONTEXT_ASKS} tries (${why}, "${bot.slice(0, 80)}"): the app says it itself`); guardFired("Ara didn't say where we were", `"${bot.slice(0, 80)}"`); G.ctxWatch = null; forceSay(c.kind === "reconnect" ? `Sorry, I lost you for a moment. ${c.line}` : c.line); return; }
+  c.tries++; act("step", `Ara's reply ${why} ("${bot.slice(0, 80)}"): asked again for where we were (${c.tries} of ${CONTEXT_ASKS})`);
+  const g = `${c.guide} Your last reply ("${bot.slice(0, 100)}") ${why}.`; setTimeout(() => { if (G.live && G.ctxWatch === c) askReply(g); }, 0);
 }
 // the last line before the drop (Ara's question, or the app's save line) as something for Ara to say herself: the person it names, and its question word for word
 function lastLineContext(line) { const w = typeof whereWeAre === "function" ? whereWeAre() : null, who = w && w.who && new RegExp("\\b" + w.who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(line) ? w.who : ""; return { kind: "last line", line, who, q: typeof lastQuestionOf === "function" ? lastQuestionOf(line) : line }; }

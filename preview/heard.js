@@ -25,6 +25,8 @@ const heardWords = (r) => `${r.audioS.toFixed(1)} s of voice audio, speaker leve
 // at the end of a line Ara said: keep its readings, and check them once it should have finished playing
 function lineHeard(text) {
   const rec = { text, at: Date.now(), resp: G.respSeq, audioS: (G.audioSamples || 0) / 24000, out: G.outPeak || 0, echo: G.echoPeak || 0, state: G.ctx ? G.ctx.state : "none", left: playingLeft() };
+  /* a line with no sound has nothing left to play, but the officer can't have heard it: words count as an answer only once it would have finished (5:34 PM call, Oct 31: "Save it." 1.4 s after a soundless next-step line was taken as the answer) */
+  rec.sayS = rec.audioS < 0.3 ? String(text).trim().split(/\s+/).length / 2.6 : 0; /* how long it would have taken to say */
   G.lastLine = rec; G.outPeak = 0;
   setTimeout(() => { if (!G.live || G.lastLine !== rec) return; rec.out = Math.max(rec.out, G.outPeak || 0); rec.state = G.ctx ? G.ctx.state : "none";
     const prob = heardProblem(rec); if (prob) { act("step", `${/^no voice audio/.test(prob) ? "(no sound) " : ""}Ara's line may not have been heard: ${prob} ("${text.slice(0, 80)}")`); vlog("not heard? " + prob); if (/^no voice audio|^the phone produced no sound/.test(prob) && rec.state === "running") silentLine(rec); }
@@ -40,7 +42,7 @@ function lineSaid(text) {
 }
 // the officer answered the line: only a new utterance of theirs after the line would have finished playing counts (the service transcribes the same
 // words two or three times over a few seconds; on the 4:50 PM call a late copy of "No." to the question before made the resend stand down)
-const answeredAfter = (rec) => !!(G.lastHeard && !G.lastHeard.repeat && G.lastHeard.at > rec.at + rec.left * 1000);
+const answeredAfter = (rec) => !!(G.lastHeard && !G.lastHeard.repeat && G.lastHeard.at > rec.at + Math.max(rec.left, rec.sayS || 0) * 1000);
 // her line came with words but no sound (Carverhill, Oct 28: 33 s of silence until "are you there?"): the phone says "Ara's taking a moment", then asks for the line again,
 // once; a second silent copy means the line is dead and the phone reconnects. Only once a line of hers has been heard in this call (a typed test sends no audio).
 function silentLine(rec) {

@@ -382,8 +382,8 @@ test("Said means heard (Oct 30): the A to E ranges count as read only once heard
   // 2. a new answer after the line would have finished stands the resend down
   await p.evaluate(() => { G.silentAgain = null; G.resend = null; });
   await p.fire([{ type: "response.created", response: { id: "r2" } }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }]);
-  await p.waitForTimeout(400); await said(p, "National."); await p.waitForTimeout(5800);
-  ok(/officer answered after it: not asked again/.test(await p.log()), "a new answer after the soundless line didn't stand the resend down: " + (await p.log()).slice(-300));
+  await p.waitForTimeout(2300); await said(p, "National."); await p.waitForTimeout(5800); /* after the line would have finished playing (5:34 PM call, Oct 31: an answer before that can't be to this line) */
+  ok(/officer answered after it: (not asked again|the resend stands down)/.test(await p.log()), "a new answer after the soundless line didn't stand the resend down: " + (await p.log()).slice(-300));
   // 3. the ranges heard with sound: now they count as read, and the next rating question is the short form; after two minutes the list is read again
   await p.fire([{ type: "response.created", response: { id: "r3" } }, audio, { type: "response.output_audio_transcript.delta", delta: ranges }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]);
   await p.waitForFunction(() => G.rangesSaidAt > 0, null, { timeout: 6000 }).catch(() => {}); /* the judgement runs 2 s after the queued sound has played */
@@ -397,7 +397,7 @@ test("Said means heard (Oct 30): the A to E ranges count as read only once heard
   ok(r.ask_exactly === `Set ${first}'s capacity to B, $100,000 to $250,000, yes or no?`, "the rating confirmation isn't a yes-or-no decision: " + JSON.stringify(r));
 });
 test("Ara: after a reconnect the app says where the form stands and asks the pending question itself (an optional question, or the read-back waiting for a yes)", async (p) => {
-  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await signIn(p); await p.evaluate(() => { window.__reconnectBy = "app"; }); /* the app's own reconnect line (Settings "app"); Ara's route: the 5:34 PM call check */ await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await ara(p, "show_contact_draft", { first: "Nora", last: "Quist", email: "nora@example.org", mobile: "(555) 010-0188" });
   ok(await p.evaluate(() => V && V.opt && V.opt.cur === "capacity"), "the capacity question isn't pending after the required details");
   const forced = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "force_message").map(x => x.item.content[0].text), n);
@@ -718,7 +718,7 @@ test("Ara: when Grok goes silent after the app asks for a reply, the app asks on
   ok(/on a slow line \(test request \d+ ms\): fresh line/.test(await p.log()), "the slow-line reconnect wasn't logged");
 });
 test("Ara: a dropped voice line reconnects and picks up where it left off; it keeps reconnecting past 3 tries, and only 10 minutes without a working line ends the call (warned at 8, last try announced)", async (p) => {
-  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await signIn(p); await p.evaluate(() => { window.__reconnectBy = "app"; }); /* the app's own reconnect line (Settings "app"); Ara's route: the 5:34 PM call check */ await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   await p.evaluate(() => recent(botName(), "Which entity is the ask for?"));
   await p.evaluate(() => { window.__ws0 = __ws; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1200);
