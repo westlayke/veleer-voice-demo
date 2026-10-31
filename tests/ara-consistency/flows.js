@@ -45,6 +45,14 @@ module.exports = [
     lines: ["Let's go into hands-free mode.", "Log an interaction with James Okafor.", "I met him yesterday at the Citizens Alliance Halloween party, in person. We talked about the North Dakota work.",
       "Yes. I'll call him on Friday to talk about a gift."],
     subst: "Yes, it was.", tool: "show_interaction_draft", saved: /Interaction report/, heard: { contact_name: /James Okafor/i } },
+  // Oct 31 (Carverhill: Ara, not the app, follows the officer's yes or no to the next-step question): a bare yes, then the step; a bare no
+  { id: "next-step-yes", title: "Log an interaction, a bare yes to setting the next step, then the step",
+    lines: ["Let's go into hands-free mode.", "Log an interaction with James Okafor.", "I met him yesterday at the Citizens Alliance Halloween party, in person. We talked about the North Dakota work.",
+      "Yes.", "I'll call him on Friday to talk about a gift."],
+    subst: "Yes, it was.", tool: "show_interaction_draft", saved: /Interaction report/, heard: { contact_name: /James Okafor/i } },
+  { id: "next-step-no", title: "Log an interaction, a bare no to setting the next step",
+    lines: ["Let's go into hands-free mode.", "Log an interaction with Ruth Abernathy.", "I had coffee with her yesterday, in person. We talked about the Pennsylvania work.", "No."],
+    subst: "Yes, it was.", tool: "show_interaction_draft", saved: /Interaction report/, heard: { contact_name: /Ruth Abernathy/i } },
   // harder officers (Oct 28, Carverhill "yes go ahead"): lines that sound like a real drive, for the engines' hearing rather than their manners
   { id: "rambling-interaction", title: "Log an interaction from a long, rambling summary",
     lines: ["Let's go into hands-free mode.", "Log an interaction with Ruth Abernathy.",
