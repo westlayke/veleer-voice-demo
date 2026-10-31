@@ -581,7 +581,7 @@ async function openAudio() {
   // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
   ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") soundPaused(ctx); };
   const mine = (tr) => G.stream && G.stream.getAudioTracks().includes(tr); // a mic replaced after a lock no longer speaks for the call
-  stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && mine(tr) && G.status !== "Connecting…") micMuted(tr); }; tr.onended = () => { if (G.live && mine(tr)) interrupted("mic ended", "Your phone took the microphone away (a call, Siri or the recording dialog)."); }; });
+  stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && mine(tr) && G.status !== "Connecting…") micMuted(tr); }; tr.onended = () => micEnded(tr, mine); });
   const srcNode = ctx.createMediaStreamSource(stream);
   const onPcm = (f32) => {
     if (G.ctx !== ctx) return;
@@ -632,6 +632,16 @@ function soundBack() {
   if (!line || !G.live) return;
   act("step", "Sound is back: the line Ara said while it was paused is said again");
   forceSay(line);
+}
+/* the phone took the mic away. At a lock (the page hidden, now or within 1.5 s) that is the lock, not an ending: the mic is started afresh when the
+   app is back (Oct 31 11:10 AM call: the mic ended 0.5 s after the page hid and the call ended at once, so he had to tap Carry on) */
+const MIC_LOCK_GRACE_MS = 1500;
+function micEnded(tr, mine) {
+  if (!G.live || !mine(tr)) return;
+  const atLock = () => !!G.hiddenAt || document.visibilityState === "hidden";
+  const asLock = () => { G.micEndedAtLock = true; act("step", "The phone took the mic as it locked: started afresh when the app is back"); };
+  if (atLock()) { asLock(); return; }
+  setTimeout(() => { if (!G.live || !mine(tr)) return; if (atLock()) { asLock(); return; } interrupted("mic ended", "Your phone took the microphone away (a call, Siri or the recording dialog)."); }, MIC_LOCK_GRACE_MS);
 }
 // After a lock: start the sound and mic afresh (see openAudio); if the phone refuses (no running sound in a moment), the old ones stay
 async function restartAudio(why) {
@@ -776,6 +786,7 @@ function endCall(why) {
 }
 // a call has ended: the line, the turn, the scripted-line watches and the call's clocks go back to their start
 function resetCall() {
+  G.micEndedAtLock = false;
   G.ws = G.stream = G.ctx = G.node = null;
   G.buf = [];
   G.audioOn = false;
@@ -945,7 +956,9 @@ function onEvent(e) {
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
-  if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1;
+  /* a transcript that is only a sound tag ("[noise] ...") is not the officer speaking (Oct 31 11:04 AM call: car noise was taken as a turn) */
+  if (/input_audio_transcription\.completed/.test(t) && e.transcript && onlyNoise(e.transcript)) act("step", `Heard only noise ("${String(e.transcript).slice(0, 40)}"): not taken as the officer speaking`);
+  else if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1;
     G.heardWait = null;
     if (!G.turnOpen && !G.responding && !G.speechOn) { G.turnOpen = Date.now();
       G.turnStep = 0; } /* the officer's turn is open until a reply starts (turnWatch); a partial transcript while they are still talking opens nothing (real-line runs Oct 29: "taking a moment" 4 s into a long sentence) */
@@ -1029,6 +1042,7 @@ function onEvent(e) {
 // the same words as the last line, which came without voice audio less than 15 s ago, now with audio: the sounded copy of that line, not a second telling
 const soundedCopy = (text) => { const r = G.lastLine; return !!(r && typeof AUDIO_MIN_S !== "undefined" && r.audioS < AUDIO_MIN_S && Date.now() - r.at < 15000 && (G.audioSamples || 0) / 24000 >= AUDIO_MIN_S && sameWords(r.text) === sameWords(text)); };
 const REPEAT_MS = 6000; /* the service sends the same transcript again, sometimes grown by a word, within a few seconds: that is no new answer */
+const onlyNoise = (s) => !String(s).replace(/\[[^\]]*\]/g, " ").replace(/[^a-z0-9]/gi, "").length && /\[[^\]]*\]/.test(String(s));
 const sameWords = (s) => String(s).toLowerCase().replace(/[^a-z0-9$ ]/g, " ").replace(/\s+/g, " ").trim();
 // the late-copy watches (G.lateForced, G.resend) cut a second telling of the same words; they end when a repeat is wanted: a new line after a
 // drop (the re-ask is the first telling on it), "are you there?" (Ara repeats her last line) or "say that again" (Carverhill's 5:50 PM call, Oct 30:

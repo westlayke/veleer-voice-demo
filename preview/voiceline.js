@@ -533,7 +533,10 @@ function appHidden() {
       clearInterval(tick); const s = ((Date.now() - G.hiddenAt) / 1000).toFixed(1), paused = G.lockPaused; G.hiddenAt = 0; G.lockPaused = 0; vlog("app visible again after " + s + " s");
       if (G.soundPausedAt) G.soundPausedAt = Date.now(); if (G.micMutedAt) G.micMutedAt = Date.now(); // their waits start again now: the phone brings both back on unlock, in its own time
       if (G.ctx && G.ctx.state !== "running") G.ctx.resume().catch(() => {});
-      if (paused) { act("step", `App hidden for ${s} s: reopening the line on the same conversation`); lockResume(); } else act("step", "App hidden for " + s + " s, then back (line still open)");
+      const micGone = G.micEndedAtLock; G.micEndedAtLock = false;
+      if (paused) { act("step", `App hidden for ${s} s: reopening the line on the same conversation`); lockResume(); }
+      else { act("step", "App hidden for " + s + " s, then back (line still open)"); /* the mic the phone took at the lock comes back fresh; if it can't, the call ends as before */
+        if (micGone && typeof restartAudio === "function") restartAudio("after the phone took the mic at the lock").then(ok => { if (!ok && G.live) interrupted("mic ended", "Your phone took the microphone away (a call, Siri or the recording dialog)."); }); }
       return; }
     if (!G.lockPaused && Date.now() - G.hiddenAt > LOCK_CLOSE_MS) lockPause();
     if (Date.now() - G.hiddenAt > LOCK_MAX_MS) { clearInterval(tick); G.hiddenAt = 0; G.lockPaused = 0; G.endedByLock = true; interrupted("app hidden for " + Math.round(LOCK_MAX_MS / 60000) + " minutes", `The app was in the background for ${Math.round(LOCK_MAX_MS / 60000)} minutes, longer than a paused conversation is kept.`); }
@@ -596,7 +599,7 @@ function forceSay(text, then, fallback, waited = 0) {
   if (!waited) G.pendingForce = text;
   if ((replyBusy() || playingLeft() > 0 || G.forced || Date.now() - (G.cancelAt || 0) < CANCEL_SETTLE_MS) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
   // the reply just finished already said it (the engine answered the tool result with the question itself): no second copy (OpenAI, Oct 27: "What's the first name?" three times)
-  if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text))) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
+  if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text), text)) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
   G.forced = { at: Date.now(), events: [], text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false, itemId: null, byId: false, ids: {} };
   if (G.pendingForce === text) G.pendingForce = null; /* itemId: the id xAI gives the line when it accepts it; the reply carrying that id on its item and audio is the line (real-Ara run, Oct 30: 30 of 30; an id of our own is not kept) */
   if (PROV().forceItem) send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
@@ -638,15 +641,15 @@ function forcedEvent(t, e) {
   if (f.itemId && idOf && idOf === f.itemId && !f.byId) { f.byId = true; if (!f.started) forcedStart(f); } /* this reply carries our line's id: it is the line, whatever else is on the way */
   if (t === "response.created") { if (!f.itemId) forcedStart(f); } /* no id to go by: the next reply is taken for the line and its words are checked at the end */
   else if (/audio\.delta$/.test(t) && f.started) { f.sound = true; clearTimeout(f.soundTimer); }
-  else if (t === "response.done" && !f.started && f.itemId) { const said = sameWords(G.bot || ""); if (said.length >= 12 && saidLine(said, sameWords(f.text))) { act("step", `Scripted line played with another id (ours ${f.itemId}, the reply's ${f.ids.seen || "none"}): taken by its words`); f.byWords = true; forcedStart(f); forcedEvent(t, e); } } /* the id pairing was wrong: the words still count */
+  else if (t === "response.done" && !f.started && f.itemId) { const said = sameWords(G.bot || ""); if (said.length >= 12 && saidLine(said, sameWords(f.text), f.text)) { act("step", `Scripted line played with another id (ours ${f.itemId}, the reply's ${f.ids.seen || "none"}): taken by its words`); f.byWords = true; forcedStart(f); forcedEvent(t, e); } } /* the id pairing was wrong: the words still count */
   else if (/function_call_arguments\.done$/.test(t) && f.started && !f.sound && !f.byId) { f.started = false; clearTimeout(f.soundTimer); act("step", `A tool call's reply came while the scripted line was still to come: not taken for it (${forcedTrace(f)})`); /* 12:45 PM call, Oct 30: save_form's reply was taken for the save line, judged soundless, and the line was sent again: heard twice */
     clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(g)})`); guide(g.fallback); } }, FORCE_WAIT_MS); forceTick(true); }
   else if (t === "response.done" && f.started) {
     const said = sameWords(G.bot || ""), want = sameWords(f.text);
     if (!f.byId && said.length >= 12 && !want.startsWith(said.slice(0, 40)) && !said.startsWith(want.slice(0, 40))) {
       // Ara answered on her own (to the tool result) and the app took that for the scripted line starting (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
-      if (f.viaReply && saidLine(said, want)) { G.forced = null; G.lastForcedText = f.text; act("step", `${PROV().name} said the scripted line in its own words`); if (f.then) setTimeout(() => guide(f.then), 0); return; } /* no late copy is coming on this engine */
-      if (saidLine(said, want)) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
+      if (f.viaReply && saidLine(said, want, f.text)) { G.forced = null; G.lastForcedText = f.text; act("step", `${PROV().name} said the scripted line in its own words`); if (f.then) setTimeout(() => guide(f.then), 0); return; } /* no late copy is coming on this engine */
+      if (saidLine(said, want, f.text)) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
       else if (/\?\s*$/.test(G.bot || "") && /\?\s*$/.test(f.text) && Date.now() - f.at <= TWO_Q_MS) { G.forced = null;
         G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 };
         act("step", `Ara asked her own question while the app's scripted question was still to come: hers stands, the scripted copy will be cut (${forcedTrace(f)})`);
@@ -667,6 +670,13 @@ function forcedEvent(t, e) {
 }
 // did Ara say the scripted line in her own words? Most of the shorter line's words shared, and enough of them: a three-word echo
 // ("For the date.") shares "the" and "date" with an 18 s read-back and is not that read-back (Oct 28: the real read-back was then cut as a late copy)
-function saidLine(said, want) { const n = said.split(" ").filter(Boolean).length, w = want.split(" ").filter(Boolean).length; return wordOverlap(said, want) >= 0.6 && n >= Math.min(8, Math.ceil(w / 2)); }
+/* the line's opening (what comes before its closing question: "Capacity C, $25,000 to $100,000. That's everything the contact needs.") must be in what was said:
+   Oct 31 11:04 AM call, Ara's own "I didn't catch that. Save Penny's contact, or ...?" matched the question alone and was taken for the line, so the confirmation was never said */
+function openingSaid(said, raw) {
+  const m = String(raw || "").match(/^([^]*[.!])\s+[^.!?]*\?\s*$/); if (!m) return true;
+  const op = sameWords(m[1]).split(" ").filter(Boolean); if (op.length < 3) return true;
+  const S = new Set(said.split(" ")); return op.filter(w => S.has(w)).length / op.length >= 0.6;
+}
+function saidLine(said, want, raw) { const n = said.split(" ").filter(Boolean).length, w = want.split(" ").filter(Boolean).length; return openingSaid(said, raw) && wordOverlap(said, want) >= 0.6 && n >= Math.min(8, Math.ceil(w / 2)); }
 // how much two lines share, as a fraction of the shorter one's words
 function wordOverlap(a, b) { const A = new Set(a.split(" ").filter(Boolean)), B = new Set(b.split(" ").filter(Boolean)); if (!A.size || !B.size) return 0; let n = 0; A.forEach(w => { if (B.has(w)) n++; }); return n / Math.min(A.size, B.size); }

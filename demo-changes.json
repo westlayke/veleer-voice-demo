@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 12:10 PM",
+      "change": "Preview: three fixes from Carverhill's 11:04 and 11:10 AM calls. (1) A scripted line counts as played only if its opening (the confirmation, such as \"Capacity C, $25,000 to $100,000.\") was said; Ara's own reply that only asks the same question is no longer taken for it, so the confirmation is still said. (2) A transcript that is only noise (\"[noise] ...\") no longer counts as the officer speaking. (3) When the phone takes the mic as it locks, the call pauses for the lock instead of ending, and the mic starts afresh when the app is back (no Carry on tap). Also: a value dropped because the officer never said it always comes back with its question.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 31 11:17 AM: the rating confirmation got interrupted and the entity question looped (11:04 and 11:10 AM calls); 12:00 PM: \"Go fix the other 2 issues from today\"."
+    },
+    {
       "date": "Oct 31, 11:50 AM",
       "change": "Preview: the entity list now lives in one place (one table of record name, spoken name and state), and everything reads from it: the form pick lists, Grok's allowed values, Ara's list, the app's questions and \"didn't catch that\" line, the read-back, the matcher, the check that the officer really said it, the hearing hints and the FAQ. Ara is only ever given spoken names (\"National C4\"); any record name is swapped for its spoken name on the way to the voice service, so \"C.A.\" never reaches her. The check that the officer said the entity now uses the same words as the matcher, which ends the Oct 31 loop where \"National C4\" was asked 15 times. Screens and saved records keep the full names. A new check fails the build if a record name reaches Ara.",
       "area": "Voice",

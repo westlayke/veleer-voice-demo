@@ -1394,5 +1394,35 @@ test("Call start (Oct 29): Ara's configuration goes up on the warmed line at the
   await p.waitForFunction(() => G.live && G.ws === window.__ws && G.status === "Listening" && __sent.some(s => s.includes('"session.update"')), null, { timeout: 9000 }); await p.waitForTimeout(300);
   ok(await p.evaluate(() => __sent.map(s => { try { return JSON.parse(s); } catch (e) { return {}; } }).filter(x => x.type === "session.update" && x.session && x.session.tools).length === 1), "the fresh line after a drop didn't send the full configuration");
 });
+
+test("Carverhill's 11:04 and 11:10 AM calls (Oct 31): Ara's own question isn't taken for a scripted line whose confirmation never played; noise isn't a turn; the mic lost at a lock comes back", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const audio = { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(24000))) };
+  await p.evaluate(() => { window.__noAutoForce = true; G.audioEver = true; });
+  // 1. the line's id went astray and Ara's own reply asked only its question: not the line, so the confirmation is still to be said
+  const line = "Capacity C, $25,000 to $100,000. That's everything the contact needs. Save it, or add the optional details first?";
+  await p.evaluate((l) => { __sent.length = 0; forceSay(l); }, line); await p.waitForFunction(() => G.forced && __sent.some(s => /force_message/.test(s)), null, { timeout: 9000 }); await p.waitForTimeout(50);
+  await p.fire([{ type: "conversation.item.added", item: { id: "it_cap", type: "message", role: "assistant" } }, { type: "response.created" }, { type: "response.output_item.added", item: { id: "it_ara", type: "message" } }, Object.assign({ item_id: "it_ara" }, audio), { type: "response.output_audio_transcript.delta", delta: "I didn't catch that. Save Penny's contact, or add the optional details first?" }]);
+  await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !!G.forced && !G.forced.started) && !/taken by its words/.test(await p.log()), "Ara's own question was taken for the capacity line: " + (await p.log()).slice(-300));
+  ok(await p.evaluate(() => saidLine(sameWords("Capacity C, 25,000 to 100,000. That's everything the contact needs. Save it, or add the optional details first?"), sameWords(G.forced.text), G.forced.text)), "the whole line said in other ids no longer counts");
+  await p.evaluate(() => { clearTimeout(G.forceTimer); clearTimeout(G.forceTick); G.forced = null; });
+  // 2. a transcript that is only noise is not the officer's turn
+  const n0 = await p.evaluate(() => G.heardN || 0);
+  await p.fire([{ type: "conversation.item.input_audio_transcription.completed", transcript: "[noise] ..." }]); await p.waitForTimeout(150);
+  ok(await p.evaluate((n0) => (G.heardN || 0) === n0 && !(G.recent || []).some(l => /\[noise\]/.test(l)), n0) && /Heard only noise/.test(await p.log()), "a noise-only transcript was taken as the officer speaking");
+  // 3. the phone takes the mic as it locks: the call goes on, and the mic is started afresh when the app is back
+  await p.evaluate(() => { Object.defineProperty(document, "visibilityState", { get: () => "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
+  await p.waitForTimeout(300);
+  await p.evaluate(() => { const tr = G.stream.getAudioTracks()[0]; tr.stop(); tr.onended && tr.onended(); });
+  await p.waitForTimeout(1800);
+  ok(await p.evaluate(() => G.live && G.micEndedAtLock) && /took the mic as it locked/.test(await p.log()), "the mic ending at the lock ended the call: " + (await p.log()).slice(-200));
+  await p.evaluate(() => { window.__oldStream = G.stream; Object.defineProperty(document, "visibilityState", { get: () => "visible", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
+  await p.waitForTimeout(2500);
+  ok(await p.evaluate(() => G.live && G.stream !== window.__oldStream && !G.micEndedAtLock), "the mic wasn't started afresh after the lock: " + (await p.log()).slice(-300));
+  // the mic taken with the app in front (Siri, a phone call) still ends the call, after the short grace
+  await p.evaluate(() => { const tr = G.stream.getAudioTracks()[0]; tr.stop(); tr.onended && tr.onended(); }); await p.waitForTimeout(1900);
+  ok(await p.evaluate(() => !G.live), "the mic taken with the app in front didn't end the call");
+});
 };
 
