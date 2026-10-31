@@ -16,4 +16,5 @@ const out = [`# Patient Pat, combined: ${runs.length} run(s), ${convs.length} co
   "| Seed | Conversations | Minutes | Asks | Per 10 min | Closed Won | Hung up |", "|---|---|---|---|---|---|---|",
   ...runs.map(r => { const cs = r.convs || [], m = cs.reduce((a, c) => a + (c.minutes || 0), 0), n = cs.reduce((a, c) => a + (c.asks || []).length, 0); return `| ${r.seed} | ${cs.length} | ${m} | ${n} | ${m ? Math.round(n / m * 100) / 10 : 0} | ${cs.filter(c => c.closedWon).length} | ${cs.filter(c => c.hungUp).length} |`; }), ""];
 const { stateSection } = require("./state-section.js");
-console.log(out.concat(stateSection(convs)).join("\n"));
+const { stepsLines } = require("../steps.js");
+console.log(out.concat(["## Discrete steps and the app's scripted lines", "", ...stepsLines(convs), ""], stateSection(convs)).join("\n"));
