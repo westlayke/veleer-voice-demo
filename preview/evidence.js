@@ -83,13 +83,6 @@ function amountSaid(n, lines) {
     return false;
   });
 }
-function entitySaid(fund, lines) {
-  const fw = entityWords(fund).filter(w => !["citizens", "alliance"].includes(w)), st = (ENTITY_STATE[fund] || "").toLowerCase();
-  const aw = entityWords(lines.join(" ")); if (fw.length && fw.every(w => aw.includes(w))) return true; // "the Idaho entity" then "the PAC" (Oct 26 drive)
-  return lines.some(t => { const tw = entityWords(t); if (fw.length && fw.every(w => tw.includes(w))) return true;
-    if (st && t.includes(st) && FUNDS.filter(f => ENTITY_STATE[f] === ENTITY_STATE[fund]).length === 1) return true; // the only entity in the state the officer named
-    return !st && fw.length === 1 && /\bc3\b|\bc 3\b|\bthe c-?3\b/.test(t) && fw[0] === "c3"; });
-}
 // true when the value can stand, false when nothing the officer said supports it, null when the rule doesn't apply to this field.
 // ctx: asked = the line Ara said just before the officer's latest; askedSubst = the app itself asked the substantive question (its answer is taken as said)
 function fieldEvidence(action, f, v, data, lines, ctx = {}) {
@@ -101,7 +94,7 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
     if (f.k === "nextStep") return nextStepIn(lines, ctx.asked);
     return outcomeIn(v, lines, ctx.asked); }
   const all = lines.join(" \n ");
-  if (f.k === "fund") return entitySaid(v, lines);
+  if (f.k === "fund") return entityHeardIn(v, lines); /* core.js: the same words the matcher hears */
   if (f.k === "campaign") { const c = campaignsFor(data.fund || ""); if (c.length === 1 && c[0] === v) return true; if (v === "National") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all); return all.includes(String(v).toLowerCase()); }
   if (f.type === "bool" && !v) return null; // false is the default, nothing to prove
   if (OPTION_WORDS[f.k]) { const re = OPTION_WORDS[f.k][String(v)]; if (optionAnswered(String(v), lines, ctx.asked)) return true; return re ? re.test(all) || re.test(all.replace(/-/g, " ")) : null; } // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)

@@ -140,7 +140,7 @@ test("Interaction report: Next step is a three-line box, and Summary and Next st
 test("Ask planning: the campaign choices follow the entity (touch and voice)", async (p) => {
   await signIn(p);
   let r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Citizens Alliance C3", campaign: "Pennsylvania", plannedDate: "2026-12-01", amount: 50000 });
-  ok(r.still_needed && r.still_needed.some(x => /Pennsylvania isn't a campaign for Citizens Alliance C3.*National/.test(x)), "Ara was not told the campaign doesn't suit the entity: " + JSON.stringify(r).slice(0, 200));
+  ok(r.still_needed && r.still_needed.some(x => /Pennsylvania isn't a campaign for National C3.*National/ /* Ara hears spoken names (Oct 31) */.test(x)), "Ara was not told the campaign doesn't suit the entity: " + JSON.stringify(r).slice(0, 200));
   const opts = async () => p.$$eval("#f_campaign option", os => os.map(o => o.value).filter(Boolean));
   ok((await opts()).join() === "National", "C3 should offer National only");
   await p.selectOption("#f_fund", "C.A. Idaho C4"); await p.waitForTimeout(300);

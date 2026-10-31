@@ -32,7 +32,7 @@ const OPT_Q = {
   permText: (who) => `Next field: is it OK to text ${who} on their mobile? Yes, no, or move on?`,
   permSource: (who) => `Next field: how ${who} agreed to texts. Fill it in, or move on?`,
   flags: (who) => `Last field: should ${who} be marked Ally - Do Not Solicit, or Do Not Contact? Most people are neither; say neither to move on.`,
-  fund: () => `Next field: the entity they're most likely to give to, for example Citizens Alliance C3, or one of the C4s or PACs. Fill it in, or move on?`,
+  fund: () => `Next field: the entity they're most likely to give to, for example National C3, or one of the C4s or PACs. Fill it in, or move on?`,
   campaign: () => { const f = readDraft().fund; return `Which campaign: National, or ${ENTITY_STATE[f]}?`; },
   potential: () => `Next field: the potential amount. Fill it in, or move on?`,
   notes: () => `Last field: any notes. Fill them in, or move on?`
@@ -145,7 +145,7 @@ function optStep(callId, data) {
   const v = optParse(k, data.value, st);
   if (v === null) {
     toolReply(callId, { ok: false, field: k, error: `The app couldn't read "${data.value || ""}" as an answer to this question.`, say: k === "fund" ? (() => { const { hits } = matchEntity(data.value);
-        return hits.length > 1 ? `Ask which one they mean: ${hits.join(", or ")}.` : `Say you didn't catch which entity. Give the short version: Citizens Alliance C3, C.A. of America Action C4, C.A. Fed PAC, or a state C4 or PAC in Idaho, North Dakota, New Hampshire or Pennsylvania. Ask which.`; })() : `Say in a few words that you didn't catch that, then ask again: "${optQuestion(st, optWho())}"` });
+        return hits.length > 1 ? `Ask which one they mean: ${hits.map(entitySpoken).join(", or ")}.` : `Say you didn't catch which entity. Give the short version: ${ENTITY_LIST_SPOKEN()} Ask which.`; })() : `Say in a few words that you didn't catch that, then ask again: "${optQuestion(st, optWho())}"` });
     return; }
   if (st.group) st.group.forEach(gk => optSet(gk, v[gk])); else optSet(k, v);
   V.opt.done.push(k); V.opt.lastK = k; V.opt.lastVal = norm(data.value); V.opt.lastAt = Date.now(); act("step", "optional field " + k + ": " + JSON.stringify(v));

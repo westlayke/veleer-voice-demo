@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 11:50 AM",
+      "change": "Preview: the entity list now lives in one place (one table of record name, spoken name and state), and everything reads from it: the form pick lists, Grok's allowed values, Ara's list, the app's questions and \"didn't catch that\" line, the read-back, the matcher, the check that the officer really said it, the hearing hints and the FAQ. Ara is only ever given spoken names (\"National C4\"); any record name is swapped for its spoken name on the way to the voice service, so \"C.A.\" never reaches her. The check that the officer said the entity now uses the same words as the matcher, which ends the Oct 31 loop where \"National C4\" was asked 15 times. Screens and saved records keep the full names. A new check fails the build if a record name reaches Ara.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 31 11:26 AM: C.A. should have been removed from the entity names; 11:32 AM: have the list and phrasings in one place shared by each function; 11:36 AM: \"Go on entity fix\". The Oct 31 11:10 AM call looped on the entity question."
+    },
+    {
       "date": "Oct 30, 10:17 PM",
       "change": "Preview: no change in what the app does. Code tidy-up (step 3 of the cleanup): the call's memory now goes back to its start in three named places, one for a turn, one for a line (after a drop or a phone lock) and one for the end of a call, instead of lists written out by hand in each place. The lists are exactly what they were. The voice-line design note lists the call's memory by group and where each resets.",
       "area": "Voice",

@@ -300,7 +300,7 @@ test("Turning on hands-free mid-form: Ara says she'll read back all the informat
   await p.evaluate(() => __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "cancelled" } }) }));
   // xAI extras: resumption, words to listen for, pronunciation fixes; a dropped line picks up the same conversation
   const ups = await p.evaluate(() => __sent.map(x => JSON.parse(x)).filter(x => x.type === "session.update").map(x => x.session));
-  ok(ups.some(u => u.resumption && u.resumption.enabled) && ups.some(u => u.replace && u.replace["C.A."]) && ups.some(u => u.audio && u.audio.input.transcription && u.audio.input.transcription.keyterms.includes("Ruth Abernathy") && u.audio.input.transcription.keyterms.length <= 100) && ups[0].instructions, "the xAI extras weren't sent after the main settings");
+  ok(ups.some(u => u.resumption && u.resumption.enabled) && ups.some(u => u.replace && u.replace["Fed PAC"]) && ups.some(u => u.audio && u.audio.input.transcription && u.audio.input.transcription.keyterms.includes("Ruth Abernathy") && u.audio.input.transcription.keyterms.length <= 100) && ups[0].instructions, "the xAI extras weren't sent after the main settings");
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "conversation.created", conversation: { id: "conv_test1" } }) }); G.drops = 0; G.loudAt = 0; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForTimeout(1500);
   ok(await p.evaluate(() => /conversation_id=conv_test1/.test(__wsUrls[__wsUrls.length - 1])), "the reopened line didn't ask for the same conversation: " + await p.evaluate(() => __wsUrls.join(" ")));
   // a mic muted for a moment doesn't end the call
@@ -391,7 +391,7 @@ test("Hands-free: a planned ask with no entity said is read back without one and
   const d = await p.evaluate(() => readDraft());
   ok(d.fund === "" || d.fund === undefined, "a blank entity became the first in the list (the Oct 26 drive saved Citizens Alliance C3 for an Idaho PAC ask): " + JSON.stringify(d.fund));
   const txt = [r.ask_exactly, r.read_back, r.status, r.say, (r.still_needed || []).join(" ")].join(" ");
-  ok(/entity/i.test(txt) && !/Citizens Alliance C3/.test(txt), "the app didn't ask for the entity, or named one: " + txt.slice(0, 300));
+  ok(/entity/i.test(txt) && !/Citizens Alliance C3|National C3/.test(txt), "the app didn't ask for the entity, or named one: " + txt.slice(0, 300));
 });
 
 test("The phone locking (page hidden) closes the line a few seconds later and reopens the same conversation when the app is back, no Carry on tap", async (p) => {

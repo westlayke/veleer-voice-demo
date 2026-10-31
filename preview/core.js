@@ -7,17 +7,25 @@ function applyName() {
   OFFICER_INITIALS = OFFICER.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "DR";
 }
 const STAGES = ["Qualification", "Cultivation", "Ask Planning", "Ask Made", "Commitment", "Closed"];
-// entities (the guide renamed Fund to Entity) and the state campaign each one can take besides National (Carverhill, Oct 20)
-const ENTITY_STATE = { "Citizens Alliance C3": "", "C.A. of America Action C4": "", "C.A. Fed PAC": "", "C.A. Idaho C4": "Idaho", "C.A. Idaho PAC": "Idaho",
-  "C.A. North Dakota C4": "North Dakota", "C.A. North Dakota State PAC": "North Dakota", "C.A. North Dakota Fed PAC": "North Dakota", "C.A. New Hampshire C4": "New Hampshire",
-  "C.A. Pennsylvania C4": "Pennsylvania", "C.A. Pennsylvania State PAC": "Pennsylvania" };
-const FUNDS = Object.keys(ENTITY_STATE);
-// how each entity is said and heard by voice (Carverhill, Oct 29 4:33 PM: drop "C.A." from the spoken lists; one unique key per option): the
-// record keeps the full name, Ara says and accepts the key; "Fed" and "Federal" are the same word
-const ENTITY_KEY = { "Citizens Alliance C3": "National C3", "C.A. of America Action C4": "National C4", "C.A. Fed PAC": "National Federal PAC", "C.A. Idaho C4": "Idaho C4", "C.A. Idaho PAC": "Idaho PAC",
-  "C.A. North Dakota C4": "North Dakota C4", "C.A. North Dakota State PAC": "North Dakota State PAC", "C.A. North Dakota Fed PAC": "North Dakota Federal PAC", "C.A. New Hampshire C4": "New Hampshire C4",
-  "C.A. Pennsylvania C4": "Pennsylvania C4", "C.A. Pennsylvania State PAC": "Pennsylvania State PAC" };
+// THE entity list (Oct 31, Carverhill: "only have the list and phrasings in one place"). Each row: the record name (what the record keeps and
+// the screens show), the spoken name (what Ara says, Grok sends and the officer answers with) and its state ("" = National). Everything
+// else is built from this table: the form pick lists, Grok's allowed values, Ara's list, the app's questions, the read-back, the matcher,
+// the evidence guard, the transcription hints, and toSpoken(), which turns any record name into its spoken name on the way to the voice
+// service. To change an entity, change this table only; tests/checks/14-lists.js fails when a record name reaches the voice service.
+const ENTITIES = [
+  ["Citizens Alliance C3", "National C3", ""], ["C.A. of America Action C4", "National C4", ""], ["C.A. Fed PAC", "National Federal PAC", ""],
+  ["C.A. Idaho C4", "Idaho C4", "Idaho"], ["C.A. Idaho PAC", "Idaho PAC", "Idaho"],
+  ["C.A. North Dakota C4", "North Dakota C4", "North Dakota"], ["C.A. North Dakota State PAC", "North Dakota State PAC", "North Dakota"], ["C.A. North Dakota Fed PAC", "North Dakota Federal PAC", "North Dakota"],
+  ["C.A. New Hampshire C4", "New Hampshire C4", "New Hampshire"],
+  ["C.A. Pennsylvania C4", "Pennsylvania C4", "Pennsylvania"], ["C.A. Pennsylvania State PAC", "Pennsylvania State PAC", "Pennsylvania"]];
+const ENTITY_STATE = Object.fromEntries(ENTITIES.map(e => [e[0], e[2]]));
+const FUNDS = ENTITIES.map(e => e[0]);
+const ENTITY_KEY = Object.fromEntries(ENTITIES.map(e => [e[0], e[1]]));
+const ENTITY_SPOKEN = ENTITIES.map(e => e[1]);
 const entitySpoken = (f) => ENTITY_KEY[f] || f;
+/* any record name in text bound for the voice service -> its spoken name, longest first ("C.A. North Dakota Fed PAC" before "C.A. Fed PAC") */
+const SPOKEN_SWAP = ENTITIES.filter(e => e[0] !== e[1]).sort((a, b) => b[0].length - a[0].length);
+const toSpoken = (text) => { let t = String(text); for (const [rec, said] of SPOKEN_SWAP) if (t.includes(rec)) t = t.split(rec).join(said); return t; };
 const fundFromSpoken = (v) => { if (!v) return v; if (FUNDS.includes(v)) return v; const k = Object.keys(ENTITY_KEY).find(f => ENTITY_KEY[f].toLowerCase() === String(v).toLowerCase().trim()); if (k) return k; const m = matchEntity(v).hits; return m.length === 1 ? m[0] : v; }; /* a key or a close spoken form -> the record name */
 const CAMPAIGNS = ["National", "Idaho", "North Dakota", "New Hampshire", "Pennsylvania"];
 const oppNeedsCampaign = (action, d) => (action === "opportunity" || action === "editOpportunity") && d && d.fund && !d.campaign && campaignsFor(d.fund).length > 1;
@@ -47,6 +55,15 @@ function matchEntity(t) {
   const hits = FUNDS.filter(f => { const fw = wordsOf(f); return ws.every(w => fw.includes(w)); });
   const same = (fw) => fw.length === ws.length && ws.every(w => fw.includes(w)); const exact = hits.filter(f => same(entityWords(f)) || same(entityWords(ENTITY_KEY[f] || ""))); // "C.A. Fed PAC" is that one, not also the North Dakota Fed PAC
   return { hits: exact.length === 1 ? exact : hits };
+}
+/* did the officer's own lines name this entity? The evidence guard and the "was it said" check both use this, with the same words as
+   matchEntity (Oct 31: the guard used only the record name's words, so "National C4" never counted and the app asked 15 times) */
+function entityHeardIn(fund, lines) {
+  if (lines.some(t => { const h = matchEntity(t).hits; return h.length === 1 && h[0] === fund; })) return true;
+  const aw = entityWords(lines.join(" ")), sets = [entityWords(fund).filter(w => !["citizens", "alliance"].includes(w)), entityWords(entitySpoken(fund))];
+  if (sets.some(fw => fw.length && fw.every(w => aw.includes(w)))) return true; /* "the Idaho entity" then "the PAC" (Oct 26 drive) */
+  const st = (ENTITY_STATE[fund] || "").toLowerCase();
+  return lines.some(t => st && t.toLowerCase().includes(st) && FUNDS.filter(f => ENTITY_STATE[f] === ENTITY_STATE[fund]).length === 1); /* the only entity in the state named */
 }
 const ENTITY_RULE = FUNDS.map(f => `${entitySpoken(f)}: ${campaignsFor(f).join(" or ")}`).join("; ");
 // by state, so Ara never invents one (seen Oct 24: "C.A. Pennsylvania Fed PAC", which doesn't exist)

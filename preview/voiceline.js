@@ -207,7 +207,7 @@ function warmLine() {
       // the phone's uplink carrying it was the 1.3 s wait for session.updated, not xAI. Built as the call will start: hands-free on, nothing saved yet.
       const hands = G.hands, saves = G.saves, name = S.settings.userName, el = document.getElementById("wlName"), typed = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : ""; G.hands = true; G.saves = []; if (typed) S.settings.userName = typed; /* the name being typed on the welcome is the officer's name once Start is tapped */
       try { const cfg = sessionCfg(), msgs = [{ type: "session.update", session: provider() !== "openai" ? cfg : providerSession(cfg) }, ...extraUpdates()]; /* the same shaping as sessUpdate (OpenAI puts audio under audio.input and needs type/model) */
-        msgs.forEach(m => ws.send(JSON.stringify(m)));
+        msgs.forEach(m => ws.send(wire(m)));
         ws.upN = (ws.upN || 0) + msgs.length;
         w.cfg = { at: Date.now(), n: msgs.length, rules: G.sentRules, ctx: G.sentCtx };
         vlog(`configuration sent on the warmed line (${msgs.length} updates)`); }
