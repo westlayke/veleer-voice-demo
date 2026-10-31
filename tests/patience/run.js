@@ -144,6 +144,7 @@ const BOOK = [
   { q: /Save it, or add the optional details first\?/i, say: "Save it.", tool: ["save_form", {}] },
   { q: /set a capacity rating\. Do you want to do that now\??/i, say: "No. Create an opportunity for Jordan Pike.", tool: ["show_opportunity_draft", { contact_name: C }] },
   { q: /Do you want to do that now\??/i, say: "Yes.", tool: (line) => STEP_TOOL(line) },
+  { q: /have a capacity rating \(not yet[^]*(What would you like to do\?|What's next\?)/i, say: "Set Jordan's capacity rating to C.", tool: ["set_capacity_rating", { contact_name: C, rating: "C" }] }, /* the opportunity needs a rating Pat skipped: Pat sets it (until Oct 31 Pat asked for the opportunity again and again) */
   { q: /What would you like to do\?|What's next\?/i, say: (ctx) => ctx.agenda() },
   { q: /first and last name/i, say: "Jordan Pike, P I K E.", tool: ["show_contact_draft", { first: "Jordan", last: "Pike" }] },
   { q: /Type: In person/i, say: "In person.", tool: (line, ctx) => forForm(ctx, { meetingType: "In person" }) },
@@ -238,7 +239,7 @@ async function conversation(browser, base, n) {
     const line = q.text; let entry = BOOK.find(b => b.q.test(line)); if (!entry) { conv.unanswered.push(line.slice(0, 120)); return; }
     if (entry.q.source === "\\?$") conv.unanswered.push(line.slice(0, 120));
     const say = typeof entry.say === "function" ? entry.say(bookCtx) : entry.say; let tool = typeof entry.tool === "function" ? entry.tool(line, bookCtx) : entry.tool || null;
-    if (/What would you like to do|What's next/i.test(line) || (say === bookCtx.agenda() && !tool)) tool = AGENDA_TOOL[Math.min(bookCtx.saves, AGENDA_TOOL.length - 1)];
+    if ((!entry.tool && /What would you like to do|What's next/i.test(line)) || (say === bookCtx.agenda() && !tool)) tool = AGENDA_TOOL[Math.min(bookCtx.saves, AGENDA_TOOL.length - 1)];
     await p.waitForTimeout(800 + Math.round(rnd() * 1200)); /* a person takes a moment */
     const st = await state(); if (!st.live) return;
     conv.turns++; lastSaid = say; lastAnswerAt = Date.now(); waitLimit = patience(); asksInRow = 0;
