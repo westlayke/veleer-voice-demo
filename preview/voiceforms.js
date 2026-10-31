@@ -70,20 +70,19 @@ function optSet(k, v) { const cur = readDraft(); (V.history = V.history || []).p
 const YES_WORDS = /\b(yes|yeah|yep|sure|ok|okay|fine|allowed|permitted|go ahead|of course|absolutely)\b/, NO_WORDS = /^(no|nope|nah|not)\b|\b(don't|do not|not ok|not okay|shouldn't|can't)\b/;
 function optParse(k, raw, st) { // the officer's answer in their words -> the field's value, or null if it can't be read
   const t = String(raw || "").trim(), l = t.toLowerCase().replace(/[’‘]/g, "'"), f = (st && st.f) || (ACTIONS[V.action].fields.find(x => x.k === k) || {});
-  if (k === "capacity") return normCap(t.replace(/^(it's|its|make it|let's say|lets say|say|rating|capacity)\s+/i, "").replace(/^(bee|be)\b/i, "B").replace(/^(see|sea|cee)\b/i, "C").replace(/^dee\b/i, "D").replace(/^ee\b/i, "E"));
+  if (k === "capacity") return capFromWords(t); /* lists.js */
   if (k === "flags") { const none = /\b(neither|none|no|nope|nah|not)\b/.test(l) && !/\b(ally|do not contact|dnc)\b.*\b(yes)\b/.test(l);
     if (/\b(neither|nor|none)\b/.test(l) || (/^(no|nope|nah)\b/.test(l) && !/\bally\b|contact|solicit/.test(l))) return { ally: false, dnc: false }; // "neither Ally - Do Not Solicit nor Do Not Contact" named both but meant neither (Oct 24)
     const ally = /\bally\b|do not solicit|don't ask|do not ask/.test(l) && !/\bnot (an )?ally\b/.test(l), dnc = /do not contact|don't contact|\bdnc\b/.test(l) && !/\bnot do not contact\b/.test(l);
     if (ally || dnc) return { ally, dnc }; return none ? { ally: false, dnc: false } : null; }
-  if (k === "fund") { const { hits } = matchEntity(t); return hits.length === 1 ? hits[0] : null; }
+  if (k === "fund") return listTake("fund", t);
   if (k === "campaign") { const fd = readDraft().fund, stn = ENTITY_STATE[fd];
     if (!/\bcampaign\b/.test(l) && /\b(pac|c3|c4|c\.a\.|citizens|alliance|entity)\b/.test(l)) return null; // "The PAC. C.A. Idaho PAC." names an entity, not a campaign (Oct 25: a repeat after a drop filled the campaign)
     if (/\bnational\b/.test(l)) return "National"; if (stn && (l.includes(stn.toLowerCase()) || /\bstate\b/.test(l))) return stn; return null; }
   if (f.type === "bool") return NO_WORDS.test(l) ? false : YES_WORDS.test(l) ? true : null;
   if (f.type === "money") return spokenAmount(t);
   if (f.type === "date") return normDate(t) || null;
-  if (f.type === "select") { const o = (typeof f.opts === "function" ? f.opts(readDraft()) : f.opts || []).filter(Boolean), re = typeof OPTION_WORDS === "object" && OPTION_WORDS[k];
-    return o.find(x => l.includes(x.toLowerCase())) || (re && o.find(x => re[x] && re[x].test(l))) || null; }
+  if (f.type === "select") { const o = (typeof f.opts === "function" ? f.opts(readDraft()) : f.opts || []).filter(Boolean); return listTake(k, t, o.length ? o : null); } /* lists.js: one matcher for every list */
   return t || null; // how we met, texting source, notes, participants: their words
 }
 const optHeardLine = (st, v) => { const k = st.k, f = st.f || {};
@@ -116,7 +115,19 @@ function optAsk(callId, said) { // the app itself says what it heard and the nex
 }
 function optStep(callId, data) {
   if (!V || !optSteps().length) { toolReply(callId, { ok: false, error: "No form with optional details is open. Open the form the officer asked for first, or ask what they'd like to do." }); return; }
-  const step = data.step || "answer"; V.choice = null;
+  const step = data.step || "answer";
+  const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // the answer-taker's rules (Oct 31, the 2:50 PM call: a repeated "B" was saved as how we met). 1: a question that hasn't played yet has no answer.
+  if ((step === "answer" || step === "skip") && ((G.forced && !G.forced.started) || G.pendingForce)) {
+    act("step", `optional fields: "${data.value || step}" came before the app's question had played; not taken`); toolReply(callId, { ok: true, waiting: "The app is asking its question now. Wait for the officer's answer." }, false); return; }
+  // 2: the same answer again within half a minute is a repeat (the officer not sure it was heard, or the voice model re-sending it), never the next answer:
+  // the app confirms it once with the question still open; a second repeat gets the confirmation only
+  const la = V.lastAns, nv = norm(data.value);
+  if (step === "answer" && la && nv && !/^(yes|yeah|yep|no|nope|nah|sure|ok|okay|skip|next|none|neither|move on)( (thanks|thank you|please))?$/.test(nv) && (nv === la.val || (la.val.length > 3 && nv.includes(la.val))) && Date.now() - la.at < 30000) {
+    la.reps = (la.reps || 0) + 1; la.at = Date.now(); const pos = la.reps === 1 && typeof formPosition === "function" ? formPosition() : null;
+    act("step", `optional fields: "${data.value}" repeats the answer to ${la.k}; confirmed${pos ? " and the open question asked again" : ""}`);
+    toolReply(callId, { ok: true, repeat: la.k, ask_exactly: pos && pos.ask ? `${la.line} ${pos.ask}` : la.line }); return; }
+  V.choice = null;
   if (!V.opt && step === "answer" && data.value) { V.opt = { done: [] }; const st = optNext();
     if (st && optParse(st.k, data.value, st) !== null) { V.opt.cur = st.k; act("step", "optional fields: the officer's answer came before the questions; taken for " + st.k); } else { optAsk(callId); return; } }
   if (step === "start" || !V.opt) { V.opt = { done: V.opt ? V.opt.done : [] }; if (step === "start" || !V.opt.cur) { optAsk(callId); return; } } // start: all the questions, not just the one
@@ -132,10 +143,6 @@ function optStep(callId, data) {
   }
   let k = V.opt.cur; if (!k) { optAsk(callId); return; }
   let st = optSteps().find(s => s.k === k) || { k, f: {} };
-  // the same answer again within half a minute is the voice model re-sending it after a drop, not an answer to the next question (Oct 25)
-  const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  if (step === "answer" && V.opt.lastVal && norm(data.value) && (norm(data.value) === V.opt.lastVal || (V.opt.lastVal.length > 3 && norm(data.value).includes(V.opt.lastVal))) && Date.now() - (V.opt.lastAt || 0) < 30000 && V.opt.done.includes(V.opt.lastK)) {
-    act("step", `optional fields: "${data.value}" repeats the last answer (${V.opt.lastK}); asking the ${k} question again`); optAsk(callId); return; }
   // an answer that fits an earlier question better ("it's one of the New Hampshire entities" while the amount was asked, Oct 24): take it for that one
   if (k !== "fund" && V.opt.done.includes("fund") && optSteps().some(s => s.k === "fund") && optEmpty(readDraft().fund) && optParse(k, data.value, st) === null && matchEntity(data.value || "").hits.length) {
     act("step", "optional fields: answer taken for the entity"); V.opt.done = V.opt.done.filter(x => x !== "fund" && x !== "campaign"); V.opt.cur = k = "fund"; st = optSteps().find(s => s.k === "fund"); }
@@ -144,11 +151,13 @@ function optStep(callId, data) {
   if (data.step === "skip") { V.opt.done.push(k); act("step", "optional field skipped: " + k); optAsk(callId, "No problem."); return; }
   const v = optParse(k, data.value, st);
   if (v === null) {
-    toolReply(callId, { ok: false, field: k, error: `The app couldn't read "${data.value || ""}" as an answer to this question.`, say: k === "fund" ? (() => { const { hits } = matchEntity(data.value);
-        return hits.length > 1 ? `Ask which one they mean: ${hits.map(entitySpoken).join(", or ")}.` : `Say you didn't catch which entity. Give the short version: ${ENTITY_LIST_SPOKEN()} Ask which.`; })() : `Say in a few words that you didn't catch that, then ask again: "${optQuestion(st, optWho())}"` });
+    const hits = k === "fund" ? listMatch("fund", data.value).hits : [];
+    if (hits.length > 1) { act("step", `optional field fund: "${data.value}" fits ${hits.length} entities; asking which`); /* "C4" is five of them: the app asks which, the question stays open (Oct 31, 3:02 PM call) */
+      toolReply(callId, { ok: true, field: k, ask_exactly: `Which one: ${hits.map(entitySpoken).join(", or ")}?` }); return; }
+    toolReply(callId, { ok: false, field: k, error: `The app couldn't read "${data.value || ""}" as an answer to this question.`, say: k === "fund" ? `Say you didn't catch which entity. Give the short version: ${ENTITY_LIST_SPOKEN()} Ask which.` : `Say in a few words that you didn't catch that, then ask again: "${optQuestion(st, optWho())}"` });
     return; }
   if (st.group) st.group.forEach(gk => optSet(gk, v[gk])); else optSet(k, v);
-  V.opt.done.push(k); V.opt.lastK = k; V.opt.lastVal = norm(data.value); V.opt.lastAt = Date.now(); act("step", "optional field " + k + ": " + JSON.stringify(v));
+  V.opt.done.push(k); V.lastAns = { k, val: norm(data.value), at: Date.now(), line: optHeardLine(st, v) }; act("step", "optional field " + k + ": " + JSON.stringify(v));
   optAsk(callId, optHeardLine(st, v));
 }
 // a few words of human reaction to what was just saved (good news, a setback), at the start of the save line

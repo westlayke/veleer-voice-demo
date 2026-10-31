@@ -607,7 +607,7 @@ function boardScreen(split) {
 }
 const taskWhere = (t) => { const o = t.oppId && oppById(t.oppId); return o ? o.name : nameOf(contactById(t.contactId)); };
 /* ---------- task statuses: To do, In progress, Waiting, Done (SpiceCRM: Not Started, In Progress, Pending Input, Completed) ---------- */
-const TSTAT = { todo: "To do", doing: "In progress", waiting: "Waiting", done: "Done" };
+const TSTAT = TASK_STATUS; /* lists.js */
 const taskStatus = (t) => t.done ? "done" : (t.status || "todo");
 function setTaskStatus(t, st, until) {
   const before = { done: t.done, status: t.status, due: t.due, doneOn: t.doneOn };

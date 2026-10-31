@@ -95,14 +95,6 @@ function formAskedFor(action) {
     a = a0 + (/do that now/.test(a0) && G.lastSaved && G.lastSaved.nextLine ? " " + G.lastSaved.nextLine.toLowerCase() : ""); /* a yes to the step offer asked again without its step ("That was already saved. Do you want to do that now?"): the step is the one the save line named (Oct 31, Patient Pat: refused as "the officer hasn't asked for the form") */ // a yes to Ara offering that form counts; a yes to "shall I save it?" doesn't, even when the read-back names the form
   return (hfYes(last) || /^(yes|yeah|yep|sure|ok|okay|please|go ahead|let's|lets|do it)\b/.test(last)) && re.test(a) && !/shall i save|save it\?|save it, or change|yes to save|is that (right|correct)|ok to save|ready to save/.test(a);
 }
-function normCap(v) {
-  if (v == null) return null; const t = String(v).trim(); if (!t) return null;
-  let m = t.match(/^([A-Ea-e])(?![a-z])/); if (m) return m[1].toUpperCase();
-  if (/under|less than|below/i.test(t) && /5/.test(t)) return "E";
-  m = t.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*(k|thousand|m|million)?/i); if (!m) return null;
-  const n = parseFloat(m[1]) * (/^(m|million)$/i.test(m[2] || "") ? 1e6 : /^(k|thousand)$/i.test(m[2] || "") ? 1e3 : 1);
-  return n >= 250000 ? "A" : n >= 100000 ? "B" : n >= 25000 ? "C" : n >= 5000 ? "D" : "E";
-}
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 function normDate(v) {
   if (v == null || v === "") return null; const t = String(v).trim().toLowerCase().replace(/(\d)(st|nd|rd|th)\b/g, "$1").replace(/,/g, " ").replace(/\s+/g, " ");
@@ -136,7 +128,7 @@ const TOOLS = [
   { action: "editTask", name: "show_task_edit_draft", description: "Change a SAVED open task's wording or due date. Send only what changes; the officer taps Save changes. To mark it done, waiting or in progress use set_task_status instead.", req: ["contact_name"], props: Object.assign({}, FOR, {
     which: { type: "string", description: "A few words from the task's current text, so the right one is found" }, text: { type: "string", description: "The new wording" }, due: S_DATE }) },
   { action: "editPlan", name: "show_ask_plan_edit_draft", description: "Change the PLANNED ask on a contact's open opportunity (entity, campaign, planned ask date, amount, ask type, participants) before the ask is made. Send only what changes; the officer taps Save changes. A recorded ask, pledge, gift or payment can't be changed: only the Chief Gift Officer or an administrator corrects them.", req: ["contact_name"], props: Object.assign({}, FOR, {
-    fund: { type: "string", enum: ENTITY_SPOKEN }, campaign: { type: "string" }, plannedDate: S_DATE, amount: { type: "number" }, askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
+    fund: { type: "string", enum: ENTITY_SPOKEN }, campaign: { type: "string" }, plannedDate: S_DATE, amount: { type: "number" }, askType: { type: "string", enum: ASK_TYPES }, participants: { type: "string" } }) },
   { action: "interaction", name: "show_interaction_draft", description: "Show an Interaction report draft for a meeting or call with a contact, with optional capacity rating and one next step.", req: ["contact_name", "date", "meetingType", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, summary: { type: "string", description: "1-3 sentences, past tense" },
     substantive: { type: "boolean", description: "True when it was a real conversation with the person about the relationship or the gift; emails and research notes are not substantive" },
@@ -144,7 +136,7 @@ const TOOLS = [
     nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "meeting", name: "show_meeting_draft", description: "Show a Schedule a meeting draft for a FUTURE meeting with a contact. Its button opens the officer's Google Calendar with the meeting filled in. (A meeting that already happened is show_interaction_draft.)", req: ["contact_name", "date", "time"], props: Object.assign({}, FOR, {
     date: S_DATE, time: { type: "string", description: "Start time, 24-hour HH:MM, e.g. 14:00" }, duration: { type: "string", enum: DURATIONS },
-    meetingType: { type: "string", enum: ["In person", "Phone call", "Video call"] }, location: { type: "string" }, notes: { type: "string" }, title: { type: "string", description: "Leave out unless the officer names it" } }) },
+    meetingType: { type: "string", enum: MEETING_FORM_TYPES }, location: { type: "string" }, notes: { type: "string" }, title: { type: "string", description: "Leave out unless the officer names it" } }) },
   { action: "task", name: "show_task_draft", description: "Show a new Task draft for a contact, optionally filed on their open opportunity.", req: ["contact_name", "text"], props: Object.assign({}, FOR, {
     text: { type: "string", description: "What to do, as a short imperative, e.g. Send Ruth the annual report" }, due: S_DATE,
     onOpp: { type: "boolean", description: "True if the officer wants the task on the contact's opportunity (or is looking at it); false for the contact only" } }) },
@@ -152,19 +144,19 @@ const TOOLS = [
     fund: { type: "string", enum: ENTITY_SPOKEN, description: "The entity receiving the money" }, campaign: { type: "string", enum: CAMPAIGNS, description: "Campaign of interest. Must suit the entity: National, or the entity's own state. " + ENTITY_RULE }, potential: { type: "number", description: "Dollars" }, notes: { type: "string" } }) },
   { action: "plan", name: "show_ask_plan_draft", description: "Show a planned Ask draft (Add planned ask) on the contact's open opportunity.", req: ["contact_name", "fund", "campaign", "plannedDate", "amount"], props: Object.assign({}, FOR, {
     fund: { type: "string", enum: ENTITY_SPOKEN, description: "The entity receiving the money" }, campaign: { type: "string", enum: CAMPAIGNS, description: "Must suit the entity: National, or the entity's own state. " + ENTITY_RULE }, plannedDate: S_DATE, amount: { type: "number" },
-    askType: { type: "string", enum: ["Outright", "Pledge", "Planned gift"] }, participants: { type: "string" } }) },
+    askType: { type: "string", enum: ASK_TYPES }, participants: { type: "string" } }) },
   { action: "ask", name: "show_ask_result_draft", description: "Show the Interaction report for the meeting where an ask was made, with the investor's response.", req: ["contact_name", "date", "meetingType", "response", "summary"], props: Object.assign({}, FOR, {
     date: S_DATE, meetingType: { type: "string", enum: MEET_TYPES, description: "How it happened: In person, Phone call or Video call (Event or Email if the officer says so)" }, amount: { type: "number", description: "Amount asked. When the officer says the ask was for a different figure than planned, or asks to change the amount of the ask, put that figure here; leave out to use the planned ask" }, fund: { type: "string", enum: ENTITY_SPOKEN, description: "The entity receiving the money" },
     response: { type: "string", enum: RESPONSES, description: "Accepted (yes), Countered (a different amount), Awaiting (still thinking it over) or Declined (no)" }, agreedAmount: { type: "number", description: "Only when the investor agreed or countered with a figure different from the amount asked; never the ask amount itself" },
     lostReason: { type: "string", description: "Required when Declined: why, in a few words" }, summary: { type: "string" }, nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "response", name: "show_ask_response_draft", description: "Show the Record the response form on a contact's open opportunity when the investor's answer to an ask that is already out comes in later (by email, phone or in person): Accepted, Countered or Declined, with the agreed or counter amount or the reason, and the date heard. Saving marks the Check on the answer task done. (The answer given at the ask meeting itself goes in show_ask_result_draft.)", req: ["contact_name", "response", "date"], props: Object.assign({}, FOR, {
-    response: { type: "string", enum: ["Accepted", "Countered", "Declined"], description: "Accepted (yes), Countered (a different amount) or Declined (no)" }, agreedAmount: { type: "number", description: "Verbal figure agreed, or the counter amount" },
+    response: { type: "string", enum: ANSWERS, description: "Accepted (yes), Countered (a different amount) or Declined (no)" }, agreedAmount: { type: "number", description: "Verbal figure agreed, or the counter amount" },
     lostReason: { type: "string", description: "Required when Declined: why, in a few words" }, date: Object.assign({}, S_DATE, { description: "The day the answer was heard (YYYY-MM-DD); today unless the officer says otherwise" }), nextStep: { type: "string" }, nextDue: S_DATE }) },
   { action: "pledge", name: "show_pledge_draft", description: "Show a Record pledge draft on the contact's open opportunity.", req: ["contact_name", "amount", "confirmedBy", "firstDue"], props: Object.assign({}, FOR, {
-    amount: { type: "number" }, fund: { type: "string", enum: ENTITY_SPOKEN, description: "The entity receiving the money" }, confirmedBy: { type: "string", enum: ["Email", "Phone", "In person"] }, confirmedDate: { type: "string", description: "YYYY-MM-DD; use today if not said" },
-    installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: ["Annual", "Quarterly", "Monthly", "One payment"] }, firstAmount: { type: "number" }, firstDue: S_DATE }) },
+    amount: { type: "number" }, fund: { type: "string", enum: ENTITY_SPOKEN, description: "The entity receiving the money" }, confirmedBy: { type: "string", enum: CONFIRMED_BY }, confirmedDate: { type: "string", description: "YYYY-MM-DD; use today if not said" },
+    installments: { type: "number", description: "Number of payments" }, frequency: { type: "string", enum: FREQUENCIES }, firstAmount: { type: "number" }, firstDue: S_DATE }) },
   { action: "cultivate", name: "show_cultivation_decision", description: "Show the Move to Cultivation? decision for an opportunity in Qualification: move it, or defer with a reason and an optional reconsider-on date.", req: ["contact_name", "decision"], props: Object.assign({}, FOR, {
-    decision: { type: "string", enum: ["Move to Cultivation", "Defer"] }, reason: { type: "string", description: "Required to defer" }, reconsiderOn: S_DATE }) },
+    decision: { type: "string", enum: DECISIONS }, reason: { type: "string", description: "Required to defer" }, reconsiderOn: S_DATE }) },
   { action: "gift", name: "show_gift_draft", description: "Show a Record gift draft when money comes in on an opportunity in Ask Made or Commitment. In Ask Made the gift is an implied commitment (no pledge needed); in Commitment it is applied to the pledge. Saving closes it as Closed Won.", req: ["contact_name", "amount", "method"], props: Object.assign({}, FOR, {
     amount: { type: "number" }, fund: { type: "string", enum: ENTITY_SPOKEN, description: "The entity receiving the money" }, date: { type: "string", description: "YYYY-MM-DD the gift arrived; use today if not said" }, method: { type: "string", enum: PAY_METHODS } }) },
   { action: "payment", hidden: true, name: "show_payment_draft", description: "Show a Record payment draft for a payment on the pledge of an opportunity in Commitment. The first payment closes it as Closed Won.", req: ["contact_name", "method"], props: Object.assign({}, FOR, {
@@ -1044,7 +1036,9 @@ function onEvent(e) {
 // the same words as the last line, which came without voice audio less than 15 s ago, now with audio: the sounded copy of that line, not a second telling
 const soundedCopy = (text) => { const r = G.lastLine; return !!(r && typeof AUDIO_MIN_S !== "undefined" && r.audioS < AUDIO_MIN_S && Date.now() - r.at < 15000 && (G.audioSamples || 0) / 24000 >= AUDIO_MIN_S && sameWords(r.text) === sameWords(text)); };
 const REPEAT_MS = 6000; /* the service sends the same transcript again, sometimes grown by a word, within a few seconds: that is no new answer */
-const onlyNoise = (s) => !String(s).replace(/\[[^\]]*\]/g, " ").replace(/[^a-z0-9]/gi, "").length && /\[[^\]]*\]/.test(String(s));
+/* only known sound tags are noise: "[B]" is the officer saying the letter B (Oct 31, 2:50 PM call) */
+const NOISE_TAG = /\[(noise|background noise|breath|breathing|music|laughter|laughs?|cough(ing)?|sigh|silence|inaudible|static|wind|traffic|applause|clears throat|blank_audio|unintelligible)\]/gi;
+const onlyNoise = (s) => { const t = String(s), rest = t.replace(NOISE_TAG, " "); return rest !== t && !rest.replace(/[^a-z0-9]/gi, "").length; };
 const sameWords = (s) => String(s).toLowerCase().replace(/[^a-z0-9$ ]/g, " ").replace(/\s+/g, " ").trim();
 // the late-copy watches (G.lateForced, G.resend) cut a second telling of the same words; they end when a repeat is wanted: a new line after a
 // drop (the re-ask is the first telling on it), "are you there?" (Ara repeats her last line) or "say that again" (Carverhill's 5:50 PM call, Oct 30:

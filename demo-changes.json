@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 4:02 PM",
+      "change": "One lists module (preview/lists.js) holds every pick-list and the one matcher that reads answers to them, used by the optional questions and the evidence guard alike. Short forms are heard (\"C3\", \"C-3\", \"card\", \"bee\"); an answer that fits several entities (\"C4\") gets \"Which one: ...?\". A repeated answer is confirmed once with the open question, never taken as the next answer; an answer before the app's question has played is not taken; \"[B]\" is no longer dropped as noise. Real-Ara runs default to 20 machines with one combined report.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Yes fix all the list modules by creating a new single lists module - go\" (3:17 PM), after the 2:50 PM call (a repeated B saved as how we met) and the 3:02 PM call (\"C-3\" refused three times); \"have your real Ara runs happen across 20 machines as a default\" (3:23 PM)."
+    },
+    {
       "date": "Oct 31, 1:46 PM",
       "change": "Preview: an interaction report saves on the officer's yes after they said no to setting a next step now. Before, the save rule still demanded a next step and the read-back repeated.",
       "area": "Voice",

@@ -7,29 +7,6 @@ function applyName() {
   OFFICER_INITIALS = OFFICER.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "DR";
 }
 const STAGES = ["Qualification", "Cultivation", "Ask Planning", "Ask Made", "Commitment", "Closed"];
-// THE entity list (Oct 31, Carverhill: "only have the list and phrasings in one place"). Each row: the record name (what the record keeps and
-// the screens show), the spoken name (what Ara says, Grok sends and the officer answers with) and its state ("" = National). Everything
-// else is built from this table: the form pick lists, Grok's allowed values, Ara's list, the app's questions, the read-back, the matcher,
-// the evidence guard, the transcription hints, and toSpoken(), which turns any record name into its spoken name on the way to the voice
-// service. To change an entity, change this table only; tests/checks/14-lists.js fails when a record name reaches the voice service.
-const ENTITIES = [
-  ["Citizens Alliance C3", "National C3", ""], ["C.A. of America Action C4", "National C4", ""], ["C.A. Fed PAC", "National Federal PAC", ""],
-  ["C.A. Idaho C4", "Idaho C4", "Idaho"], ["C.A. Idaho PAC", "Idaho PAC", "Idaho"],
-  ["C.A. North Dakota C4", "North Dakota C4", "North Dakota"], ["C.A. North Dakota State PAC", "North Dakota State PAC", "North Dakota"], ["C.A. North Dakota Fed PAC", "North Dakota Federal PAC", "North Dakota"],
-  ["C.A. New Hampshire C4", "New Hampshire C4", "New Hampshire"],
-  ["C.A. Pennsylvania C4", "Pennsylvania C4", "Pennsylvania"], ["C.A. Pennsylvania State PAC", "Pennsylvania State PAC", "Pennsylvania"]];
-const ENTITY_STATE = Object.fromEntries(ENTITIES.map(e => [e[0], e[2]]));
-const FUNDS = ENTITIES.map(e => e[0]);
-const ENTITY_KEY = Object.fromEntries(ENTITIES.map(e => [e[0], e[1]]));
-const ENTITY_SPOKEN = ENTITIES.map(e => e[1]);
-const entitySpoken = (f) => ENTITY_KEY[f] || f;
-/* any record name in text bound for the voice service -> its spoken name, longest first ("C.A. North Dakota Fed PAC" before "C.A. Fed PAC") */
-const SPOKEN_SWAP = ENTITIES.filter(e => e[0] !== e[1]).sort((a, b) => b[0].length - a[0].length);
-const toSpoken = (text) => { let t = String(text); for (const [rec, said] of SPOKEN_SWAP) if (t.includes(rec)) t = t.split(rec).join(said); return t; };
-const fundFromSpoken = (v) => { if (!v) return v; if (FUNDS.includes(v)) return v; const k = Object.keys(ENTITY_KEY).find(f => ENTITY_KEY[f].toLowerCase() === String(v).toLowerCase().trim()); if (k) return k; const m = matchEntity(v).hits; return m.length === 1 ? m[0] : v; }; /* a key or a close spoken form -> the record name */
-const CAMPAIGNS = ["National", "Idaho", "North Dakota", "New Hampshire", "Pennsylvania"];
-const oppNeedsCampaign = (action, d) => (action === "opportunity" || action === "editOpportunity") && d && d.fund && !d.campaign && campaignsFor(d.fund).length > 1;
-const campaignsFor = (f) => ENTITY_STATE[f] === undefined ? CAMPAIGNS : ["National", ...(ENTITY_STATE[f] ? [ENTITY_STATE[f]] : [])];
 // a spoken amount -> a number: "one hundred thousand dollars", "250k", "$1.5 million", "a hundred and fifty thousand" (Oct 24: Ara couldn't record "one hundred thousand")
 const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
@@ -46,47 +23,13 @@ function spokenAmount(raw) {
   }
   const n = total + cur; return any && n > 1 ? n : null;
 }
-// a spoken entity -> one entity, or the few it could be: "the C-3", "Citizens Alliance C 3", "North Dakota Fed PAC" (Oct 24: "C-3" wasn't understood)
-const entityWords = (t) => String(t || "").toLowerCase().replace(/c\.a\.|\bca\b/g, "citizens alliance").replace(/\bc\s*-?\s*([34])\b/g, "c$1").replace(/\bfed\b/g, "federal").replace(/[^a-z0-9 ]/g, " ")
-  .split(/\s+/).filter(w => w && !/^[a-z]$/.test(w) && !["the", "a", "an", "is", "it", "its", "it's", "one", "that", "this", "to", "for", "of", "let's", "lets", "go", "with", "please", "entity", "entities", "ones", "i", "think", "say", "make", "yes", "yeah"].includes(w));
-function matchEntity(t) {
-  const ws = entityWords(t); if (!ws.length) return { hits: [] };
-  const wordsOf = (f) => [...new Set(entityWords(f).concat(entityWords(ENTITY_KEY[f] || "")))]; // the record's words and the spoken key's ("National C4")
-  const hits = FUNDS.filter(f => { const fw = wordsOf(f); return ws.every(w => fw.includes(w)); });
-  const same = (fw) => fw.length === ws.length && ws.every(w => fw.includes(w)); const exact = hits.filter(f => same(entityWords(f)) || same(entityWords(ENTITY_KEY[f] || ""))); // "C.A. Fed PAC" is that one, not also the North Dakota Fed PAC
-  return { hits: exact.length === 1 ? exact : hits };
-}
-/* did the officer's own lines name this entity? The evidence guard and the "was it said" check both use this, with the same words as
-   matchEntity (Oct 31: the guard used only the record name's words, so "National C4" never counted and the app asked 15 times) */
-function entityHeardIn(fund, lines) {
-  if (lines.some(t => { const h = matchEntity(t).hits; return h.length === 1 && h[0] === fund; })) return true;
-  const aw = entityWords(lines.join(" ")), sets = [entityWords(fund).filter(w => !["citizens", "alliance"].includes(w)), entityWords(entitySpoken(fund))];
-  if (sets.some(fw => fw.length && fw.every(w => aw.includes(w)))) return true; /* "the Idaho entity" then "the PAC" (Oct 26 drive) */
-  const st = (ENTITY_STATE[fund] || "").toLowerCase();
-  return lines.some(t => st && t.toLowerCase().includes(st) && FUNDS.filter(f => ENTITY_STATE[f] === ENTITY_STATE[fund]).length === 1); /* the only entity in the state named */
-}
-const ENTITY_RULE = FUNDS.map(f => `${entitySpoken(f)}: ${campaignsFor(f).join(" or ")}`).join("; ");
-// by state, so Ara never invents one (seen Oct 24: "C.A. Pennsylvania Fed PAC", which doesn't exist)
 // "Oct 25 (today)": the model misread a same-day due date as tomorrow (Oct 25 call), so dates are handed back with their day word
 const dayWord = (iso) => { const t = typeof todayISO === "function" ? todayISO() : ""; if (!iso || !t) return ""; const d = Math.round((new Date(iso) - new Date(t)) / 86400000); return d === 0 ? "today" : d === 1 ? "tomorrow" : d === -1 ? "yesterday" : ""; };
 const dateSaid = (iso) => { const w = dayWord(iso); return fmtDate(iso) + (w ? ` (${w})` : ""); };
-const ENTITIES_BY_STATE = () => { const by = {}; FUNDS.forEach(f => { const st = ENTITY_STATE[f] || "National"; (by[st] = by[st] || []).push(entitySpoken(f)); }); return Object.entries(by).map(([st, fs]) => `${st}: ${fs.join(", ")}`).join("; "); };
-// the entity list as Ara reads it, by state (Carverhill, Oct 30: "have her read the list by default"): "National has C3, C4 and Federal PAC. Idaho has C4 and PAC. ..."
-const ENTITY_LIST_SPOKEN = () => { const by = {}; FUNDS.forEach(f => { const st = ENTITY_STATE[f] || "National", k = entitySpoken(f); (by[st] = by[st] || []).push(k.startsWith(st + " ") ? k.slice(st.length + 1) : k); });
-  return Object.entries(by).map(([st, fs]) => `${st} has ${fs.length > 1 ? fs.slice(0, -1).join(", ") + " and " + fs[fs.length - 1] : fs[0]}.`).join(" "); };
-const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
-const CAPACITY_LIST = Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", "); // "A = $250k and up, B = ..." for Ara
-const CAPACITY_LONG = { A: "$250,000 and up", B: "$100,000 to $250,000", C: "$25,000 to $100,000", D: "$5,000 to $25,000", E: "under $5,000" }; // a rating is always spoken as its letter then its range in full (Carverhill, Oct 28)
-const capSaid = (r) => `${r}, ${CAPACITY_LONG[r]}`;
-const OUTCOMES = ["Interested, continue cultivation", "Ask made", "Ask accepted", "Not now, revisit", "Not interested", "Referred elsewhere"];
-const NO_NEXT_STEP = ["Not interested", "Referred elsewhere"];
-const RESPONSES = ["Awaiting", "Accepted", "Countered", "Declined"];
-const PAY_METHODS = ["Check", "Credit card", "Bank transfer", "Wire", "Stock", "Other"];
 const PLEDGE_FOLLOWUP_DAYS = 10; // demo default; the guide's pledge reminder interval is still open with the customer
 const ASK_CHECK_DAYS = 14; // a setting: an ask still waiting for its answer gets a task to check on it within this many days (Carverhill, Oct 28: 30, then 14 the same day)
 const ASK_CHECK_RE = /^Check on the answer to the /; // the text of that task; a recorded response, pledge or gift marks it done
 const askCheckTask = (t) => !!t && !t.done && (t.askCheck || ASK_CHECK_RE.test(t.text || "")) && !!t.oppId;
-const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
 const MIC = '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
 const mic = (s) => MIC.replace(/SZ/g, s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -102,7 +45,6 @@ const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d
 const YEAR = new Date().getFullYear();
 
 /* ---------- actions: what the officer can do by voice, in any order ---------- */
-const DURATIONS = ["30 minutes", "45 minutes", "1 hour", "90 minutes", "2 hours"];
 // fields that several forms share, defined once
 const F_WHEN = () => [{ k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: ["", ...MEET_TYPES], req: true }];
 const F_NEXT = () => [{ k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" }];
@@ -135,7 +77,7 @@ const ACTIONS = {
       { k: "forName", label: "Contact", fixed: true },
       { k: "title", label: "Title", req: true },
       { k: "date", label: "Date", type: "date", req: true }, { k: "time", label: "Start time", type: "time", req: true },
-      { k: "duration", label: "Length", type: "select", opts: DURATIONS }, { k: "meetingType", label: "Type", type: "select", opts: ["In person", "Phone call", "Video call"] },
+      { k: "duration", label: "Length", type: "select", opts: DURATIONS }, { k: "meetingType", label: "Type", type: "select", opts: MEETING_FORM_TYPES },
       { k: "location", label: "Where" }, { k: "notes", label: "Notes", type: "area" } ],
     left: "Opens Google Calendar with this meeting filled in. Tap Save there, then come back." },
   task: { title: "New task", saved: "Task added", saveLabel: "Save task",
@@ -154,7 +96,7 @@ const ACTIONS = {
       { k: "forName", label: "Opportunity", fixed: true },
       { k: "fund", label: "Entity", type: "select", opts: ["", ...FUNDS], req: true }, { k: "campaign", label: "Campaign", type: "select", opts: (d) => { const c = campaignsFor(d.fund); return c.length > 1 ? ["", ...c] : c; }, req: true },
       { k: "plannedDate", label: "Planned ask date", type: "date", req: true }, { k: "amount", label: "Amount", type: "money", req: true },
-      { k: "askType", label: "Ask type", type: "select", opts: ["Outright", "Pledge", "Planned gift"] },
+      { k: "askType", label: "Ask type", type: "select", opts: ASK_TYPES },
       { k: "officer", label: "Gift officer", fixed: true }, { k: "participants", label: "Participants in the ask" } ],
     pairs: [["plannedDate", "amount"]] },
   ask: { title: "Interaction report · the ask", saved: "Ask recorded", saveLabel: "Save",
@@ -171,7 +113,7 @@ const ACTIONS = {
   response: { title: "Record the response", saved: "Response recorded", saveLabel: "Save response",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "response", label: "Response", type: "select", opts: ["", "Accepted", "Countered", "Declined"], req: true },
+      { k: "response", label: "Response", type: "select", opts: ["", ...ANSWERS], req: true },
       { k: "agreedAmount", label: "Agreed or counter amount (verbal)", type: "money" }, { k: "lostReason", label: "Reason (if declined)" },
       { k: "date", label: "Date heard", type: "date", req: true },
       ...F_NEXT() ],
@@ -180,15 +122,15 @@ const ACTIONS = {
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
       { k: "amount", label: "Pledge amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: ["", ...FUNDS], req: true },
-      { k: "confirmedBy", label: "Confirmed by", type: "select", opts: ["Email", "Phone", "In person"], req: true }, { k: "confirmedDate", label: "Confirmed on", type: "date", req: true },
-      { k: "installments", label: "Payments", type: "money", num: true }, { k: "frequency", label: "Frequency", type: "select", opts: ["Annual", "Quarterly", "Monthly", "One payment"] },
+      { k: "confirmedBy", label: "Confirmed by", type: "select", opts: CONFIRMED_BY, req: true }, { k: "confirmedDate", label: "Confirmed on", type: "date", req: true },
+      { k: "installments", label: "Payments", type: "money", num: true }, { k: "frequency", label: "Frequency", type: "select", opts: FREQUENCIES },
       { k: "firstAmount", label: "First payment", type: "money" }, { k: "firstDue", label: "First payment due", type: "date", req: true } ],
     pairs: [["confirmedBy", "confirmedDate"], ["installments", "frequency"], ["firstAmount", "firstDue"]],
     left: "No pledge card is needed. The pledge is confirmed by email, phone or in person." },
   cultivate: { title: "Move to Cultivation?", saved: "Decision recorded", saveLabel: "Confirm",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "decision", label: "Decision", type: "select", opts: ["Move to Cultivation", "Defer"], req: true },
+      { k: "decision", label: "Decision", type: "select", opts: DECISIONS, req: true },
       { k: "reason", label: "Reason (needed to defer)", type: "area" }, { k: "reconsiderOn", label: "Reconsider on", type: "date" } ],
     left: "All three criteria are met: accepted, rated and talked to. Defer keeps it in Qualification; the prompt comes back on the Reconsider on date or after the next substantive interaction." },
   gift: { title: "Record gift", saved: "Gift recorded", saveLabel: "Record gift",

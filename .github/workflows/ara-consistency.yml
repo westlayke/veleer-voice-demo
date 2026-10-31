@@ -1,18 +1,23 @@
 name: Ara consistency run
 # Real typed conversations through the preview build, scored against Ara's rules (tests/ara-consistency/), on one or more voice
 # engines side by side (one job each, started together so there is no time-of-day difference between them).
-# Costs real money (ARA_CONSISTENCY_KEY for xAI, OPENAI_CONSISTENCY_KEY, GEMINI_CONSISTENCY_KEY); each job stops itself at the budget. Run by hand only.
+# Costs real money (ARA_CONSISTENCY_KEY for xAI, OPENAI_CONSISTENCY_KEY, GEMINI_CONSISTENCY_KEY); each job stops itself at its share of the budget. Run by hand only.
+# Each engine runs on several machines at once (20 by default, like Patient Pat; Carverhill, Oct 31): the budget and the conversations are split
+# between them, each machine starts on a different flow, and a last job per engine combines them into one report.
 on:
   workflow_dispatch:
     inputs:
       budget:
-        description: "Most to spend per engine, in dollars"
+        description: "Most to spend per engine, in dollars (split between its machines)"
         default: "0.5"
       max_conversations:
-        description: "Most conversations per engine (5 for a price probe)"
+        description: "Most conversations per engine, split between its machines (5 for a price probe)"
         default: "5"
+      machines:
+        description: "Machines per engine (1-20; never more than the conversations). 20 is the default (Carverhill, Oct 31)"
+        default: "20"
       jobs:
-        description: "Conversations at once, per engine"
+        description: "Conversations at once, per machine"
         default: "3"
       flows:
         description: "Only these flows, comma separated (blank = all)"
@@ -49,10 +54,16 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       list: ${{ steps.list.outputs.list }}
+      runs: ${{ steps.list.outputs.runs }}
     steps:
       - id: list
+        env: { PROVIDERS: "${{ inputs.providers }}", MACHINES: "${{ inputs.machines }}", CONVS: "${{ inputs.max_conversations }}", BUDGET: "${{ inputs.budget }}" }
         run: |
-          echo "list=$(printf '%s' "${{ inputs.providers }}" | tr -d ' ' | jq -Rc 'split(",")')" >> "$GITHUB_OUTPUT"
+          node -e '
+            const ps = process.env.PROVIDERS.split(",").map(s => s.trim()).filter(Boolean), convs = Math.max(1, Number(process.env.CONVS) || 5);
+            const m = Math.max(1, Math.min(20, Number(process.env.MACHINES) || 20, convs)), budget = Number(process.env.BUDGET) || 0.5, runs = [];
+            ps.forEach(provider => { for (let i = 0; i < m; i++) runs.push({ provider, shard: i, convs: Math.floor(convs / m) + (i < convs % m ? 1 : 0), budget: Math.round(budget / m * 10000) / 10000 }); });
+            console.log("list=" + JSON.stringify(ps)); console.log("runs=" + JSON.stringify(runs));' >> "$GITHUB_OUTPUT"
   run:
     needs: plan
     runs-on: ubuntu-latest
@@ -60,8 +71,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        provider: ${{ fromJSON(needs.plan.outputs.list) }}
-    name: ${{ matrix.provider }}
+        include: ${{ fromJSON(needs.plan.outputs.runs) }}
+    name: ${{ matrix.provider }} ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -80,8 +91,9 @@ jobs:
           OPENAI_CONSISTENCY_KEY: ${{ secrets.OPENAI_CONSISTENCY_KEY }}
           GEMINI_CONSISTENCY_KEY: ${{ secrets.GEMINI_CONSISTENCY_KEY }}
           PROVIDER: ${{ matrix.provider }}
-          BUDGET: ${{ inputs.budget }}
-          MAX_CONVS: ${{ inputs.max_conversations }}
+          BUDGET: ${{ matrix.budget }}
+          MAX_CONVS: ${{ matrix.convs }}
+          SHARD: ${{ matrix.shard }}
           JOBS: ${{ inputs.jobs }}
           FLOWS: ${{ inputs.flows }}
           DIAG: ${{ inputs.diag }}
@@ -96,11 +108,36 @@ jobs:
       - uses: actions/upload-artifact@v4 # spoken runs: the sound clips on their own (one conversation per flow, officer + Ara + noise, with transcripts), to download from the run page and listen to
         if: always() && inputs.spoken == '1'
         with:
-          name: spoken-clips-${{ matrix.provider }}
+          name: spoken-clips-${{ matrix.provider }}-${{ matrix.shard }}
           path: tests/ara-consistency/results/clips/
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ara-consistency-results-${{ matrix.provider }}
-          path: tests/ara-consistency/results/
+          name: ara-consistency-results-${{ matrix.provider }}-${{ matrix.shard }}
+          path: |
+            tests/ara-consistency/results/
+            !tests/ara-consistency/results/voices/
+  combine:
+    needs: [plan, run]
+    if: always()
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: ${{ fromJSON(needs.plan.outputs.list) }}
+    name: combine ${{ matrix.provider }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/download-artifact@v4
+        with: { path: all, pattern: "ara-consistency-results-${{ matrix.provider }}-*" }
+      - name: One report for all machines (in the log too, since artifacts can't be fetched from the cloud session)
+        env: { PROVIDER: "${{ matrix.provider }}", COMBINE: all, SOUNDLESS: "${{ inputs.soundless }}", FAULTS: "${{ inputs.faults }}", DROP_AFTER_SAVE: "${{ inputs.drop_after_save }}", SPOKEN: "${{ inputs.spoken }}", NOISE: "${{ inputs.noise }}" }
+        run: node tests/ara-consistency/run.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ara-consistency-combined-${{ matrix.provider }}
+          path: tests/ara-consistency/results/combined.md

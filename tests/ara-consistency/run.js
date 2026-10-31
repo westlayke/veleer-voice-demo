@@ -5,7 +5,7 @@
 // Nothing reaches the activity log or the Cloudflare Worker: the token comes from this script and log posts stay here.
 const http = require("http"), fs = require("fs"), path = require("path");
 const { stepsInPage, stepsLines } = require("../steps.js");
-let chromium; try { ({ chromium } = require("playwright")); } catch (e) { ({ chromium } = require("/opt/node-tools/node_modules/playwright")); }
+let chromium; try { ({ chromium } = require("playwright")); } catch (e) { try { ({ chromium } = require("/opt/node-tools/node_modules/playwright")); } catch (e2) { /* the combine job needs no browser */ } }
 const FLOWS = require("./flows");
 
 // the voice engine (Oct 27, the provider comparison): grok (xAI, the default) or openai; each has its own key and prices
@@ -45,7 +45,11 @@ const PER_MIN = Number(process.env.PER_MIN || ENGINE.perMin), PER_ITEM = Number(
 const MAX_CONV_MS = 6 * 60000, TURN_WAIT_MS = 25000, MAX_TURNS = 20, DOWN_WAIT_MS = 100000; // DOWN_WAIT_MS: how long the officer waits for a line that dropped (FAULTS)
 const ROOT = path.resolve(__dirname, "../.."), OUT = path.join(__dirname, "results");
 
-if (!KEY) { console.error(ENGINE.key + " is not set"); process.exit(1); }
+// several machines at once (Oct 31, Carverhill: "real Ara runs across 20 machines as a default, just like Patient Pat"): SHARD is this machine's
+// number (0, 1, ...), which shifts the flow it starts on so the machines between them cover the flows; COMBINE=<folder> reads every machine's
+// conversations.json under that folder and writes one report for them all (no voice service, no key)
+const SHARD = Number(process.env.SHARD || 0), COMBINE = process.env.COMBINE || "";
+if (!KEY && !COMBINE) { console.error(ENGINE.key + " is not set"); process.exit(1); }
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".css": "text/css", ".mp3": "audio/mpeg" };
 const server = http.createServer((req, res) => {
   const f = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]));
@@ -388,6 +392,20 @@ function report(convs, extra) {
   return { md, rows, byFlow };
 }
 
+function combine(dir) { // one report for every machine's conversations
+  const files = [], walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach(e => { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (e.name === "conversations.json") files.push(f); });
+  walk(dir); const convs = [], spentBy = [];
+  files.forEach(f => { try { convs.push(...JSON.parse(fs.readFileSync(f, "utf8"))); } catch (e) { console.log("unreadable: " + f); }
+    try { const s = JSON.parse(fs.readFileSync(path.join(path.dirname(f), "summary.json"), "utf8")); spentBy.push([s.spent, s.budget]); } catch (e) {} });
+  const total = spentBy.reduce((a, x) => a + (x[0] || 0), 0), budget = spentBy.reduce((a, x) => a + (x[1] || 0), 0), good = convs.filter(c => !c.failed && !c.cut), per = good.length ? total / good.length : 0;
+  const { md, rows, byFlow } = report(good, `${files.length} machines, ${convs.length} conversations (${convs.length - good.length} left out: no answer or cut by the budget). Budget for this run: $${budget.toFixed(2)}. Spent (estimate): $${total.toFixed(3)}. Per conversation: $${per.toFixed(3)}.`);
+  fs.mkdirSync(OUT, { recursive: true }); fs.writeFileSync(path.join(OUT, "combined.md"), md);
+  if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+  console.log("\n===== SUMMARY =====\n" + md + "===== END SUMMARY =====");
+  console.log("SUMMARY_JSON " + JSON.stringify({ provider: PROVIDER, machines: files.length, spent: total, per, n: convs.length, rows: rows.map(r => [r.id, r.checked, r.broken]), byFlow }));
+}
+if (COMBINE) { combine(COMBINE); process.exit(0); }
+
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const wav = path.join(OUT, "silence.wav"); silentWav(wav);
@@ -406,7 +424,7 @@ function report(convs, extra) {
   const half = { said: false };
   async function worker() {
     while (!stopAll && started < MAX_CONVS && spent() + (running + 1) * avg() * 1.1 <= BUDGET) {
-      const flow = flows[started % flows.length], n = Math.floor(started / flows.length) + 1; started++; running++;
+      const flow = flows[(started + SHARD) % flows.length], n = Math.floor((started + SHARD) / flows.length) + 1; started++; running++;
       const c = await converse(browser, base, flow, n); running--;
       c.failed = !c.replies.some(r => r.text); if (c.cut) console.log(`(conversation ${c.flow} #${c.n} was cut off by the budget and is left out of the scores)`); else if (!c.failed) { c.score = score(c, flow); fails = 0; } else if (++fails >= 3) { stopAll = true; console.log("Three conversations in a row got no answer from " + ENGINE.name + ": stopping. " + c.errors.slice(0, 2).join("; ")); }
       convs.push(c);

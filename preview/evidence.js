@@ -35,29 +35,7 @@ function optionAnswered(label, lines, asked) {
   const listed = q.split(/[:?]/).slice(1).join(" ").split(/,|\bor\b/).map(x => x.trim()).filter(Boolean); const i = ORD[m[1]] === -1 ? listed.length - 1 : ORD[m[1]];
   return listed.length > 1 && listed[i] === l;
 }
-// did the officer say something that matches the outcome Grok picked?
-const OUTCOME_WORDS = { "Interested, continue cultivation": /\b(interested|keen|excited|enthusiastic|positive|receptive|engaged|on board|liked it|loved it)\b|went (really |very )?well|(good|great) (meeting|call|conversation)|keep cultivating/, "Ask made": /\bask(ed)?\b|proposed|pitched|requested|invited (him|her|them) to give/, "Ask accepted": /accept|agreed|said yes|yes to|committed|he's in|she's in|they're in|pledg|handed|check/, "Not now, revisit": /not now|later|revisit|next year|next quarter|hold off|wait|timing|busy|not yet|down the road/, "Not interested": /not interested|no interest|declined|turned (me|us|it) down|passed|no thanks|not for (him|her|them)/, "Referred elsewhere": /refer|pointed (me|us) to|sent (me|us) to|someone else|better fit/ };
 function outcomeIn(o, lines, asked) { if (optionAnswered(o, lines, asked)) return true; const re = OUTCOME_WORDS[o]; if (!re) return false; return lines.slice(-4).some(t => re.test(t)); }
-// words that stand for an option when the officer says them
-const OPTION_WORDS = {
-  meetingType: { "In person": /\bin person\b|\bmet\b|\bmeeting\b|\blunch\b|\bcoffee\b|\bdinner\b|\bbreakfast\b|\boffice\b|\bvisit|\bface to face\b|\bevent\b|\bparty\b|\bdropped by\b|\bstopped by\b|\bhouse\b|\bhome\b/,
-    "Event": /\bevent\b|\bgala\b|\bparty\b|\breception\b|\bfundraiser\b|\bconference\b|\bluncheon\b|\bbanquet\b|\bopening\b|\bceremony\b/, "Email": /\bemail|\be-mail|\bwrote\b|\breplied\b|\bmessage\b|\bnote\b/,
-    "Phone call": /\bphone\b|\bcall(ed|s)?\b|\brang\b|\bdialed\b/, "Video call": /\bvideo\b|\bzoom\b|\bteams\b|\bfacetime\b|\bgoogle meet\b|\bonline\b|\bvirtual/ },
-  response: { "Accepted": /\baccept|\bagreed\b|\bsaid yes\b|\byes to\b|\bcommitted\b|\bhe's in\b|\bshe's in\b|\bthey're in\b|\bhanded\b|\bcheck\b|\bcheque\b|\bpledged\b|\bgave\b|\bwrote\b/,
-    "Declined": /\bdeclin|\bturned (me|us|it) down\b|\bpassed\b|\bsaid no\b|\bnot interested\b|\bno thanks\b|\bwon't\b|\bwouldn't\b|\bnot going to\b/,
-    "Countered": /\bcounter|\binstead\b|\boffered\b|\brather\b|\blower\b|\bless\b|\bsmaller\b|\bhigher\b|\bmore\b|\bhalf\b|\bonly\b|\bcould do\b|\bcan do\b/,
-    "Awaiting": /\bthink(ing)? (about|it over)\b|\bconsider\b|\bget back\b|\bwait|\bawait|\bdecide\b|\bdecision\b|\blater\b|\bsleep on\b|\btalk to (his|her|their)\b|\bundecided\b|\bno answer\b|\bdidn't say\b/ },
-  confirmedBy: { "Email": /\bemail|\be-mail|\bwrote\b|\bwritten\b|\bmessage\b|\bletter\b|\bin writing\b/, "Phone": /\bphone\b|\bcall(ed|s)?\b|\brang\b|\btext/,
-    "In person": /\bin person\b|\bmet\b|\bmeeting\b|\bface\b|\bhanded\b|\blunch\b|\bcoffee\b|\bdinner\b|\boffice\b|\bvisit|\bevent\b|\bsigned\b/ },
-  method: { "Check": /\bcheck\b|\bcheque\b/, "Credit card": /\bcard\b|\bcredit\b|\bvisa\b|\bmastercard\b|\bamex\b/, "Bank transfer": /\bbank\b|\btransfer\b|\bach\b|\bdirect deposit\b/,
-    "Wire": /\bwire/, "Stock": /\bstock|\bshares\b|\bsecurities\b|\bappreciated\b/, "Other": /\bcash\b|\bonline\b|\bpaypal\b|\bvenmo\b|\bzelle\b|\bcrypto|\bbitcoin\b|\bdaf\b|\bdonor advised\b|\bother\b/ },
-  askType: { "Outright": /\boutright\b|\bone[- ]time\b|\bsingle gift\b|\bcash gift\b/, "Pledge": /\bpledge|\binstallment|\bover \w+ years\b|\bmulti[- ]?year\b|\bpayments\b|\bper year\b|\ba year for\b/, "Planned gift": /\bplanned gift\b|\bestate\b|\bbequest\b|\bwill\b|\blegacy\b|\btrust\b/ },
-  frequency: { "Annual": /\bannual|\byear|\byearly\b/, "Quarterly": /\bquarter/, "Monthly": /\bmonth/, "One payment": /\bone payment\b|\bsingle\b|\blump\b|\ball at once\b|\bone time\b|\bin full\b|\bup front\b/ },
-  decision: { "Move to Cultivation": /\bmove\b|\bready\b|\bcultivat|\badvance\b|\bpromote\b|\byes\b|\bgo ahead\b|\bdo it\b/, "Defer": /\bdefer\b|\bwait\b|\bnot yet\b|\bhold\b|\blater\b|\bno\b|\bnot ready\b|\bpostpone\b/ },
-  ally: { true: /\bally\b|\bdo not solicit\b|\bdon't solicit\b|\bnever (ask|solicit)\b|\bno solicit/, false: /\bnot an ally\b|\bsolicit/ },
-  dnc: { true: /\bdo not contact\b|\bdon't contact\b|\bno contact\b|\bnever contact\b/, false: /\bcontact\b/ },
-  permText: { true: /\btext/, false: /\btext/ }
-};
 const COUNT_WORDS = "a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fourteen|fifteen|twenty|thirty|sixty|ninety|\\d+";
 const DATE_WORDS = new RegExp(`\\bin (${COUNT_WORDS}|a few|a couple of|several) (day|week|month|year)s?\\b|\\b(${COUNT_WORDS}) (day|week|month|year)s? (from|out|later|ahead|time)\\b|` + String.raw`\b(today|tomorrow|yesterday|tonight|this|next|last|coming|end of|beginning of|mid|early|late|week|weekend|month|year|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|first|second|third|fourth|fifth|tenth|fifteenth|twentieth|thirtieth|christmas|thanksgiving|halloween|new year|on the|by the|the \d+(st|nd|rd|th)?|\d+(st|nd|rd|th)|\d+\/\d+|\d{4})\b`);
 // every officer line of this call, lower case
@@ -94,10 +72,10 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
     if (f.k === "nextStep") return nextStepIn(lines, ctx.asked);
     return outcomeIn(v, lines, ctx.asked); }
   const all = lines.join(" \n ");
-  if (f.k === "fund") return entityHeardIn(v, lines); /* core.js: the same words the matcher hears */
+  if (f.k === "fund") return listHeard("fund", v, lines); /* lists.js: the same words the answer-taker hears ("C-3" for National C3, Oct 31) */
   if (f.k === "campaign") { const c = campaignsFor(data.fund || ""); if (c.length === 1 && c[0] === v) return true; if (v === "National") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all); return all.includes(String(v).toLowerCase()); }
   if (f.type === "bool" && !v) return null; // false is the default, nothing to prove
-  if (OPTION_WORDS[f.k]) { const re = OPTION_WORDS[f.k][String(v)]; if (optionAnswered(String(v), lines, ctx.asked)) return true; return re ? re.test(all) || re.test(all.replace(/-/g, " ")) : null; } // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)
+  if (OPTION_WORDS[f.k]) return listHeard(f.k, v, lines, ctx.asked); // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)
   if (f.type === "money") return amountSaid(v, lines);
   if (f.type === "date") { const iso = normDate(v); if (iso && iso === todayISO()) return true; return DATE_WORDS.test(all) || /\d/.test(all); }
   if (f.type === "select" || f.type === "bool") return false; // an option with no words of its own: only the officer's own tap sets it
@@ -107,7 +85,7 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
 function fieldSaidIn(action, f, lines) {
   if (!f || !lines.length) return false; const all = lines.join(" \n ").toLowerCase();
   if (f.k === "capacity") return ratedIn(lines);
-  if (f.k === "fund") return !!(typeof matchEntity === "function" && matchEntity(lines[lines.length - 1]).hits.length === 1); /* a state with two entities is a choice still to make (10:05 AM call) */
+  if (f.k === "fund") return listMatch("fund", lines[lines.length - 1]).hits.length === 1; /* a state with two entities is a choice still to make (10:05 AM call) */
   if (f.k === "campaign") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all) || [...new Set(Object.values(ENTITY_STATE).filter(Boolean))].some(s => all.includes(s.toLowerCase()));
   if (OPTION_WORDS[f.k]) return Object.values(OPTION_WORDS[f.k]).some(re => re.test(all) || re.test(all.replace(/-/g, " ")));
   if (f.type === "money") return /\$|\d|\b(thousand|hundred|million|grand|bucks|dollars)\b/.test(all);
