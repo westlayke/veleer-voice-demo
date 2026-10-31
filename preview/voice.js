@@ -19,7 +19,7 @@ function spelledWords() {
   return out;
 }
 const SAVE_ECHO_MS = 8000; // a "yes" or "save it" repeated within this of a hands-free save is the same answer, not a new turn
-function officerRated() { if (ratedIn(officerLines(3), askedBefore(1))) return true; const last = officerLines(1)[0] || ""; return /^[a-e][.!]?$/.test(last.trim()) && /\b(rating|capacity|a through e|a to e)\b/.test(askedBefore(1)); } /* a letter alone answers the rating question (Oct 28) */ // the matcher lives in evidence.js (Oct 28 tidy-up); this wrapper serves set_capacity_rating
+function officerRated() { if (ratedIn(officerLines(3), askedBefore(1))) return true; const last = officerLines(1)[0] || ""; return /^[a-e][.!]?$/.test(last.trim()) && /\b(rating|capacity|a through e|a to e)\b/.test(askedBefore(1)); } /* a letter alone answers the rating question (Oct 28) */ // the matcher lives in validate.js (Oct 28 tidy-up); this wrapper serves set_capacity_rating
 // the officer's last words turn texting on or off ("texting is permitted", "you can text him", "no texts"), or null if they didn't mention texting
 function officerSaidTexting() {
   const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9).toLowerCase().replace(/[’‘]/g, "'");

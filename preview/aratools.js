@@ -354,7 +354,7 @@ function draftTool(callId, name, data) {
   let followKeep = null;
   if (tool.action === "ask" && V && V.action === "ask" && V.askedFollow) { const s = followUpSuggestion(target), last = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9);
     if (last && followAnswer(last) === "yes" && (!String(data.nextStep || "").trim() || data.nextStep === s.text)) { followKeep = { nextStep: s.text, nextDue: data.nextDue || s.due }; delete data.nextStep; delete data.nextDue; vlog(`${name}: follow-up task "${s.text}" by ${s.due}: the officer said yes to the app's suggestion`); } }
-  // every value must trace to the officer's words, a $0 amount, an invented rating and the interaction report's substantive flag, next step and outcome included (evidence.js)
+  // every value must trace to the officer's words, a $0 amount, an invented rating and the interaction report's substantive flag, next step and outcome included (validate.js)
   applyEvidence(tool.action, data, name).forEach(x => (data._dropped = data._dropped || []).push(x));
   if (followKeep) Object.assign(data, followKeep);
   // the voice model doesn't send texting permitted on a new contact (seen Oct 24: eight tries, never sent): take it from the officer's own words
