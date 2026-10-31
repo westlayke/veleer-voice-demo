@@ -5,6 +5,7 @@
 // Run:  node tests/patience/run.js                       (10 conversations, faults at Jim's rates, seed 1)
 //       CONVS=30 SEED=7 RATE=0 node tests/patience/run.js  (RATE=0 faults off: the floor; RATE=2 twice Jim's rates)
 //       JOBS=4 node tests/patience/run.js                 (conversations at once)
+//       BOOST=lock:20,quietMic:8 node tests/patience/run.js  (one fault aimed at: lock, soundHeld, quietMic, dropAgain, drop, ...)
 // Timers run at real speed (a conversation is 2 to 5 minutes); no xAI calls, so a run costs nothing.
 const http = require("http"), fs = require("fs"), path = require("path");
 let chromium; try { ({ chromium } = require("playwright")); } catch (e) { ({ chromium } = require("/opt/node-tools/node_modules/playwright")); }
@@ -15,7 +16,9 @@ const DROP_AFTER_SAVE = Number(process.env.DROP_AFTER_SAVE) || 0; /* per save: t
 // Jim's 45 measured waits before "Are you there?" (Oct 27-28, seconds): the officer's patience is drawn from these
 const WAITS = [24.4, 9.9, 20.0, 2.6, 2.9, 7.6, 2.6, 13.7, 16.3, 9.8, 7.2, 15.6, 11.5, 5.0, 8.3, 5.5, 6.3, 8.4, 22.1, 5.7, 4.0, 5.0, 12.5, 30.2, 15.4, 2.6, 6.7, 2.6, 22.7, 28.3, 20.3, 11.4, 21.6, 4.8, 33.6, 2.6, 34.4, 5.1, 4.7, 6.3, 25.2, 25.0, 7.2, 14.8, 37.4];
 // fault rates per officer turn at RATE=1 (Jim's calls: about 55 connection problems in 38 conversations, one problem every 6 to 7 minutes, a turn is about 12 s)
-const RATES = { wordsOnly: 0.08 /* per draft tool call: the stand-in answers in words and sends no tool call (Carverhill's 8:58 AM call, Oct 30); it sends the held call when the app asks again, 30% of asks miss again */, drop: 0.025, stall: 0.012, deadspot: 0.35 /* of drops: the voice pass then hangs 10-70 s */, noaudio: 0.06 /* per line of Ara's */, slow: 0.06 /* per reply: 10-25 s before it starts */, slowline: 0.02, lostReceipt: 0.05 /* per state update: the service never confirms it (and never applied it) */, staleAra: 0.1 /* per next-step yes: the stand-in acts on its old picture and calls save_form, as Grok did on Oct 29 */ };
+const RATES = { wordsOnly: 0.08 /* per draft tool call: the stand-in answers in words and sends no tool call (Carverhill's 8:58 AM call, Oct 30); it sends the held call when the app asks again, 30% of asks miss again */, drop: 0.025, stall: 0.012, deadspot: 0.35 /* of drops: the voice pass then hangs 10-70 s */, noaudio: 0.06 /* per line of Ara's */, slow: 0.06 /* per reply: 10-25 s before it starts */, slowline: 0.02, lostReceipt: 0.05, lock: 0.012 /* per turn: the phone locks (Auto-Lock, a pocket press); half under the app's 10 s grace, half long enough that the line closes (Carverhill's calls, Oct 30) */, soundHeld: 0.008 /* per turn: the phone holds the page's sound (9 times in Jim's log since Oct 26) */, quietMic: 0.025 /* per turn: the officer's words never reach the mic; they wait 4-10 s and say it again (as in the real-Ara runner) */, dropAgain: 0.3 /* of drops: the line drops again right after it comes back, taking the officer's answer with it (Carverhill's 5:50 PM call, Oct 30) */ /* per state update: the service never confirms it (and never applied it) */, staleAra: 0.1 /* per next-step yes: the stand-in acts on its old picture and calls save_form, as Grok did on Oct 29 */ };
+
+String(process.env.BOOST || "").split(",").filter(Boolean).forEach(kv => { const [k, x] = kv.split(":"); if (k in RATES) RATES[k] = Math.min(1, RATES[k] * (Number(x) || 1)); }); /* BOOST=lock:20,quietMic:8 multiplies single rates, to aim a short run at one fault */
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".css": "text/css", ".mp3": "audio/mpeg" };
 const server = http.createServer((req, res) => {
@@ -35,6 +38,12 @@ const FAKES = (cfg) => {
   window.__silence = (() => { const n = 12000, b = new Int16Array(n); for (let i = 0; i < n; i++) b[i] = Math.round(4000 * Math.sin(i * 2 * Math.PI * 220 / 24000)); return btoa(String.fromCharCode(...new Uint8Array(b.buffer))); })(); /* 0.5 s of a quiet tone: the phone measures its own speaker level */
   const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices); navigator.mediaDevices.getUserMedia = async (c) => { if (c && c.audio) { const ac = new (window.AudioContext || window.webkitAudioContext)(); window.__micCtx = ac; const dst = ac.createMediaStreamDestination(); return dst.stream; } return gum(c); };
   window.__quietMic = true;
+  // the phone locking and the phone holding the sound: the page sees what an iPhone shows it (hidden page, sound engine held until the phone lets go)
+  window.__hidden = false; Object.defineProperty(Document.prototype, "visibilityState", { get: () => window.__hidden ? "hidden" : "visible", configurable: true }); Object.defineProperty(Document.prototype, "hidden", { get: () => window.__hidden, configurable: true });
+  const AC = window.AudioContext || window.webkitAudioContext, res0 = AC.prototype.resume; AC.prototype.resume = function () { if (this.__heldUntil && Date.now() < this.__heldUntil) return Promise.resolve(); return res0.call(this); }; /* the app's resume() does nothing while the phone holds the sound */
+  window.__holdSound = (ms) => { const c = window.G && G.ctx; if (!c || c.state !== "running") return false; c.__heldUntil = Date.now() + ms; c.suspend(); setTimeout(() => { if (c.state === "suspended" && G.ctx === c) res0.call(c); }, ms); return true; }; /* the phone gives it back by itself after ms */
+  window.__lock = (ms) => { window.__hidden = true; document.dispatchEvent(new Event("visibilitychange")); window.__holdSound(ms + 400); setTimeout(() => { window.__hidden = false; document.dispatchEvent(new Event("visibilitychange")); }, ms); };
+  window.__deaf = () => window.__hidden || !!(window.G && G.ctx && G.ctx.state !== "running"); /* a line that arrives now is never heard */
   window.WebSocket = class {
     constructor(u) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__ws = this; this.readyState = 1; this.q = []; this.held = false; this.openedAt = Date.now();
       setTimeout(() => this.onopen && this.onopen(), 30 + Math.round(rnd() * 300)); }
@@ -42,7 +51,7 @@ const FAKES = (cfg) => {
     // a line said by the voice service, as audio + words (or words only when the fault says so)
     say(text, ms, forced, sounded) { const w = this; if (window.__standIn && !/^I'm here\.|^Okay\.$/.test(text)) window.__standIn.lastLine = text; /* the last line said in Ara's voice, scripted ones included: what she repeats after "are you there" */ const noaudio = !sounded && R && rnd() < P.noaudio * R; if (noaudio) { const late = rnd() < 0.5 ? 5000 + Math.round(rnd() * 11000) : 0; window.__events.push({ at: Date.now(), fault: late ? "words without sound, the sound " + Math.round(late / 1000) + " s later" : "words without sound", text: text.slice(0, 50) }); if (late) setTimeout(() => { if (w.readyState === 1) w.say(text, 0, forced, true); }, ms + late); } /* Carverhill's 12:45 PM call, Oct 30: the sound came 1-16 s after the words, as a response of its own */
       w.deliver({ type: "response.created" }, ms); if (!noaudio) w.deliver({ type: "response.output_audio.delta", delta: window.__silence }, ms + 40); w.deliver({ type: "response.output_audio_transcript.delta", delta: text }, ms + 50);
-      setTimeout(() => { if (w.readyState !== 1) return; const cut = !!(window.G && G.dropNext); w.deliver({ type: "response.done", response: { status: "completed" } }, 0); if (!cut) window.__lines.push({ text, at: Date.now(), from: forced ? "app" : "ara", noaudio }); else window.__events.push({ at: Date.now(), fault: "late copy cut by the app" }); }, ms + 80); } /* a copy the app cut (lateForcedCheck sets G.dropNext on its words) is never heard: not a line said twice */
+      setTimeout(() => { if (w.readyState !== 1) return; const cut = !!(window.G && G.dropNext); w.deliver({ type: "response.done", response: { status: "completed" } }, 0); if (!cut) window.__lines.push({ text, at: Date.now(), from: forced ? "app" : "ara", noaudio: noaudio || window.__deaf(), deaf: !noaudio && window.__deaf() }); else window.__events.push({ at: Date.now(), fault: "late copy cut by the app" }); }, ms + 80); } /* a copy the app cut (lateForcedCheck sets G.dropNext on its words) is never heard: not a line said twice */
     send(d) { window.__sent.push(d); let e; try { e = JSON.parse(d); } catch (x) { return; }
       if (e.type === "session.update") { const w = this, instr = e.session && e.session.instructions; if (R && rnd() < P.lostReceipt * R) { window.__events.push({ at: Date.now(), fault: "lost receipt", bytes: d.length }); (window.__receipts = window.__receipts || []).push({ at: Date.now(), lost: true }); }
         else { const ms = 50 + Math.round(d.length / 50) + Math.round(rnd() * 150); setTimeout(() => { if (w.readyState !== 1) return; if (instr && window.__standIn) window.__standIn.applyState(instr); (window.__receipts = window.__receipts || []).push({ at: Date.now(), ms }); w.deliver({ type: "session.updated" }, 0); }, ms); } } /* one receipt per update, in order (the state sync, Oct 29) */
@@ -143,6 +152,7 @@ const BOOK = [
   { q: /What happened\?|How did it go\?|A sentence or two/i, say: "We talked about his interest in the North Dakota work, and he's keen.", tool: (line, ctx) => forForm(ctx, { summary: "Talked about his interest in the North Dakota work; he's keen." }) },
   { q: /substantive interaction, one that moved/i, say: "Yes, it was.", tool: (line, ctx) => forForm(ctx, { substantive: true }) },
   { q: /What's the next step, and when is it due/i, say: "Call him on Friday about the donation.", tool: (line, ctx) => forForm(ctx, { nextStep: "Call Jordan about the donation", nextDue: F }) },
+  { q: /set it now, yes or no\?/i, say: "Yes." }, /* the next-step question for a substantive interaction (the app then asks what and when) */
   { q: /next step/i, say: "Yes. Call him on Friday about the donation.", tool: (line, ctx) => forForm(ctx, { nextStep: "Call Jordan about the donation", nextDue: F }) },
   { q: /What should the task say/i, say: "Call Jordan about the ask, due Friday.", tool: (line, ctx) => forForm(ctx, { nextStep: "Call Jordan about the ask", nextDue: F }) },
   { q: /Should I hang up now/i, say: "No.", tool: null },
@@ -179,7 +189,7 @@ async function conversation(browser, base, n) {
   // a seeded random number stream in Node for the officer's side (patience, turn faults)
   let s = (seed * 7919) >>> 0; const rnd = () => { s += 0x6D2B79F5; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const patience = () => WAITS[Math.floor(rnd() * WAITS.length)] * 1000;
-  let agendaAt = 0, lastSaid = "", answered = 0, lastAnswerAt = Date.now(), waitLimit = patience() + 10000 /* the greeting is expected: the officer gives it 10 s more */, asksInRow = 0, form = "";
+  let agendaAt = 0, lastSaid = "", answered = 0, lastAnswerAt = Date.now(), waitLimit = patience() + 10000 /* the greeting is expected: the officer gives it 10 s more */, asksInRow = 0, form = "", dropAgainAt = 0 /* a drop armed to strike again right after the line comes back */;
   const firstOpen = await p.evaluate(() => window.__ws.openedAt);
   const state = () => p.evaluate(() => { const last = (window.__lines || []).slice(-1)[0] || null; const ps = (window.__phoneSaid || []).slice(-1)[0] || null; const ws = window.__ws;
     return { lines: (window.__lines || []).length, last, phoneAt: ps ? ps.at : 0, phone: ps ? ps.text : "", status: G.status, live: G.live, forced: !!G.forced, forcedStarted: !!(G.forced && G.forced.started), pendingForce: !!G.pendingForce, asked: !!G.asked, responding: !!G.responding, playing: playingLeft() > 0, openedAt: ws ? ws.openedAt : 0, form: typeof V !== "undefined" && V ? V.action : "", saves: (G.saves || []).length, events: window.__events.length, lastHeardAt: G.lastHeard ? G.lastHeard.at : 0 }; });
@@ -207,7 +217,7 @@ async function conversation(browser, base, n) {
       const silence = Date.now() - lastHeardEnd;
       // a new question from the app or Ara: the officer answers it once the sound would have finished
       if (st.lines > seenLines) { const fresh = await p.evaluate((n) => window.__lines.slice(n), seenLines); seenLines = st.lines;
-        const qs = fresh.filter(l => l.from !== "officer"), q = qs.filter(l => /\?\s*$/.test(l.text)).pop() || qs.pop();
+        const qs = fresh.filter(l => l.from !== "officer" && !l.noaudio) /* words without sound were never heard: the officer waits (until Oct 31 the harness answered them) */, q = qs.filter(l => /\?\s*$/.test(l.text)).pop() || qs.pop();
         if (q && Date.now() >= lastHeardEnd - 200) { await answer(q); continue; } else if (q) { seenLines -= fresh.length - fresh.indexOf(q); /* not finished playing: look again next tick */ continue; } }
       // the officer's patience: silence since the last sound, with nothing of his own left unanswered for less than the draw
       if (silence > waitLimit && Date.now() - lastAnswerAt > waitLimit) {
@@ -227,8 +237,20 @@ async function conversation(browser, base, n) {
     await p.waitForTimeout(800 + Math.round(rnd() * 1200)); /* a person takes a moment */
     const st = await state(); if (!st.live) return;
     conv.turns++; lastSaid = say; lastAnswerAt = Date.now(); waitLimit = patience(); asksInRow = 0;
+    // the line drops again right after it came back: the officer's answer goes into the dead line and the app must ask again (Carverhill's 5:50 PM call, Oct 30)
+    if (dropAgainAt && st.openedAt > dropAgainAt) { dropAgainAt = 0; if (Date.now() - st.openedAt < 20000) { conv.faults.push({ at: Date.now() - t0, fault: "second drop took the answer" });
+      await p.evaluate((t) => { window.__lines.push({ text: t, at: Date.now(), from: "officer", lost: true }); __ws.drop(); }, say); return; } }
+    // the phone locks as the officer is about to answer; they unlock it and answer, or after a long lock wait for the app to ask again
+    if (RATE && rnd() < RATES.lock * RATE) { const long = rnd() < 0.5, ms = long ? 12000 + Math.round(rnd() * 48000) : 2000 + Math.round(rnd() * 7000); conv.faults.push({ at: Date.now() - t0, fault: long ? "phone locked, line closed" : "phone locked, under the grace", ms });
+      await p.evaluate((ms) => { window.__lock(ms); }, ms); await p.waitForTimeout(ms + 1200); lastAnswerAt = Date.now(); if (long || !(await state()).live) return; }
+    // the phone holds the sound: what Ara says next is never heard until the phone lets go (mostly a few seconds, sometimes longer than the app waits)
+    if (RATE && rnd() < RATES.soundHeld * RATE) { const ms = rnd() < 0.8 ? 1500 + Math.round(rnd() * 8000) : 20000 + Math.round(rnd() * 25000);
+      if (await p.evaluate((ms) => window.__holdSound(ms), ms)) conv.faults.push({ at: Date.now() - t0, fault: "phone held the sound", ms }); }
+    // a quiet mic: the words never reach the app; the officer waits 4-10 s and says it again
+    if (RATE && rnd() < RATES.quietMic * RATE) { conv.faults.push({ at: Date.now() - t0, fault: "quiet mic" }); await p.evaluate((t) => { window.__lines.push({ text: t, at: Date.now(), from: "officer", lost: true }); }, say);
+      await p.waitForTimeout(4000 + Math.round(rnd() * 6000)); if (!(await state()).live) return; lastAnswerAt = Date.now(); }
     // faults thrown around this turn
-    if (RATE && rnd() < RATES.drop * RATE) { const dead = rnd() < RATES.deadspot; const ms = 300 + Math.round(rnd() * 2500); conv.faults.push({ at: Date.now() - t0, fault: dead ? "drop + dead spot" : "drop" });
+    if (RATE && rnd() < RATES.drop * RATE) { const dead = rnd() < RATES.deadspot; const ms = 300 + Math.round(rnd() * 2500); if (rnd() < RATES.dropAgain) dropAgainAt = Date.now(); conv.faults.push({ at: Date.now() - t0, fault: dead ? "drop + dead spot" : "drop" });
       setTimeout(() => {}, 0); await said(say, tool); await p.waitForTimeout(ms);
       await p.evaluate((dead) => { if (dead) { const h = 10000 + Math.round(window.__rnd() * 60000); window.__fault.tokenHang = h; window.__fault.tokenUntil = Date.now() + h; } __ws.drop(); }, dead); return; }
     if (RATE && rnd() < RATES.stall * RATE) { conv.faults.push({ at: Date.now() - t0, fault: "stall" }); await said(say, tool); await p.evaluate(() => __ws.stall(5000 + Math.round(window.__rnd() * 40000))); return; }
@@ -254,6 +276,7 @@ async function conversation(browser, base, n) {
 }
 
 const { stateSection } = require("./state-section.js");
+const { faultSection } = require("./fault-section.js");
 const { stepsInPage, stepsLines } = require("../steps.js");
 if (require.main === module) (async () => {
   await new Promise(r => server.listen(0, r)); const base = `http://localhost:${server.address().port}/`;
@@ -275,6 +298,7 @@ if (require.main === module) (async () => {
     "| Conversation | Minutes | Saves | Asks | Faults | Ended |", "|---|---|---|---|---|---|", ...convs.map(c => `| ${c.n} | ${c.minutes} | ${c.saves.length} | ${c.asks.map(a => `${a.silence} s (${a.cause})`).join("; ") || "none"} | ${c.faults.map(f => f.fault).join(", ") || "none"} | ${c.closedWon ? "Closed Won" : c.ended || ""}${c.errors.length ? " " + c.errors.join("; ") : ""} |`), "",
     "## Discrete steps and the app's scripted lines", "", ...stepsLines(convs), "",
     "## Silence", "", `Stretches with no sound (estimated, speaking time taken off): longest ${Math.max(0, ...convs.map(c => c.quiet ? c.quiet.longest : 0))} s; over 6.5 s: ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.over : 0), 0)} of ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.n : 0), 0)} stretches, in ${convs.filter(c => c.quiet && c.quiet.over).length} of ${convs.length} conversations.`, "",
+    ...faultSection(convs),
     ...stateSection(convs),
     "## Each ask", "", "| Conv | At | Silence | Cause | Status | Form | Last heard |", "|---|---|---|---|---|---|---|", ...convs.flatMap(c => c.asks.map(a => `| ${c.n} | ${Math.round(a.at / 1000)} s | ${a.silence} s | ${a.cause} | ${a.status} | ${a.form || ""} | ${a.lastHeard.replace(/\|/g, "/")} |`)), "",
     "## Questions the answer book had no entry for", "", ...[...new Set(convs.flatMap(c => c.unanswered))].map(q => `- ${q}`), "",
