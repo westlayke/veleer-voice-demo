@@ -79,7 +79,10 @@ const LOC_FRESH_MS = 120000;                // a position older than this is not
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;
 const MIC_BACK_MS = 45000;
-const LOCK_CLOSE_MS = 10000;                 // (3 s until Oct 30: the phone auto-locked three times that day and was unlocked within 7 s; now a quick unlock keeps the line) the phone locking (or a switch to another app) hides the page: the line is closed this long after, so nothing is charged while the phone sits locked, and reopened when the app is back (Oct 26 pocket tests: a locked iPhone mutes the mic and pauses the sound anyway)
+// (3 s until Oct 30: the phone auto-locked three times that day and was unlocked within 7 s; now a quick unlock keeps the line) the phone locking (or a
+// switch to another app) hides the page: the line is closed this long after, so nothing is charged while the phone sits locked, and reopened when the
+// app is back (Oct 26 pocket tests: a locked iPhone mutes the mic and pauses the sound anyway)
+const LOCK_CLOSE_MS = 10000;
 const LOCK_MAX_MS = RESUME_MS;               // hidden longer than this (the conversation can no longer be picked up on xAI) ends the call with the Carry on card
 /* MIC_BACK_MS: a muted mic gets longer than the sound, since iOS shows "Audio Recording / Stop audio recording?" and the mic is back on Cancel, which takes a reach (Oct 26 drive). SOUND_BACK_MS: when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back */
 
@@ -203,7 +206,11 @@ function warmLine() {
       // Ara's whole configuration (about 55 KB) goes up now, while the phone is still opening its mic: the call-start harness (Oct 29) showed
       // the phone's uplink carrying it was the 1.3 s wait for session.updated, not xAI. Built as the call will start: hands-free on, nothing saved yet.
       const hands = G.hands, saves = G.saves, name = S.settings.userName, el = document.getElementById("wlName"), typed = el ? el.value.trim().replace(/\s+/g, " ").slice(0, 60) : ""; G.hands = true; G.saves = []; if (typed) S.settings.userName = typed; /* the name being typed on the welcome is the officer's name once Start is tapped */
-      try { const cfg = sessionCfg(), msgs = [{ type: "session.update", session: provider() !== "openai" ? cfg : providerSession(cfg) }, ...extraUpdates()]; /* the same shaping as sessUpdate (OpenAI puts audio under audio.input and needs type/model) */ msgs.forEach(m => ws.send(JSON.stringify(m))); ws.upN = (ws.upN || 0) + msgs.length; w.cfg = { at: Date.now(), n: msgs.length, rules: G.sentRules, ctx: G.sentCtx }; vlog(`configuration sent on the warmed line (${msgs.length} updates)`); }
+      try { const cfg = sessionCfg(), msgs = [{ type: "session.update", session: provider() !== "openai" ? cfg : providerSession(cfg) }, ...extraUpdates()]; /* the same shaping as sessUpdate (OpenAI puts audio under audio.input and needs type/model) */
+        msgs.forEach(m => ws.send(JSON.stringify(m)));
+        ws.upN = (ws.upN || 0) + msgs.length;
+        w.cfg = { at: Date.now(), n: msgs.length, rules: G.sentRules, ctx: G.sentCtx };
+        vlog(`configuration sent on the warmed line (${msgs.length} updates)`); }
       catch (e) { w.cfg = null; } finally { G.hands = hands; G.saves = saves; S.settings.userName = name; } };
     setTimeout(() => { if (G.warm === w && !G.live) { G.warm = null; try { ws.close(); } catch (e) {} vlog("warmed line closed unused"); } }, WARM_MAX_MS); }).catch(() => {});
 }
@@ -295,7 +302,10 @@ const downSince = () => Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now
 async function reconnect(why) {
   if (!G.live) return;
   if (G.lastTry || downSince() > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } /* after the announced last try, no more */
-  if (!G.lastTry && downSince() > NO_LINE_GIVE_UP_MS - LAST_TRY_MS) { G.lastTry = true; clearTimeout(G.downTimer); cutStatusLine("the last try is announced"); sayLocal(DOWN_LINES[3], "last", namedText("last")); } /* Carverhill, Oct 29: tell them when it's the last try */ // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
+  if (!G.lastTry && downSince() > NO_LINE_GIVE_UP_MS - LAST_TRY_MS) { G.lastTry = true;
+    clearTimeout(G.downTimer);
+    cutStatusLine("the last try is announced");
+    sayLocal(DOWN_LINES[3], "last", namedText("last")); } /* Carverhill, Oct 29: tell them when it's the last try */ // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
   G.drops++; G.status = "Reconnecting…"; G.createAt = 0; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.turnOpen = 0;
   if (G.speechOn) { G.cutMidSpeech = true; G.speechOn = false; } /* the officer was mid-sentence when the line went: what was heard is a fragment, not their answer (real-line run, Oct 29: "You said: Record the") */
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
@@ -327,7 +337,10 @@ async function openAgain(lock) {
   // the app says where the form stands and, when a question is pending, asks it again itself as a scripted line; the context goes in Ara's instructions (Right now)
   openSocket(token, () => { const fp = typeof formPosition === "function" ? formPosition() : null;
     const pf = G.pendingForce; G.pendingForce = null; /* a scripted line the old line never started (forceTick): said again on this one unless the form question covers it */
-    const back = lock ? "Line reopened" : "Reconnected", say = (line, why) => { G.justNow = { text: reconnectLine(lock, line) + (fp ? " " + fp.where : ""), at: Date.now() }; act("step", `${back}: ${why}`); whenIdle("instr"); syncWait(() => forceSay(`Sorry, I lost you for a moment. ${line}`)); }; /* the sorry line goes once the service has confirmed Ara's state for the new line (or after SYNC_RECEIPT_MS), so she has the picture before the officer answers (Carverhill, Oct 29) */
+    const back = lock ? "Line reopened" : "Reconnected", say = (line, why) => { G.justNow = { text: reconnectLine(lock, line) + (fp ? " " + fp.where : ""), at: Date.now() };
+      act("step", `${back}: ${why}`);
+      whenIdle("instr");
+      syncWait(() => forceSay(`Sorry, I lost you for a moment. ${line}`)); }; /* the sorry line goes once the service has confirmed Ara's state for the new line (or after SYNC_RECEIPT_MS), so she has the picture before the officer answers (Carverhill, Oct 29) */
     if (fp && fp.ask) { if (fp.arm) fp.arm(); say(`${typeof formIntro === "function" ? formIntro() + " " : ""}${fp.ask}`, `the app says where we are and asks the pending question itself (${fp.where})`); } /* "We're on the interaction report for Elon." first: the officer may have been away a while */
     else if (pf) say(pf, "the app says the scripted line the old line never started");
     else { const q = lastQuestion();
@@ -339,13 +352,17 @@ async function openAgain(lock) {
 function lastLineContext(line) { const w = typeof whereWeAre === "function" ? whereWeAre() : null, who = w && w.who && new RegExp("\\b" + w.who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(line) ? w.who : ""; return { kind: "last line", line, who, q: typeof lastQuestionOf === "function" ? lastQuestionOf(line) : line }; }
 // what the app asks after a drop with no form open: the question Ara had just asked and the officer hadn't answered, "say that again" when the officer had spoken last, else the open question
 function lastQuestion() {
-  const bot = String(G.lastBot || "").trim().replace(/^(Sorry, I lost you for a moment\.\s*)+/, "").replace(/\s*(You said: "[^"]*"\.|I didn't catch your answer\.|Then you started to say something\. Can you repeat what you said\?)\s*$/, ""), heardAt = G.lastHeard && G.lastHeard.at || 0, answered = heardAt > 0 && heardAt >= (G.lastBotAt || 0); /* her last line may itself be the app's reconnect line: a second drop with no word from the officer must not stack the sorry (Patient Pat on the real line, Oct 29: five in a row) */
+  // her last line may itself be the app's reconnect line: a second drop with no word from the officer must not stack the sorry (Patient Pat on the real
+  // line, Oct 29: five in a row)
+  const bot = String(G.lastBot || "").trim().replace(/^(Sorry, I lost you for a moment\.\s*)+/, "").replace(/\s*(You said: "[^"]*"\.|I didn't catch your answer\.|Then you started to say something\. Can you repeat what you said\?)\s*$/, ""), heardAt = G.lastHeard && G.lastHeard.at || 0, answered = heardAt > 0 && heardAt >= (G.lastBotAt || 0);
   const asked = /\?\s*$/.test(bot) && bot.length > 3 && bot.length <= 220; // Ara had asked something: the whole line is said again, so the officer knows where they were (Carverhill, 3:57 PM call Oct 29: "Could you say that again?" alone left him asking "say what again?")
-  const statement = !asked && bot.length > 3 && bot.length <= 220 ? { line: `${bot} Then you started to say something. Can you repeat what you said?`, why: "the app says Ara's last line (a statement) again and asks for what the officer had started to say" } : { line: "Could you say that again?", why: "the app asks the officer to repeat what they said" }; /* Carverhill, 4:15 PM Oct 29: "Could you say that again?" after a statement sounded like a request to repeat the statement */
+  // Carverhill, 4:15 PM Oct 29: "Could you say that again?" after a statement sounded like a request to repeat the statement
+  const statement = !asked && bot.length > 3 && bot.length <= 220 ? { line: `${bot} Then you started to say something. Can you repeat what you said?`, why: "the app says Ara's last line (a statement) again and asks for what the officer had started to say" } : { line: "Could you say that again?", why: "the app asks the officer to repeat what they said" };
   const cut = G.cutMidSpeech; G.cutMidSpeech = false;
   if ((typeof V === "undefined" || !V) && G.staleRbAt && G.staleRbAt >= (G.lastBotAt || 0) - 60000 && /Yes to save, or no to change something\?\s*$/.test(bot)) return { line: G.savedByWordsLine || `It's saved. ${typeof NEXT_NO_Q === "string" ? NEXT_NO_Q : "What would you like to do?"}`, why: "that read-back's form was saved: the app says so instead of asking it again" }; /* 6:23 PM call, Oct 29 */
   if (G.spokeInGap || cut) return asked ? { line: `${bot} I didn't catch your answer.`, why: `the app says Ara's whole last line again and that the officer's answer was lost ${cut ? "(the line went while they were still talking)" : "while the line was down"}` } : statement;
-  if (answered) { const heard = String(G.lastHeard.text || "").trim().replace(/[.!?]+$/, ""); return asked && heard ? { line: `${bot} You said: "${heard.slice(0, 80)}".`, why: "the app says Ara's whole last line again and the answer it heard, for Ara to act on", then: `The officer had already answered that question before the line dropped: "${heard.slice(0, 160)}". Act on that answer now, as if they had just said it; don't ask the question again.` } : statement; }
+  if (answered) { const heard = String(G.lastHeard.text || "").trim().replace(/[.!?]+$/, "");
+    return asked && heard ? { line: `${bot} You said: "${heard.slice(0, 80)}".`, why: "the app says Ara's whole last line again and the answer it heard, for Ara to act on", then: `The officer had already answered that question before the line dropped: "${heard.slice(0, 160)}". Act on that answer now, as if they had just said it; don't ask the question again.` } : statement; }
   // her whole last line when it is short and ends in her question (10:05 AM call: the last sentence alone, "which fits?", lost the choices); else just the question
   const bare = /^(what would you like to do( next)?|what'?s next)\?$/i.test(bot); /* her bare open question is never said again after a drop: where we were is (10:36 AM call, Oct 30) */
   if (/\?\s*$/.test(bot) && bot.length > 3 && bot.length <= 220 && !bare) return { line: bot, why: "the app says Ara's whole last line again itself" };
@@ -576,7 +593,8 @@ function forceSay(text, then, fallback, waited = 0) {
   if ((replyBusy() || playingLeft() > 0 || G.forced || Date.now() - (G.cancelAt || 0) < CANCEL_SETTLE_MS) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
   // the reply just finished already said it (the engine answered the tool result with the question itself): no second copy (OpenAI, Oct 27: "What's the first name?" three times)
   if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text))) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
-  G.forced = { at: Date.now(), events: [], text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false, itemId: null, byId: false, ids: {} }; if (G.pendingForce === text) G.pendingForce = null; /* itemId: the id xAI gives the line when it accepts it; the reply carrying that id on its item and audio is the line (real-Ara run, Oct 30: 30 of 30; an id of our own is not kept) */
+  G.forced = { at: Date.now(), events: [], text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false, itemId: null, byId: false, ids: {} };
+  if (G.pendingForce === text) G.pendingForce = null; /* itemId: the id xAI gives the line when it accepts it; the reply carrying that id on its item and audio is the line (real-Ara run, Oct 30: 30 of 30; an id of our own is not kept) */
   if (PROV().forceItem) send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
   else { G.forced.viaReply = true; G.createAt = Date.now(); forceByReply(text); } /* an engine without force_message is asked to say it in a reply of its own: a reply request like any other, so the next one waits for it */
   vlog("scripted line: " + text);
@@ -607,7 +625,10 @@ function forcedStart(f) { f.started = true; if (f.ids) f.ids.resp = f.ids.lastRe
 function forcedEvent(t, e) {
   const f = G.forced;
   if (f.events && f.events.length < 60) f.events.push({ t, dt: Date.now() - f.at });
-  if (f.ids && e) { if (t === "response.created" && e.response && e.response.id) f.ids.lastResp = e.response.id; if (t === "response.output_item.added" && e.item && e.item.id) { f.ids.seen = e.item.id; if (!f.ids.item && (f.itemId ? e.item.id === f.itemId : f.started)) f.ids.item = e.item.id; } if (/audio\.delta$/.test(t) && e.item_id && !f.ids.audio && (f.itemId ? e.item_id === f.itemId : f.started)) f.ids.audio = e.item_id; } /* which ids the line comes back with (another reply's items, a tool call's, don't count once ours is known) */
+  if (f.ids && e) { if (t === "response.created" && e.response && e.response.id) f.ids.lastResp = e.response.id;
+    if (t === "response.output_item.added" && e.item && e.item.id) { f.ids.seen = e.item.id;
+      if (!f.ids.item && (f.itemId ? e.item.id === f.itemId : f.started)) f.ids.item = e.item.id; }
+    if (/audio\.delta$/.test(t) && e.item_id && !f.ids.audio && (f.itemId ? e.item_id === f.itemId : f.started)) f.ids.audio = e.item_id; } /* which ids the line comes back with (another reply's items, a tool call's, don't count once ours is known) */
   if (t === "conversation.item.added" && e && e.item && e.item.id && !f.itemId && !f.byId && ownForcedItem(f, e.item)) { f.itemId = e.item.id; if (f.started && [f.ids.item, f.ids.audio].includes(f.itemId)) f.byId = true; return; } /* the acceptance can land after the reply started by order: the id still confirms it */
   const idOf = t === "response.output_item.added" ? e && e.item && e.item.id : /audio\.delta$/.test(t) ? e && e.item_id : null;
   if (f.itemId && idOf && idOf === f.itemId && !f.byId) { f.byId = true; if (!f.started) forcedStart(f); } /* this reply carries our line's id: it is the line, whatever else is on the way */
@@ -622,11 +643,23 @@ function forcedEvent(t, e) {
       // Ara answered on her own (to the tool result) and the app took that for the scripted line starting (Oct 25 6:04 PM: a read-back heard twice, 8 s apart)
       if (f.viaReply && saidLine(said, want)) { G.forced = null; G.lastForcedText = f.text; act("step", `${PROV().name} said the scripted line in its own words`); if (f.then) setTimeout(() => guide(f.then), 0); return; } /* no late copy is coming on this engine */
       if (saidLine(said, want)) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", "Ara said the scripted line in her own words before it played: its late copy will be cut"); if (f.then) setTimeout(() => guide(f.then), 0); }
-      else if (/\?\s*$/.test(G.bot || "") && /\?\s*$/.test(f.text) && Date.now() - f.at <= TWO_Q_MS) { G.forced = null; G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 }; act("step", `Ara asked her own question while the app's scripted question was still to come: hers stands, the scripted copy will be cut (${forcedTrace(f)})`); if (f.then) setTimeout(() => guide(f.then), 0); } /* 10:05 AM call: two questions in a row */
-      else { f.started = false; act("step", `Ara answered on her own while the scripted line was still to come (${forcedTrace(f)})`); clearTimeout(G.forceTimer); G.forceTimer = setTimeout(() => { const g = G.forced; if (g && !g.started) { G.forced = null; G.lateForced = { text: g.text, said: 0, at: Date.now() }; act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(g)})`); guide(g.fallback); } }, FORCE_WAIT_MS); }
+      else if (/\?\s*$/.test(G.bot || "") && /\?\s*$/.test(f.text) && Date.now() - f.at <= TWO_Q_MS) { G.forced = null;
+        G.lateForced = { text: f.text, said: 0, at: Date.now(), resp: G.respSeq, firstAudio: G.audioSamples || 0 };
+        act("step", `Ara asked her own question while the app's scripted question was still to come: hers stands, the scripted copy will be cut (${forcedTrace(f)})`);
+        if (f.then) setTimeout(() => guide(f.then), 0); } /* 10:05 AM call: two questions in a row */
+      else { f.started = false;
+        act("step", `Ara answered on her own while the scripted line was still to come (${forcedTrace(f)})`);
+        clearTimeout(G.forceTimer);
+        G.forceTimer = setTimeout(() => { const g = G.forced;
+          if (g && !g.started) { G.forced = null;
+            G.lateForced = { text: g.text, said: 0, at: Date.now() };
+            act("step", `Scripted line didn't play in ${FORCE_WAIT_MS / 1000} s: Ara says it instead (${forcedTrace(g)})`);
+            guide(g.fallback); } }, FORCE_WAIT_MS); }
       return; }
     G.forced = null; G.lastForcedText = f.text; if (!G.bot) G.bot = f.text; { const st = (f.events || []).find(x => x.t === "response.created"); G.traceN = (G.traceN || 0) + 1; if (G.traceN <= 2 || !st || st.dt > 2500) act("step", `Scripted line played (${forcedTrace(f)})`); }
-    if (G.traceN <= 3) { const i = f.ids || {}; act("step", `Scripted line ids: the service gave the line item ${f.itemId || "none"}; reply ${i.resp || "none"}, item ${i.item || "none"}, audio item ${i.audio || "none"}; matched by id: ${f.byId ? "yes" : f.byWords ? "no (by its words)" : "no (no id, by order)"}`); } /* the first three per call: enough to see the pairing without flooding the log */ if (f.then) setTimeout(() => guide(f.then), 0); }
+    if (G.traceN <= 3) { const i = f.ids || {};
+      act("step", `Scripted line ids: the service gave the line item ${f.itemId || "none"}; reply ${i.resp || "none"}, item ${i.item || "none"}, audio item ${i.audio || "none"}; matched by id: ${f.byId ? "yes" : f.byWords ? "no (by its words)" : "no (no id, by order)"}`); } /* the first three per call: enough to see the pairing without flooding the log */
+    if (f.then) setTimeout(() => guide(f.then), 0); }
 }
 // did Ara say the scripted line in her own words? Most of the shorter line's words shared, and enough of them: a three-word echo
 // ("For the date.") shares "the" and "date" with an 18 s read-back and is not that read-back (Oct 28: the real read-back was then cut as a late copy)

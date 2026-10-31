@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 9:09 PM",
+      "change": "Preview: no change in what the app does. Code tidy-up (step 2 of the cleanup): long lines in the voice code are split where one statement ends and the next begins, and long notes that trailed code now sit on their own lines just above it. A check confirmed the code itself is token-for-token the same. The tests share one activity-log reader and one voice-event sender instead of 24 copies (step 1).",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 6:48 PM asked for code clean-up suggestions, and at 8:39 PM agreed to steps 1 to 3 (step 3 only after the Patient Pat baseline). Lines up to 1,200 characters were hard to read and review."
+    },
+    {
       "date": "Oct 30, 6:28 PM",
       "change": "Preview: the app's watch that cuts a late duplicate of a line now ends whenever a repeat is wanted: on a new line after a drop, on \"are you there?\" and on \"say that again\", so a re-ask is never cut (a save's stale read-back is still cut). With a form open and 13 seconds of quiet, the app asks Ara to put the pending question again in her own words, once per quiet spell; the app says nothing itself. Whatever the form is waiting on is what she asks: a required field, the email or mobile, the substantive question, the next step, the save-or-optional choice, an optional field, the follow-up suggestion or the read-back's yes.",
       "area": "Voice",

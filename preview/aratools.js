@@ -11,7 +11,8 @@ const TOOL_HANDLERS = {
     G.nameCheck = null;
     const wasAsking = !!document.getElementById("wlName"); // the name screen was open
     S.settings.userName = v; S.settings.seenPrivacy = true; S.settings.seenFormLog = true; S.seenWelcome = true; if (wasAsking) S.screen = "home"; save(); applyName(); welcomeModal(); render(); if (wasAsking) window.scrollTo(0, 0); whenIdle("instr");
-    toolReply(callId, { ok: true, status: `Saved. You already introduced yourself, so don't say your name or role again. If they haven't asked for anything yet, say exactly: "Nice to meet you, ${v}. What would you like to do?" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Thanks, ${v}" and carry on with it.` }); return;
+    toolReply(callId, { ok: true, status: `Saved. You already introduced yourself, so don't say your name or role again. If they haven't asked for anything yet, say exactly: "Nice to meet you, ${v}. What would you like to do?" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process". If they already asked for something, say "Thanks, ${v}" and carry on with it.` });
+    return;
   },
   set_capacity_rating(callId, data, name) {
     const r = normCap(data.rating);
@@ -37,7 +38,8 @@ const TOOL_HANDLERS = {
     if (!data.confirmed && !officerRated()) { vlog(`${name}: rating ${r} not from the officer; asking`); toolReply(callId, { ok: false, saved: false, error: "The officer hasn't said a rating; the app is asking them which. After the answer, call set_capacity_rating again with that rating.", ask_exactly: rateQ(c.first) }); return; }
     S.sel.contact = c.id; if (S.screen !== "contact") go("contact"); else render();
     // the app says the rating lines itself, letter then range in full (Carverhill, Oct 28: Ara's own wording dropped the letter)
-    if (!data.confirmed) { toolReply(callId, { ok: true, contact: nameOf(c), now: was ? capSaid(was) : "not rated", will_become: capSaid(r), said: "The app asked the officer this itself. After their yes, call set_capacity_rating again with confirmed true.", ask_exactly: `Set ${c.first}'s capacity to ${capSaid(r)}, yes or no?` }); return; } /* a selection that saves on its own is confirmed as a yes-or-no decision (Carverhill, Oct 30) */
+    if (!data.confirmed) { toolReply(callId, { ok: true, contact: nameOf(c), now: was ? capSaid(was) : "not rated", will_become: capSaid(r), said: "The app asked the officer this itself. After their yes, call set_capacity_rating again with confirmed true.", ask_exactly: `Set ${c.first}'s capacity to ${capSaid(r)}, yes or no?` });
+      return; } /* a selection that saves on its own is confirmed as a yes-or-no decision (Carverhill, Oct 30) */
     c.capacity = r; log(`Capacity rated ${r} (${CAPACITY[r]})`, { contactId: c.id }); save(); render(); toast(`${nameOf(c)}: capacity ${r} · ${CAPACITY[r]}`);
     toolReply(callId, { ok: true, saved: true, rating: capSaid(r), said: "The app said the save and the next step itself; wait for the officer's answer.", ask_exactly: `${c.first} is rated ${capSaid(r)}. ${nextStepLine(c)}` }); return;
   },
@@ -63,7 +65,8 @@ const TOOL_HANDLERS = {
     const until = st === "waiting" ? (/^\d{4}-\d{2}-\d{2}$/.test(data.check_back_on || "") ? data.check_back_on : addDays(todayISO(), 7)) : null;
     const change = st === "waiting" ? `Waiting, check back ${fmtDate(until)}` : TSTAT[st];
     if (!data.confirmed) { go("tasks"); whenIdle("instr"); setTimeout(() => { const r = document.querySelector(`.trow[data-tid="${t.id}"]`); if (r) { r.classList.add("tflash"); r.scrollIntoView({ block: "center", behavior: "smooth" }); } }, 150);
-      toolReply(callId, { ok: true, task: t.text, for: taskWhere(t), now: TSTAT[taskStatus(t)], will_become: change, ask_exactly: `Mark '${t.text}'${taskWhere(t) ? " for " + taskWhere(t) : ""}${t.due ? ", due " + fmtDate(t.due) : ""}, as ${change.toLowerCase()}, yes or no?${st === "waiting" && !data.check_back_on ? " The check-back date would be a week from today unless you want another day." : ""}`, next: "The app asked the question itself; don't ask it again. Wait for yes before calling again with confirmed true." }); return; } // the question is scripted (Oct 25 6:03 PM: Ara announced it and then asked it, "Didn't you just ask me that?")
+      toolReply(callId, { ok: true, task: t.text, for: taskWhere(t), now: TSTAT[taskStatus(t)], will_become: change, ask_exactly: `Mark '${t.text}'${taskWhere(t) ? " for " + taskWhere(t) : ""}${t.due ? ", due " + fmtDate(t.due) : ""}, as ${change.toLowerCase()}, yes or no?${st === "waiting" && !data.check_back_on ? " The check-back date would be a week from today unless you want another day." : ""}`, next: "The app asked the question itself; don't ask it again. Wait for yes before calling again with confirmed true." });
+      return; } // the question is scripted (Oct 25 6:03 PM: Ara announced it and then asked it, "Didn't you just ask me that?")
     const undo = setTaskStatus(t, st, until); go("tasks"); toast(`${change}: ${t.text}`, undo);
     const meetingish = /follow|call|meet|visit|lunch|coffee|pledge|ask/i.test(t.text);
     toolReply(callId, { ok: true, saved: true, task: t.text, status: change, say: `Confirm in one short sentence that it's saved${st === "done" && meetingish ? ", then ask whether they'd like to log an interaction for it (for example a call or meeting report)" : ""}.` }); return;
@@ -219,7 +222,8 @@ const TOOL_HANDLERS = {
     const byStatus = {}, byPerson = {}; open.forEach(t => { const k = TSTAT[taskStatus(t)], w = taskWhere(t) || "no one"; byStatus[k] = (byStatus[k] || 0) + 1; byPerson[w] = (byPerson[w] || 0) + 1; });
     toolReply(callId, { ok: true, open_tasks_total: open.length, overdue_total: open.filter(t => t.due && t.due < T).length, by_status: byStatus, people_with_most_tasks: Object.entries(byPerson).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([w, n]) => ({ who: w, n })), showing: which, for_person: who && !who.error ? nameOf(who.contact) : "everyone", count: pick.length,
       tasks: pick.map(t => ({ task: t.text, status: TSTAT[taskStatus(t)], for: taskWhere(t), due: t.due ? fmtDate(t.due) + (t.due.slice(0, 4) !== T.slice(0, 4) ? " " + t.due.slice(0, 4) : "") : "no due date", overdue: !!(t.due && t.due < T), due_today: t.due === T })),
-      say: pick.length > 8 ? "A long list: first give the counts in one sentence (open, overdue, and the two or three people with the most tasks), then ask whether to hear the oldest five, the ones for one person, or the ones due this week. Read tasks only after they choose, five at a time, each briefly with who it's for and when it's due." : pick.length ? "Say how many there are, overdue ones first, then read each task briefly with who it's for and when it's due (say overdue, today, or the day). If there are more than five, read the first five and ask whether to go on. Then ask if they'd like to act on one, for example log the follow-up." : "Say there are no open tasks of that kind." }); return;
+      say: pick.length > 8 ? "A long list: first give the counts in one sentence (open, overdue, and the two or three people with the most tasks), then ask whether to hear the oldest five, the ones for one person, or the ones due this week. Read tasks only after they choose, five at a time, each briefly with who it's for and when it's due." : pick.length ? "Say how many there are, overdue ones first, then read each task briefly with who it's for and when it's due (say overdue, today, or the day). If there are more than five, read the first five and ask whether to go on. Then ask if they'd like to act on one, for example log the follow-up." : "Say there are no open tasks of that kind." });
+      return;
   },
   get_contact_history(callId, data, name) {
     const r = resolveTarget("interaction", data.contact_name);
@@ -232,7 +236,8 @@ const TOOL_HANDLERS = {
       interactions_total: ints.length, last_substantive: (ints.find(i => i.substantive) || {}).date ? fmtDate(ints.find(i => i.substantive).date) : "none",
       interactions: focus === "tasks" ? undefined : ints.slice(0, 6).map(i => ({ date: fmtDate(i.date) + (i.date && i.date.slice(0, 4) !== T.slice(0, 4) ? " " + i.date.slice(0, 4) : ""), how: i.type, what: i.kind === "ask" ? "ask" : "interaction", substantive: !!i.substantive, outcome: i.outcome || undefined, summary: i.summary || "" })),
       open_tasks: focus === "history" ? undefined : tasks.map(t => ({ task: t.text, on: t.oppId ? "opportunity" : "contact", due: t.due ? fmtDate(t.due) : "no due date", overdue: !!(t.due && t.due < T) })),
-      say: `Speak only what was asked. History: newest first, one short sentence each (when, how, and the gist of the summary); if there are more than three, give the latest three and offer the rest. ${focus === "history" ? "" : "Then the open tasks for this contact, overdue first, each with its due date; if none, say there are no open tasks for them."} Never add details that aren't in the records.` }); return;
+      say: `Speak only what was asked. History: newest first, one short sentence each (when, how, and the gist of the summary); if there are more than three, give the latest three and offer the rest. ${focus === "history" ? "" : "Then the open tasks for this contact, overdue first, each with its due date; if none, say there are no open tasks for them."} Never add details that aren't in the records.` });
+      return;
   },
   highlight_stage(callId, data, name) {
     const i = flowIndex(data.stage); if (i < 0) { toolReply(callId, { ok: false, error: "Unknown stage. The stages are Qualification, Cultivation, Ask Planning, Ask Made, Commitment and Closed. Ask which one." }); return; }
@@ -245,7 +250,8 @@ const TOOL_HANDLERS = {
     if (i === FLOW.length - 1) G.tourEnding = true;
     highlightStage(i); const f = FLOW[i], nx = FLOW[i + 1];
     const facts = `${f.means}${f.move.length ? " To move on: " + f.move.join(" ") : ""}${f.note ? " " + f.note : ""}`;
-    toolReply(callId, { ok: true, summary: `${f.stage} is lit up on screen. ${i === 0 ? `First say exactly: "${PROCESS_INTRO}" Then talk` : "Your next words are"} about ${f.stage} only: start with "${f.stage}" and say one or two sentences based on this: ${facts} Say nothing about earlier stages and don't finish or repeat anything you said before. Then ${nx ? `ask "Shall I go on to ${nx.stage}?" and wait for the answer (unless they asked you to go straight through). When they say yes, call highlight_stage for ${nx.stage} before saying anything.` : "ask if they have questions or want to try a step."}` }); return;
+    toolReply(callId, { ok: true, summary: `${f.stage} is lit up on screen. ${i === 0 ? `First say exactly: "${PROCESS_INTRO}" Then talk` : "Your next words are"} about ${f.stage} only: start with "${f.stage}" and say one or two sentences based on this: ${facts} Say nothing about earlier stages and don't finish or repeat anything you said before. Then ${nx ? `ask "Shall I go on to ${nx.stage}?" and wait for the answer (unless they asked you to go straight through). When they say yes, call highlight_stage for ${nx.stage} before saying anything.` : "ask if they have questions or want to try a step."}` });
+    return;
   },
   show_needs_attention(callId, data, name) {
     if (data.filter === "hands_free") { // the saves made by voice that the officer hasn't looked at yet (Carverhill, Oct 25: "read off all of the hands-free decisions that I made that I need to approve")
@@ -289,7 +295,10 @@ function onTool(callId, name, args, held) {
   let data = {}; try { data = typeof args === "string" ? JSON.parse(args || "{}") : (args || {}); } catch (x) {}
   act("step", name + " " + JSON.stringify(data));
   // a picked-up conversation replays the last tool call (Oct 28, twice: the interaction form reopened with the type from the saved report, then "I didn't catch the type"): once is enough
-  const key = name + " " + JSON.stringify(data); if (G.resumedAt && Date.now() - G.resumedAt < REPLAY_MS && (G.heardN || 0) <= (G.resumedHeardN || 0) && (G.toolKeys || []).some(k => k.key === key && k.at < G.resumedAt && (G.lastDropAt || 0) - k.at < REPLAY_BEFORE_MS)) { /* only a call from just before the drop, and only before the officer has said anything on the new line: anything they say after the pickup is answered for real, whatever it matches (Oct 29 7:39 AM: a yes to the opportunity matched the contact's save 60 s earlier and was refused) */
+  const key = name + " " + JSON.stringify(data);
+  // only a call from just before the drop, and only before the officer has said anything on the new line: anything they say after the pickup is answered
+  // for real, whatever it matches (Oct 29 7:39 AM: a yes to the opportunity matched the contact's save 60 s earlier and was refused)
+  if (G.resumedAt && Date.now() - G.resumedAt < REPLAY_MS && (G.heardN || 0) <= (G.resumedHeardN || 0) && (G.toolKeys || []).some(k => k.key === key && k.at < G.resumedAt && (G.lastDropAt || 0) - k.at < REPLAY_BEFORE_MS)) {
     const pos = typeof formPosition === "function" ? formPosition() : null; guardFired("tool call replayed after a pickup", name);
     toolReply(callId, { ok: false, error: `This call was already handled before the line dropped; nothing changed. ${pos ? pos.where : G.savedLine ? `The last form was saved (${G.savedLine}); no form is open.` : "No form is open."} Don't repeat it: go on with what the officer says next.` }); return; }
   (G.toolKeys = (G.toolKeys || []).slice(-5)).push({ key, at: Date.now() });
@@ -306,7 +315,8 @@ function draftTool(callId, name, data) {
   if (!tool) { toolReply(callId, { ok: false, error: "Unknown tool. Use one of the tools you were given, or tell the officer the app can't do that." }); return; }
   // another form while the open one was read back and is waiting for a yes: the officer's yes saves it first, anything else keeps it open (a safeguard added Oct 25)
   const settle = () => { const p = hfSettlePending(); if (!p) return false;
-    if (!p.saved) { toolReply(callId, { ok: false, ask_exactly: `The ${formName(ACTIONS[V.action])} form is waiting on your yes. Save it, change something, or drop it?`, error: `The open ${p.title} form was read back and is waiting for the officer's yes; it is NOT saved${p.err ? ` (${p.err})` : ""}. The app asked them what to do with it. If they say yes, call save_form with confirmed true; if they want a change, call its draft tool with the changed field; if they drop it, call cancel_form. Only then open the ${ACTIONS[tool.action].title} form.` }); return true; }
+    if (!p.saved) { toolReply(callId, { ok: false, ask_exactly: `The ${formName(ACTIONS[V.action])} form is waiting on your yes. Save it, change something, or drop it?`, error: `The open ${p.title} form was read back and is waiting for the officer's yes; it is NOT saved${p.err ? ` (${p.err})` : ""}. The app asked them what to do with it. If they say yes, call save_form with confirmed true; if they want a change, call its draft tool with the changed field; if they drop it, call cancel_form. Only then open the ${ACTIONS[tool.action].title} form.` });
+      return true; }
     guide(`The officer's yes saved the ${p.title} form first (${p.line}); say so in a few words before going on.`); return false; };
   // the open form settles first (its save can be what makes the next form possible), unless this tool is the open form under its routed name (Oct 28 4:41 PM call: "credit card" on the routed gift form was refused as a new form)
   if (V && V.action !== tool.action && voiceRule(V.action).routedFrom !== tool.action && settle()) return;
@@ -356,7 +366,8 @@ function draftTool(callId, name, data) {
     if (t) { data.substantive = hfYes(t) || /\bsubstantive\b/i.test(t) && !/\b(not|no|wasn't)\b/i.test(t); vlog(`${name}: substantive ${data.substantive}, from the officer's words`); } }
   if (data._dropped) { vlog(`${name}: left out ${data._dropped.join(", ")} (the officer didn't say it)`); act("step", `Left out ${data._dropped.join(", ")} the voice model filled in without the officer saying it`); }
   const movedNote = (data._moved || []).map(x => " " + x).join(""); delete data._moved;
-  const droppedList = data._dropped || [], droppedNote = droppedList.length ? ` Left out of the form because the officer never said it: ${droppedList.join(", ")}. Never fill those in yourself, never read them back, never say "noted" or "got it" for them, and if the officer asks where a value came from, say it was your guess and the app removed it; the app asks what it needs.` : ""; delete data._dropped;
+  const droppedList = data._dropped || [], droppedNote = droppedList.length ? ` Left out of the form because the officer never said it: ${droppedList.join(", ")}. Never fill those in yourself, never read them back, never say "noted" or "got it" for them, and if the officer asks where a value came from, say it was your guess and the app removed it; the app asks what it needs.` : "";
+  delete data._dropped;
   // a dropped value the form still needs: the app says so itself before the question, so Ara can't answer "noted" to a rating that was just removed (Jacqueline's call, Oct 27)
   const droppedNeeded = (labels) => droppedList.map(x => x.replace(/ \(.*$/, "").replace(/ of \$0$/, "")).filter(x => labels.some(l => l.toLowerCase().startsWith(x)));
   const notCaught = (xs) => `I didn't catch ${xs.length > 1 ? "these" : "the"} ${xs.join(", ").replace(/, ([^,]*)$/, " and $1")} from you, so ${xs.length > 1 ? "they're" : "it's"} not on the form.`;
@@ -396,19 +407,27 @@ function draftTool(callId, name, data) {
   if (oneOf && R.needsOneOf.every(k => empty(d[k]))) missing.push(noEmail && !noMobile ? "Mobile number (the officer said there is no email, so ask only for the mobile)" : noMobile && !noEmail ? "Email address (the officer said there is no mobile, so ask only for the email)" : "Email or mobile");
   if (stateNote) { missing.unshift(`Entity of interest (${stateNote.trim()})`); stateNote = ""; } // the entity isn't a required field, but the officer asked for one in that state
   if (oppNeedsCampaign(tool.action, d)) missing.push(`Campaign of interest (${d.fund} can be ${campaignsFor(d.fund).join(" or ")}: ask which)`); // Carverhill: always ask the campaign when there is a choice
-  if (awaitingAsk(tool.action, d) && (empty(d.nextStep) || empty(d.nextDue))) { const s = followUpSuggestion(target, d.nextDue); V.askedFollow = true; missing.push(`Next step and its due date (an ask still waiting for its answer needs a follow-up task, which becomes a Task for the officer: say so in one sentence, then suggest exactly these words: "${s.text}", ${dueSaid(s)}, and ask "Shall I use that, yes or no?". If they say yes, call this tool with nextStep "${s.text}" and nextDue ${s.due}; if they say no, ask what the task should say and when it's due, and use their words)`); }
+  if (awaitingAsk(tool.action, d) && (empty(d.nextStep) || empty(d.nextDue))) { const s = followUpSuggestion(target, d.nextDue);
+    V.askedFollow = true;
+    missing.push(`Next step and its due date (an ask still waiting for its answer needs a follow-up task, which becomes a Task for the officer: say so in one sentence, then suggest exactly these words: "${s.text}", ${dueSaid(s)}, and ask "Shall I use that, yes or no?". If they say yes, call this tool with nextStep "${s.text}" and nextDue ${s.due}; if they say no, ask what the task should say and when it's due, and use their words)`); }
   else if (wantsNextStep(tool.action, d, target) && (empty(d.nextStep) || empty(d.nextDue))) missing.push("Next step and its due date (a substantive interaction needs one, and it becomes a Task for the officer: explain that in one sentence, then ask 'Do you want to set it now, yes or no?'; on yes ask 'What's the next step, and when is it due?'; on no go on without one; never suggest a step, a date or a way of contacting anyone, the officer decides)");
   // a new contact: ask once for the other of email/mobile, then once about the optional fields (the app drives this so it never gets skipped)
   // the officer just said a phone number, but this update didn't carry it (Oct 27 spoken run: Grok's call for the mobile turn had no mobile, so the app asked again)
   const saidDigits = oneOf && empty(d.mobile) && data.mobile === undefined ? officerSaidDigits() : "";
   if (saidDigits) { vlog(`${name}: mobile not used: the officer said ${saidDigits}`); toolReply(callId, { ok: true, button: A.saveLabel, status: `The officer just said a phone number (the digits ${saidDigits}), but this update didn't include it. Call this tool again now with it in the mobile field, as they said it. Don't ask them to repeat it.` }); return; }
-  if (missedSpelling.length) { toolReply(callId, { ok: true, button: A.saveLabel, status: `The officer just spelled out ${missedSpelling.map(w => `"${spellOut(w)}" (${w.charAt(0) + w.slice(1).toLowerCase()})`).join(" and ")}, but this update didn't use it. Call this tool again now with that exact spelling in the field they named (for a name, first or last as they said; for an email, the part before the @). If they changed how a name is spelled and the email uses that name, ask once whether the email should change to match. Don't ask them to repeat it.` }); return; }
+  if (missedSpelling.length) { toolReply(callId, { ok: true, button: A.saveLabel, status: `The officer just spelled out ${missedSpelling.map(w => `"${spellOut(w)}" (${w.charAt(0) + w.slice(1).toLowerCase()})`).join(" and ")}, but this update didn't use it. Call this tool again now with that exact spelling in the field they named (for a name, first or last as they said; for an email, the part before the @). If they changed how a name is spelled and the email uses that name, ask once whether the email should change to match. Don't ask them to repeat it.` });
+    return; }
   // every interaction report: ask whether it was substantive (Oct 24: saved as not substantive without asking, which kept the opportunity in Qualification)
-  if (R.alwaysAsk === "substantive" && !missing.length && !V.askedSubst && !V.fromVoice.has("substantive")) { V.askedSubst = true; toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: SUBST_Q, next: "After the officer answers, call this tool again with substantive true or false." + droppedNote }); return; } // the app asks it itself (Oct 25: Ara skipped the question when it was only guidance)
+  if (R.alwaysAsk === "substantive" && !missing.length && !V.askedSubst && !V.fromVoice.has("substantive")) { V.askedSubst = true;
+    toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: SUBST_Q, next: "After the officer answers, call this tool again with substantive true or false." + droppedNote });
+    return; } // the app asks it itself (Oct 25: Ara skipped the question when it was only guidance)
   if (V.opt && V.opt.only && !empty(d[V.opt.only])) V.opt = null; // the one field asked for came in through this tool instead
   if (oneOf && !missing.length) { // one of the pair is in: ask once for the other (the policy's "needs one of")
     if ((empty(d.email) || empty(d.mobile)) && !V.askedOther && ((empty(d.email) && noEmail) || (empty(d.mobile) && noMobile))) { V.askedOther = true; vlog(`${name}: not asking for the ${empty(d.email) ? "email" : "mobile"}, the officer said there is none`); } // never "an email as well?" after "No email" (Oct 27)
-    if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true; const who = d.first || "them"; toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: `Do you have ${empty(d.email) ? "an email address" : "a mobile number"} for ${who} too?`, next: `The app asked for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.${droppedNote}${movedNote}` }); return; }
+    if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true;
+      const who = d.first || "them";
+      toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: `Do you have ${empty(d.email) ? "an email address" : "a mobile number"} for ${who} too?`, next: `The app asked for their ${empty(d.email) ? "email address" : "mobile number"} too (it's fine if they don't have it). After the answer, call this tool again.${droppedNote}${movedNote}` });
+      return; }
   }
   // a field the form declares to ask first (the rating an opportunity will need, Carverhill, Oct 25), then the rest of the optional details are offered
   if (R.askFirst && !missing.length && empty(d[R.askFirst]) && !V.askedCap && !V.opt) { V.askedCap = true; V.opt = { done: [], only: R.askFirst }; optAsk(callId, droppedNeeded([optLabel(A.fields.find(f => f.k === R.askFirst))]).length ? notCaught([optLabel(A.fields.find(f => f.k === R.askFirst))]) : undefined); return; }
@@ -422,7 +441,13 @@ function draftTool(callId, name, data) {
   // the drop note and the next required question are one scripted line (Oct 28: "I didn't catch the response" alone, four times, while the question never came)
   // the dropped value was the next step and no field question follows: the app asks its own next-step question, so Ara never has to (Carverhill's 9:14 AM call, Oct 29: "I didn't catch the next step from you" and nothing more, which left him asking what she wanted)
   const nextQ = needed.some(x => /^next step/i.test(x)) && !missingFields.length && wantsNextStep(tool.action, d, target) ? (awaitingAsk(tool.action, d) ? FOLLOW_Q(target) : NEXT_STEP_Q) : "";
-  const reply = (out) => { if (!needed.length) { toolReply(callId, out); return; } const { status, ...rest } = out; const q = out.ask_exactly || nextQ; if (nextQ && !out.ask_exactly) { V.askedNext = true; act("step", "The next step Ara filled in was dropped: the app asks its own next-step question"); } toolReply(callId, Object.assign(rest, { ask_exactly: `${notCaught(needed)}${q ? " " + q : ""}`, next: (nextQ && !out.ask_exactly ? `The app asked whether to set the next step itself. After the answer, call this tool again with nextStep and nextDue, in the officer's words; if they say no, go on without one. ` : "") + (out.next || status) })); };
+  const reply = (out) => { if (!needed.length) { toolReply(callId, out);
+      return; }
+    const { status, ...rest } = out;
+    const q = out.ask_exactly || nextQ;
+    if (nextQ && !out.ask_exactly) { V.askedNext = true;
+      act("step", "The next step Ara filled in was dropped: the app asks its own next-step question"); }
+    toolReply(callId, Object.assign(rest, { ask_exactly: `${notCaught(needed)}${q ? " " + q : ""}`, next: (nextQ && !out.ask_exactly ? `The app asked whether to set the next step itself. After the answer, call this tool again with nextStep and nextDue, in the officer's words; if they say no, go on without one. ` : "") + (out.next || status) })); };
   // the officer's words that landed with this call may already answer the first question: then the app doesn't ask it (Oct 28: "How much is the amount?" right after "Fifty thousand dollars")
   const justSaid = missingFields.length && G.lastHeard && G.lastHeard.at && Date.now() - G.lastHeard.at < JUST_SAID_MS && typeof fieldSaidIn === "function" && fieldSaidIn(tool.action, missingFields[0], [G.lastHeard.text]) ? optLabel(missingFields[0]) : "";
   if (justSaid) act("step", `The officer has just said the ${justSaid}: the app doesn't ask for it`);
