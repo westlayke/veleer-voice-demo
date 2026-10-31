@@ -527,3 +527,21 @@ On Carverhill's 5:50 PM call the first reconnect's read-back fell back to Ara af
 - `watchOff(why)` in voice.js ends both watches (`G.lateForced`, `G.resend`) on a new line (`reconnect`), on "are you there?" (`heardAsk`) and on "say that again" (the repeat command). The after-save watch from `staleReadback` carries `keep: true` and stands, since the form is gone.
 - `formReask(since)` in voiceline.js: with a form open, nothing awaited and `FORM_REASK_MS` (13 s) of quiet, Ara is asked (`askReply`) to put the pending question from `formPosition()` again in her own words. The app says nothing itself (Carverhill: "don't want the app to do the re-ask"). Once per quiet spell (`G.formReaskAt` vs `G.lastAct`); the hang-up question still comes at 50 s with a form open. Because it is a requested reply, the quiet clock waits on it.
 - Check "Carverhill's 5:50 PM call (Oct 30)" in 09-hands-free.js.
+
+## The call's memory (G) and its resets (cleanup step 3, Oct 30)
+
+G is one flat object holding what the app must remember between the voice service's events. Its 178 flags fall into groups:
+
+| Group | About | Examples | Goes back to its start in |
+|---|---|---|---|
+| Turn | one exchange with Ara | responding, asked, qInstr, qCreate, retried | `resetTurn()` (voice.js), called by `resetLine()` and `resetCall()` |
+| Line | one connection; a drop or a phone lock ends it | ws, tries, retriedAt, dropNext, qTimer, askWatch, tickWatch, netTick | `resetLine()` (voiceline.js), called by `reconnect()` and `lockPause()` |
+| Call | one conversation | live, session, drops, lastMsg, forced, lateForced, resend, silentWait, unheard, sync, hands | `resetCall()` (voice.js), called by `endCall()`; `startCall()` sets the rest of a new call's start |
+| Down | a stretch with no line | downAt, downTimer, downSaid, warnSaid, lastTry | `downEnd()` (voiceline.js) |
+| Sound | speaker and mic | sources, playHead, outPeak, soundEver, loudAt, lastSoundAt | `stopPlayback()` for what is playing; levels are read fresh |
+| Scripted lines | the app's own lines | forced, pendingForce, lateForced, resend, silentWait, heardN | `watchOff()` when a repeat is wanted; `resetCall()` at the end |
+| Forms and hands-free | the open form, saves, read-backs | hands, hfForm, savedAt, savedLine, undoSaid, formReaskAt | the form's own open and close |
+| Clocks | waiting and hang-up | idleTimer, idleTick, idleAt, idleEnding, nudge | `idleCheck()` and `resetCall()` |
+| Per phone | kept across calls on purpose | warm, sentRules, sentCtx, toolKeys, visit, traceN, resume, convId | never reset within a page |
+
+Step 3 moved today's hand-written reset lists into these functions with exactly the same contents, so nothing the app does changed. Flags set during a call that no call-end reset clears yet, worth checking one by one (each would be a behaviour change, approved and tested on its own): pendingForce, turnOpen, speechOn, cutMidSpeech, justNow, staleRbAt, formReaskAt, hfForm.

@@ -299,6 +299,12 @@ async function pingMs(limit = 8000) {
 async function netLog(what, known) { const sess = G.session, info = netInfo(), ms = known !== undefined ? known : await pingMs(); act("step", `Connection: ${what}. ${info}${ms == null ? "" : typeof ms === "number" ? `, test request ${ms} ms` : `, test request ${ms}`}${locInfo()}`, sess); }
 // the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
 const downSince = () => Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now()); // how long since the voice service was last heard: the give-up clock
+// a line has ended (a drop, or the phone locked): the turn on it, its watches and its sound go, and the socket is closed
+function resetLine() {
+  resetTurn(); G.retriedAt = 0; G.dropNext = false;
+  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); stopPlayback();
+  const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
+}
 async function reconnect(why) {
   if (!G.live) return;
   if (G.lastTry || downSince() > NO_LINE_GIVE_UP_MS) { voiceUnavailable(why); return; } /* after the announced last try, no more */
@@ -306,10 +312,9 @@ async function reconnect(why) {
     clearTimeout(G.downTimer);
     cutStatusLine("the last try is announced");
     sayLocal(DOWN_LINES[3], "last", namedText("last")); } /* Carverhill, Oct 29: tell them when it's the last try */ // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
-  G.drops++; G.status = "Reconnecting…"; G.createAt = 0; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.turnOpen = 0;
+  G.drops++; G.status = "Reconnecting…"; G.createAt = 0; G.turnOpen = 0;
   if (G.speechOn) { G.cutMidSpeech = true; G.speechOn = false; } /* the officer was mid-sentence when the line went: what was heard is a fragment, not their answer (real-line run, Oct 29: "You said: Record the") */
-  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); G.retriedAt = 0; G.dropNext = false; stopPlayback(); paintCall();
-  const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
+  resetLine(); paintCall();
   if (typeof watchOff === "function") watchOff("a new line"); /* whatever the app asks on the new line is its first telling there */
   if (G.drops === 1) cue("drop");
   downStart();
@@ -535,9 +540,8 @@ function appHidden() {
   }, 500);
 }
 function lockPause(why) { // close the line while the phone is locked; the conversation is kept on xAI for RESUME_MS
-  if (G.lockPaused) return; G.lockPaused = Date.now(); G.status = "Paused (phone locked)"; G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; G.retriedAt = 0; G.dropNext = false;
-  clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); clearTimeout(G.forceTimer); clearTimeout(G.forceTick); G.forced = null; G.pendingForce = null; stopPlayback();
-  const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries(); paintCall();
+  if (G.lockPaused) return; G.lockPaused = Date.now(); G.status = "Paused (phone locked)";
+  clearTimeout(G.forceTimer); clearTimeout(G.forceTick); G.forced = null; G.pendingForce = null; resetLine(); paintCall();
   if (typeof keepResume === "function") keepResume("Your phone closed the app while it was locked."); /* Oct 28: the page was discarded during a lock and the card came up on a fresh page with no explanation */
   netLog(why ? `Voice line closed while the phone was locked (${why}): it reopens when the app is back` : `Phone locked: voice line closed after ${((Date.now() - G.hiddenAt) / 1000).toFixed(1)} s (nothing is charged while the phone is locked); the conversation is kept for ${RESUME_MS / 60000} minutes`);
 }

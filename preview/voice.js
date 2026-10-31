@@ -319,6 +319,10 @@ function faqLookup(question, n = 6) {
 }
 
 const G = { live: false, ws: null, ctx: null, stream: null, node: null, sources: [], playHead: 0, bot: "", status: "", handled: new Set(), buf: [] };
+// G is the call's memory, one flat object. Its flags fall into groups, and each group goes back to its start in one place:
+// a turn (one exchange with Ara) in resetTurn(), a line (one connection; a drop or a phone lock ends it) in resetLine() (voiceline.js),
+// a call (one conversation) in resetCall() at its end. The other groups (sound, forms and hands-free, clocks, scripted lines) are listed in docs/voice-line.md.
+function resetTurn() { G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; }
 const callbar = () => document.getElementById("callbar");
 // Caption: each reply's words, scrolled in step with its audio. Replies queue up, so show the one being heard now.
 function capNow() {
@@ -762,11 +766,18 @@ function endCall(why) {
   if (!/^interrupted/.test(why || "")) dropResume();
   if (G.session) { act("end", "Conversation ended" + (why ? " (" + why + ")" : "") + (typeof locInfo === "function" ? locInfo() : "") + syncSummary());
     G.session = null; }
+  resetCall();
+  paintCall(); render();
+  // a form left open gets its voice button back, keeping what was filled in
+  if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
+  setTimeout(prefetchToken, 1000);
+}
+// a call has ended: the line, the turn, the scripted-line watches and the call's clocks go back to their start
+function resetCall() {
   G.ws = G.stream = G.ctx = G.node = null;
   G.buf = [];
   G.audioOn = false;
-  G.responding = G.qInstr = G.qCreate = G.asked = false;
-  G.retried = 0;
+  resetTurn();
   G.drops = 0;
   G.lastMsg = 0;
   G.retriedAt = 0;
@@ -798,10 +809,6 @@ function endCall(why) {
   clearTimeout(G.askWatch);
   clearTimeout(G.tickWatch);
   clearInterval(G.pingTick);
-  paintCall(); render();
-  // a form left open gets its voice button back, keeping what was filled in
-  if (V && document.getElementById("draftForm")) { V.data = readDraft(); renderOverlay(); }
-  setTimeout(prefetchToken, 1000);
 }
 function tellPicked(kind) {
   if (!G.live) return;
