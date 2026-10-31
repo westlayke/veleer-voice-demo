@@ -1,3 +1,8 @@
+// THE validation module (Oct 31, Carverhill: "let's look at whether we have a single shared validation module"; was evidence.js).
+// Every decision about the officer's own words lives here: did they say this value (the evidence rule below), is this a yes or a no
+// (the yes/no readers), and which words name a list value and so are not an amount or a date (listWordsOut). Pick-lists and their
+// matcher are in lists.js, which this file uses. Loaded after heard.js, before aratools.js and voiceforms.js.
+//
 // Evidence rule (Carverhill, Oct 25: "for every field there is some probability Grok makes things up"):
 // every value the voice model puts on a form must be traceable to something the officer said in this call.
 // A value with no evidence is left off the form and named in the "left out" note, so Ara asks for it instead of reading back her own guess.
@@ -36,6 +41,36 @@ function optionAnswered(label, lines, asked) {
   return listed.length > 1 && listed[i] === l;
 }
 function outcomeIn(o, lines, asked) { if (optionAnswered(o, lines, asked)) return true; const re = OUTCOME_WORDS[o]; if (!re) return false; return lines.slice(-4).some(t => re.test(t)); }
+// ---- yes and no ----
+const HF_YES = /\b(yes|yeah|yep|yup|ya|correct|right|sure|save|go ahead|do it|confirm|confirmed|sounds good|perfect|ok|okay|absolutely|definitely)\b/;
+// a no is an answer that opens with no or wait, or asks not to save or to change something; "I don't think you needed to say that, but yes" is still a yes
+const HF_NO = /^(no|nope|nah|wait|hold on|hang on|not yet|stop|cancel)\b|\b(don't|dont|do not|not|never) (save|do it|go ahead)|\b(not yet|hold on|hang on|wait a|change|wrong|incorrect|isn't right|not right|that's off|fix)\b/;
+// the app asked its own yes/no question: a short reply (4 words or fewer) that isn't a no, a question or a command counts as yes, whatever the
+// words ("looks good", "lock it in", "it was") (Oct 29 phrase-list review: a yes list always misses the next phrasing)
+const appYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim();
+  if (/\?\s*$/.test(String(text)) || /^(are|is|do|did|does|can|could|would|will|should|have|has|hello|hey|hi|ara)\b/.test(t) || (typeof HEARD_WORDS !== "undefined" && HEARD_WORDS.test(String(text)))) return false; /* a question is never a yes: "Are you there?" saved a gift (6:23 PM call, Oct 29) */
+  if (hfYes(t)) return true;
+  if (namesField(t)) return false; /* "The amount": what to change, not a yes */
+  if (!t || t.split(" ").length > 4 || HF_NO.test(t) || /^(no|nope|nah|not|never|don't|dont|what|which|how|why|when|where|who|say|repeat|undo|cancel|wait|hold|hang|stop|skip|back|change|hmm|um|uh|huh|pardon|sorry)\b/.test(t) || /\b(no|not|don't|dont|wrong|change|undo|cancel|wait|again|driving|parked|drive|hands|free|bug|help|goodbye|bye)\b/.test(t)) return false; /* "I'm driving" is a switch, not a yes */
+  return true; };
+const hfYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim(); return HF_YES.test(t) && !HF_NO.test(t); };
+const YES_WORDS = /\b(yes|yeah|yep|sure|ok|okay|fine|allowed|permitted|go ahead|of course|absolutely)\b/, NO_WORDS = /^(no|nope|nah|not)\b|\b(don't|do not|not ok|not okay|shouldn't|can't)\b/;
+// a reply that names a field of the open form ("The amount", "the date") is the officer saying what to change, never a yes (5:08 PM call, Oct 31:
+// "The amount" after "No, to change something" saved a $3 ask)
+function namesField(text) {
+  if (typeof V === "undefined" || !V || !ACTIONS[V.action]) return false; const t = String(text).toLowerCase();
+  const words = new Set(ACTIONS[V.action].fields.flatMap(f => String(f.label || "").toLowerCase().replace(/\(.*\)/g, "").split(/[^a-z]+/)).filter(w => w.length > 3 && !/^(planned|with|your|their|this|that|from)$/.test(w)));
+  return t.split(/[^a-z]+/).some(w => words.has(w));
+}
+// ---- words that name a list value ----
+// "C-3" names an entity: its 3 is not three dollars or the 3rd (5:08 PM call, Oct 31: "C-3" put $3 and a date on a planned ask).
+// Every list value with a digit in its name ("C3", "C4") is taken out of the words, in any spelling ("c 3", "c-3", "c3"), before amounts and dates are read.
+function listWordsOut(s) {
+  const toks = new Set(); Object.values(LISTS()).forEach(vals => (vals || []).forEach(x => String(x).split(/\s+/).forEach(w => { if (/^[a-z]+\d+$/i.test(w)) toks.add(w.toLowerCase()); })));
+  let out = String(s); toks.forEach(w => { const m = w.match(/^([a-z]+)(\d+)$/); out = out.replace(new RegExp("\\b" + m[1] + "[\\s.-]*" + m[2] + "\\b", "gi"), " "); });
+  return out;
+}
+// ---- did the officer say it (the evidence rule) ----
 const COUNT_WORDS = "a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fourteen|fifteen|twenty|thirty|sixty|ninety|\\d+";
 const DATE_WORDS = new RegExp(`\\bin (${COUNT_WORDS}|a few|a couple of|several) (day|week|month|year)s?\\b|\\b(${COUNT_WORDS}) (day|week|month|year)s? (from|out|later|ahead|time)\\b|` + String.raw`\b(today|tomorrow|yesterday|tonight|this|next|last|coming|end of|beginning of|mid|early|late|week|weekend|month|year|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|first|second|third|fourth|fifth|tenth|fifteenth|twentieth|thirtieth|christmas|thanksgiving|halloween|new year|on the|by the|the \d+(st|nd|rd|th)?|\d+(st|nd|rd|th)|\d+\/\d+|\d{4})\b`);
 // every officer line of this call, lower case
@@ -53,7 +88,7 @@ function nameHeard(c) {
 // did the officer say this amount, in digits or words ("25,000", "25k", "twenty-five thousand", "ten grand")?
 function amountSaid(n, lines) {
   n = toNum(n); if (!(n > 0)) return false;
-  return lines.some(t => {
+  return lines.map(listWordsOut).some(t => {
     const s = t.replace(/\bgrand\b/g, "thousand");
     if (new RegExp("(^|[^0-9.])" + String(n).replace(".", "\\.") + "(?![0-9])").test(s.replace(/,/g, ""))) return true;
     const ws = s.replace(/[$]/g, "").replace(/[^a-z0-9. ]/g, " ").split(/\s+/).filter(Boolean);
@@ -77,7 +112,7 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
   if (f.type === "bool" && !v) return null; // false is the default, nothing to prove
   if (OPTION_WORDS[f.k]) return listHeard(f.k, v, lines, ctx.asked); // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)
   if (f.type === "money") return amountSaid(v, lines);
-  if (f.type === "date") { const iso = normDate(v); if (iso && iso === todayISO()) return true; return DATE_WORDS.test(all) || /\d/.test(all); }
+  if (f.type === "date") { const iso = normDate(v); if (iso && iso === todayISO()) return true; const w = listWordsOut(all); return DATE_WORDS.test(w) || /\d/.test(w); }
   if (f.type === "select" || f.type === "bool") return false; // an option with no words of its own: only the officer's own tap sets it
   return null;
 }
@@ -88,8 +123,8 @@ function fieldSaidIn(action, f, lines) {
   if (f.k === "fund") return listMatch("fund", lines[lines.length - 1]).hits.length === 1; /* a state with two entities is a choice still to make (10:05 AM call) */
   if (f.k === "campaign") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all) || [...new Set(Object.values(ENTITY_STATE).filter(Boolean))].some(s => all.includes(s.toLowerCase()));
   if (OPTION_WORDS[f.k]) return Object.values(OPTION_WORDS[f.k]).some(re => re.test(all) || re.test(all.replace(/-/g, " ")));
-  if (f.type === "money") return /\$|\d|\b(thousand|hundred|million|grand|bucks|dollars)\b/.test(all);
-  if (f.type === "date") return DATE_WORDS.test(all) || /\d/.test(all);
+  if (f.type === "money") return /\$|\d|\b(thousand|hundred|million|grand|bucks|dollars)\b/.test(listWordsOut(all));
+  if (f.type === "date") { const w = listWordsOut(all); return DATE_WORDS.test(w) || /\d/.test(w); }
   return false; /* free text: the app can't tell, so it asks */
 }
 // drop every value the officer never gave; returns the labels dropped (the interaction report's substantive, next step and outcome last, in that order)

@@ -162,7 +162,8 @@ const VOICE_RULES = {
   response: { optional: [], nextStepWhen: (d) => !!d.response && d.response !== "Declined", followUpWhen: (d) => d.response === "Awaiting", requiredWhen: (d) => d.response === "Declined" ? ["lostReason"] : [] },
   cultivate: { optional: [], requiredWhen: (d) => d.decision === "Defer" ? ["reason", "reconsiderOn"] : [], ownWords: true },
   opportunity: { optional: ["fund", "campaign", "potential", "notes"] },
-  plan: { optional: ["askType"] },
+  plan: { secondYes: "amount", optional: ["askType"] }, /* the amount checked once more after the yes, as gifts and pledges (Carverhill, Oct 31 5:23 PM) */
+  editPlan: { secondYes: "amount" },
   task: { optional: [] },
   pledge: { secondYes: "amount", optional: ["installments", "frequency", "firstAmount"] },
   gift: { secondYes: "amount", optional: [] },

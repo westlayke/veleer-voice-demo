@@ -67,7 +67,6 @@ function optNext() { // the next question still to ask: skips anything already a
   return optSteps().find(st => !V.opt.done.includes(st.k) && (!st.when || st.when(d)) && (st.group || st.f.type === "bool" ? true : optEmpty(d[st.k])));
 }
 function optSet(k, v) { const cur = readDraft(); (V.history = V.history || []).push(Object.assign({}, cur)); cur[k] = v; V.fromVoice.add(k); V.data = prefill(V.action, cur, V.target); renderOverlay(); }
-const YES_WORDS = /\b(yes|yeah|yep|sure|ok|okay|fine|allowed|permitted|go ahead|of course|absolutely)\b/, NO_WORDS = /^(no|nope|nah|not)\b|\b(don't|do not|not ok|not okay|shouldn't|can't)\b/;
 function optParse(k, raw, st) { // the officer's answer in their words -> the field's value, or null if it can't be read
   const t = String(raw || "").trim(), l = t.toLowerCase().replace(/[’‘]/g, "'"), f = (st && st.f) || (ACTIONS[V.action].fields.find(x => x.k === k) || {});
   if (k === "capacity") return capFromWords(t); /* lists.js */
@@ -300,17 +299,6 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
 // Hands-free (driving) mode: Ara saves a finished form after reading it back and hearing the officer's own yes. It lasts until the call ends.
 const CAR = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14v-5l-2-5H7l-2 5z"/><path d="M5 12h14"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>';
 const secondYes = (action) => voiceRule(action).secondYes || ""; // a declared field the form confirms once more before the save (money forms)
-const HF_YES = /\b(yes|yeah|yep|yup|ya|correct|right|sure|save|go ahead|do it|confirm|confirmed|sounds good|perfect|ok|okay|absolutely|definitely)\b/;
-// a no is an answer that opens with no or wait, or asks not to save or to change something; "I don't think you needed to say that, but yes" is still a yes
-const HF_NO = /^(no|nope|nah|wait|hold on|hang on|not yet|stop|cancel)\b|\b(don't|dont|do not|not|never) (save|do it|go ahead)|\b(not yet|hold on|hang on|wait a|change|wrong|incorrect|isn't right|not right|that's off|fix)\b/;
-// the app asked its own yes/no question: a short reply (4 words or fewer) that isn't a no, a question or a command counts as yes, whatever the
-// words ("looks good", "lock it in", "it was") (Oct 29 phrase-list review: a yes list always misses the next phrasing)
-const appYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim();
-  if (/\?\s*$/.test(String(text)) || /^(are|is|do|did|does|can|could|would|will|should|have|has|hello|hey|hi|ara)\b/.test(t) || (typeof HEARD_WORDS !== "undefined" && HEARD_WORDS.test(String(text)))) return false; /* a question is never a yes: "Are you there?" saved a gift (6:23 PM call, Oct 29) */
-  if (hfYes(t)) return true;
-  if (!t || t.split(" ").length > 4 || HF_NO.test(t) || /^(no|nope|nah|not|never|don't|dont|what|which|how|why|when|where|who|say|repeat|undo|cancel|wait|hold|hang|stop|skip|back|change|hmm|um|uh|huh|pardon|sorry)\b/.test(t) || /\b(no|not|don't|dont|wrong|change|undo|cancel|wait|again|driving|parked|drive|hands|free|bug|help|goodbye|bye)\b/.test(t)) return false; /* "I'm driving" is a switch, not a yes */
-  return true; };
-const hfYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim(); return HF_YES.test(t) && !HF_NO.test(t); };
 // what Ara says when hands-free goes on or off, then she carries on: "Say only" left her silent mid-form (Oct 24: the officer waited 30 s for the first-name question)
 function hfSwitchLine(on) {
   const q = [...(G.recent || [])].reverse().find(l => !l.startsWith("Officer: ") && !l.startsWith("App: ") && /\?$/.test(l.trim()));
@@ -490,7 +478,15 @@ function araReadBack() {
 const LINE_HEARD_MS = 1500; // a word said this long after the save line started playing answers the line (its question is what they heard)
 const HF_YES_AGAIN_MS = 2500; // the service sends a transcript several times as it grows: one yes, not three
 function hfYesHeard(text) {
-  const c = G.saveCheck; if (!V || !c || !G.hands || !appYes(text)) return false;
+  const c = G.saveCheck; if (!V || !c || !G.hands) return false;
+  // a no closes the read-back: nothing counts as a yes to it until the form is read back again (5:08 PM call, Oct 31: "No, to change something",
+  // then "The amount" saved the $3 ask)
+  const tl = String(text).toLowerCase().trim();
+  if (HF_NO.test(tl.replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim()) || /^(no|nope|nah)\b/.test(tl)) { G.saveCheck = null; paintCall(); act("step", `the officer's no ("${String(text).slice(0, 60)}") closed the read-back: the form is read back again before any yes saves it`); return false; }
+  if (!appYes(text)) return false;
+  // a short reply that isn't a yes word counts only straight after the app's own question, with nothing from Ara in between
+  if (!hfYes(text)) { const last = [...(G.recent || [])].reverse().find(l => !l.startsWith("Officer: ")) || "";
+    if (!/(Yes to save, or no to change something\?|Is that right\?)\s*$/.test(last)) { act("step", `"${String(text).slice(0, 40)}" not taken as a yes: the read-back is no longer the last question`); return false; } }
   if (c.key !== V.action + JSON.stringify(readDraft()) || Date.now() - (G.hfYesAt || 0) < HF_YES_AGAIN_MS) return false;
   G.hfYesAt = Date.now(); const title = ACTIONS[V.action].title;
   stopPlayback(); if (G.responding) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } /* whatever Ara started to say about the yes; her save_form still gets its answer (hfSave: already saved) */

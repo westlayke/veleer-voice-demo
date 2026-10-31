@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 5:32 PM",
+      "change": "One validation module (preview/validate.js, was evidence.js) holds every check on the officer's own words: did they say this value, and is this a yes or a no. Words that name a list value (\"C-3\") are no longer read as an amount or a date. A no to a read-back closes it: nothing counts as a yes until it is read back again, and a reply naming a field (\"The amount\") is never a yes. A short reply counts as a yes only straight after the app's own question. Planned asks (new and edited) now get the amount check after the yes, as gifts and pledges do.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "5:08 PM call: \"C-3\" put a $3 amount on a planned ask, and after \"No, to change something\" the answer \"The amount\" saved it. \"let's look at whether we have a single shared validation module\" (5:20 PM); \"Yes\" (5:23 PM) to the plan and to the planned-ask amount check."
+    },
+    {
       "date": "Oct 31, 4:26 PM",
       "change": "Repeats and \"Which one\" are now asked by Ara, not the app: the app tells her what is already on the form and the exact question to ask, then checks her reply; if it doesn't ask the question she gets one nudge, then the app waits for the officer. The first test of guidance-with-a-check (the scripted-lines middle path).",
       "area": "Voice",

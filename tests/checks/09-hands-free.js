@@ -20,8 +20,8 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   // a "no" does not save
   await said(p, "No, change the date.");
   r = await ara(p, "save_form", { confirmed: true });
-  ok(r.saved === false && /isn't a clear yes/.test(r.error), "saved after a no: " + JSON.stringify(r));
-  // after a no, a plain yes saves without another read-back; "don't" elsewhere in a yes still counts (from a real call)
+  ok(r.saved === false && /Yes to save, or no to change something\?$/.test(r.read_back || ""), "saved after a no, or not read back again: " + JSON.stringify(r)); /* since Oct 31 a no closes the read-back: it is read again before a yes saves (5:08 PM call) */
+  // "don't" elsewhere in a yes still counts (from a real call)
   ok(await p.evaluate(() => { const hfYes = window.__demo.hfYes; return [hfYes("Yeah, I don't think you needed to say that last part, but yes, I do want to save."), hfYes("Save it."), !hfYes("No, change the date."), !hfYes("Don't save it yet"), !hfYes("Wait")].every(Boolean); }), "yes/no reading is wrong");
   ok(!(await state(p)).tasks.some(t => t.text === "Send Ruth the board deck"), "the task was saved after a no");
   // read back again, then yes saves it
@@ -897,5 +897,33 @@ test("Next step and step offers (Oct 31): a yes or no to Ara's own next-step que
   await said(p, "What's on my list today?"); await p.fire([{ type: "input_audio_buffer.speech_stopped" }]);
   await p.waitForTimeout(1800); ok(!/soft thinking tone/.test(await p.log()), "the thinking tone came before 2.5 s");
   await p.waitForTimeout(1000); ok(/No reply 2\.5 s after the officer stopped: soft thinking tone/.test(await p.log()), "no thinking tone 2.5 s after the officer stopped: " + (await p.log()).slice(-300));
+});
+
+test("Carverhill's 5:08 PM call (Oct 31): \"C-3\" is not an amount or a date, a no closes the read-back so \"The amount\" doesn't save it, and a planned ask gets the amount check", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { const c = S.contacts.find(x => x.first === "Ruth"); S.opps.filter(o => o.contactId === c.id).forEach(o => { o.fund = ""; o.campaign = ""; }); });
+  const v = await p.evaluate(() => [amountSaid(3, ["c-3."]), amountSaid(3, ["c 3"]), amountSaid(3000, ["three thousand"]), fieldSaidIn("plan", { k: "amount", type: "money" }, ["c-3."]), fieldSaidIn("plan", { k: "plannedDate", type: "date" }, ["c-3."]), fieldSaidIn("plan", { k: "amount", type: "money" }, ["c-3, ten thousand"])]);
+  ok(JSON.stringify(v) === "[false,false,true,false,false,true]", "the 3 in C-3 still read as an amount or a date: " + JSON.stringify(v));
+  await said(p, "Add a planned ask for Ruth.");
+  await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
+  await said(p, "C-3.");
+  let r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "National C3", campaign: "National", plannedDate: new Date().toISOString().slice(0, 10), amount: 3 });
+  ok(!(await p.inputValue("#f_amount")) && /amount/i.test(JSON.stringify(r)), "the $3 from \"C-3\" was kept: " + (await p.inputValue("#f_amount")) + " " + JSON.stringify(r).slice(0, 300));
+  // the read-back with a (made up) amount, then the officer's no, Ara's question, and "The amount": nothing saves
+  await p.evaluate(() => { V.data.amount = 3; renderOverlay(); });
+  await said(p, "Twenty-five thousand."); await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", amount: 25000 });
+  r = await ara(p, "save_form", { confirmed: false });
+  ok(/Yes to save, or no to change something\?$/.test(r.read_back || ""), "the planned ask wasn't read back: " + JSON.stringify(r).slice(0, 300));
+  await said(p, "No, to change something."); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !G.saveCheck) && /closed the read-back/.test(await p.log()), "the no didn't close the read-back");
+  await p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Sure. What would you like to change?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
+  await said(p, "The amount."); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => V && V.action === "plan") && !(await p.evaluate(() => S.opps.some(o => (o.asks || []).some(a => a.amount === 25000)))), "\"The amount\" after a no saved the planned ask");
+  // read back again: yes, then the app's own amount check before the save
+  r = await ara(p, "save_form", { confirmed: false });
+  await said(p, "Yes."); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => V && G.saveCheck && G.saveCheck.step === "amount") && await p.evaluate(() => __sent.some(s => s.includes("Just to be sure, the amount is $25,000"))), "the planned ask didn't get the amount check after the yes");
+  await said(p, "The amount."); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => V && V.action === "plan"), "\"The amount\" was taken as a yes to the amount check");
 });
 };

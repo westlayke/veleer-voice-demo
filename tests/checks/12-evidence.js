@@ -1,4 +1,4 @@
-// Checks: the evidence rule (preview/evidence.js) across every form and every value it can judge. tests/bot.js loads this file and passes in its helpers.
+// Checks: the evidence rule (preview/validate.js) across every form and every value it can judge. tests/bot.js loads this file and passes in its helpers.
 // For each field the rule covers: an unsaid value is dropped, and the same value said in ordinary phrasings is kept. Add a phrasing here when a real call shows the word lists missed it.
 module.exports = ({ test, ok, fresh, signIn, state, tab, ara, said, titleOf, PAGE, fs, path }) => {
 
