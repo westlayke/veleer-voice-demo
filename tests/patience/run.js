@@ -128,7 +128,7 @@ const STAND_IN = () => {
       // nothing the stand-in understands: it says a short line (Grok never answers with nothing) and the guidance is kept for the report
       (window.__guidance = window.__guidance || []).push(instr.slice(0, 200) + " | last tool result: " + JSON.stringify(this.lastOut || {}).slice(0, 300)); ws.say("Okay.", window.__latency()); },
     toolResult(ws, out) { this.lastOut = out; if (this.lastTool && /^show_/.test(this.lastTool)) this.state.formOpen = true; if (out.already && /Open that step now/.test(out.note || "")) { this.pendingSay = null; return; } if (out.ask_exactly || out.asked || out.read_back || out.already) { this.pendingSay = null; return; } /* the app says those lines itself (forced), or wants silence */
-      const q = out.still_needed && out.still_needed.length ? `What's the ${String(out.still_needed[0]).replace(/\s*\(.*$/, "").toLowerCase()}?` : out.say ? out.say : out.saved ? "Saved. What's next?" : out.error ? `${String(out.error).split(/(?<=\.)\s/)[0]} What would you like to do?` : "";
+      const q = out.still_needed && out.still_needed.length ? `What's the ${String(out.still_needed[0]).replace(/\s*\(.*$/, "").toLowerCase()}?` : out.say ? (/\?\s*$/.test(out.say) ? out.say : out.say + " What would you like to do?") /* Grok ends on a question */ : out.saved ? "Saved. What's next?" : out.error ? `${String(out.error).split(/(?<=\.)\s/)[0]} What would you like to do?` : "";
       if (!q) return; this.pendingSay = q; const me = this; setTimeout(() => { if (me.pendingSay === q) { me.pendingSay = null; if (out.error) me.errSaidAt = Date.now(); ws.say(q, window.__latency()); } }, 1500); /* said as the answer to the app's reply request, or on its own when none comes */ } };
 };
 
@@ -253,7 +253,8 @@ async function conversation(browser, base, n) {
       if (await p.evaluate((ms) => window.__holdSound(ms), ms)) conv.faults.push({ at: Date.now() - t0, fault: "phone held the sound", ms }); }
     // a quiet mic: the words never reach the app; the officer waits 4-10 s and says it again
     if (RATE && rnd() < RATES.quietMic * RATE) { conv.faults.push({ at: Date.now() - t0, fault: "quiet mic" }); await p.evaluate((t) => { window.__lines.push({ text: t, at: Date.now(), from: "officer", lost: true }); }, say);
-      await p.waitForTimeout(4000 + Math.round(rnd() * 6000)); if (!(await state()).live) return; lastAnswerAt = Date.now(); }
+      const n0 = (await state()).lines; await p.waitForTimeout(4000 + Math.round(rnd() * 6000)); const st2 = await state(); if (!st2.live) return; lastAnswerAt = Date.now();
+      if (await p.evaluate((n) => window.__lines.slice(n).some(l => l.from !== "officer" && !l.noaudio), n0)) return; } /* something new was said meanwhile: the officer answers that instead of repeating */
     // faults thrown around this turn
     if (RATE && rnd() < RATES.drop * RATE) { const dead = rnd() < RATES.deadspot; const ms = 300 + Math.round(rnd() * 2500); if (rnd() < RATES.dropAgain) dropAgainAt = Date.now(); conv.faults.push({ at: Date.now() - t0, fault: dead ? "drop + dead spot" : "drop" });
       setTimeout(() => {}, 0); await said(say, tool); await p.waitForTimeout(ms);
