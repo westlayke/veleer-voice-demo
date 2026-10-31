@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 4:26 PM",
+      "change": "Repeats and \"Which one\" are now asked by Ara, not the app: the app tells her what is already on the form and the exact question to ask, then checks her reply; if it doesn't ask the question she gets one nudge, then the app waits for the officer. The first test of guidance-with-a-check (the scripted-lines middle path).",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Yes have Ara ask not the app, let's try it out and maybe it becomes the 'test' of your middle path\" (4:17 PM), after hearing the app asked on repeats itself, against his rule that the app doesn't re-ask itself."
+    },
+    {
       "date": "Oct 31, 4:02 PM",
       "change": "One lists module (preview/lists.js) holds every pick-list and the one matcher that reads answers to them, used by the optional questions and the evidence guard alike. Short forms are heard (\"C3\", \"C-3\", \"card\", \"bee\"); an answer that fits several entities (\"C4\") gets \"Which one: ...?\". A repeated answer is confirmed once with the open question, never taken as the next answer; an answer before the app's question has played is not taken; \"[B]\" is no longer dropped as noise. Real-Ara runs default to 20 machines with one combined report.",
       "area": "Voice",

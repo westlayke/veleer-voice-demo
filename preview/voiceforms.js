@@ -126,7 +126,10 @@ function optStep(callId, data) {
   if (step === "answer" && la && nv && !/^(yes|yeah|yep|no|nope|nah|sure|ok|okay|skip|next|none|neither|move on)( (thanks|thank you|please))?$/.test(nv) && (nv === la.val || (la.val.length > 3 && nv.includes(la.val))) && Date.now() - la.at < 30000) {
     la.reps = (la.reps || 0) + 1; la.at = Date.now(); const pos = la.reps === 1 && typeof formPosition === "function" ? formPosition() : null;
     act("step", `optional fields: "${data.value}" repeats the answer to ${la.k}; confirmed${pos ? " and the open question asked again" : ""}`);
-    toolReply(callId, { ok: true, repeat: la.k, ask_exactly: pos && pos.ask ? `${la.line} ${pos.ask}` : la.line }); return; }
+    /* Ara says it, not the app (Carverhill, 4:17 PM: "have Ara ask not the app ... maybe it becomes the test of your middle path"); sayCheck nudges her once if her reply misses the question */
+    const q = pos && pos.ask ? lastQuestionOf(pos.ask) : "";
+    toolReply(callId, { ok: true, repeat: la.k, status: `The officer repeated an answer that is already on the form. In one short sentence tell them: "${la.line}"${q ? ` Then ask exactly: "${q}"` : " Don't ask that question again, and don't ask anything else."}` });
+    if (q) sayWatch(q, `The officer repeated an answer that is already on the form ("${la.line}"). Ask exactly: "${q}"`); return; }
   V.choice = null;
   if (!V.opt && step === "answer" && data.value) { V.opt = { done: [] }; const st = optNext();
     if (st && optParse(st.k, data.value, st) !== null) { V.opt.cur = st.k; act("step", "optional fields: the officer's answer came before the questions; taken for " + st.k); } else { optAsk(callId); return; } }
@@ -153,7 +156,7 @@ function optStep(callId, data) {
   if (v === null) {
     const hits = k === "fund" ? listMatch("fund", data.value).hits : [];
     if (hits.length > 1) { act("step", `optional field fund: "${data.value}" fits ${hits.length} entities; asking which`); /* "C4" is five of them: the app asks which, the question stays open (Oct 31, 3:02 PM call) */
-      toolReply(callId, { ok: true, field: k, ask_exactly: `Which one: ${hits.map(entitySpoken).join(", or ")}?` }); return; }
+      const q = `Which one: ${hits.map(entitySpoken).join(", or ")}?`; toolReply(callId, { ok: true, field: k, status: `That fits ${hits.length} entities. Ask exactly: "${q}"` }); sayWatch(q, `"${data.value}" fits ${hits.length} entities. Ask exactly: "${q}"`); return; } /* Ara asks, the app checks (Carverhill, 4:17 PM) */
     toolReply(callId, { ok: false, field: k, error: `The app couldn't read "${data.value || ""}" as an answer to this question.`, say: k === "fund" ? `Say you didn't catch which entity. Give the short version: ${ENTITY_LIST_SPOKEN()} Ask which.` : `Say in a few words that you didn't catch that, then ask again: "${optQuestion(st, optWho())}"` });
     return; }
   if (st.group) st.group.forEach(gk => optSet(gk, v[gk])); else optSet(k, v);
@@ -257,6 +260,20 @@ function ynCheck(r) {
   if (w.tries > 1) { act("step", `Ara's reply still ${why} after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't follow a yes-or-no answer after a nudge", `"${bot.slice(0, 80)}"`); G.ynWatch = null; return; }
   w.tries = 2; w.at = Date.now(); act("step", `Ara's reply ${why} after the officer's ${w.ans} ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't follow a yes-or-no answer", `${why}: "${bot.slice(0, 80)}"`);
   const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") ${why}. Do it now.`; setTimeout(() => { if (G.live && G.ynWatch === w) askReply(g); }, 0);
+}
+// guidance with a check (Oct 31, the test of the middle path): the app tells Ara what to ask; if her reply doesn't ask it, one nudge, then the app waits
+// for the officer (formReask's 13 s backstop still stands). Cleared when the officer speaks again or after SAY_WATCH_MS.
+const SAY_WATCH_MS = 20000;
+function sayWatch(q, guideText) { G.sayWatch = { q, guide: guideText, at: Date.now(), heardN: G.heardN || 0, tries: 1 }; }
+function sayCheck(r) {
+  const w = G.sayWatch; if (!w || !G.live) return;
+  if (Date.now() - w.at > SAY_WATCH_MS || (G.heardN || 0) > w.heardN) { G.sayWatch = null; return; }
+  if (r.status === "cancelled" || G.dropNext) return;
+  const bot = String(G.bot || "").trim(); if (!bot) return;
+  if (wordOverlap(sameWords(lastQuestionOf(bot)), sameWords(w.q)) >= 0.6 && /\?\s*$/.test(bot)) { act("step", `Ara asked the question herself${w.tries > 1 ? " after one nudge" : ""}: "${w.q}"`); G.sayWatch = null; return; }
+  if (w.tries > 1) { act("step", `Ara's reply still didn't ask "${w.q}" after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't ask the question after a nudge", `"${bot.slice(0, 80)}"`); G.sayWatch = null; return; }
+  w.tries = 2; w.at = Date.now(); act("step", `Ara's reply didn't ask "${w.q}" ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't ask the question she was given", `"${bot.slice(0, 80)}"`);
+  const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") didn't ask it. Ask it now.`; setTimeout(() => { if (G.live && G.sayWatch === w) askReply(g); }, 0);
 }
 // the officer's answer to Ara's own next-step question counts the same as the app's (Oct 31: she asked "Do you want to set it now?" from still_needed, and the app,
 // which only took a yes after its own question, asked again)

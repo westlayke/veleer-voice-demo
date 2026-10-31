@@ -220,7 +220,7 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   ok(/Which campaign: National, or Idaho\?/.test(r.ask_exactly || ""), "the campaign wasn't asked after the entity: " + JSON.stringify(r));
   r = await ara(p, "optional_fields", { step: "answer", value: "The PAC. C.A. Idaho PAC." }); // Grok re-sent the entity answer after a reconnect (Oct 25)
   let d = await p.evaluate(() => V && V.data);
-  ok(!d.campaign && /Which campaign: National, or Idaho\?/.test(r.ask_exactly || ""), "the repeated entity answer filled the campaign: " + JSON.stringify({ campaign: d.campaign, r }));
+  ok(!d.campaign && /Which campaign: National, or Idaho\?/.test(r.ask_exactly || r.status || ""), "the repeated entity answer filled the campaign: " + JSON.stringify({ campaign: d.campaign, r }));
   await said(p, "Idaho."); r = await ara(p, "optional_fields", { step: "answer", value: "Idaho" });
   d = await p.evaluate(() => V && V.data);
   ok(d.campaign === "Idaho" && /potential amount/.test(r.ask_exactly || ""), "the campaign the officer gave wasn't taken: " + JSON.stringify({ campaign: d.campaign, r }));

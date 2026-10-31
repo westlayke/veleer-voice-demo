@@ -970,7 +970,7 @@ function onEvent(e) {
     if (typeof silentSoundArrived === "function") silentSoundArrived(G.bot);
     if (typeof lineHeard === "function") lineHeard(G.bot); } /* real Ara run, Oct 29: 13 "said twice" rows were a words-only response followed by its sounded copy */
   else if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
-  if (t === "response.done") { contextCheck(e.response || {}); toolCheck(e.response || {}); if (typeof ynCheck === "function") ynCheck(e.response || {}); replyCheck(e.response || {}); G.bot = ""; }
+  if (t === "response.done") { contextCheck(e.response || {}); toolCheck(e.response || {}); if (typeof ynCheck === "function") ynCheck(e.response || {}); if (typeof sayCheck === "function") sayCheck(e.response || {}); replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } truncateSpoken(); stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall();
     if (G.asked && !G.responding && PROV().forceItem) { if (G.savedAt && Date.now() - G.savedAt < SAVE_ECHO_MS) act("step", "The officer spoke right after a save: the save confirmation is still coming (not cancelled)"); /* Oct 28 12:54 PM call: a repeated "yes, save it" cancelled the confirmation and the officer heard nothing */
       else { clearTimeout(G.askWatch);

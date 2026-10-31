@@ -65,15 +65,22 @@ test("One lists module: an entity answer that fits several is asked back, a repe
   let r = await ara(p, "show_opportunity_draft", { contact_name: "Ken Ito" });
   await said(p, "The details."); r = await ara(p, "optional_fields", { step: "start" });
   await said(p, "C4."); r = await ara(p, "optional_fields", { step: "answer", value: "C4" });
-  ok(/^Which one: .*Idaho C4.*\?$/.test(r.ask_exactly || "") && r.ok !== false, "\"C4\" wasn't asked back as which one: " + JSON.stringify(r).slice(0, 300));
+  ok(!r.ask_exactly && /Ask exactly: "Which one: .*Idaho C4.*\?"/.test(r.status || "") && r.ok !== false, "\"C4\" wasn't handed to Ara as which one: " + JSON.stringify(r).slice(0, 300));
   await said(p, "Idaho C4."); r = await ara(p, "optional_fields", { step: "answer", value: "Idaho C4" });
   let d = await p.evaluate(() => V.data);
   ok(d.fund === "C.A. Idaho C4" && /campaign/i.test(r.ask_exactly || ""), "the entity wasn't taken after which one: " + JSON.stringify({ fund: d.fund, r }).slice(0, 300));
   await said(p, "Idaho C4."); r = await ara(p, "optional_fields", { step: "answer", value: "Idaho C4" });
   d = await p.evaluate(() => V.data);
-  ok(!d.campaign && r.repeat === "fund" && /^Idaho C4 is on the form\..*campaign/i.test(r.ask_exactly || ""), "a repeated answer wasn't confirmed with the open question: " + JSON.stringify({ campaign: d.campaign, r }).slice(0, 300));
+  ok(!d.campaign && r.repeat === "fund" && !r.ask_exactly && /"Idaho C4 is on the form\." Then ask exactly: "Which campaign: National, or Idaho\?"/.test(r.status || ""), "a repeated answer wasn't handed to Ara to confirm with the open question: " + JSON.stringify({ campaign: d.campaign, r }).slice(0, 300));
+  // Ara's reply misses the question: one nudge; her next reply asks it: no more
+  const araSays = (text) => p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: text }, { type: "response.done", response: { status: "completed" } }]);
+  const nudges = () => p.evaluate(() => __sent.map(x => JSON.parse(x)).filter(x => x.type === "response.create" && x.response && /didn't ask it\. Ask it now/.test(x.response.instructions || "")).length);
+  await araSays("Got it, Idaho C4 is on the form."); await p.waitForTimeout(200);
+  ok((await nudges()) === 1 && /nudged once/.test(await p.log()), "Ara's reply missed the question and she wasn't nudged once");
+  await araSays("Which campaign: National, or Idaho?"); await p.waitForTimeout(200);
+  ok((await nudges()) === 1 && /Ara asked the question herself after one nudge/.test(await p.log()), "Ara's reply asked the question but wasn't counted, or she was nudged again");
   r = await ara(p, "optional_fields", { step: "answer", value: "Idaho C4" });
-  ok(r.repeat === "fund" && !/campaign/i.test(r.ask_exactly || ""), "a second repeat asked the question again: " + JSON.stringify(r).slice(0, 300));
+  ok(r.repeat === "fund" && /Don't ask that question again/.test(r.status || ""), "a second repeat asked the question again: " + JSON.stringify(r).slice(0, 300));
   // an answer that arrives while the app's question is still waiting to play is not taken
   await p.evaluate(() => { G.pendingForce = "Which campaign: National, or Idaho?"; });
   r = await ara(p, "optional_fields", { step: "answer", value: "National" });
