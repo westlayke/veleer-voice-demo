@@ -545,3 +545,9 @@ G is one flat object holding what the app must remember between the voice servic
 | Per phone | kept across calls on purpose | warm, sentRules, sentCtx, toolKeys, visit, traceN, resume, convId | never reset within a page |
 
 Step 3 moved today's hand-written reset lists into these functions with exactly the same contents, so nothing the app does changed. Flags set during a call that no call-end reset clears yet, worth checking one by one (each would be a behaviour change, approved and tested on its own): pendingForce, turnOpen, speechOn, cutMidSpeech, justNow, staleRbAt, formReaskAt, hfForm.
+
+## After a reconnect with a form open, Ara says where we were (Oct 31, 5:34 PM call)
+
+Carverhill: "I don't want the app saying things." The form branch of `reconnect()` no longer says "Sorry, I lost you for a moment. <form> <question>" itself. It builds the line and hands it to `contextAsk("reconnect", w)` (kind `form`), the same route a reconnect with no form open has taken since Oct 30. A scripted line the old line never started (`G.pendingForce`, for example "Rating B is on the form. Save it, or add the optional details first?") is part of what Ara is asked to say: in full when it ends in the form's own question, else its lead goes before the question. `contextCheck` asks her again up to `CONTEXT_ASKS` (3) times; after that the app's own line is the floor. `contextWatch` / `contextAsk` / `contextCheck` now live in `voiceline.js`. Settings `reconnectBy` "app" (or `window.__reconnectBy`) keeps the old scripted line.
+
+A line that came with no sound (`heard.js`) is answered only by words that start after it would have finished playing (`rec.sayS`, words / 2.6 s); "Save it." 1.4 s after a soundless next-step line was taken as its answer. A late `save_form` after a save never takes "save" words as a yes to the next step.
