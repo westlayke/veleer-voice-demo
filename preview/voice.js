@@ -91,7 +91,8 @@ function formAskedFor(action) {
   const ls = officerLines(3).filter(t => !/^((turn on |switch on |start |use )?(hands ?free|driving)( mode)?( on)?|(i'm|i am) driving( now)?)[.!]?$/.test(t.trim())); if (!ls.length) return true; // nothing said yet (or only "I'm driving"): a tap or typed flow
   if (ls.some(t => re.test(t))) return true;
   if (ls[ls.length - 1].split(/\s+/).length > 4 && !hfYes(ls[ls.length - 1]) && !/^(no|nope|nah|yes|yeah|yep|sure|ok|okay|please|go ahead|do it|let's do (it|that)|that's (right|fine|it))\b/.test(ls[ls.length - 1])) return true; /* a sentence of their own is a request, whatever words it uses (Oct 29 phrase-list review: "Let's do the same for Bob") */
-  const last = ls[ls.length - 1], a = askedBefore(2) + " " + ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").toLowerCase(); // a yes to Ara offering that form counts; a yes to "shall I save it?" doesn't, even when the read-back names the form
+  const last = ls[ls.length - 1], a0 = askedBefore(2) + " " + ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").toLowerCase(),
+    a = a0 + (/do that now/.test(a0) && G.lastSaved && G.lastSaved.nextLine ? " " + G.lastSaved.nextLine.toLowerCase() : ""); /* a yes to the step offer asked again without its step ("That was already saved. Do you want to do that now?"): the step is the one the save line named (Oct 31, Patient Pat: refused as "the officer hasn't asked for the form") */ // a yes to Ara offering that form counts; a yes to "shall I save it?" doesn't, even when the read-back names the form
   return (hfYes(last) || /^(yes|yeah|yep|sure|ok|okay|please|go ahead|let's|lets|do it)\b/.test(last)) && re.test(a) && !/shall i save|save it\?|save it, or change|yes to save|is that (right|correct)|ok to save|ready to save/.test(a);
 }
 function normCap(v) {
@@ -966,6 +967,7 @@ function onEvent(e) {
     act("user", e.transcript);
     recent("Officer", e.transcript);
     if (typeof idleAnswer === "function" && idleAnswer(e.transcript)) {} else if (!(typeof hfYesHeard === "function" && hfYesHeard(e.transcript)) && !voiceCommand(e.transcript) && typeof nextStepNo === "function") nextStepNo(e.transcript);
+    if (typeof yesNoHeard === "function") yesNoHeard(e.transcript);
     if (typeof heardAsk === "function" && heardAsk(e.transcript)) guide("The officer heard nothing for a while and asked whether you are there. Say \"I'm here.\" and then say your last line again, word for word."); }
   if (G.forced) forcedEvent(t, e);
   if (t === "response.done" && G.bot && G.unheardResp === G.respSeq) G.unheard = G.bot; /* said into a paused sound engine: said again when it is back */
@@ -976,7 +978,7 @@ function onEvent(e) {
     if (typeof silentSoundArrived === "function") silentSoundArrived(G.bot);
     if (typeof lineHeard === "function") lineHeard(G.bot); } /* real Ara run, Oct 29: 13 "said twice" rows were a words-only response followed by its sounded copy */
   else if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
-  if (t === "response.done") { contextCheck(e.response || {}); toolCheck(e.response || {}); replyCheck(e.response || {}); G.bot = ""; }
+  if (t === "response.done") { contextCheck(e.response || {}); toolCheck(e.response || {}); if (typeof ynCheck === "function") ynCheck(e.response || {}); replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } truncateSpoken(); stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall();
     if (G.asked && !G.responding && PROV().forceItem) { if (G.savedAt && Date.now() - G.savedAt < SAVE_ECHO_MS) act("step", "The officer spoke right after a save: the save confirmation is still coming (not cancelled)"); /* Oct 28 12:54 PM call: a repeated "yes, save it" cancelled the confirmation and the officer heard nothing */
       else { clearTimeout(G.askWatch);
@@ -988,7 +990,7 @@ function onEvent(e) {
     G.speechOn = false;
     G.heardWait = { n: G.heardN || 0, at: Date.now() };
     if (!G.responding) { G.turnOpen = Date.now();
-      G.turnStep = 0; }
+      G.turnStep = 0; if (typeof thinkArm === "function") thinkArm(); }
     paintCall(); } /* a reply already running (the app's save line on a quick "yes") answers this turn: real-line runs Oct 29 said "Ara's taking a moment" 3 s after every save line */ /* the transcript of this turn is still to come: a tool call before it waits (onTool) */
   else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
     // the late answer to the first ask arrived after the app asked again: one of the two is extra (seen Oct 24: "Just to be sure..." said twice)

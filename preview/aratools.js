@@ -1,4 +1,9 @@
 "use strict";
+// the officer's yes or no to the next-step question, whoever asked it (Oct 31: Ara asked it from still_needed and the yes was lost); a no skips the step for this report
+function nextByAra() { if (typeof nextAnswerByAra === "function") nextAnswerByAra(); if (!V || V.askedNext !== true || !/set it now|set (a|the) next step|next step.*yes or no/i.test(askedBefore(2))) return null; /* only an answer given right after the question */
+  const a = followAnswer(((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9));
+  if (a === "no") { V.nextSkipped = true; act("step", "The officer said no to setting a next step now: the report goes on without one"); } else if (a === "yes") { V.askedNext = "own"; act("step", "The officer said yes to setting the next step now"); }
+  return a; }
 // Ara's tools: what the app does when Ara calls a lookup, an app action or a draft form (loaded after voice.js, sharing its scope)
 // Ara's lookup and app tools: one function each (the draft tools share draftTool below)
 const TOOL_HANDLERS = {
@@ -410,7 +415,7 @@ function draftTool(callId, name, data) {
   if (awaitingAsk(tool.action, d) && (empty(d.nextStep) || empty(d.nextDue))) { const s = followUpSuggestion(target, d.nextDue);
     V.askedFollow = true;
     missing.push(`Next step and its due date (an ask still waiting for its answer needs a follow-up task, which becomes a Task for the officer: say so in one sentence, then suggest exactly these words: "${s.text}", ${dueSaid(s)}, and ask "Shall I use that, yes or no?". If they say yes, call this tool with nextStep "${s.text}" and nextDue ${s.due}; if they say no, ask what the task should say and when it's due, and use their words)`); }
-  else if (wantsNextStep(tool.action, d, target) && (empty(d.nextStep) || empty(d.nextDue))) missing.push("Next step and its due date (a substantive interaction needs one, and it becomes a Task for the officer: explain that in one sentence, then ask 'Do you want to set it now, yes or no?'; on yes ask 'What's the next step, and when is it due?'; on no go on without one; never suggest a step, a date or a way of contacting anyone, the officer decides)");
+  else if (wantsNextStep(tool.action, d, target) && (empty(d.nextStep) || empty(d.nextDue)) && !V.nextSkipped && nextByAra() !== "no") missing.push(V.askedNext === "own" ? `Next step and its due date (the officer said yes to setting it now: ask exactly "${NEXT_OWN_Q}")` : "Next step and its due date (a substantive interaction needs one, and it becomes a Task for the officer: explain that in one sentence, then ask 'Do you want to set it now, yes or no?'; on yes ask 'What's the next step, and when is it due?'; on no go on without one; never suggest a step, a date or a way of contacting anyone, the officer decides)");
   // a new contact: ask once for the other of email/mobile, then once about the optional fields (the app drives this so it never gets skipped)
   // the officer just said a phone number, but this update didn't carry it (Oct 27 spoken run: Grok's call for the mobile turn had no mobile, so the app asked again)
   const saidDigits = oneOf && empty(d.mobile) && data.mobile === undefined ? officerSaidDigits() : "";

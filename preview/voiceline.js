@@ -22,6 +22,7 @@ const OFFLINE_WAIT_MS = 15000;               // when the phone says it's offline
 const SECOND_LINE_MS = 5000;                 // a new line not open after this long gets a second one alongside
 const OPEN_TIMEOUT_MS = 10000;               // a new line not open after this long counts as a failed try
 const MAX_ASKS = 1;                          // times the app asks Grok again for a reply before opening a fresh line
+const THINK_MS = 2500;                      // soft "thinking" tone when no reply has started after the officer stopped (Carverhill, Oct 31)
 const TICK_MS = 4000;                        // soft tick while waiting, and the early line test when no reply has started
 const ASK_AGAIN_MS = 10000;                  // ask Grok again when no reply has started by now (Grok sometimes takes 6 to 10 s)
 const TURN_TEST_MS = 8000, TURN_GIVE_UP_MS = 12000; // the officer's own turn with no reply started: line test at 8 s, fresh line at 12 s (the tick at TICK_MS)
@@ -115,6 +116,10 @@ const idleMs = () => typeof V !== "undefined" && V && ACTIONS[V.action] ? Math.m
 // line never ran; the officer sat in silence until the hang-up. The same ladder as a scripted line: "Ara's taking a moment." at TICK_MS, a line
 // test at TURN_TEST_MS (slow line: fresh line, which asks "Could you say that again?"; healthy: one reply request with their words, then the
 // usual watch), a fresh line at TURN_GIVE_UP_MS whatever happened. The hang-up is held off while a turn is open. No words from the turn: noise.
+// the officer stopped and no reply has started THINK_MS later: a soft two-note tone, so they know Ara is on it; "Ara's taking a moment." still follows at TICK_MS
+function thinkArm() { clearTimeout(G.thinkT); const at = G.turnOpen; if (!at) return;
+  G.thinkT = setTimeout(() => { if (!G.live || G.turnOpen !== at || G.responding || G.audioOn || G.speechOn || G.forced || G.pendingForce || playingLeft() > 0 || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
+    cue("think"); G.thinkAt = Date.now(); act("step", `No reply ${THINK_MS / 1000} s after the officer stopped: soft thinking tone`); }, THINK_MS); }
 function turnWatch() {
   if (!G.live || !G.turnOpen || G.asked || G.forced || G.pendingForce || G.responding || G.audioOn || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
   const heard = G.lastHeard && G.lastHeard.at >= G.turnOpen - 1500 ? String(G.lastHeard.text || "") : "", dt = Date.now() - G.turnOpen;
@@ -126,7 +131,7 @@ function turnWatch() {
       G.turnOpen = 0;
       if (typeof ms !== "number" || ms > SLOW_LINE_MS) { act("step", `No reply ${TURN_TEST_MS / 1000} s after the officer spoke, on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
       act("step", `No reply ${TURN_TEST_MS / 1000} s after the officer spoke on a healthy line: asked for one with their words`); G.retriedAt = Date.now(); G.heardSinceRetry = false;
-      askReply(`The officer just said: "${heard}". Answer that now, out loud in one or two sentences, or call the tool it needs.`); }); }
+      askReply((typeof answerGuide === "function" && answerGuide(heard)) || `The officer just said: "${heard}". Answer that now, out loud in one or two sentences, or call the tool it needs.`); }); }
   else if (dt >= TURN_GIVE_UP_MS && G.turnStep === 2) { G.turnOpen = 0; act("step", `No reply ${TURN_GIVE_UP_MS / 1000} s after the officer spoke: fresh line`); G.retried = 0; reconnect("the voice service stopped answering"); }
 }
 function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWatch(); quietWatch();
@@ -464,11 +469,11 @@ function voiceUnavailable(why) {
 }
 // short tones (and a spoken line when the phone allows it) so a driver knows without looking
 function cue(kind) {
-  const notes = kind === "down" ? [660, 520, 390] : kind === "wait" ? [880] : [520, 660];
+  const notes = kind === "down" ? [660, 520, 390] : kind === "wait" ? [880] : kind === "think" ? [440, 554] : [520, 660];
   try { const ctx = G.ctx && G.ctx.state === "running" ? G.ctx : (typeof spkCtx !== "undefined" && spkCtx) || new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state !== "running") ctx.resume();
     notes.forEach((f, i) => { const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + i * 0.22;
-      o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(kind === "wait" ? 0.08 : 0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(kind === "wait" ? 0.08 : kind === "think" ? 0.05 : 0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
       o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.22); }); } catch (e) {}
   if (kind !== "down") return;
   // no spoken line here any more: the screen says the voice service isn't answering (see voiceUnavailable), and the phone's built-in speech is never used
@@ -506,7 +511,7 @@ function replyCheck(r) {
   if (PROV().silentEmpty && why === "empty reply") { // the line answered (a finished reply), it just had no words: ask once more with the officer's words, never a fresh line for it
     if (G.retried > MAX_ASKS) { vlog("empty reply: had no words twice, waiting for the officer"); act("step", "Ara's reply had no words twice; waiting for the officer"); G.retried = 0; return; }
     const heard = G.lastHeard && G.lastHeard.text; act("step", "Ara's reply had no words (the line is up): asked again with the officer's words");
-    G.retriedAt = Date.now(); G.heardSinceRetry = false; askReply((heard ? `The officer just said: "${heard}". ` : "") + "Answer that now, out loud in one or two sentences, or call the tool it needs." + (G.askGuide ? " " + G.askGuide : "")); return; }
+    G.retriedAt = Date.now(); G.heardSinceRetry = false; askReply((heard && typeof answerGuide === "function" && answerGuide(heard)) || (heard ? `The officer just said: "${heard}". ` : "") + "Answer that now, out loud in one or two sentences, or call the tool it needs." + (G.askGuide ? " " + G.askGuide : "")); return; }
   if (G.retried > MAX_ASKS) { act("step", `Grok gave ${why} after asking again`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
   // asking again on a slow line only piles up late answers (seen Oct 24: six "I'm here"s at once): test the line first, and on a slow one start a fresh line
   const ws = G.ws; busy();

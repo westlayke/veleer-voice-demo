@@ -845,4 +845,54 @@ test("Carverhill's 5:50 PM call (Oct 30): the late-copy watch ends on a new line
   ok((await p.log()).split("Ara is asked to put the pending question again").length === 2, "the re-ask came twice in one quiet spell: " + (await p.log()).split(" | ").filter(t => /Quiet for|asked to put|Reconnect|taking a moment/.test(t)).slice(-8).join(" | "));
   await p.evaluate(() => { clearInterval(window.__keep); window.fetch = window.__fetch0; V = null; });
 });
+test("Next step and step offers (Oct 31): a yes or no to Ara's own next-step question counts, she gets one nudge when her reply misses it, a yes to a step offer asked again opens that step, and a soft tone plays while she thinks", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { window.__noAutoForce = true; });
+  const araSays = (text) => p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: text }, { type: "response.done", response: { status: "completed" } }]);
+  const creates = () => p.evaluate(() => __sent.map(x => JSON.parse(x)).filter(x => x.type === "response.create" && x.response && x.response.instructions).map(x => x.response.instructions));
+  const today = await p.evaluate(() => todayISO());
+  // 1. Ara asks the next-step question herself (from still_needed); the officer says yes; her reply misses it: one nudge, then none
+  await said(p, "Log an interaction with Ruth, I met her at the Halloween party today.");
+  let r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", date: today, meetingType: "Event", summary: "Met Ruth at the Halloween party." });
+  await said(p, "Yes, it was."); r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", substantive: true });
+  await p.evaluate(() => { V.askedNext = false; }); /* as if the app had not asked: Ara asks it herself */
+  await araSays("A substantive interaction needs a next step. Do you want to set it now, yes or no?"); await p.waitForTimeout(100);
+  await said(p, "Yes."); await p.waitForTimeout(100);
+  ok(await p.evaluate(() => G.ynWatch && G.ynWatch.kind === "next" && G.ynWatch.ans === "yes"), "the officer's yes to Ara's next-step question wasn't watched");
+  let n0 = (await creates()).length;
+  await araSays("Okay."); await p.waitForTimeout(200);
+  let c = await creates();
+  ok(c.length === n0 + 1 && /answering your question "Do you want to set it now, yes or no\?"/.test(c[c.length - 1]) && /Ask exactly "What's the next step, and when is it due\?"/.test(c[c.length - 1]) && /Your last reply \("Okay\."\) didn't ask what the next step is/.test(c[c.length - 1]), "no nudge naming the question and the yes branch: " + JSON.stringify(c.slice(n0)));
+  await araSays("Got it."); await p.waitForTimeout(200);
+  ok((await creates()).length === n0 + 1 && /still didn't ask what the next step is after one nudge/.test(await p.log()), "a second nudge was sent, or the miss wasn't logged");
+  // her draft call after that yes: the form asks for the step itself, not the yes-or-no again
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy" });
+  ok(await p.evaluate(() => V.askedNext === "own") && (r.still_needed || []).some(x => /ask exactly "What's the next step, and when is it due\?"/.test(x)) || r.ask_exactly === "What's the next step, and when is it due?", "the yes to Ara's own question wasn't taken: " + JSON.stringify(r));
+  // 2. a no to her question: the report goes on without a next step
+  await p.evaluate(() => { V = null; G.recent = []; G.ynWatch = null; renderOverlay(); });
+  await said(p, "Log a phone call with Ken Ito today, we talked about the gala.");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: today, meetingType: "Phone call", summary: "Talked about the gala." });
+  await said(p, "Yes, it was."); r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true });
+  await p.evaluate(() => { V.askedNext = false; });
+  await araSays("It needs a next step, which becomes a task. Do you want to set it now, yes or no?"); await p.waitForTimeout(100);
+  await said(p, "No."); await p.waitForTimeout(100);
+  ok(/That is a no: the report goes on without a next step/.test(await p.evaluate(() => answerGuide("No."))), "the no branch isn't in the guidance");
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito" });
+  ok(await p.evaluate(() => V && V.nextSkipped) && !(r.still_needed || []).some(x => /next step/i.test(x)) && !/set it now/.test(r.ask_exactly || ""), "the no to Ara's own question wasn't taken: " + JSON.stringify(r));
+  // 3. a yes to a step offer Ara asked again without its step: the step the save line named counts as asked for
+  await p.evaluate(() => { V = null; G.ynWatch = null; G.recent = []; renderOverlay(); const line = "The next step in the process to move Ruth to Qualification is to create an opportunity. Do you want to do that now, yes or no?";
+    G.lastSaved = { who: "Ruth Abernathy", contactId: null, next: "", nextLine: line, at: Date.now() }; recent("Ara", "Planned ask saved for Ruth. " + line); });
+  await araSays("That was already saved. Do you want to do that now, yes or no?"); await p.waitForTimeout(100);
+  await said(p, "Yes."); await p.waitForTimeout(100);
+  ok(await p.evaluate(() => formAskedFor("opportunity")), "a yes to the step offer asked again was refused as not asked for");
+  ok(await p.evaluate(() => !formAskedFor("gift")), "a yes to the step offer opened a different form");
+  ok(await p.evaluate(() => /That is a yes to this step: "The next step in the process to move Ruth to Qualification is to create an opportunity\."\. Open that step now by calling its tool/.test(answerGuide("Yes."))), "the step offer's guidance doesn't name the step: " + await p.evaluate(() => answerGuide("Yes.")));
+  n0 = (await creates()).length; await araSays("Sure, sounds good."); await p.waitForTimeout(200);
+  c = await creates(); ok(c.length === n0 + 1 && /didn't open the step/.test(c[c.length - 1]), "no nudge when Ara's reply to the yes didn't open the step: " + JSON.stringify(c.slice(n0)));
+  // 4. no reply 2.5 s after the officer stops: a soft thinking tone, before "Ara's taking a moment"
+  await p.evaluate(() => { G.ynWatch = null; G.responding = false; G.asked = false; G.audioOn = false; });
+  await said(p, "What's on my list today?"); await p.fire([{ type: "input_audio_buffer.speech_stopped" }]);
+  await p.waitForTimeout(1800); ok(!/soft thinking tone/.test(await p.log()), "the thinking tone came before 2.5 s");
+  await p.waitForTimeout(1000); ok(/No reply 2\.5 s after the officer stopped: soft thinking tone/.test(await p.log()), "no thinking tone 2.5 s after the officer stopped: " + (await p.log()).slice(-300));
+});
 };

@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 1:36 PM",
+      "change": "Preview: when the officer answers a yes-or-no question with a bare yes or no, the app's guidance to Ara now names the question and what each answer means (a yes to a step offer: open that step; a yes to setting the next step: ask what the step is and when it's due; a no: go on without one). If her reply misses it, the app nudges her once, never twice, and never asks the question itself. The officer's yes or no to Ara's own next-step question now counts the same as to the app's. A yes to a step offer Ara asked again (\"That was already saved. Do you want to do that now?\") now opens that step instead of being refused. A soft two-note tone plays when no reply has started 2.5 s after the officer stops talking; \"Ara's taking a moment.\" still follows at 4 s.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 31 1:17 PM: fix the next-step \"yes\" gap by having Ara respond properly, not with an app line (split-brain risk); 1:23 PM: the nudge runs once and a slow reply still gets \"Ara's taking a moment\"; 1:24 PM: \"Ok build preview with 1, 2, and 4\"."
+    },
+    {
       "date": "Oct 31, 12:10 PM",
       "change": "Preview: three fixes from Carverhill's 11:04 and 11:10 AM calls. (1) A scripted line counts as played only if its opening (the confirmation, such as \"Capacity C, $25,000 to $100,000.\") was said; Ara's own reply that only asks the same question is no longer taken for it, so the confirmation is still said. (2) A transcript that is only noise (\"[noise] ...\") no longer counts as the officer speaking. (3) When the phone takes the mic as it locks, the call pauses for the lock instead of ending, and the mic starts afresh when the app is back (no Carry on tap). Also: a value dropped because the officer never said it always comes back with its question.",
       "area": "Voice",

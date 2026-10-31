@@ -209,6 +209,49 @@ function nextStepNo(text) {
   act("step", "a no to the next step: the app asks what they'd like to do"); stopPlayback(); if (G.responding) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now();
   forceSay(NEXT_NO_Q); return true;
 }
+// Ara's own yes-or-no question that the officer's words answer, with what each answer means (Carverhill, Oct 31: Ara, not the app, follows the
+// answer, so the guidance names the question and both branches; Patient Pat's 20-machine run: "The officer just said: Yes. Answer that now"
+// gave no hint what the yes was for, and 31% of the "are you there?"s came after such a reply)
+function yesNoPending() {
+  const r = G.recent || []; let i = r.length - 1; while (i >= 0 && r[i].startsWith("Officer: ")) i--; if (i < 0) return null;
+  const line = r[i].replace(/^[^:]+: /, "").trim(), q = lastQuestionOf(line); if (!/\?$/.test(q)) return null;
+  if (/do that now(, yes or no)?\?$/i.test(q)) { /* the step offer after a save; an "already saved" re-ask doesn't name the step, the saved line does */
+    const offer = /next step|next on your list/i.test(line) ? line : (G.lastSaved && G.lastSaved.nextLine) || line, step = offer.replace(/\s*Do you want to do that now(, yes or no)?\?\s*$/i, "").replace(/^That was already saved\.\s*/i, "").trim();
+    return { kind: "step", q, step, yes: `That is a yes to this step: "${step}". Open that step now by calling its tool (never save_form), with no question first; the app asks the first question.`, no: `That is a no to that step: don't open it. If they named something else, do that; otherwise ask what they'd like to do.` }; }
+  if (/set it now|set (a|the) next step|next step.*yes or no/i.test(q)) return { kind: "next", q,
+    yes: `That is a yes to setting the next step now. Ask exactly "${NEXT_OWN_Q}" and nothing else.`, no: `That is a no: the report goes on without a next step. Never ask about a next step again; call the draft tool again (the fields already in stay), and the app takes it from there.` };
+  if (/hang up/i.test(q)) return null; /* the app's own hang-up question: idleAnswer takes it */
+  if (/yes or no\?$/i.test(q)) return { kind: "other", q, yes: "Act on that yes.", no: "Act on that no." };
+  return null;
+}
+// the guidance for a reply to the officer's yes or no, and the watch that checks the reply follows it (one firmer nudge, never an app re-ask)
+const YN_WATCH_MS = 20000;
+function answerGuide(heard) {
+  const p = yesNoPending(), a = p ? followAnswer(heard) : null; if (!p || !a) return "";
+  const guide = `The officer just said "${String(heard).trim()}", answering your question "${p.q}". ${a === "yes" ? p.yes : p.no}`;
+  if (p.kind !== "other") G.ynWatch = { kind: p.kind, ans: a, step: p.step || "", guide, tries: 1, at: Date.now(), heardN: G.heardN || 0 };
+  return guide; }
+// the officer answered: arm the check for Ara's own reply (the voice service answers on its own; the app only steps in when that reply misses)
+function yesNoHeard(text) { if (!V && !(G.lastSaved && Date.now() - G.lastSaved.at < 10 * 60e3)) { G.ynWatch = null; return; } G.ynWatch = null; answerGuide(text); }
+function ynCheck(r) {
+  const w = G.ynWatch; if (!w || !G.live) return;
+  if (Date.now() - w.at > YN_WATCH_MS || (G.heardN || 0) > w.heardN) { G.ynWatch = null; return; } /* stale, or the officer has spoken again */
+  if (r.status === "cancelled" || G.dropNext) return;
+  if (G.respForcedSeq === G.respSeq || G.nudge || G.ctxWatch) { G.ynWatch = null; return; } /* the app's own line, or another check already asked her again */
+  const bot = String(G.bot || "").trim(); if (!bot && !G.respTool) return;
+  let why = "";
+  if (w.kind === "step" && w.ans === "yes" && !G.respTool) why = "didn't open the step";
+  else if (w.kind === "next" && w.ans === "yes" && !G.respTool && !(/next step/i.test(bot) && /\?\s*$/.test(bot) && !OPEN_Q.test(bot))) why = "didn't ask what the next step is";
+  else if (w.kind === "next" && w.ans === "no" && !G.respTool && /next step/i.test(bot) && /\?\s*$/.test(bot)) why = "asked about the next step again";
+  else if (w.kind === "step" && w.ans === "no" && /do that now/i.test(bot)) why = "offered the same step again";
+  if (!why) { if (w.tries > 1) act("step", `Ara followed the officer's ${w.ans} after one nudge`); G.ynWatch = null; return; }
+  if (w.tries > 1) { act("step", `Ara's reply still ${why} after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't follow a yes-or-no answer after a nudge", `"${bot.slice(0, 80)}"`); G.ynWatch = null; return; }
+  w.tries = 2; w.at = Date.now(); act("step", `Ara's reply ${why} after the officer's ${w.ans} ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't follow a yes-or-no answer", `${why}: "${bot.slice(0, 80)}"`);
+  const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") ${why}. Do it now.`; setTimeout(() => { if (G.live && G.ynWatch === w) askReply(g); }, 0);
+}
+// the officer's answer to Ara's own next-step question counts the same as the app's (Oct 31: she asked "Do you want to set it now?" from still_needed, and the app,
+// which only took a yes after its own question, asked again)
+function nextAnswerByAra() { if (V && !V.askedNext && /set it now|set (a|the) next step|next step.*yes or no/i.test(askedBefore(2))) { V.askedNext = true; act("step", "Ara asked the next-step question herself: the officer's answer counts"); } }
 function nextStepLine(c, closed) {
   if (!c) return "What would you like to do next?";
   if (closed) { const it = typeof attentionItems === "function" ? attentionItems()[0] : null;
@@ -378,7 +421,7 @@ async function hfSave(callId, data, lead, short) { /* short: only the changed fi
       else { V.askedFollow = true;
         toolReply(callId, { ok: false, saved: false, field: "nextStep", ask_exactly: `${lead ? lead + " " : ""}${FOLLOW_Q(V.target)}`, error: `Not read back yet: the app asked the officer whether to use the suggested follow-up task "${s.text}" due ${s.due}, yes or no. If they say yes (any short answer that isn't a no), call the draft tool with exactly that nextStep and nextDue ${s.due}; if they say no, the app asks for their own words and date, use those.` });
         return; } }
-    else { const last = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9), na = V.askedNext ? followAnswer(last) : null; /* the same yes-or-no rule as the follow-up suggestion */
+    else { nextAnswerByAra(); const last = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9), na = V.askedNext ? followAnswer(last) : null; /* the same yes-or-no rule as the follow-up suggestion */
       if (V.askedNext && na === "no") { V.nextSkipped = true; act("step", "The officer said no to setting a next step now: the report goes on without one"); }
       else if (V.askedNext === "own" || na === "yes") { V.askedNext = "own";
         toolReply(callId, { ok: false, saved: false, field: "nextStep", ask_exactly: `${lead ? lead + " " : ""}${NEXT_OWN_Q}`, error: "Not read back yet: the officer said yes to setting the next step, so the app asked what the step is and when it's due. After the answer, call the draft tool with nextStep and nextDue in their words." });
