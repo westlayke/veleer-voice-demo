@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       conversations:
-        description: "Conversations per machine"
-        default: "24"
+        description: "Conversations per machine (5 x 20 machines = 100, close to the 96 of the Oct 31 baseline)"
+        default: "5"
       machines:
-        description: "Machines at once (1-20); each gets its own seed"
-        default: "4"
+        description: "Machines at once (1-20); each gets its own seed. 20 is the default (Carverhill, Oct 31)"
+        default: "20"
       rate:
         description: "Fault rate: 0 = none (baseline), 1 = Jim's calls, 2 = twice as rough"
         default: "1"
@@ -26,6 +26,9 @@ on:
       drop_after_save:
         description: "Share of saves followed by a dropped line 2.5-5.5 s later (0 = none; 0.5 = half), the 10:36 AM call's case"
         default: "0"
+      entity:
+        description: "Entity Pat names, by spoken name (e.g. National C4); blank = a different one per conversation; old = the pre-Oct 31 answer"
+        default: ""
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -33,7 +36,7 @@ jobs:
       seeds: ${{ steps.m.outputs.seeds }}
     steps:
       - id: m
-        run: echo "seeds=$(node -e "const n=Math.max(1,Math.min(20,Number('${{ inputs.machines }}')||4));console.log(JSON.stringify(Array.from({length:n},(_,i)=>i+1)))")" >> "$GITHUB_OUTPUT"
+        run: echo "seeds=$(node -e "const n=Math.max(1,Math.min(20,Number('${{ inputs.machines }}')||20));console.log(JSON.stringify(Array.from({length:n},(_,i)=>i+1)))")" >> "$GITHUB_OUTPUT"
   talk:
     needs: plan
     runs-on: ubuntu-latest
@@ -56,6 +59,7 @@ jobs:
           MAX_MIN: ${{ inputs.max_minutes }}
           RECONNECT: ${{ inputs.reconnect }}
           DROP_AFTER_SAVE: ${{ inputs.drop_after_save }}
+          ENTITY: ${{ inputs.entity }}
         run: MAX_MS=$(( ${MAX_MIN:-30} * 60000 )) node tests/patience/run.js
       - name: Report (in the log, since artifacts can't be fetched from the cloud session; the summary last, so a tail of the log has it)
         if: always()

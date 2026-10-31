@@ -4,8 +4,10 @@
 
 Run locally: `CONVS=10 RATE=0 JOBS=8 node tests/patience/run.js` (baseline, no faults), `CONVS=30 RATE=1 JOBS=8 SEED=2 node tests/patience/run.js` (Jim's rates). `RATE=2` is twice as rough. `DEBUG=1` prints each conversation's lines and the app's log. Reports land in `results/report-<stamp>.md` with the conversations in `convs-<stamp>.json`; `node tests/patience/combine.js <dir>` sums several runs.
 
-From GitHub Actions: "Patient Pat's calls" (inputs: conversations per machine, machines, rate, jobs); each machine gets its own seed and the last job combines them into the run summary.
+From GitHub Actions: "Patient Pat's calls" (inputs: conversations per machine (default 5), machines (default 20, Carverhill Oct 31), rate, jobs, entity); each machine gets its own seed and the last job combines them into the run summary.
 
 Timers run at real speed (a conversation is 5-10 minutes), so the batches run in parallel: 8 conversations per machine, several machines at once.
 
 The score is asks per 10 minutes, by cause. A change to the app's timers (the 4 s "taking a moment" tick, the 8 s scripted-line fallback, the reconnect clock) is judged by rerunning with the same seeds and comparing.
+
+Entity answers (Oct 31): Pat names the entity by its spoken name ("National C4"), a different one per conversation by seed. ENTITY=<spoken name> pins one; ENTITY=old gives the pre-Oct 31 answer ("the North Dakota Fed PAC"). The report has a table of how often the entity question came back for each.

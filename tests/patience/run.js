@@ -137,7 +137,15 @@ const C = "Jordan Pike", iso = (d) => d.toISOString().slice(0, 10), today = new 
 const STEP_TOOL = (line) => /capacity rating/i.test(line) ? null /* the officer declines and names the next form instead (see BOOK) */ : /create an opportunity/i.test(line) ? ["show_opportunity_draft", { contact_name: C }] : /substantive interaction/i.test(line) ? ["show_interaction_draft", { contact_name: C }] : /planned ask/i.test(line) ? ["show_ask_plan_draft", { contact_name: C }] : /record the ask/i.test(line) ? ["show_ask_result_draft", { contact_name: C, date: T }] : /move to Cultivation|Cultivation\?/i.test(line) ? ["show_cultivation_decision", { contact_name: C, decision: "Move to Cultivation" }] : /planned ask/i.test(line) ? ["show_ask_plan_draft", { contact_name: C }] : /record the ask/i.test(line) ? ["show_ask_result_draft", { contact_name: C, date: T }] : /gift|answer/i.test(line) ? ["show_gift_draft", { contact_name: C }] : null;
 const FORM_TOOL = { contact: "show_contact_draft", opportunity: "show_opportunity_draft", interaction: "show_interaction_draft", ask: "show_ask_result_draft", plan: "show_ask_plan_draft", gift: "show_gift_draft", cultivate: "show_cultivation_decision", response: "show_ask_response_draft" };
 const forForm = (ctx, args) => [FORM_TOOL[ctx.form] || "show_interaction_draft", Object.assign({ contact_name: C }, args)]; /* the stand-in sends only what the officer just said: the app's evidence guard drops anything else */
-const ND = "C.A. North Dakota Fed PAC";
+/* the entity Pat names, by its spoken name (Oct 31: Pat used to say "the North Dakota Fed PAC", which also matched the record name, so runs never met the
+   "National C4" loop); one per conversation, by seed; ENTITY=<spoken name> pins one, ENTITY=old keeps the pre-Oct 31 answer */
+const ENTS = [["National C3", "Citizens Alliance C3", "National"], ["National C4", "C.A. of America Action C4", "National"], ["National Federal PAC", "C.A. Fed PAC", "National"],
+  ["Idaho C4", "C.A. Idaho C4", "Idaho"], ["Idaho PAC", "C.A. Idaho PAC", "Idaho"], ["North Dakota C4", "C.A. North Dakota C4", "North Dakota"],
+  ["North Dakota State PAC", "C.A. North Dakota State PAC", "North Dakota"], ["North Dakota Federal PAC", "C.A. North Dakota Fed PAC", "North Dakota"],
+  ["New Hampshire C4", "C.A. New Hampshire C4", "New Hampshire"], ["Pennsylvania C4", "C.A. Pennsylvania C4", "Pennsylvania"], ["Pennsylvania State PAC", "C.A. Pennsylvania State PAC", "Pennsylvania"]];
+const entFor = (seed) => { const e = process.env.ENTITY; if (e === "old") return { said: "the North Dakota Fed PAC", fund: "C.A. North Dakota Fed PAC", campaign: "North Dakota" };
+  const r = (e && ENTS.find(x => x[0].toLowerCase() === e.toLowerCase())) || ENTS[seed % ENTS.length]; return { said: "the " + r[0], fund: r[1], campaign: r[2] }; };
+const cap = (t) => t[0].toUpperCase() + t.slice(1);
 const BOOK = [
   { q: /Just to be sure, the amount is/i, say: "Yes." },
   { q: /Save it, or change something\?|Yes to save, or no to change something\?|Shall I save it\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
@@ -165,11 +173,11 @@ const BOOK = [
   { q: /Shall I use that/i, say: "Use that.", tool: (line, ctx) => forForm(ctx, { nextStep: "Follow up with Jordan to get an answer on the ask", nextDue: F }) },
   { q: /Move \w+ to Cultivation, or defer\?/i, say: "Move to Cultivation.", tool: ["show_cultivation_decision", { contact_name: C, decision: "Move to Cultivation" }] },
   { q: /Move (\w+ )?to Cultivation\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
-  { q: /Which entity, and which campaign|Which entity\?/i, say: "The North Dakota Fed PAC, North Dakota.", tool: (line, ctx) => forForm(ctx, { fund: ND, campaign: "North Dakota" }) },
-  { q: /Which campaign/i, say: "North Dakota.", tool: (line, ctx) => forForm(ctx, { campaign: "North Dakota" }) },
-  { q: /Which entity\?/i, say: "The North Dakota Fed PAC.", tool: (line, ctx) => forForm(ctx, { fund: ND }) },
+  { q: /Which entity, and which campaign|Which entity\?/i, say: (ctx) => `${cap(ctx.ent.said)}, ${ctx.ent.campaign}.`, tool: (line, ctx) => forForm(ctx, { fund: ctx.ent.fund, campaign: ctx.ent.campaign }) },
+  { q: /Which campaign/i, say: (ctx) => `${ctx.ent.campaign}.`, tool: (line, ctx) => forForm(ctx, { campaign: ctx.ent.campaign }) },
+  { q: /Which entity\?/i, say: (ctx) => `${cap(ctx.ent.said)}.`, tool: (line, ctx) => forForm(ctx, { fund: ctx.ent.fund }) },
   { q: /planned ask date/i, say: "Today, twenty-five thousand dollars.", tool: ["show_ask_plan_draft", { contact_name: C, plannedDate: T, amount: 25000 }] },
-  { q: /How much (was the ask|is the gift|is the pledge), and for which entity/i, say: "Twenty-five thousand dollars, for the North Dakota Fed PAC.", tool: (line, ctx) => forForm(ctx, { amount: 25000, fund: ND }) },
+  { q: /How much (was the ask|is the gift|is the pledge), and for which entity/i, say: (ctx) => `Twenty-five thousand dollars, for ${ctx.ent.said}.`, tool: (line, ctx) => forForm(ctx, { amount: 25000, fund: ctx.ent.fund }) },
   { q: /When was it received, and how was it paid/i, say: "Today, by check.", tool: (line, ctx) => forForm(ctx, { date: T, method: "Check" }) },
   { q: /Ally - Do Not Solicit, or Do Not Contact/i, say: "Neither.", tool: ["optional_fields", { step: "answer", value: "neither" }] },
   { q: /What's the type\?/i, say: "In person.", tool: (line, ctx) => forForm(ctx, { meetingType: "In person" }) },
@@ -185,7 +193,7 @@ const AGENDA_TOOL = [["show_contact_draft", { first: "Jordan", last: "Pike" }], 
 // ---------- one conversation ----------
 async function conversation(browser, base, n) {
   const seed = SEED * 1000 + n, cfg = { seed, rate: RATE, rates: RATES, reconnect: process.env.RECONNECT || "ara" };
-  const conv = { n, seed, asks: [], faults: [], saves: [], unanswered: [], started: Date.now(), errors: [], turns: 0, hungUp: false, closedWon: false };
+  const conv = { n, seed, entity: "", entityAsks: 0, asks: [], faults: [], saves: [], unanswered: [], started: Date.now(), errors: [], turns: 0, hungUp: false, closedWon: false };
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true, permissions: ["microphone"] });
   await ctx.addInitScript(FAKES, cfg); await ctx.addInitScript(STAND_IN); await ctx.addInitScript({ content: `window.__stepTool = (() => { const C = ${JSON.stringify(C)}, T = ${JSON.stringify(T)}; return ${STEP_TOOL.toString()}; })();` }); /* the step a next-step offer names, for the stand-in's yes */
   const p = await ctx.newPage(); p.on("pageerror", e => conv.errors.push("page: " + e.message));
@@ -207,7 +215,7 @@ async function conversation(browser, base, n) {
       if (window.__cfg.rate && /^show_/.test(tool[0]) && window.__rnd() < window.__cfg.rates.wordsOnly * window.__cfg.rate) { window.__standIn.heldTool = tool; (window.__wordsOnly = window.__wordsOnly || []).push({ at: Date.now(), tool: tool[0], asks: 0, recovered: false }); window.__events.push({ at: Date.now(), fault: "words only, no tool call" });
         ws.say(/^show_contact_draft$/.test(tool[0]) && !tool[1].first ? "We'll fill in the form together as you talk." : /^show_/.test(tool[0]) && Object.keys(tool[1] || {}).length <= 1 ? "Sure, let's add that." : "Got it.", 0); return; } /* Ara talks but doesn't call the tool: the app asks her again (toolCheck) */
       tool = window.__standIn.pick(tool); window.__standIn.lastTool = tool[0]; window.__standIn.lastSent = tool; ws.deliver({ type: "response.created" }, 0); ws.deliver({ type: "response.output_audio.delta", delta: window.__silence }, 20); ws.deliver({ type: "response.function_call_arguments.done", call_id: "t" + Math.random().toString(36).slice(2), name: tool[0], arguments: JSON.stringify(tool[1]) }, 40); ws.deliver({ type: "response.done", response: { status: "completed" } }, 60); }, window.__latency()); }, [text, tool]);
-  const bookCtx = { form: "", saves: 0, agenda: () => AGENDA[Math.min(bookCtx.saves, AGENDA.length - 1)], again: () => lastSaid && !/^(yes|no|save it|move on|in person)\.?$/i.test(lastSaid) ? lastSaid : bookCtx.agenda() /* a bare yes means nothing on its own: the officer says what they were doing */ };
+  const bookCtx = { form: "", saves: 0, ent: entFor(seed), agenda: () => AGENDA[Math.min(bookCtx.saves, AGENDA.length - 1)], again: () => lastSaid && !/^(yes|no|save it|move on|in person)\.?$/i.test(lastSaid) ? lastSaid : bookCtx.agenda() /* a bare yes means nothing on its own: the officer says what they were doing */ };
   const spokenMs = (text) => Math.round((String(text).split(/\s+/).filter(Boolean).length / 2.7) * 1000) + 300; /* about 160 words a minute */
   const t0 = Date.now(); let seenLines = 0, seenEvents = 0;
   try {
@@ -239,6 +247,7 @@ async function conversation(browser, base, n) {
   async function answer(q) {
     const line = q.text; let entry = BOOK.find(b => b.q.test(line)); if (!entry) { conv.unanswered.push(line.slice(0, 120)); return; }
     if (entry.q.source === "\\?$") conv.unanswered.push(line.slice(0, 120));
+    if (/which entity/i.test(line)) { conv.entity = bookCtx.ent.said.replace(/^the /, ""); conv.entityAsks++; }
     const say = typeof entry.say === "function" ? entry.say(bookCtx) : entry.say; let tool = typeof entry.tool === "function" ? entry.tool(line, bookCtx) : entry.tool || null;
     if ((!entry.tool && /What would you like to do|What's next/i.test(line)) || (say === bookCtx.agenda() && !tool)) tool = AGENDA_TOOL[Math.min(bookCtx.saves, AGENDA_TOOL.length - 1)];
     await p.waitForTimeout(800 + Math.round(rnd() * 1200)); /* a person takes a moment */
@@ -284,7 +293,7 @@ async function conversation(browser, base, n) {
 }
 
 const { stateSection } = require("./state-section.js");
-const { faultSection } = require("./fault-section.js");
+const { faultSection, entitySection } = require("./fault-section.js");
 const { stepsInPage, stepsLines } = require("../steps.js");
 if (require.main === module) (async () => {
   await new Promise(r => server.listen(0, r)); const base = `http://localhost:${server.address().port}/`;
@@ -306,7 +315,7 @@ if (require.main === module) (async () => {
     "| Conversation | Minutes | Saves | Asks | Faults | Ended |", "|---|---|---|---|---|---|", ...convs.map(c => `| ${c.n} | ${c.minutes} | ${c.saves.length} | ${c.asks.map(a => `${a.silence} s (${a.cause})`).join("; ") || "none"} | ${c.faults.map(f => f.fault).join(", ") || "none"} | ${c.closedWon ? "Closed Won" : c.ended || ""}${c.errors.length ? " " + c.errors.join("; ") : ""} |`), "",
     "## Discrete steps and the app's scripted lines", "", ...stepsLines(convs), "",
     "## Silence", "", `Stretches with no sound (estimated, speaking time taken off): longest ${Math.max(0, ...convs.map(c => c.quiet ? c.quiet.longest : 0))} s; over 6.5 s: ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.over : 0), 0)} of ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.n : 0), 0)} stretches, in ${convs.filter(c => c.quiet && c.quiet.over).length} of ${convs.length} conversations.`, "",
-    ...faultSection(convs),
+    ...faultSection(convs), ...entitySection(convs),
     ...stateSection(convs),
     "## Each ask", "", "| Conv | At | Silence | Cause | Status | Form | Last heard |", "|---|---|---|---|---|---|---|", ...convs.flatMap(c => c.asks.map(a => `| ${c.n} | ${Math.round(a.at / 1000)} s | ${a.silence} s | ${a.cause} | ${a.status} | ${a.form || ""} | ${a.lastHeard.replace(/\|/g, "/")} |`)), "",
     "## Questions the answer book had no entry for", "", ...[...new Set(convs.flatMap(c => c.unanswered))].map(q => `- ${q}`), "",
