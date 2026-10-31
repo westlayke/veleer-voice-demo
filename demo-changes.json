@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 30, 10:17 PM",
+      "change": "Preview: no change in what the app does. Code tidy-up (step 3 of the cleanup): the call's memory now goes back to its start in three named places, one for a turn, one for a line (after a drop or a phone lock) and one for the end of a call, instead of lists written out by hand in each place. The lists are exactly what they were. The voice-line design note lists the call's memory by group and where each resets.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill, Oct 30 8:39 PM: group the call state once the Patient Pat baseline is in; 9:32 PM: on the preview only after it passes the comparison. Baseline 5.6 asks per 10 minutes, 55 of 96 Closed Won; step 3 5.5 per 10 minutes, 59 of 96, same 12 machines and seeds."
+    },
+    {
       "date": "Oct 30, 9:09 PM",
       "change": "Preview: no change in what the app does. Code tidy-up (step 2 of the cleanup): long lines in the voice code are split where one statement ends and the next begins, and long notes that trailed code now sit on their own lines just above it. A check confirmed the code itself is token-for-token the same. The tests share one activity-log reader and one voice-event sender instead of 24 copies (step 1).",
       "area": "Voice",
