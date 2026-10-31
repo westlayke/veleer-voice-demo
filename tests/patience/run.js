@@ -91,7 +91,7 @@ const STAND_IN = () => {
     reply(ws, e) { const t = this.pendingTool; const instr = (e.response && e.response.instructions) || "";
       { const CTX = /say in one sentence where we were|already saved, then ask this question word for word/, note = this.lastOut && this.lastOut.note || ""; /* the first late-yes ask rides in the tool result's note ("Reply to the officer from the tool result"); the retries come as guidance */
         if (CTX.test(instr)) { this.context(ws, instr); return; } if (/Reply to the officer from the tool result/.test(instr) && CTX.test(note)) { this.context(ws, note); return; } }
-      if (/your last reply had no tool call/.test(instr)) { const held = this.heldTool, w = (window.__wordsOnly || []).slice(-1)[0]; /* the app's ask for the missing tool call */
+      if (/your last reply had no tool call|promised a form but had no tool call/.test(instr)) { const held = this.heldTool, w = (window.__wordsOnly || []).slice(-1)[0]; /* the app's ask for the missing tool call */
         if (!held || !w || w.recovered) { (window.__falseNudges = window.__falseNudges || []).push({ at: Date.now(), instr: instr.slice(0, 160) }); ws.say("Okay.", window.__latency()); return; }
         w.asks++; if (w.asks < 3 && window.__rnd() < 0.3) { ws.say("Okay.", window.__latency()); return; } /* misses again */
         this.heldTool = null; w.recovered = true; w.recoveredOn = w.asks; const tl = this.pick(held); this.lastTool = tl[0]; this.lastSent = tl; const ms = window.__latency(); setTimeout(() => { if (ws.readyState !== 1) return; ws.deliver({ type: "response.created" }, 0); ws.deliver({ type: "response.output_audio.delta", delta: window.__silence }, 20); ws.deliver({ type: "response.function_call_arguments.done", call_id: "t" + Math.random().toString(36).slice(2), name: tl[0], arguments: JSON.stringify(tl[1]) }, 40); ws.deliver({ type: "response.done", response: { status: "completed" } }, 60); }, ms); return; }
@@ -106,6 +106,9 @@ const STAND_IN = () => {
       if (/The app just said|don't say it (or anything like it )?again|The app is saying so itself/.test(instr)) { const ms = window.__latency(); setTimeout(() => { if (ws.readyState !== 1) return; ws.deliver({ type: "response.created" }, 0); ws.deliver({ type: "response.done", response: { status: "completed" } }, 30); }, ms); return; } /* the app said the line itself: Ara stays quiet (the stand-in used to read the quoted question out, and the line was heard twice) */
       if (this.intended && this.lastOut && /Open that step now with its tool/.test(this.lastOut.note || "")) { const t = this.intended; this.intended = null; const sv = (window.__staleSaves || []).slice(-1)[0]; if (sv) sv.recovered = true; this.pendingTool = null; const ms = window.__latency();
         setTimeout(() => { if (ws.readyState !== 1) return; ws.deliver({ type: "response.created" }, 0); ws.deliver({ type: "response.output_audio.delta", delta: window.__silence }, 20); ws.deliver({ type: "response.function_call_arguments.done", call_id: "t" + Math.random().toString(36).slice(2), name: t[0], arguments: JSON.stringify(t[1]) }, 40); ws.deliver({ type: "response.done", response: { status: "completed" } }, 60); }, ms); return; } /* the app's guard routed the yes to the next step: Ara opens it */
+      if (/The officer (just said|had already answered that question[^:]*): "(No|Nope|Not now)[.!]?"/i.test(instr)) { ws.say("Okay. What would you like to do?", window.__latency()); return; } /* a no to a yes-or-no question: Grok asks what's next */
+      { const rq = instr.match(/Ask them the pending question again[^"]*"([^"]+)"/); if (rq) { /* the app's 13 s re-ask (formReask, Oct 30 6:28 PM build): put the pending question again */
+          const qs = rq[1].match(/[^.?!]*\?/g); ws.say(qs ? qs[qs.length - 1].trim() : rq[1].trim(), window.__latency()); return; } }
       { const sn = instr.match(/Still needed: ([^.]+)\./); if (sn) { ws.say(`What's the ${sn[1].split(/,| and /)[0].replace(/\s*\(.*$/, "").trim().toLowerCase()}?`, window.__latency()); return; } }
       if (/never read it aloud/.test(instr) && /question/.test(instr)) { const q = (instr.match(/"([^"]+\?)"/) || [])[1]; if (q) { ws.say(q, window.__latency()); return; } }
       // nothing the stand-in understands: it says a short line (Grok never answers with nothing) and the guidance is kept for the report
@@ -145,7 +148,7 @@ const BOOK = [
   { q: /Should I hang up now/i, say: "No.", tool: null },
   { q: /Shall I use that/i, say: "Use that.", tool: (line, ctx) => forForm(ctx, { nextStep: "Follow up with Jordan to get an answer on the ask", nextDue: F }) },
   { q: /Move \w+ to Cultivation, or defer\?/i, say: "Move to Cultivation.", tool: ["show_cultivation_decision", { contact_name: C, decision: "Move to Cultivation" }] },
-  { q: /Move \w+ to Cultivation\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
+  { q: /Move (\w+ )?to Cultivation\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
   { q: /Which entity, and which campaign|Which entity\?/i, say: "The North Dakota Fed PAC, North Dakota.", tool: (line, ctx) => forForm(ctx, { fund: ND, campaign: "North Dakota" }) },
   { q: /Which campaign/i, say: "North Dakota.", tool: (line, ctx) => forForm(ctx, { campaign: "North Dakota" }) },
   { q: /Which entity\?/i, say: "The North Dakota Fed PAC.", tool: (line, ctx) => forForm(ctx, { fund: ND }) },
