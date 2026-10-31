@@ -267,16 +267,15 @@ test("Evidence rule: a value the officer never said is left off the form and nam
 
 test("Ara: the phone checks whether each line could be heard, and \"Are you there?\" logs the readings of the last line and has Ara repeat it", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
   // a line with words but no voice audio is flagged (the readings: audio received, speaker level, mic echo, sound state)
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "What's her last name?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForTimeout(2600);
-  ok(/Ara's line may not have been heard: no voice audio came from the voice service, only the words \("What's her last name\?"\)/.test(await logged()), "a line without voice audio wasn't flagged: " + (await logged()).slice(-300));
+  ok(/Ara's line may not have been heard: no voice audio came from the voice service, only the words \("What's her last name\?"\)/.test(await p.log()), "a line without voice audio wasn't flagged: " + (await p.log()).slice(-300));
   ok(await p.evaluate(() => !!(G.out && G.outAn) && G.lastLine && G.lastLine.text === "What's her last name?"), "the speaker-path analyser or the last-line record is missing");
   // a line with sound is not flagged
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(4800))) }, { type: "response.output_audio_transcript.delta", delta: "Smith, got it." }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); G.audioSamples = 30000; G.outPeak = 0.2; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
   await p.waitForTimeout(2600);
-  ok(!/may not have been heard: [^|]*Smith, got it/.test(await logged()), "a line with sound was flagged as not heard");
+  ok(!/may not have been heard: [^|]*Smith, got it/.test(await p.log()), "a line with sound was flagged as not heard");
   // "Are you there?" (Carverhill, Oct 25: it always means he heard nothing for a while)
   const n0 = await p.evaluate(() => __sent.length);
   await said(p, "Are you there?"); await p.waitForTimeout(400);
@@ -292,107 +291,103 @@ test("Ara: the phone checks whether each line could be heard, and \"Are you ther
   const nS = await p.evaluate(() => { G.audioEver = true; __sent.length = 0; SILENT_STILL_MS = 1200; SILENT_RESEND_MS = 3000; return __sent.length; }); /* the real waits are 6 and 13 s past the judgement (Oct 30) */
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForTimeout(6500);
-  ok(/came without sound: the phone says she's taking a moment and waits for the sound; it asks for the line again only after \d+ s/.test(await logged()) && /No sound for Ara's line in \d+ s: asked for it again, once/.test(await logged()) && await p.evaluate(() => __sent.some(s => /Say it again now, word for word: \\"Which campaign: National, or Idaho\?\\"/.test(s))), "a silent line wasn't asked for again after the wait: " + (await logged()).slice(-300));
+  ok(/came without sound: the phone says she's taking a moment and waits for the sound; it asks for the line again only after \d+ s/.test(await p.log()) && /No sound for Ara's line in \d+ s: asked for it again, once/.test(await p.log()) && await p.evaluate(() => __sent.some(s => /Say it again now, word for word: \\"Which campaign: National, or Idaho\?\\"/.test(s))), "a silent line wasn't asked for again after the wait: " + (await p.log()).slice(-300));
   // her sound already on the clock when the judgement runs (Oct 28 10:03 PM: the recording played over her sounded copy): a false alarm, no recording, no resend
   await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }, { type: "response.created" }, { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(4800))) }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForTimeout(2600);
-  ok(/false alarm, nothing said/.test(await logged()) && await p.evaluate(() => !__sent.some(s => /Idaho/.test(s))), "a judged-silent line with sound already queued wasn't treated as a false alarm: " + (await logged()).slice(-300));
+  ok(/false alarm, nothing said/.test(await p.log()) && await p.evaluate(() => !__sent.some(s => /Idaho/.test(s))), "a judged-silent line with sound already queued wasn't treated as a false alarm: " + (await p.log()).slice(-300));
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); G.audioOn = false; });
   // a reply with sound starting before the resend goes out: the resend stands down (Oct 28 10:03 PM: a line heard twice)
   await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Pennsylvania?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForTimeout(2600);
   await p.evaluate(() => { [{ type: "response.created" }, { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(4800))) }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Pennsylvania?" }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); G.audioSamples = 30000; G.outPeak = 0.2; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
   await p.waitForTimeout(3500);
-  ok(/The sound for Ara's line arrived [\d.]+ s after the words: nothing asked again/.test(await logged()) && await p.evaluate(() => !__sent.some(s => /Pennsylvania/.test(s))), "the resend went out although the sound had arrived: " + (await logged()).slice(-300));
+  ok(/The sound for Ara's line arrived [\d.]+ s after the words: nothing asked again/.test(await p.log()) && await p.evaluate(() => !__sent.some(s => /Pennsylvania/.test(s))), "the resend went out although the sound had arrived: " + (await p.log()).slice(-300));
   await p.evaluate(() => { G.silentAgain = { text: "Which campaign: National, or Idaho?", at: Date.now() }; window.__wsS = __ws; [{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }].forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); });
   await p.waitForFunction(() => __ws !== __wsS, null, { timeout: 8000 }).catch(() => {});
-  ok(/came without sound twice: the line is treated as dead/.test(await logged()) && await p.evaluate(() => __ws !== __wsS), "a second silent copy didn't reconnect: " + (await logged()).slice(-300));
+  ok(/came without sound twice: the line is treated as dead/.test(await p.log()) && await p.evaluate(() => __ws !== __wsS), "a second silent copy didn't reconnect: " + (await p.log()).slice(-300));
 });
 test("Carverhill's 12:45 PM call (Oct 30): a tool call's reply is never taken for the scripted line; a soundless line waits 15 s for its sound before one resend; a late second telling is cut", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  const logged = () => p.evaluate(() => ACT.q.map(a => a.text).join(" | "));
-  const ev = (list) => p.evaluate((list) => { list.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }, list);
   const audio = { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(24000))) }; /* 0.5 s of sound */
   await p.evaluate(() => { window.__noAutoForce = true; G.audioEver = true; SILENT_STILL_MS = 1200; SILENT_RESEND_MS = 3000; });
   // 1. the save line is sent; save_form's own reply (a tool call, no sound) comes first: it is not the scripted line, which still waits and then plays once, no resend
   const line = "Contact saved for Sylvia. The next step in the process to move Sylvia to Qualification is to create an opportunity. Do you want to do that now, yes or no?";
   // the service gives the line an id when it accepts it (real-Ara run, Oct 30: the reply's item and audio carry that id); a reply with another item (the tool call) is not the line
   await p.evaluate((line) => forceSay(line), line); await p.waitForTimeout(100);
-  await ev([{ type: "conversation.item.added", item: { id: "it_save1", type: "message", role: "assistant", content: [{ type: "output_text", text: line }] } }]); await p.waitForTimeout(50);
+  await p.fire([{ type: "conversation.item.added", item: { id: "it_save1", type: "message", role: "assistant", content: [{ type: "output_text", text: line }] } }]); await p.waitForTimeout(50);
   ok(await p.evaluate(() => G.forced && G.forced.itemId === "it_save1" && !G.forced.started), "the line's id from the service wasn't kept: " + JSON.stringify(await p.evaluate(() => G.forced && [G.forced.itemId, G.forced.started])));
-  await ev([{ type: "response.created", response: { id: "r1" } }, { type: "response.output_item.added", item: { id: "it_call1", type: "function_call" } }, { type: "response.function_call_arguments.done", call_id: "t1", name: "get_process_faq", arguments: JSON.stringify({ question: "what is capacity" }) }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
-  ok(await p.evaluate(() => G.forced && !G.forced.started && !G.forced.byId) && !/Scripted line played/.test(await logged()), "the tool call's reply was taken for the scripted line: " + (await logged()).slice(-300));
+  await p.fire([{ type: "response.created", response: { id: "r1" } }, { type: "response.output_item.added", item: { id: "it_call1", type: "function_call" } }, { type: "response.function_call_arguments.done", call_id: "t1", name: "get_process_faq", arguments: JSON.stringify({ question: "what is capacity" }) }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => G.forced && !G.forced.started && !G.forced.byId) && !/Scripted line played/.test(await p.log()), "the tool call's reply was taken for the scripted line: " + (await p.log()).slice(-300));
   ok(await p.evaluate((line) => !(G.lastLine && G.lastLine.text === line), line), "the unplayed scripted line was recorded as said");
-  await ev([{ type: "response.created", response: { id: "r2" } }, { type: "response.output_item.added", item: { id: "it_save1", type: "message" } }, Object.assign({ item_id: "it_save1" }, audio), { type: "response.output_audio_transcript.delta", delta: line }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(3000);
-  ok(/Scripted line played/.test(await logged()) && await p.evaluate(() => !G.forced) && !/came without sound/.test(await logged()), "the scripted line didn't play once, cleanly: " + (await logged()).slice(-300));
-  ok(/Scripted line ids: the service gave the line item it_save1; reply r2, item it_save1, audio item it_save1; matched by id: yes/.test(await logged()), "the id pairing wasn't logged: " + (await logged()).slice(-300));
+  await p.fire([{ type: "response.created", response: { id: "r2" } }, { type: "response.output_item.added", item: { id: "it_save1", type: "message" } }, Object.assign({ item_id: "it_save1" }, audio), { type: "response.output_audio_transcript.delta", delta: line }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(3000);
+  ok(/Scripted line played/.test(await p.log()) && await p.evaluate(() => !G.forced) && !/came without sound/.test(await p.log()), "the scripted line didn't play once, cleanly: " + (await p.log()).slice(-300));
+  ok(/Scripted line ids: the service gave the line item it_save1; reply r2, item it_save1, audio item it_save1; matched by id: yes/.test(await p.log()), "the id pairing wasn't logged: " + (await p.log()).slice(-300));
   ok(await p.evaluate(() => __sent.filter(s => /force_message/.test(s) && /Contact saved for Sylvia/.test(s)).length === 1 && !__sent.some(s => /force_message/.test(s) && /"id":"force_/.test(s))), "the save line was sent more than once, or with an id of our own");
   // no id from the service (another engine, or the acceptance not seen): the next reply is taken for the line, and a tool call's reply is given back
   await p.evaluate(() => { __sent.length = 0; forceSay("Which campaign: National, or Idaho?"); }); await p.waitForTimeout(100);
-  await ev([{ type: "response.created" }, { type: "response.function_call_arguments.done", call_id: "t2", name: "get_process_faq", arguments: JSON.stringify({ question: "what is capacity" }) }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
-  ok(/A tool call's reply came while the scripted line was still to come: not taken for it/.test(await logged()) && await p.evaluate(() => G.forced && !G.forced.started), "without ids, the tool call's reply was taken for the scripted line: " + (await logged()).slice(-300));
-  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
-  ok(await p.evaluate(() => !G.forced) && /matched by id: no \(no id, by order\)/.test(await logged()), "the scripted line without an id didn't play by order: " + (await logged()).slice(-200));
+  await p.fire([{ type: "response.created" }, { type: "response.function_call_arguments.done", call_id: "t2", name: "get_process_faq", arguments: JSON.stringify({ question: "what is capacity" }) }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  ok(/A tool call's reply came while the scripted line was still to come: not taken for it/.test(await p.log()) && await p.evaluate(() => G.forced && !G.forced.started), "without ids, the tool call's reply was taken for the scripted line: " + (await p.log()).slice(-300));
+  await p.fire([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !G.forced) && /matched by id: no \(no id, by order\)/.test(await p.log()), "the scripted line without an id didn't play by order: " + (await p.log()).slice(-200));
   // the acceptance lands after the reply started by order: the id on the reply still confirms it (matched by id)
   await p.evaluate(() => { __sent.length = 0; forceSay("What's their first and last name?"); }); await p.waitForFunction(() => G.forced && __sent.some(s => /force_message/.test(s)), null, { timeout: 9000 }); await p.waitForTimeout(50);
-  await ev([{ type: "response.created", response: { id: "r3" } }, { type: "response.output_item.added", item: { id: "it_name", type: "message" } }, { type: "conversation.item.added", item: { id: "it_name", type: "message", role: "assistant", content: [{ type: "output_text", text: "What's their first and last name?" }] } }, Object.assign({ item_id: "it_name" }, audio), { type: "response.output_audio_transcript.delta", delta: "What's their first and last name?" }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
-  ok(await p.evaluate(() => !G.forced) && /Scripted line ids: the service gave the line item it_name; reply r3, item it_name, audio item it_name; matched by id: yes/.test(await logged()), "a late acceptance didn't confirm the line by id: " + (await logged()).slice(-300));
+  await p.fire([{ type: "response.created", response: { id: "r3" } }, { type: "response.output_item.added", item: { id: "it_name", type: "message" } }, { type: "conversation.item.added", item: { id: "it_name", type: "message", role: "assistant", content: [{ type: "output_text", text: "What's their first and last name?" }] } }, Object.assign({ item_id: "it_name" }, audio), { type: "response.output_audio_transcript.delta", delta: "What's their first and last name?" }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !G.forced) && /Scripted line ids: the service gave the line item it_name; reply r3, item it_name, audio item it_name; matched by id: yes/.test(await p.log()), "a late acceptance didn't confirm the line by id: " + (await p.log()).slice(-300));
   // the id pairing went to the wrong item (a stale id): the reply that says the line's words still counts as the line
   await p.evaluate(() => { __sent.length = 0; forceSay("Do you have a mobile number for Sylvia too?"); }); await p.waitForFunction(() => G.forced && __sent.some(s => /force_message/.test(s)), null, { timeout: 9000 }); await p.waitForTimeout(50);
-  await ev([{ type: "conversation.item.added", item: { id: "it_wrong", type: "message", role: "assistant" } }, { type: "response.created" }, { type: "response.output_item.added", item: { id: "it_other", type: "message" } }, Object.assign({ item_id: "it_other" }, audio), { type: "response.output_audio_transcript.delta", delta: "Do you have a mobile number for Sylvia too?" }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
-  ok(await p.evaluate(() => !G.forced) && /Scripted line played with another id \(ours it_wrong, the reply's it_other\): taken by its words/.test(await logged()), "a wrongly paired line wasn't taken by its words: " + (await logged()).slice(-300));
+  await p.fire([{ type: "conversation.item.added", item: { id: "it_wrong", type: "message", role: "assistant" } }, { type: "response.created" }, { type: "response.output_item.added", item: { id: "it_other", type: "message" } }, Object.assign({ item_id: "it_other" }, audio), { type: "response.output_audio_transcript.delta", delta: "Do you have a mobile number for Sylvia too?" }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !G.forced) && /Scripted line played with another id \(ours it_wrong, the reply's it_other\): taken by its words/.test(await p.log()), "a wrongly paired line wasn't taken by its words: " + (await p.log()).slice(-300));
   // 2. a words-only line whose sound arrives 4 s later as a response of its own: the phone fills the wait, the sound ends it, nothing is asked again, heard once
   const t2 = "Sylvia is now in Cultivation. The next step in the process to move Sylvia to Ask Planning is to add a planned ask. Do you want to do that now, yes or no?";
   await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; });
-  await ev([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: t2 }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(2600);
-  ok(/came without sound: the phone says she's taking a moment and waits for the sound/.test(await logged()) && await p.evaluate(() => !!G.silentWait), "the wait didn't start: " + (await logged()).slice(-200));
-  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t2 }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(3500);
-  ok(/arrived again, this time with sound/.test(await logged()) && /The sound for Ara's line arrived [\d.]+ s after the words: nothing asked again/.test(await logged()) && await p.evaluate(() => !G.silentWait && !__sent.some(s => /Say it again now/.test(s))), "the late sound didn't end the wait: " + (await logged()).slice(-300));
+  await p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: t2 }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(2600);
+  ok(/came without sound: the phone says she's taking a moment and waits for the sound/.test(await p.log()) && await p.evaluate(() => !!G.silentWait), "the wait didn't start: " + (await p.log()).slice(-200));
+  await p.fire([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t2 }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(3500);
+  ok(/arrived again, this time with sound/.test(await p.log()) && /The sound for Ara's line arrived [\d.]+ s after the words: nothing asked again/.test(await p.log()) && await p.evaluate(() => !G.silentWait && !__sent.some(s => /Say it again now/.test(s))), "the late sound didn't end the wait: " + (await p.log()).slice(-300));
   // 3. no sound at all: one resend after the wait; the first telling with sound plays, the second telling is cut before it plays
   const t3 = "Planned ask saved for Sylvia. The next step in the process to move Sylvia to Ask Made is to record the ask. Do you want to do that now, yes or no?";
   await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; G.lastForcedText = ""; });
-  await ev([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: t3 }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(6000);
-  ok(/No sound for Ara's line in \d+ s: asked for it again, once/.test(await logged()) && await p.evaluate(() => __sent.some(s => /Say it again now, word for word/.test(s)) && !!G.resend), "no resend after the wait: " + (await logged()).slice(-300));
-  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t3 }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  await p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: t3 }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(6000);
+  ok(/No sound for Ara's line in \d+ s: asked for it again, once/.test(await p.log()) && await p.evaluate(() => __sent.some(s => /Say it again now, word for word/.test(s)) && !!G.resend), "no resend after the wait: " + (await p.log()).slice(-300));
+  await p.fire([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t3 }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
   const n1 = await p.evaluate(() => __sent.filter(s => /response\.cancel/.test(s)).length);
-  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t3 }]); await p.waitForTimeout(200);
-  ok(/Late copy cut: the line was already heard with sound after the phone asked for it again/.test(await logged()) && await p.evaluate((n1) => __sent.filter(s => /response\.cancel/.test(s)).length === n1 + 1 && G.dropNext, n1), "the second telling wasn't cut: " + (await logged()).slice(-300));
-  await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
+  await p.fire([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t3 }]); await p.waitForTimeout(200);
+  ok(/Late copy cut: the line was already heard with sound after the phone asked for it again/.test(await p.log()) && await p.evaluate((n1) => __sent.filter(s => /response\.cancel/.test(s)).length === n1 + 1 && G.dropNext, n1), "the second telling wasn't cut: " + (await p.log()).slice(-300));
+  await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
   ok(await p.evaluate(() => !G.resend && !G.dropNext), "the cut didn't clear");
   // 4. the app's own line, soundless, with the service's transcript ending in a space (as it does): the resend is the line itself as a scripted line, not a reply request (the diagnostic run, Oct 30: the request was never answered and the line reconnected)
   const t4 = "That's everything the new contact form needs for Sylvia. Save it, or add the optional details first?";
   await p.evaluate(() => { __sent.length = 0; G.silentAgain = null; G.resend = null; G.lateForced = null; });
   await p.evaluate((t4) => forceSay(t4), t4); await p.waitForFunction(() => G.forced && __sent.some(s => /force_message/.test(s)), null, { timeout: 9000 }); await p.waitForTimeout(50);
-  await ev([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: t4 + " " }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(6000);
-  ok(/No sound for Ara's line in \d+ s: asked for it again, once/.test(await logged()) && await p.evaluate((t4) => __sent.filter(s => /force_message/.test(s) && s.includes(t4.slice(0, 50))).length === 2 && !__sent.some(s => /Say it again now, word for word/.test(s)), t4), "the app's own soundless line wasn't resent as a scripted line: " + (await logged()).slice(-300));
-  await ev([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t4 + " " }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  await p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: t4 + " " }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(6000);
+  ok(/No sound for Ara's line in \d+ s: asked for it again, once/.test(await p.log()) && await p.evaluate((t4) => __sent.filter(s => /force_message/.test(s) && s.includes(t4.slice(0, 50))).length === 2 && !__sent.some(s => /Say it again now, word for word/.test(s)), t4), "the app's own soundless line wasn't resent as a scripted line: " + (await p.log()).slice(-300));
+  await p.fire([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t4 + " " }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
   ok(await p.evaluate(() => !G.forced), "the resent scripted line didn't play");
 });
 test("Said means heard (Oct 30): the A to E ranges count as read only once heard with sound; a late copy of an earlier answer doesn't stand the resend down", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  const logged = () => p.evaluate(() => ACT.q.map(a => a.text).join(" | "));
-  const ev = (list) => p.evaluate((list) => { list.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })); }, list);
   const audio = { type: "response.output_audio.delta", delta: btoa(String.fromCharCode(...new Uint8Array(24000))) }; /* 0.5 s of sound */
   await p.evaluate(() => { window.__noAutoForce = true; G.audioEver = true; G.rangesSaidAt = 0; SILENT_STILL_MS = 1200; SILENT_RESEND_MS = 3000; });
   const ranges = await p.evaluate(() => "What's Carver's capacity rating? " + CAP_RANGES);
   // 1. Carverhill's 4:50 PM call: "No." to the question before is transcribed three times; the ranges arrive as text only after the second copy
   await said(p, "No."); await p.waitForTimeout(200); await said(p, "No.");
-  await ev([{ type: "response.created", response: { id: "r1" } }, { type: "response.output_audio_transcript.delta", delta: ranges }, { type: "response.done", response: { status: "completed" } }]);
+  await p.fire([{ type: "response.created", response: { id: "r1" } }, { type: "response.output_audio_transcript.delta", delta: ranges }, { type: "response.done", response: { status: "completed" } }]);
   await p.waitForTimeout(300); await said(p, "No."); /* the third copy lands after the soundless line */
   ok(await p.evaluate(() => G.lastHeard && G.lastHeard.repeat === true), "the third copy of \"No.\" wasn't marked as a repeat: " + JSON.stringify(await p.evaluate(() => G.lastHeard)));
   await p.waitForTimeout(5800);
-  ok(/\(no sound\) Ara's line may not have been heard: no voice audio/.test(await logged()) && !/officer answered after it/.test(await logged()) && /No sound for Ara's line in \d+ s: asked for it again, once/.test(await logged()), "a soundless ranges line after a repeated answer wasn't asked for again: " + (await logged()).slice(-400));
+  ok(/\(no sound\) Ara's line may not have been heard: no voice audio/.test(await p.log()) && !/officer answered after it/.test(await p.log()) && /No sound for Ara's line in \d+ s: asked for it again, once/.test(await p.log()), "a soundless ranges line after a repeated answer wasn't asked for again: " + (await p.log()).slice(-400));
   ok(await p.evaluate(() => !G.rangesSaidAt && !rangesHeard()), "the ranges were marked as read with no sound (the Oct 30 bug)");
   ok(/A is \$250,000 and up/.test(await p.evaluate(() => rateQ("Carver"))), "the next rating question is the short form although the ranges were never heard: " + await p.evaluate(() => rateQ("Carver")));
   // 2. a new answer after the line would have finished stands the resend down
   await p.evaluate(() => { G.silentAgain = null; G.resend = null; });
-  await ev([{ type: "response.created", response: { id: "r2" } }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }]);
+  await p.fire([{ type: "response.created", response: { id: "r2" } }, { type: "response.output_audio_transcript.delta", delta: "Which campaign: National, or Idaho?" }, { type: "response.done", response: { status: "completed" } }]);
   await p.waitForTimeout(400); await said(p, "National."); await p.waitForTimeout(5800);
-  ok(/officer answered after it: not asked again/.test(await logged()), "a new answer after the soundless line didn't stand the resend down: " + (await logged()).slice(-300));
+  ok(/officer answered after it: not asked again/.test(await p.log()), "a new answer after the soundless line didn't stand the resend down: " + (await p.log()).slice(-300));
   // 3. the ranges heard with sound: now they count as read, and the next rating question is the short form; after two minutes the list is read again
-  await ev([{ type: "response.created", response: { id: "r3" } }, audio, { type: "response.output_audio_transcript.delta", delta: ranges }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await ev([{ type: "response.done", response: { status: "completed" } }]);
+  await p.fire([{ type: "response.created", response: { id: "r3" } }, audio, { type: "response.output_audio_transcript.delta", delta: ranges }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]);
   await p.waitForFunction(() => G.rangesSaidAt > 0, null, { timeout: 6000 }).catch(() => {}); /* the judgement runs 2 s after the queued sound has played */
-  ok(await p.evaluate(() => G.rangesSaidAt > 0 && rangesHeard()), "the ranges heard with sound weren't marked as read: " + JSON.stringify(await p.evaluate(() => [G.lastLine, G.ctx && G.ctx.state])) + (await logged()).slice(-300));
+  ok(await p.evaluate(() => G.rangesSaidAt > 0 && rangesHeard()), "the ranges heard with sound weren't marked as read: " + JSON.stringify(await p.evaluate(() => [G.lastLine, G.ctx && G.ctx.state])) + (await p.log()).slice(-300));
   ok(await p.evaluate(() => rateQ("Carver")) === "What's Carver's capacity rating, A to E?", "the rating question after the ranges were heard isn't the short form");
   ok(/A is \$250,000 and up/.test(await p.evaluate(() => { G.rangesSaidAt = Date.now() - RANGES_HEARD_MS - 1; return rateQ("Carver"); })), "the list isn't read again after two minutes");
   // 4. the capacity confirmation and the task-status confirmation are yes-or-no decisions
@@ -702,27 +697,25 @@ test("Ara: an interaction's summary is taken from the officer's answer when Ara 
 
 test("Ara: when Grok goes silent after the app asks for a reply, the app asks once more on a healthy line, then opens a fresh line; on a slow line it goes straight to a fresh line; Grok errors are logged", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
   const creates = () => p.evaluate(() => __sent.filter(s => JSON.parse(s).type === "response.create").length);
-  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
-  await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
+  await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
   await p.evaluate(() => notice("Ask the officer the next question."));
   const c0 = await creates(); await p.evaluate(() => { window.__ws0 = __ws; });
-  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(600);
+  await p.fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(600);
   ok(await creates() === c0 + 1 && await p.evaluate(() => __ws === __ws0), "an empty reply on a healthy line was not asked for again");
-  await fire([{ type: "error", error: { message: "Something broke upstream" } }]); await p.waitForTimeout(100);
-  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(1500);
+  await p.fire([{ type: "error", error: { message: "Something broke upstream" } }]); await p.waitForTimeout(100);
+  await p.fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(1500);
   ok(await p.evaluate(() => __ws !== __ws0 && G.live), "a second silent reply did not open a fresh line");
-  const q = await logged();
+  const q = await p.log();
   ok(/empty reply, asked again/.test(q) && /after asking again/.test(q) && /Reconnecting \(1\)/.test(q) && /Grok error: Something broke upstream/.test(q), "the silent replies, the reconnect or the Grok error were not logged");
   // a slow line: no asking again, a fresh line straight away
   await p.waitForFunction(() => G.status === "Listening", null, { timeout: 5000 });
   await p.evaluate(() => { const f = window.fetch; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise(res => setTimeout(() => res(new Response("{}")), 2500)) : f(u, o); window.__ws1 = __ws; G.drops = 0; });
   await p.evaluate(() => notice("Ask the officer the next question."));
   const c1 = await creates();
-  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(4000);
+  await p.fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(4000);
   ok(await p.evaluate(() => __ws !== __ws1) && await creates() >= c1, "a silent reply on a slow line didn't go straight to a fresh line");
-  ok(/on a slow line \(test request \d+ ms\): fresh line/.test(await logged()), "the slow-line reconnect wasn't logged");
+  ok(/on a slow line \(test request \d+ ms\): fresh line/.test(await p.log()), "the slow-line reconnect wasn't logged");
 });
 test("Ara: a dropped voice line reconnects and picks up where it left off; it keeps reconnecting past 3 tries, and only 10 minutes without a working line ends the call (warned at 8, last try announced)", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
@@ -762,13 +755,12 @@ test("Ara: a dropped voice line reconnects and picks up where it left off; it ke
 });
 test("Ara: no reply at the first tick on a slow line gets a fresh line at once, and a new line that won't open gets a second line alongside", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
   await p.evaluate(() => { const f = window.fetch; window.__fetch0 = f; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res, rej) => { const t = setTimeout(() => res(new Response("{}")), 2800); o && o.signal && o.signal.addEventListener("abort", () => { clearTimeout(t); rej(new Error("aborted")); }); }) : f(u, o); window.__ws1 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; G.responding = false; });
   await p.evaluate(() => notice("Ask the officer the next question."));
   // 4 s tick + 2.5 s line test + 1 s before the reconnect; the log line below proves it came from the early test, not the 10 s re-ask
   await p.waitForFunction(() => __ws !== __ws1, null, { timeout: 11000 }).catch(() => {});
   ok(await p.evaluate(() => __ws !== __ws1 && G.live), "no reply at the first tick on a slow line didn't get a fresh line before the 10 s re-ask");
-  ok(/No reply started after 4 s on a slow line \(test request no answer in 2.5 s\): fresh line/.test(await logged()), "the early slow-line check wasn't logged");
+  ok(/No reply started after 4 s on a slow line \(test request no answer in 2.5 s\): fresh line/.test(await p.log()), "the early slow-line check wasn't logged");
   // the next line hangs without opening: after 5 s a second one is tried alongside, and the first to open is kept
   await p.waitForFunction(() => G.status === "Listening", null, { timeout: 8000 });
   await p.evaluate(() => { window.fetch = window.__fetch0; window.__quietMic = true; const Orig = window.WebSocket; let n = 0;
@@ -777,7 +769,7 @@ test("Ara: no reply at the first tick on a slow line gets a fresh line at once, 
   await p.waitForTimeout(8000);
   const st = await p.evaluate(() => ({ live: G.live, status: G.status, onSecond: G.ws === __ws && __ws !== __ws2, hungClosed: !!__hung.closed }));
   ok(st.live && st.status === "Listening" && st.onSecond && st.hungClosed, "a line that wouldn't open didn't get a second line alongside: " + JSON.stringify(st));
-  const q = await logged();
+  const q = await p.log();
   ok(/trying a second line alongside/.test(q) && /\(the second line\)/.test(q), "the second line wasn't logged");
   // Oct 29: with no form open the app says the whole line itself (sorry + the open question); Ara is told not to say it again
   await p.waitForFunction(() => __sent.some(s => /force_message/.test(s) && s.includes("Sorry, I lost you")), null, { timeout: 6000 }).catch(() => {}); /* the sorry line waits for the state receipt, 3 s at most when the line never confirms (Oct 29) */
@@ -786,15 +778,13 @@ test("Ara: no reply at the first tick on a slow line gets a fresh line at once, 
 });
 test("Reconnect with no form open (Oct 29): the app says the sorry and the question itself, so Ara can't stop after the sorry", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
   const lastForced = () => p.evaluate(() => __sent.map(s => { try { return JSON.parse(s); } catch (e) { return {}; } }).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text).pop() || "");
-  const logged = () => p.evaluate(() => ACT.q.map(a => a.text).join(" | "));
   await p.evaluate(() => { window.__quietMic = true; window.__reconnectBy = "app"; }); /* the fake mic is loud: it would count as the officer talking while the line is down; app mode: this check is about the app's own lines (Ara mode is checked in 09, the 10:36 AM call) */
   const drop = async () => { await p.evaluate(() => { G.drops = 0; G.loudAt = 0; G.speechSince = 0; G.spokeInGap = false; __ws.onclose({ code: 1006, reason: "" }); }); await p.waitForFunction(() => G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(600); };
   // Ara had just asked a question and the officer hadn't answered: the line comes back with that question (the 9:45 AM call: Ara said only the sorry, then 12 s of dead air)
-  await fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  await p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
   await drop();
-  ok((await lastForced()) === "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?" && /the app says Ara's whole last line again itself/.test(await logged()), "Ara's whole last line wasn't said again by the app (Oct 29 10:05 AM call): " + (await lastForced()));
+  ok((await lastForced()) === "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?" && /the app says Ara's whole last line again itself/.test(await p.log()), "Ara's whole last line wasn't said again by the app (Oct 29 10:05 AM call): " + (await lastForced()));
   // a second drop before the officer says anything (the real-line probe, Oct 29): the same question again, the sorry said once, not stacked
   await p.evaluate(() => { G.lastBot = "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?"; G.lastBotAt = Date.now(); G.lastHeard = null; });
   await drop();
@@ -825,13 +815,12 @@ test("Reconnect with no form open (Oct 29): the app says the sorry and the quest
 });
 test("Scripted line (Oct 29): nothing back 4 s after it gets \"Ara's taking a moment\" and a line test; a slow line gets a fresh one that says the line again", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
   await p.evaluate(() => { window.__noAutoForce = true; window.__said = []; window.__cues = []; window.sayLocal = (t, k) => { __said.push(k + ": " + t); return true; }; window.cue = (k) => { __cues.push(k); };
     const f = window.fetch; window.__fetch0 = f; window.__pingMs = 200; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res, rej) => { const t = setTimeout(() => res(new Response("{}")), window.__pingMs); o && o.signal && o.signal.addEventListener("abort", () => { clearTimeout(t); rej(new Error("aborted")); }); }) : f(u, o); window.__ws1 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; G.responding = false; G.slowSaid = false; });
   // a healthy line (test request 200 ms): the phone says the line once at 4 s, the line is kept, and the 8 s fallback still hands the words to Ara
   await p.evaluate(() => forceSay("Task added for Ruth. What's next?")); await p.waitForTimeout(4600);
   ok(await p.evaluate(() => __said.length === 1 && __said[0] === "slow: Ara's taking a moment." && __ws === __ws1 && G.forced && !G.forced.started), "4 s after a scripted line with nothing back the phone didn't say \"Ara's taking a moment.\" once and keep the healthy line: " + JSON.stringify(await p.evaluate(() => [__said, __ws === __ws1, !!G.forced])));
-  ok(/Nothing back 4 s after a scripted line: the phone says Ara's taking a moment and tests the line/.test(await logged()), "the 4 s check wasn't logged");
+  ok(/Nothing back 4 s after a scripted line: the phone says Ara's taking a moment and tests the line/.test(await p.log()), "the 4 s check wasn't logged");
   await p.waitForTimeout(4000);
   ok(await p.evaluate(() => __ws === __ws1 && !G.forced && G.lateForced && G.lateForced.text === "Task added for Ruth. What's next?" && __said.length === 1), "on a healthy line the 8 s fallback didn't hand the line to Ara, or the phone spoke twice: " + JSON.stringify(await p.evaluate(() => [__said, !!G.forced, G.lateForced])));
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created" }) }); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); }); await p.waitForTimeout(300);
@@ -841,23 +830,22 @@ test("Scripted line (Oct 29): nothing back 4 s after it gets \"Ara's taking a mo
   await p.evaluate(() => forceSay("Task added for Ruth. What's next?"));
   await p.waitForFunction(() => __ws !== __ws1, null, { timeout: 9000 }).catch(() => {});
   ok(await p.evaluate(() => __ws !== __ws1 && G.live), "a scripted line with nothing back on a slow line didn't get a fresh line before the 8 s fallback");
-  ok(/Scripted line not started after 4 s on a slow line \(test request no answer in 2.5 s\): fresh line/.test(await logged()), "the slow-line check after a scripted line wasn't logged: " + (await logged()).slice(-900));
+  ok(/Scripted line not started after 4 s on a slow line \(test request no answer in 2.5 s\): fresh line/.test(await p.log()), "the slow-line check after a scripted line wasn't logged: " + (await p.log()).slice(-900));
   await p.waitForFunction(() => G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(1200);
   const forced = await p.evaluate((n) => __sent.slice(n).map(s => { try { return JSON.parse(s); } catch (e) { return {}; } }).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
-  ok(forced.length === 2 && forced[1] === "Sorry, I lost you for a moment. Task added for Ruth. What's next?" && /the app says the scripted line the old line never started/.test(await logged()), "the fresh line didn't say the scripted line the old one never started: " + JSON.stringify(forced));
+  ok(forced.length === 2 && forced[1] === "Sorry, I lost you for a moment. Task added for Ruth. What's next?" && /the app says the scripted line the old line never started/.test(await p.log()), "the fresh line didn't say the scripted line the old one never started: " + JSON.stringify(forced));
   ok(await p.evaluate(() => __said.length >= 1 && __said[0] === "slow: Ara's taking a moment." && __said.slice(1).every(s => QUIET_LINES.some(q => s === ": " + q))), "the phone's line before the fresh line is wrong (the quiet clock may add its lines after it, Oct 30): " + JSON.stringify(await p.evaluate(() => __said)));
   await p.evaluate(() => { window.fetch = window.__fetch0; window.__noAutoForce = false; });
 });
 test("Scripted line (5:59 PM call, Oct 29): the app fills a pick-list from the answer; a reply with no sound in 6 s counts as not started; Ara's own question stands only within 12 s", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
-  const logged = () => p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "));
   // 1. the app asked the type, the officer answered, Grok's call leaves the type out: the app fills it from the answer
   await said(p, "Log an interaction with Ken Ito.");
   let r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: "2026-10-28", summary: "We talked about the gala." });
   ok(/^Type: In person, Phone call, Video call, Event, Email\?$/.test(r.ask_exactly || ""), "the type question wasn't asked by the app: " + JSON.stringify(r));
   await p.waitForFunction(() => !G.forced, null, { timeout: 5000 }); await said(p, "In person."); await p.waitForTimeout(200);
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", response: "Awaiting", summary: "" });
-  ok((await p.inputValue("#f_meetingType")) === "In person" && /The app filled the type from the officer's answer to the question just asked/.test(await logged()) && !/^Type:/.test(r.ask_exactly || ""), "the type the officer answered wasn't filled in by the app when Grok left it out: " + JSON.stringify(r).slice(0, 300) + " " + (await p.inputValue("#f_meetingType")));
+  ok((await p.inputValue("#f_meetingType")) === "In person" && /The app filled the type from the officer's answer to the question just asked/.test(await p.log()) && !/^Type:/.test(r.ask_exactly || ""), "the type the officer answered wasn't filled in by the app when Grok left it out: " + JSON.stringify(r).slice(0, 300) + " " + (await p.inputValue("#f_meetingType")));
   await p.waitForFunction(() => !G.forced, null, { timeout: 5000 }).catch(() => {});
   await p.evaluate(() => { window.__noAutoForce = true; window.__said = []; window.sayLocal = (t, k) => { __said.push(k + ": " + t); return true; }; window.cue = () => {}; G.forced = null; G.lateForced = null; G.slowSaid = false; G.bot = ""; G.lastBot = "";
     const f = window.fetch; window.__fetch0 = f; window.fetch = (u, o) => /ping=/.test(String(u)) ? new Promise((res) => setTimeout(() => res(new Response("{}")), 200)) : f(u, o); window.__ws1 = __ws; G.drops = 0; G.loudAt = 0; G.speechSince = 0; });
@@ -866,7 +854,7 @@ test("Scripted line (5:59 PM call, Oct 29): the app fills a pick-list from the a
   await p.waitForTimeout(4600);
   ok(await p.evaluate(() => __said.length === 0 && G.forced && G.forced.started), "the 4 s tick fired although the reply had started: " + JSON.stringify(await p.evaluate(() => __said)));
   await p.waitForTimeout(2000);
-  ok(await p.evaluate(() => __said.length === 1 && __said[0] === "slow: Ara's taking a moment." && G.forced && !G.forced.started && __ws === __ws1) && /Scripted line's reply started but no sound in 6 s: treated as not started/.test(await logged()), "a started reply with no sound for 6 s wasn't treated as not started: " + JSON.stringify(await p.evaluate(() => [__said, !!G.forced, G.forced && G.forced.started])));
+  ok(await p.evaluate(() => __said.length === 1 && __said[0] === "slow: Ara's taking a moment." && G.forced && !G.forced.started && __ws === __ws1) && /Scripted line's reply started but no sound in 6 s: treated as not started/.test(await p.log()), "a started reply with no sound for 6 s wasn't treated as not started: " + JSON.stringify(await p.evaluate(() => [__said, !!G.forced, G.forced && G.forced.started])));
   await p.waitForTimeout(4300);
   ok(await p.evaluate(() => !G.forced && G.lateForced && /Ask recorded for Charlie/.test(G.lateForced.text)), "the fallback didn't hand the silent line to Ara: " + JSON.stringify(await p.evaluate(() => [!!G.forced, G.lateForced])));
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); G.lateForced = null; __said.length = 0; G.slowSaid = false; }); await p.waitForTimeout(300);
@@ -876,7 +864,7 @@ test("Scripted line (5:59 PM call, Oct 29): the app fills a pick-list from the a
   ok(await p.evaluate(() => __said.length === 0 && G.forced && G.forced.started && G.forced.sound), "a line whose sound came was treated as not started: " + JSON.stringify(await p.evaluate(() => [__said, G.forced])));
   // 4. Ara asks her own question while the scripted line is 15 s old: the scripted line is news the officer hasn't heard, so it is not cut
   await p.evaluate(() => { G.forced.at = Date.now() - 15000; G.bot = "The read-back is still waiting on you. Shall I save it, yes or no?"; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); }); await p.waitForTimeout(300);
-  ok(await p.evaluate(() => G.forced && !G.forced.started && !G.lateForced) && /Ara answered on her own while the scripted line was still to come/.test(await logged()), "a stale question of Ara's cut a 15 s old scripted line: " + JSON.stringify(await p.evaluate(() => [!!G.forced, G.lateForced])));
+  ok(await p.evaluate(() => G.forced && !G.forced.started && !G.lateForced) && /Ara answered on her own while the scripted line was still to come/.test(await p.log()), "a stale question of Ara's cut a 15 s old scripted line: " + JSON.stringify(await p.evaluate(() => [!!G.forced, G.lateForced])));
   // and within 12 s: hers stands, the copy is cut (the 10:05 AM rule)
   await p.evaluate(() => { G.forced.at = Date.now() - 3000; G.forced.started = true; G.bot = "Which contact is this task for?"; __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); }); await p.waitForTimeout(300);
   ok(await p.evaluate(() => !G.forced && G.lateForced && G.lateForced.text === "Task added for Ruth. What's next?"), "two questions within 12 s: hers didn't stand: " + JSON.stringify(await p.evaluate(() => [!!G.forced, G.lateForced])));
@@ -901,8 +889,7 @@ test("Ara: a planned ask for an entity with a state campaign leaves the campaign
 test("Ara: a slow reply gets a soft tick, a doubled reply is cut off, readings time a test request, and a voice pass stays ready during a call", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); }); // this check starts in tap mode; hands-free is on by default since Oct 25
-  const fire = (evs) => p.evaluate((evs) => evs.forEach(e => __ws.onmessage({ data: JSON.stringify(e) })), evs);
-  await fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
+  await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(100);
   await p.evaluate(() => { window.__cues = []; window.__said = []; const c = cue; window.cue = (k) => { __cues.push(k); }; window.sayLocal = (t, k) => { __said.push(k + ": " + t); return true; }; });
   await p.evaluate(() => notice("Ask the officer the next question."));
   await p.waitForTimeout(4400);
@@ -911,10 +898,10 @@ test("Ara: a slow reply gets a soft tick, a doubled reply is cut off, readings t
   await p.waitForTimeout(4200);
   ok(await p.evaluate(() => !__cues.includes("wait") && __said.length === 2 && __said[1] === ": Still waiting on Ara."), "after the spoken line the next tick wasn't the quiet clock's \"Still waiting on Ara.\" (Oct 30; a beep before): " + JSON.stringify(await p.evaluate(() => [__said, __cues])));
   // the first ask comes back empty, the app asks again, then both answers arrive: the second is cut off
-  await fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(600);
-  await fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "Just to be sure?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  await p.fire([{ type: "response.created" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(600);
+  await p.fire([{ type: "response.created" }, { type: "response.output_audio.delta", delta: "AAAA" }, { type: "response.output_audio_transcript.delta", delta: "Just to be sure?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
   const n = await p.evaluate(() => __sent.length);
-  await fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Just to be sure again?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
+  await p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: "Just to be sure again?" }, { type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
   const cut = await p.evaluate((n) => ({ cancel: __sent.slice(n).some(s => JSON.parse(s).type === "response.cancel"), said: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | ") }), n);
   ok(cut.cancel && !/Just to be sure again/.test(cut.said) && /second answer to the same ask/.test(cut.said), "the doubled reply wasn't cut off");
   await p.evaluate(() => netLog("Reading")); await p.waitForTimeout(300);
@@ -1027,16 +1014,15 @@ test("Ara: a dead spot while reconnecting: the voice pass is tried again every f
     const f = window.fetch; window.__hang = true; window.fetch = (u, o) => (window.__hang && o && o.method === "POST" && /workers\.dev/.test(String(u)) && !/\/log/.test(String(u))) ? new Promise((_, rej) => { if (o.signal) o.signal.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError"))); }) : f(u, o); // a dead spot: the request never answers, only the app's own time limit ends it
     __ws.onclose({ code: 1006, reason: "" }); });
   await p.waitForTimeout(8500);
-  const logged = () => p.evaluate(() => __logs.flatMap(l => l.events || [l]).concat(ACT.q).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).map(a => a.text).join(" | "));
-  const mid = await p.evaluate(() => ({ spoken: __spoken.slice(), status: G.status, live: G.live })); mid.log = await logged();
+  const mid = await p.evaluate(() => ({ spoken: __spoken.slice(), status: G.status, live: G.live })); mid.log = await p.log();
   ok(mid.live && /^Reconnecting/.test(mid.status) && /No voice pass yet \(no answer in 6 s\): trying again in 2 s/.test(mid.log), "a hanging voice pass fetch wasn't given up on and tried again: " + mid.status + " " + mid.log.slice(-300));
   const saidLines = (log) => (log.match(/The phone said \((recording|phone's speech)\): "[^"]*"/g) || []).map(x => x.replace(/^[^"]*"/, "").replace(/"$/, ""));
   ok(saidLines(mid.log).join("|") === "The line dropped. Reconnecting you to Ara.", "the phone didn't say the line dropped at 5 s: " + JSON.stringify(saidLines(mid.log)));
   await p.waitForTimeout(5000);
-  const s2 = saidLines(await logged());
+  const s2 = saidLines(await p.log());
   ok(s2.length === 2 && s2[1] === "Still trying to reconnect.", "the phone didn't say it's still trying at 12 s: " + JSON.stringify(s2));
   await p.evaluate(() => { window.__hang = false; }); await p.waitForTimeout(4500);
-  const end = await p.evaluate(() => ({ live: G.live, status: G.status, downAt: G.downAt, timer: G.downTimer, spoken: __spoken.length })); end.log = await logged();
+  const end = await p.evaluate(() => ({ live: G.live, status: G.status, downAt: G.downAt, timer: G.downTimer, spoken: __spoken.length })); end.log = await p.log();
   ok(end.live && end.status === "Listening" && /Voice pass fetched in \d+ ms/.test(end.log) && /Voice line open in/.test(end.log), "the line didn't come back once a voice pass could be fetched: " + end.status + " " + end.log.slice(-300));
   ok(!end.downAt && !end.timer && saidLines(end.log).join("|") === "The line dropped. Reconnecting you to Ara.|Still trying to reconnect.|You're back with Ara.", "the spoken reconnect lines didn't stop when the line came back, or the back line wasn't said: " + JSON.stringify(saidLines(end.log)));
   ok(/\(recording\)/.test(end.log), "the lines were not played as recordings through the call's own sound: " + end.log.slice(-400));
