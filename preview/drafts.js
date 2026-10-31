@@ -311,7 +311,7 @@ function hfNotice(text) { if (G.hfTry) G.hfTry.msg = text; else guide(text); }
 function saveDraft() {
   const d = readDraft(), A = ACTIONS[V.action];
   const miss = A.fields.filter(f => f.req && fieldBlank(f, d[f.k]));
-  if (!miss.length && (needsNextStep(V.action, d, V.target) || (V.action === "ask" && d.response !== "Declined"))) {
+  if (!miss.length && !V.nextSkipped && (needsNextStep(V.action, d, V.target) || (V.action === "ask" && d.response !== "Declined"))) { /* the officer said no to setting a next step now (Oct 30 rule): it saves without one (Oct 31 real-Ara run: the no looped on the read-back 7 times) */
     const need = [!String(d.nextStep || "").trim() && "Next step", !d.nextDue && "Next step due"].filter(Boolean);
     if (need.length) {
       const msg = `Add the ${need.join(" and ").toLowerCase()} before saving. A substantive interaction needs a next step and its due date.`;

@@ -879,6 +879,9 @@ test("Next step and step offers (Oct 31): a yes or no to Ara's own next-step que
   ok(/That is a no: the report goes on without a next step/.test(await p.evaluate(() => answerGuide("No."))), "the no branch isn't in the guidance");
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito" });
   ok(await p.evaluate(() => V && V.nextSkipped) && !(r.still_needed || []).some(x => /next step/i.test(x)) && !/set it now/.test(r.ask_exactly || ""), "the no to Ara's own question wasn't taken: " + JSON.stringify(r));
+  await p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: r.read_back || "" }, { type: "response.done", response: { status: "completed" } }]);
+  await said(p, "Yes."); await p.waitForTimeout(300); r = await ara(p, "save_form", { confirmed: true });
+  ok(r.saved === true && /saved for Ken/.test(r.said || r.note || ""), "the report with no next step wasn't saved on the yes (Oct 31 real-Ara run: the read-back looped 7 times): " + JSON.stringify(r));
   // 3. a yes to a step offer Ara asked again without its step: the step the save line named counts as asked for
   await p.evaluate(() => { V = null; G.ynWatch = null; G.recent = []; renderOverlay(); const line = "The next step in the process to move Ruth to Qualification is to create an opportunity. Do you want to do that now, yes or no?";
     G.lastSaved = { who: "Ruth Abernathy", contactId: null, next: "", nextLine: line, at: Date.now() }; recent("Ara", "Planned ask saved for Ruth. " + line); });

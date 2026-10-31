@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 1:46 PM",
+      "change": "Preview: an interaction report saves on the officer's yes after they said no to setting a next step now. Before, the save rule still demanded a next step and the read-back repeated.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Real-Ara run of the 1:36 PM preview (Oct 31): all 3 \"no next step\" conversations looped on the read-back 7 times and nothing was saved; Carverhill's Oct 30 rule says a no goes on without one."
+    },
+    {
       "date": "Oct 31, 1:36 PM",
       "change": "Preview: when the officer answers a yes-or-no question with a bare yes or no, the app's guidance to Ara now names the question and what each answer means (a yes to a step offer: open that step; a yes to setting the next step: ask what the step is and when it's due; a no: go on without one). If her reply misses it, the app nudges her once, never twice, and never asks the question itself. The officer's yes or no to Ara's own next-step question now counts the same as to the app's. A yes to a step offer Ara asked again (\"That was already saved. Do you want to do that now?\") now opens that step instead of being refused. A soft two-note tone plays when no reply has started 2.5 s after the officer stops talking; \"Ara's taking a moment.\" still follows at 4 s.",
       "area": "Voice",
