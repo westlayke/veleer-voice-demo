@@ -206,6 +206,9 @@ async function converse(browser, base, flow, n) {
       const last = sents.pop() || "", tail = sents.slice(-1).concat(last).join(" "); // the officer answers the question Ara ended on (tail = its last two sentences)
       let say;
       if (savedDone()) break;
+      if (!/\?/.test(last) && !script.length && await p.evaluate(() => !!(typeof V !== "undefined" && V))) { // a form is open and Ara's reply ended without a question (e.g. "No problem."): the app may be nudging her for the tool call, so the officer waits for the follow-up before deciding (Nov 1 next-step-no run: the harness hung up first)
+        const n = conv.replies.length, t1 = Date.now(); while (Date.now() - t1 < 10000 && conv.replies.length === n && !stopAll) await p.waitForTimeout(500);
+        if (conv.replies.length > n) { await settle(); continue; } }
       if (/say that again|lost you for a moment\.\s*$|didn't catch (that|your answer)|repeat what you said/i.test(last) && conv.turns.length) say = conv.turns[conv.turns.length - 1].say; // after a drop the app asks the officer to repeat: they say their last line again (the probe at FAULTS 30 ended three calls on "No, that's all for now")
       else if (/substantive/i.test(last) && /\?\s*$/.test(last.trim())) say = flow.subst || "Yes.";
       else if (/^Which one: /i.test(last)) say = last.replace(/^Which one: /i, "").split(/,|\?/)[0].trim() + "."; // the app's two-to-five-way entity question (Oct 29): the first one named

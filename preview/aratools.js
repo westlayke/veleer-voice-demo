@@ -1,6 +1,6 @@
 "use strict";
 // the officer's yes or no to the next-step question, whoever asked it (Oct 31: Ara asked it from still_needed and the yes was lost); a no skips the step for this report
-function nextByAra() { if (typeof nextAnswerByAra === "function") nextAnswerByAra(); if (!V || V.askedNext !== true || !/set it now|set (a|the) next step|next step.*yes or no/i.test(askedBefore(2))) return null; /* only an answer given right after the question */
+function nextByAra() { if (typeof nextAnswerByAra === "function") nextAnswerByAra(); if (!V || V.askedNext !== true || !NEXT_ASKED_RE.test(askedBefore(2))) return null; /* only an answer given right after the question */
   const a = followAnswer(((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9));
   if (a === "no") { V.nextSkipped = true; act("step", "The officer said no to setting a next step now: the report goes on without one"); } else if (a === "yes") { V.askedNext = "own"; act("step", "The officer said yes to setting the next step now"); }
   return a; }

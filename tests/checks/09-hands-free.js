@@ -879,7 +879,7 @@ test("Next step and step offers (Oct 31): a yes or no to Ara's own next-step que
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: today, meetingType: "Phone call", summary: "Talked about the gala." });
   await p.says("Was it a substantive interaction, one that moved the relationship forward, yes or no?"); await said(p, "Yes, it was."); r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true });
   await p.evaluate(() => { V.askedNext = false; });
-  await araSays("It needs a next step, which becomes a task. Do you want to set it now, yes or no?"); await p.waitForTimeout(100);
+  await araSays("Since it was substantive, it needs a next step and a due date. Do you want to set that now, and if so, what is it and when is it due?"); /* her own wording (next-step-no run, Nov 1) */ await p.waitForTimeout(100);
   await said(p, "No."); await p.waitForTimeout(100);
   ok(/That is a no: the report goes on without a next step/.test(await p.evaluate(() => answerGuide("No."))), "the no branch isn't in the guidance");
   // Nov 1 next-step-no run (3 of 5 unsaved): her reply to the no has no tool call: one nudge to call the draft tool again, then none

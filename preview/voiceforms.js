@@ -234,7 +234,7 @@ function yesNoPending() {
   if (/do that now(, yes or no)?\?$/i.test(q)) { /* the step offer after a save; an "already saved" re-ask doesn't name the step, the saved line does */
     const offer = /next step|next on your list/i.test(line) ? line : (G.lastSaved && G.lastSaved.nextLine) || line, step = offer.replace(/\s*Do you want to do that now(, yes or no)?\?\s*$/i, "").replace(/^That was already saved\.\s*/i, "").trim();
     return { kind: "step", q, step, yes: `That is a yes to this step: "${step}". Open that step now by calling its tool (never save_form), with no question first; the app asks the first question.`, no: `That is a no to that step: don't open it. If they named something else, do that; otherwise ask what they'd like to do.` }; }
-  if (/set it now|set (a|the) next step|next step.*yes or no/i.test(q)) return { kind: "next", q,
+  if (NEXT_ASKED_RE.test(q)) return { kind: "next", q,
     yes: `That is a yes to setting the next step now. Ask exactly "${NEXT_OWN_Q}" and nothing else.`, no: `That is a no: the report goes on without a next step. Never ask about a next step again; call the draft tool again (the fields already in stay), and the app takes it from there.` };
   if (/hang up/i.test(q)) return null; /* the app's own hang-up question: idleAnswer takes it */
   if (/yes or no\?$/i.test(q)) return { kind: "other", q, yes: "Act on that yes.", no: "Act on that no." };
@@ -278,7 +278,7 @@ function sayCheck(r) {
 }
 // the officer's answer to Ara's own next-step question counts the same as the app's (Oct 31: she asked "Do you want to set it now?" from still_needed, and the app,
 // which only took a yes after its own question, asked again)
-function nextAnswerByAra() { if (V && !V.askedNext && /set it now|set (a|the) next step|next step.*yes or no/i.test(askedBefore(2))) { V.askedNext = true; act("step", "Ara asked the next-step question herself: the officer's answer counts"); } }
+function nextAnswerByAra() { if (V && !V.askedNext && NEXT_ASKED_RE.test(askedBefore(2))) { V.askedNext = true; act("step", "Ara asked the next-step question herself: the officer's answer counts"); } }
 function nextStepLine(c, closed) {
   if (!c) return "What would you like to do next?";
   if (closed) { const it = typeof attentionItems === "function" ? attentionItems()[0] : null;
