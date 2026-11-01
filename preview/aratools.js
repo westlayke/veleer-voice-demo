@@ -211,12 +211,13 @@ const TOOL_HANDLERS = {
   },
   show_list(callId, data, name) {
     const opp = data.list === "opportunities", F = opp ? OPP_F : TASK_F, v = F[data.view] ? data.view : "open";
-    if (opp && STAGES.slice(0, 5).includes(data.stage)) { /* by stage, on the board (Carverhill's 1:35 PM call, Nov 1: "which need to move from Qualification to Cultivation?" got "not covered") */
-      const st = data.stage, ready = data.ready === true && st === "Qualification", xs = S.opps.filter(o => o.stage === st && (!ready || readyForCultivation(o)));
+    const stIn = STAGES.find(s => s !== "Closed" && s.toLowerCase() === String(data.stage || "").trim().toLowerCase());
+    if (opp && stIn) { /* by stage, on the board (Carverhill's 1:35 PM call, Nov 1: "which need to move from Qualification to Cultivation?" got "not covered") */
+      const st = stIn, ready = data.ready === true && st === "Qualification", xs = S.opps.filter(o => o.stage === st && (!ready || readyForCultivation(o)));
       S.oFilter = "open"; S.oppView = "board"; save(); go("board"); whenIdle("instr");
       setTimeout(() => { const h = [...document.querySelectorAll(".board .col h3")].find(x => x.textContent.startsWith(st)); if (h) h.parentElement.scrollIntoView({ inline: "start", block: "nearest" }); }, 60);
       const what = ready ? `ready to move from Qualification to Cultivation` : `in ${st}`;
-      toolReply(callId, { ok: true, showing: `Opportunities ${what}`, count: xs.length, items: xs.slice(0, 8).map(o => `${o.name}${ready ? "" : readyForCultivation(o) ? " (ready for Cultivation)" : ""}`),
+      toolReply(callId, { ok: true, showing: `Opportunities ${what}`, count: xs.length, items: xs.slice(0, 8).map(o => `${o.name}${!ready && readyForCultivation(o) ? " (ready for Cultivation)" : ""}`),
         note: data.ready === true && st !== "Qualification" ? `"ready" only applies to Qualification; this is everyone in ${st}.` : undefined,
         say: xs.length ? `Say in a sentence how many opportunities are ${what}, then name them (up to eight, as returned). The board is on screen at that stage.` : `Say that no opportunity is ${what} right now; the board is on screen.` }); return; }
     if (opp) { S.oFilter = v; S.oppView = S.oppView || "list"; } else S.tFilter = v;
