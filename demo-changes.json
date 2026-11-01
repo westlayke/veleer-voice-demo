@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 9:43 PM",
+      "change": "Preview: the app's \"Just to be sure, the amount is...\" check now counts only an answer given after the check has started playing. An echo of the first yes from the voice service can no longer save the form before the check is heard.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Go\": in the 9:33 PM call one \"Yes\" arrived twice, and the second copy saved the planned ask before the amount check played; the check then played after the save"
+    },
+    {
       "date": "Oct 31, 9:33 PM",
       "change": "Preview: right after the phone locks or pauses the sound, if Ara's reply doesn't start within 4 seconds, the app opens a fresh line straight away instead of waiting about 20 seconds with the \"taking a moment\" fillers. This happens once per pause. After the reconnect, Ara says where we were as usual.",
       "area": "Voice",

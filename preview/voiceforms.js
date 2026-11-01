@@ -389,6 +389,12 @@ function reqQuestion(action, fields, d) {
 } // the one question that ends every read-back (the policy)
 // the officer's next words after Ara's question (the transcript can land a moment after her tool call)
 function hfHeardAfter(n, ms = 2500) { return new Promise(res => { const t0 = Date.now(); (function poll() { if ((G.heardN || 0) > n) return res(G.lastHeard); if (Date.now() - t0 > ms) return res(null); setTimeout(poll, 100); })(); }); }
+/* the app's own amount check is answered only by words after it was said (Carverhill's 9:36 PM call, Oct 31: a second transcript of the read-back's
+   "Yes." arrived 1.2 s later, before the check had played, and Ara's save_form saved on it; the check then played after the save, out of date) */
+function amountAnswered(c) {
+  const said = Math.max(G.forceStartAt > c.askedAt ? G.forceStartAt : 0, G.lastBotAt > c.askedAt && /the amount is .*Is that right\?\s*$/.test(G.lastBot || "") ? G.lastBotAt : 0);
+  return !!said && !!G.lastHeard && G.lastHeard.at > said + 800;
+}
 async function hfSave(callId, data, lead, short) { /* short: only the changed field was re-read (lead), then the save question */
   if (!V) { const recentSave = G.savedAt && Date.now() - G.savedAt < 3 * 60e3;
     // or after Ara finished the save line herself (the scripted line fell back to her: no forceStartAt)
@@ -453,7 +459,7 @@ async function hfSave(callId, data, lead, short) { /* short: only the changed fi
     G.saveCheck = { key, step: "read", n: G.heardN || 0 }; paintCall();
     toolReply(callId, { ok: true, saved: false, read_back: short ? `${lead} ${SAVE_Q}` : `${lead ? lead + " " : ""}${hfReadback()}${saveQ(hfReadback())}`, next: "The app said read_back aloud. After the officer's yes, call save_form again with confirmed true; if they want a change, call the draft tool with just the changed field (the app re-reads that field and asks again)." }); return;
   }
-  if (c.askedByApp && c.step === "amount" && (G.heardN || 0) <= c.n) { guardFired("save_form while the app asks its own amount check"); toolReply(callId, { ok: true, saved: false, already: true, note: "The app took the officer's yes and asked its own amount check; after their next yes it saves. Say nothing; wait for the officer." }, false); return; } /* hfYesHeard is ahead of this call */
+  if (c.askedByApp && c.step === "amount" && !amountAnswered(c)) { guardFired("save_form while the app asks its own amount check"); toolReply(callId, { ok: true, saved: false, already: true, note: "The app took the officer's yes and asked its own amount check; after their next yes it saves. Say nothing; wait for the officer." }, false); return; } /* hfYesHeard is ahead of this call */
   const heard = await hfHeardAfter(c.n);
   if (!V || G.saveCheck !== c) { toolReply(callId, { ok: false, saved: false, error: "The form changed while waiting. Nothing was saved. Read it back again and ask for a yes." }); return; }
   if (!heard) { toolReply(callId, { ok: false, saved: false, error: "Not saved: the officer hasn't answered yet. Wait for them to say yes, then call save_form with confirmed true." }); return; }
@@ -492,9 +498,10 @@ function hfYesHeard(text) {
   if (!hfYes(text)) { const last = [...(G.recent || [])].reverse().find(l => !l.startsWith("Officer: ")) || "";
     if (!/(Yes to save, or no to change something\?|Is that right\?)\s*$/.test(last)) { act("step", `"${String(text).slice(0, 40)}" not taken as a yes: the read-back is no longer the last question`); return false; } }
   if (c.key !== V.action + JSON.stringify(readDraft()) || Date.now() - (G.hfYesAt || 0) < HF_YES_AGAIN_MS) return false;
+  if (c.step === "amount" && c.askedByApp && !amountAnswered(c)) { act("step", `"${String(text).slice(0, 40)}" not taken as the amount yes: it came before the amount check was said`); return false; }
   G.hfYesAt = Date.now(); const title = ACTIONS[V.action].title;
   stopPlayback(); if (G.responding) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } /* whatever Ara started to say about the yes; her save_form still gets its answer (hfSave: already saved) */
-  if (secondYes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; c.askedByApp = true; paintCall(); act("step", `the officer's yes to the ${title} read-back: the app checks the amount itself`);
+  if (secondYes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; c.askedByApp = true; c.askedAt = Date.now(); paintCall(); act("step", `the officer's yes to the ${title} read-back: the app checks the amount itself`);
     forceSay(`Just to be sure, the amount is ${money(readDraft()[secondYes(V.action)])}. Is that right?`); return true; }
   const r = hfCommit();
   if (!r.ok) { act("step", `the officer's yes to the ${title} read-back, but it can't be saved: ${r.err}`); guide(`Not saved. ${r.err} Ask for what's missing in one short question, update the draft, then read it back again.`); return true; } /* the same guidance save_form gets; never spoken as is */

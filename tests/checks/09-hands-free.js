@@ -987,4 +987,23 @@ test("Carverhill's 9:18 PM call (Oct 31): right after the phone paused the sound
   ok(await p.waitForFunction((n) => __wsUrls.length > n, n, { timeout: 8000 }).then(() => true, () => false), "the line wasn't reopened");
   ok(await p.evaluate(() => !G.pauseBackAt), "the pause was not used up (it would fire again)");
 });
+test("Carverhill's 9:36 PM call (Oct 31): a second transcript of the read-back's yes, before the amount check is said, never saves; a yes after it does", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await said(p, "Add a planned ask for Ruth.");
+  await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
+  await said(p, "Idaho C4, today, twenty thousand dollars.");
+  await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "Idaho C4", campaign: "Idaho", plannedDate: new Date().toISOString().slice(0, 10), amount: 20000 });
+  await ara(p, "save_form", { confirmed: false });
+  await p.evaluate(() => { window.__noAutoForce = true; }); /* the amount check is sent but doesn't start playing (a slow line) */
+  await said(p, "Yes."); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => V && G.saveCheck && G.saveCheck.step === "amount" && G.saveCheck.askedByApp), "the app didn't start its own amount check");
+  await said(p, "Yes."); /* the same yes again, from the service */
+  const r = await ara(p, "save_form", { confirmed: true });
+  const saved = () => p.evaluate(() => S.opps.some(o => (o.asks || []).some(a => a.amount === 20000)));
+  ok(!(await saved()) && r && r.saved === false, "the repeated yes saved before the amount check was said: " + JSON.stringify(r).slice(0, 300));
+  // the check plays, then the officer's yes saves
+  await p.waitForTimeout(2600); await p.evaluate(() => { G.forceStartAt = Date.now(); }); await p.waitForTimeout(900);
+  await said(p, "Yes."); await p.waitForTimeout(400);
+  ok(await saved(), "the yes after the amount check didn't save");
+});
 };
