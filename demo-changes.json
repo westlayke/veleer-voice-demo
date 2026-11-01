@@ -2,7 +2,7 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
-      "date": "STAMP",
+      "date": "Nov 1, 12:50 PM",
       "change": "Once the app has answered the officer's words itself (a bare no to the next step, undo, repeat, cancel), the turn watchdog never asks Ara to answer those words again; and Ara's end-call tool is refused unless the officer said something about ending (goodbye, hang up, that's all, I'm done, stop for now).",
       "area": "Voice",
       "requestedBy": "Carverhill",
