@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "STAMP",
+      "change": "Ara answers \"which opportunities are in Qualification?\" and \"which are ready to move to Cultivation?\": the list tool takes a stage and a ready-only flag, opens the Opportunities board at that stage and hands Ara the count and names to read out (ready = marked Ready for Cultivation, the Needs attention rule).",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill's 1:35 PM call (Nov 1): the question got \"not covered\"; 1:41 PM \"Sure answer it as a list\"; 1:50 PM \"Yes\" to the plan."
+    },
+    {
       "date": "Nov 1, 1:28 PM",
       "change": "Ara asks whether an interaction was substantive herself (guidance with the app's check and one nudge); the app's scripted version of that question is gone, including the reminder before a read-back. The officer's yes or no counts only when it follows the question in the transcript, so an answer to an earlier question (\"We had a good meeting\" to \"What happened?\") is never read as a no.",
       "area": "Voice",

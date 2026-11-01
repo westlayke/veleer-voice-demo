@@ -174,6 +174,15 @@ test("Opportunities and Tasks have search and filter chips like Contacts, and Ar
   const r = await ara(p, "show_list", { list: "tasks", view: "done" });
   ok(r.ok && /Done/.test(r.showing), "show_list failed: " + JSON.stringify(r));
   ok((await state(p)).tFilter === "done" && await p.isVisible(".cfilt button.on:has-text('Done')"), "Ara didn't open the Done view");
+  // Nov 1 (Carverhill's 1:35 PM call): opportunities by stage, and only the ones ready to move on; the board opens at that stage
+  const wantS = await p.evaluate(() => ({ q: S.opps.filter(o => o.stage === "Qualification").map(o => o.name), ready: S.opps.filter(readyForCultivation).map(o => o.name) }));
+  let rs = await ara(p, "show_list", { list: "opportunities", view: "open", stage: "Qualification" });
+  ok(rs.ok && rs.showing === "Opportunities in Qualification" && rs.count === wantS.q.length && rs.items.every((x, i) => x.startsWith(wantS.q[i])), "the stage list is wrong: " + JSON.stringify([rs, wantS]));
+  ok((await state(p)).oppView === "board" && await p.isVisible(".board .col h3:has-text('Qualification')"), "the board didn't open at Qualification");
+  rs = await ara(p, "show_list", { list: "opportunities", view: "open", stage: "Qualification", ready: true });
+  ok(rs.ok && rs.showing === "Opportunities ready to move from Qualification to Cultivation" && rs.count === wantS.ready.length && JSON.stringify(rs.items) === JSON.stringify(wantS.ready.slice(0, 8)) && /how many opportunities are ready to move|no opportunity is ready/.test(rs.say || ""), "the ready list is wrong: " + JSON.stringify([rs, wantS]));
+  rs = await ara(p, "show_list", { list: "opportunities", view: "open", stage: "Cultivation", ready: true });
+  ok(rs.ok && rs.showing === "Opportunities in Cultivation" && /only applies to Qualification/.test(rs.note || ""), "ready on another stage wasn't explained: " + JSON.stringify(rs));
 });
 
 test("Ken's last gift gives its year once, and a defer reason ending in a full stop isn't doubled in History", async (p) => {
