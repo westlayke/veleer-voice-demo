@@ -101,7 +101,7 @@ test("Halloween sounds: a visitor makes a sound after the first tap, but not dur
   ok(live, "no conversation started"); ok(b === 0, "a Halloween visitor made a sound during a conversation");
 });
 test("Spooky mode: Ara turns it on and off, with the night look, slower host voice and new rules", async (p) => {
-  if (new Date().getMonth() !== 9) return; // spooky mode only exists in October
+  /* any month: spooky mode is available all year since Nov 1 (Carverhill) */
   await signIn(p); await p.waitForTimeout(400);
   const n = await p.evaluate(() => __sent.length);
   const on = await ara(p, "set_spooky_mode", { on: true });
@@ -164,8 +164,8 @@ test("Christmas mode (any time): look, wreath, nativity, Ara as a Christmas host
   await p.evaluate(() => startCall()); await p.waitForTimeout(600);
   const hi = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.type === "conversation.item.create").map(e => JSON.stringify(e)).join(" "), n2);
   ok(/Merry Christmas, and welcome to the Christmas CRM/.test(hi), "Ara's greeting wasn't Christmassy");
-  if (await p.evaluate(() => spookySeason())) { await ara(p, "set_spooky_mode", { on: true });
-    ok(await p.evaluate(() => spookyMode() && !xmasMode()), "spooky mode and Christmas mode were on together"); await ara(p, "set_spooky_mode", { on: false }); }
+  { const r = await ara(p, "set_spooky_mode", { on: true }); /* any time of year since Nov 1 (Carverhill: "make it so spooky mode is still available") */
+    ok(r.ok === true && await p.evaluate(() => spookyMode() && !xmasMode()), "spooky mode outside October was refused, or on together with Christmas mode: " + JSON.stringify(r)); await ara(p, "set_spooky_mode", { on: false }); }
   await p.tap(".cb-end").catch(() => {});
   await p.evaluate(() => window.__demo.setXmas(false));
   ok(!(await p.evaluate(() => document.documentElement.classList.contains("xmas") || !!document.querySelector(".nativity"))), "the Christmas look stayed after normal mode");
@@ -203,7 +203,7 @@ test("Christmas mode: visitors and sounds (sleigh bells, ho ho ho, chime, carol)
   ok(!(await p.evaluate(() => xmasMode())), "Settings couldn't turn Christmas mode off");
 });
 test("Spooky mode: a creak when a form opens, thunder on Save, bats and a cackle on Closed Won, visitors more often", async (p) => {
-  if (new Date().getMonth() !== 9) return;
+  /* any month: spooky mode is available all year since Nov 1 (Carverhill) */
   await signIn(p); await p.tap(".cb-end").catch(() => {}); await p.waitForTimeout(300); await p.tap("nav >> text=Contacts"); await p.waitForTimeout(300);
   await p.tap("header .setbtn"); await p.waitForTimeout(300); await p.check("#spookyMode"); await p.waitForTimeout(300);
   ok(await p.evaluate(() => document.documentElement.classList.contains("spooky")), "the Settings switch didn't turn spooky mode on");

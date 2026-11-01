@@ -2,6 +2,20 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 3:07 PM",
+      "change": "Spooky mode is available any time of year, from Settings or by saying \"spooky mode\" (it used to switch itself off on Nov 1); the Halloween visitors on their own are still October-only.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Can you make it so spooky mode is still available\" (Nov 1, 2:56 PM ET)."
+    },
+    {
+      "date": "Nov 1, 3:07 PM",
+      "change": "A bare \"No.\" to Ara's own next-step question: if her reply has no tool call, the app nudges her once to call the draft tool again, so the read-back follows. Before, \"No problem.\" with no tool call left the interaction report unsaved.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Yes\" (Nov 1, 2:52 PM ET) to the fix for the next-step-no real Ara run, where 3 of 5 reports went unsaved this way."
+    },
+    {
       "date": "Nov 1, 2:06 PM",
       "change": "Ara answers \"which opportunities are in Qualification?\" and \"which are ready to move to Cultivation?\": the list tool takes a stage and a ready-only flag, opens the Opportunities board at that stage and hands Ara the count and names to read out (ready = marked Ready for Cultivation, the Needs attention rule).",
       "area": "Voice",

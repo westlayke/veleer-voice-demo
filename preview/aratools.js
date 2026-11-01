@@ -92,7 +92,6 @@ const TOOL_HANDLERS = {
     toolReply(callId, { ok: true, visitor: v, say: `In one short, playful sentence say the ${v} is on its way across the screen.` }); return;
   },
   set_spooky_mode(callId, data, name) {
-    if (!spookySeason()) { toolReply(callId, { ok: false, error: "Spooky mode is only around in October.", say: "Say in one short sentence that spooky mode is only around in October." }); return; }
     if (!!data.on === spookyMode()) { toolReply(callId, { ok: true, spooky: spookyMode(), already: true, status: `Spooky mode is already ${spookyMode() ? "on" : "off"}. Don't announce it again.` }, false); return; } // e.g. after Carry on: nothing to redo, and no second welcome
     setSpooky(!!data.on); sessUpdate(sessionCfg()); // new rules and a slower voice straight away
     toolReply(callId, { ok: true, spooky: spookyMode(), say: spookyMode() ? `In your haunted-house host voice, say one short welcome, such as "Mwahaha... spooky mode is on. Welcome to the haunted CRM!", then ask what they'd like to do.` : `Say only "Back to normal. The ghosts have gone home."` }); return;
