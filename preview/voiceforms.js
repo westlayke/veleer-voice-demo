@@ -75,9 +75,6 @@ function optParse(k, raw, st) { // the officer's answer in their words -> the fi
     const ally = /\bally\b|do not solicit|don't ask|do not ask/.test(l) && !/\bnot (an )?ally\b/.test(l), dnc = /do not contact|don't contact|\bdnc\b/.test(l) && !/\bnot do not contact\b/.test(l);
     if (ally || dnc) return { ally, dnc }; return none ? { ally: false, dnc: false } : null; }
   if (k === "fund") return listTake("fund", t);
-  if (k === "campaign") { const fd = readDraft().fund, stn = ENTITY_STATE[fd];
-    if (!/\bcampaign\b/.test(l) && /\b(pac|c3|c4|c\.a\.|citizens|alliance|entity)\b/.test(l)) return null; // "The PAC. C.A. Idaho PAC." names an entity, not a campaign (Oct 25: a repeat after a drop filled the campaign)
-    if (/\bnational\b/.test(l)) return "National"; if (stn && (l.includes(stn.toLowerCase()) || /\bstate\b/.test(l))) return stn; return null; }
   if (f.type === "bool") return NO_WORDS.test(l) ? false : YES_WORDS.test(l) ? true : null;
   if (f.type === "money") return spokenAmount(t);
   if (f.type === "date") return normDate(t) || null;
@@ -240,40 +237,38 @@ const YN_WATCH_MS = 20000;
 function answerGuide(heard) {
   const p = yesNoPending(), a = p ? followAnswer(heard) : null; if (!p || !a) return "";
   const guide = `The officer just said "${String(heard).trim()}", answering your question "${p.q}". ${a === "yes" ? p.yes : p.no}`;
-  if (p.kind !== "other") oneCheck("ynWatch");
-  if (p.kind !== "other") G.ynWatch = { kind: p.kind, ans: a, step: p.step || "", guide, tries: 1, at: Date.now(), heardN: G.heardN || 0 };
+  if (p.kind !== "other") checkStart("ynWatch", { what: p.kind, ans: a, step: p.step || "", guide, heardN: G.heardN || 0 });
   return guide; }
 // the officer answered: arm the check for Ara's own reply (the voice service answers on its own; the app only steps in when that reply misses)
-function yesNoHeard(text) { if (!V && !(G.lastSaved && Date.now() - G.lastSaved.at < 10 * 60e3)) { G.ynWatch = null; return; } G.ynWatch = null; answerGuide(text); }
+function yesNoHeard(text) { checkEnd("", "ynWatch"); if (V || (G.lastSaved && Date.now() - G.lastSaved.at < 10 * 60e3)) answerGuide(text); }
 function ynCheck(r) {
-  const w = G.ynWatch; if (!w || !G.live) return;
-  if (Date.now() - w.at > YN_WATCH_MS || (G.heardN || 0) > w.heardN) { G.ynWatch = null; return; } /* stale, or the officer has spoken again */
+  const w = checkNow("ynWatch"); if (!w || !G.live) return;
+  if (Date.now() - w.at > YN_WATCH_MS || (G.heardN || 0) > w.heardN) { checkEnd("", "ynWatch"); return; } /* stale, or the officer has spoken again */
   if (r.status === "cancelled" || G.dropNext) return;
-  if (G.respForcedSeq === G.respSeq || G.nudge || G.ctxWatch) { G.ynWatch = null; return; } /* the app's own line, or another check already asked her again */
+  if (G.respForcedSeq === G.respSeq) { checkEnd("the app's own line", "ynWatch"); return; } /* the app's own line (another check can't be waiting: one at a time) */
   const bot = String(G.bot || "").trim(); if (!bot && !G.respTool) return;
   let why = "";
-  if (w.kind === "step" && w.ans === "yes" && !G.respTool) why = "didn't open the step";
-  else if (w.kind === "next" && w.ans === "yes" && !G.respTool && !(/next step/i.test(bot) && /\?\s*$/.test(bot) && !OPEN_Q.test(bot))) why = "didn't ask what the next step is";
-  else if (w.kind === "next" && w.ans === "no" && !G.respTool && /next step/i.test(bot) && /\?\s*$/.test(bot)) why = "asked about the next step again";
-  else if (w.kind === "step" && w.ans === "no" && /do that now/i.test(bot)) why = "offered the same step again";
-  if (!why) { if (w.tries > 1) act("step", `Ara followed the officer's ${w.ans} after one nudge`); G.ynWatch = null; return; }
-  if (w.tries > 1) { act("step", `Ara's reply still ${why} after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't follow a yes-or-no answer after a nudge", `"${bot.slice(0, 80)}"`); G.ynWatch = null; return; }
+  if (w.what === "step" && w.ans === "yes" && !G.respTool) why = "didn't open the step";
+  else if (w.what === "next" && w.ans === "yes" && !G.respTool && !(/next step/i.test(bot) && /\?\s*$/.test(bot) && !OPEN_Q.test(bot))) why = "didn't ask what the next step is";
+  else if (w.what === "next" && w.ans === "no" && !G.respTool && /next step/i.test(bot) && /\?\s*$/.test(bot)) why = "asked about the next step again";
+  else if (w.what === "step" && w.ans === "no" && /do that now/i.test(bot)) why = "offered the same step again";
+  if (!why) { if (w.tries > 1) act("step", `Ara followed the officer's ${w.ans} after one nudge`); checkEnd("", "ynWatch"); return; }
+  if (w.tries > 1) { act("step", `Ara's reply still ${why} after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't follow a yes-or-no answer after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "ynWatch"); return; }
   w.tries = 2; w.at = Date.now(); act("step", `Ara's reply ${why} after the officer's ${w.ans} ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't follow a yes-or-no answer", `${why}: "${bot.slice(0, 80)}"`);
-  const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") ${why}. Do it now.`; setTimeout(() => { if (G.live && G.ynWatch === w) askReply(g); }, 0);
+  const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") ${why}. Do it now.`; setTimeout(() => { if (G.live && checkNow("ynWatch") === w) askReply(g); }, 0);
 }
 // guidance with a check (Oct 31, the test of the middle path): the app tells Ara what to ask; if her reply doesn't ask it, one nudge, then the app waits
 // for the officer (formReask's 13 s backstop still stands). Cleared when the officer speaks again or after SAY_WATCH_MS.
 const SAY_WATCH_MS = 20000;
-function sayWatch(q, guideText) { oneCheck("sayWatch"); G.sayWatch = { q, guide: guideText, at: Date.now(), heardN: G.heardN || 0, tries: 1 }; }
+function sayWatch(q, guideText) { checkStart("sayWatch", { q, guide: guideText, heardN: G.heardN || 0 }); }
 function sayCheck(r) {
-  const w = G.sayWatch; if (!w || !G.live) return;
-  if (Date.now() - w.at > SAY_WATCH_MS || (G.heardN || 0) > w.heardN) { G.sayWatch = null; return; }
-  if (r.status === "cancelled" || G.dropNext) return;
-  const bot = String(G.bot || "").trim(); if (!bot) return;
-  if (wordOverlap(sameWords(lastQuestionOf(bot)), sameWords(w.q)) >= 0.6 && /\?\s*$/.test(bot)) { act("step", `Ara asked the question herself${w.tries > 1 ? " after one nudge" : ""}: "${w.q}"`); G.sayWatch = null; return; }
-  if (w.tries > 1) { act("step", `Ara's reply still didn't ask "${w.q}" after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't ask the question after a nudge", `"${bot.slice(0, 80)}"`); G.sayWatch = null; return; }
+  const w = checkNow("sayWatch"); if (!w || !G.live) return;
+  if (Date.now() - w.at > SAY_WATCH_MS || (G.heardN || 0) > w.heardN) { checkEnd("", "sayWatch"); return; }
+  if (!replyCounts(r)) return; const bot = G.bot.trim();
+  if (wordOverlap(sameWords(lastQuestionOf(bot)), sameWords(w.q)) >= 0.6 && /\?\s*$/.test(bot)) { act("step", `Ara asked the question herself${w.tries > 1 ? " after one nudge" : ""}: "${w.q}"`); checkEnd("", "sayWatch"); return; }
+  if (w.tries > 1) { act("step", `Ara's reply still didn't ask "${w.q}" after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't ask the question after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "sayWatch"); return; }
   w.tries = 2; w.at = Date.now(); act("step", `Ara's reply didn't ask "${w.q}" ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't ask the question she was given", `"${bot.slice(0, 80)}"`);
-  const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") didn't ask it. Ask it now.`; setTimeout(() => { if (G.live && G.sayWatch === w) askReply(g); }, 0);
+  const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") didn't ask it. Ask it now.`; setTimeout(() => { if (G.live && checkNow("sayWatch") === w) askReply(g); }, 0);
 }
 // the officer's answer to Ara's own next-step question counts the same as the app's (Oct 31: she asked "Do you want to set it now?" from still_needed, and the app,
 // which only took a yes after its own question, asked again)

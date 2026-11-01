@@ -78,10 +78,16 @@ const ANSWERS = RESPONSES.filter(r => r !== "Awaiting"); /* the ask's later answ
 const MEETING_FORM_TYPES = MEET_TYPES.slice(0, 3); /* a meeting to schedule: in person, phone or video */
 const TASK_STATUS = { todo: "To do", doing: "In progress", waiting: "Waiting", done: "Done" };
 
-// did the officer say something that matches the outcome Grok picked?
-const OUTCOME_WORDS = { "Interested, continue cultivation": /\b(interested|keen|excited|enthusiastic|positive|receptive|engaged|on board|liked it|loved it)\b|went (really |very )?well|(good|great) (meeting|call|conversation)|keep cultivating/, "Ask made": /\bask(ed)?\b|proposed|pitched|requested|invited (him|her|them) to give/, "Ask accepted": /accept|agreed|said yes|yes to|committed|he's in|she's in|they're in|pledg|handed|check/, "Not now, revisit": /not now|later|revisit|next year|next quarter|hold off|wait|timing|busy|not yet|down the road/, "Not interested": /not interested|no interest|declined|turned (me|us|it) down|passed|no thanks|not for (him|her|them)/, "Referred elsewhere": /refer|pointed (me|us) to|sent (me|us) to|someone else|better fit/ };
-// words that stand for an option when the officer says them
-const OPTION_WORDS = {
+const listText = (t) => String(t || "").toLowerCase().replace(/[’‘]/g, "'").replace(/-/g, " ").replace(/\s+/g, " ").trim(); /* words as the lists compare them: lower case, no dashes */
+const listEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// THE words table (Nov 1, Carverhill: "move the other lists to the one-list approach the entities now use"): for every list value, the
+// words that stand for it when the officer says them. listMatch (the answer-taker) and listHeard (the evidence guard) both read this
+// table and nothing else, so a phrasing added here is heard the same way everywhere. A value's own name is always heard (listMatch).
+const LIST_WORDS = {
+  outcome: { "Interested, continue cultivation": /\b(interested|keen|excited|enthusiastic|positive|receptive|engaged|on board|liked it|loved it)\b|went (really |very )?well|(good|great) (meeting|call|conversation)|keep cultivating/, "Ask made": /\bask(ed)?\b|proposed|pitched|requested|invited (him|her|them) to give/, "Ask accepted": /accept|agreed|said yes|yes to|committed|he's in|she's in|they're in|pledg|handed|check/, "Not now, revisit": /not now|later|revisit|next year|next quarter|hold off|wait|timing|busy|not yet|down the road/, "Not interested": /not interested|no interest|declined|turned (me|us|it) down|passed|no thanks|not for (him|her|them)/, "Referred elsewhere": /refer|pointed (me|us) to|sent (me|us) to|someone else|better fit/ },
+  campaign: Object.fromEntries(CAMPAIGNS.map(c => [c, c === "National" ? /\bnational\b|\bnation ?wide\b|\bfederal\b|\bcountry ?wide\b/ : new RegExp("\\b" + listEsc(listText(c)) + "\\b")])), /* "the state one" is read against the entity's own campaigns in listMatch */
+  status: { "To do": /\bto do\b|\bnot started\b|\bnot done\b|\bopen\b|\breopen|\bundo\b|\bback to\b/, "In progress": /\bin progress\b|\bstarted\b|\bworking on\b|\bunder ?way\b|\bbegun\b|\bdoing\b/,
+    "Waiting": /\bwait|\bon hold\b|\bblocked\b|\bpending\b|\bheld up\b/, "Done": /\bdone\b|\bfinished\b|\bcomplete|\bwrapped up\b|\btaken care of\b/ },
   meetingType: { "In person": /\bin person\b|\bmet\b|\bmeeting\b|\blunch\b|\bcoffee\b|\bdinner\b|\bbreakfast\b|\boffice\b|\bvisit|\bface to face\b|\bevent\b|\bparty\b|\bdropped by\b|\bstopped by\b|\bhouse\b|\bhome\b/,
     "Event": /\bevent\b|\bgala\b|\bparty\b|\breception\b|\bfundraiser\b|\bconference\b|\bluncheon\b|\bbanquet\b|\bopening\b|\bceremony\b/, "Email": /\bemail|\be-mail|\bwrote\b|\breplied\b|\bmessage\b|\bnote\b/,
     "Phone call": /\bphone\b|\bcall(ed|s)?\b|\brang\b|\bdialed\b/, "Video call": /\bvideo\b|\bzoom\b|\bteams\b|\bfacetime\b|\bgoogle meet\b|\bonline\b|\bvirtual/ },
@@ -112,24 +118,28 @@ function normCap(v) {
 // every list by the form field that uses it
 const LISTS = () => ({ fund: FUNDS, campaign: CAMPAIGNS, capacity: Object.keys(CAPACITY), meetingType: MEET_TYPES, response: RESPONSES, confirmedBy: CONFIRMED_BY,
   method: PAY_METHODS, askType: ASK_TYPES, frequency: FREQUENCIES, decision: DECISIONS, outcome: OUTCOMES, duration: DURATIONS, status: Object.values(TASK_STATUS) });
-const LIST_WORDS = () => Object.assign({ outcome: OUTCOME_WORDS }, OPTION_WORDS);
-const listText = (t) => String(t || "").toLowerCase().replace(/[’‘]/g, "'").replace(/-/g, " ").replace(/\s+/g, " ").trim();
-const listEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // a rating in the officer's words: a letter ("B", "bee", "it's a C"), or a dollar figure that falls in a range
 function capFromWords(raw) {
   const t = String(raw || "").trim().replace(/^(it's|its|make it|let's say|lets say|say|rating|capacity|rate (him|her|them)|give (him|her|them))\s+(an? )?/i, "").replace(/^(bee|be)\b/i, "B").replace(/^(see|sea|cee)\b/i, "C").replace(/^dee\b/i, "D").replace(/^ee\b/i, "E");
   return normCap(t);
 }
+// lists with their own way of reading an answer (text as said, t as the lists compare it, opts the form's values): the hits, or null to
+// read the answer like any other list (its values' names, then the words table)
+const LIST_PICK = {
+  fund: (text, t, opts) => { const h = matchEntity(text).hits; return opts ? h.filter(v => opts.includes(v)) : h; },
+  capacity: (text) => { const v = capFromWords(text); return v ? [v] : []; },
+  /* a campaign answer that names an entity ("The PAC. C.A. Idaho PAC.") is not a campaign; "the state one" is the entity's own state (Oct 25: a repeat after a drop filled the campaign) */
+  campaign: (text, t, opts) => { if (!/\bcampaign\b/.test(t) && /\b(pac|c3|c4|c\.?a\.?|citizens|alliance|entity)\b/.test(t)) return []; const st = (opts || CAMPAIGNS).filter(c => c !== "National"); return /\bstate\b/.test(t) && st.length === 1 ? st : null; }
+};
 // the officer's words -> the value(s) of a list they point to. One hit is the answer; several mean the app asks which one; none means
 // the words don't answer this list. opts: the values this form offers (a form can offer part of a list).
 function listMatch(key, text, opts) {
   const t = listText(text); if (!t) return { hits: [] };
-  if (key === "fund") { const h = matchEntity(text).hits; return { hits: opts ? h.filter(v => opts.includes(v)) : h }; }
-  if (key === "capacity") { const v = capFromWords(text); return { hits: v ? [v] : [] }; }
+  const pick = LIST_PICK[key] && LIST_PICK[key](text, t, opts); if (pick) return { hits: pick };
   const vals = (opts || LISTS()[key] || []).filter(Boolean);
   const named = vals.filter(v => new RegExp("\\b" + listEsc(listText(v)) + "\\b").test(t)); /* the value's own name ("credit card", "in person") */
   if (named.length) { const longest = Math.max(...named.map(v => v.length)); return { hits: named.filter(v => v.length === longest) }; }
-  const re = LIST_WORDS()[key] || {}; return { hits: vals.filter(v => re[v] && re[v].test(t)) };
+  const re = LIST_WORDS[key] || {}; return { hits: vals.filter(v => re[v] && re[v].test(t)) };
 }
 // the answer to a list question: the one value the words point to (the first, when the words fit several and the list has no "which one" question), or null
 function listTake(key, text, opts) { const h = listMatch(key, text, opts).hits; if (key === "fund") return h.length === 1 ? h[0] : null; return h.length ? h[0] : null; }
@@ -137,7 +147,7 @@ function listTake(key, text, opts) { const h = listMatch(key, text, opts).hits; 
 function listHeard(key, value, lines, asked) {
   if (key === "fund") return entityHeardIn(value, lines);
   if (typeof optionAnswered === "function" && optionAnswered(String(value), lines, asked)) return true;
-  const all = lines.map(listText).join(" \n "), re = (LIST_WORDS()[key] || {})[String(value)];
+  const all = lines.map(listText).join(" \n "), re = (LIST_WORDS[key] || {})[String(value)];
   if (new RegExp("\\b" + listEsc(listText(value)) + "\\b").test(all)) return true;
   return re ? re.test(all) : null;
 }

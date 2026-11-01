@@ -286,7 +286,7 @@ const TOOL_HANDLERS = {
 };
 function onTool(callId, name, args, held) {
   busy(); G.respTool = true; G.toolHeardN = G.heardN || 0;
-  if (G.nudge) { act("step", `Ara called ${name} on ask ${G.nudge.tries} of ${TOOL_ASKS} (${Math.round((Date.now() - G.nudge.at) / 100) / 10} s after the first)`); G.nudge = null; }
+  const nd = checkNow("nudge"); if (nd) { act("step", `Ara called ${name} on ask ${nd.tries} of ${TOOL_ASKS} (${Math.round((Date.now() - nd.at) / 100) / 10} s after the first)`); checkEnd("the tool was called", "nudge"); }
   if (!callId || G.handled.has(callId)) return;
   // the engine's transcript of the officer's last turn is still to come (speech ended, no transcript yet): the call waits for it, up to
   // HEARD_WAIT_MS, so the evidence rule judges the fields against what the officer just said (OpenAI sends the call first)

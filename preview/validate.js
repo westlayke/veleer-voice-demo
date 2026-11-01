@@ -40,7 +40,6 @@ function optionAnswered(label, lines, asked) {
   const listed = q.split(/[:?]/).slice(1).join(" ").split(/,|\bor\b/).map(x => x.trim()).filter(Boolean); const i = ORD[m[1]] === -1 ? listed.length - 1 : ORD[m[1]];
   return listed.length > 1 && listed[i] === l;
 }
-function outcomeIn(o, lines, asked) { if (optionAnswered(o, lines, asked)) return true; const re = OUTCOME_WORDS[o]; if (!re) return false; return lines.slice(-4).some(t => re.test(t)); }
 // ---- yes and no ----
 const HF_YES = /\b(yes|yeah|yep|yup|ya|correct|right|sure|save|go ahead|do it|confirm|confirmed|sounds good|perfect|ok|okay|absolutely|definitely)\b/;
 // a no is an answer that opens with no or wait, or asks not to save or to change something; "I don't think you needed to say that, but yes" is still a yes
@@ -105,12 +104,12 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
   if (INTERACTION_ONLY.has(f.k)) { if (action !== "interaction") return null; // Grok marks reports substantive, picks outcomes and invents next steps on its own (Oct 25 consistency run, 2 of 6)
     if (f.k === "substantive") return ctx.askedSubst ? true : substantiveIn(lines, ctx.asked);
     if (f.k === "nextStep") return nextStepIn(lines, ctx.asked);
-    return outcomeIn(v, lines, ctx.asked); }
+    return listHeard("outcome", v, lines.slice(-4), ctx.asked) === true; } /* lists.js: the outcome words table, over the last four lines */
   const all = lines.join(" \n ");
   if (f.k === "fund") return listHeard("fund", v, lines); /* lists.js: the same words the answer-taker hears ("C-3" for National C3, Oct 31) */
-  if (f.k === "campaign") { const c = campaignsFor(data.fund || ""); if (c.length === 1 && c[0] === v) return true; if (v === "National") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all); return all.includes(String(v).toLowerCase()); }
+  if (f.k === "campaign") { const c = campaignsFor(data.fund || ""); if (c.length === 1 && c[0] === v) return true; return listHeard("campaign", v, lines, ctx.asked) === true; } /* an entity's only campaign needs no words; otherwise lists.js */
   if (f.type === "bool" && !v) return null; // false is the default, nothing to prove
-  if (OPTION_WORDS[f.k]) return listHeard(f.k, v, lines, ctx.asked); // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)
+  if (LIST_WORDS[f.k]) return listHeard(f.k, v, lines, ctx.asked); // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)
   if (f.type === "money") return amountSaid(v, lines);
   if (f.type === "date") { const iso = normDate(v); if (iso && iso === todayISO() && f.k === "date") return true; /* today is only a form's own default (interaction, ask, gift "Date" and "Received on"); a planned ask date, a due date or a confirmed date must be said (Carverhill's 12:09 AM call, Nov 1: "Let's set a new date" became today) */ const w = listWordsOut(all); return DATE_WORDS.test(w) || /\d/.test(w); }
   if (f.type === "select" || f.type === "bool") return false; // an option with no words of its own: only the officer's own tap sets it
@@ -121,8 +120,7 @@ function fieldSaidIn(action, f, lines) {
   if (!f || !lines.length) return false; const all = lines.join(" \n ").toLowerCase();
   if (f.k === "capacity") return ratedIn(lines);
   if (f.k === "fund") return listMatch("fund", lines[lines.length - 1]).hits.length === 1 || !!(typeof V !== "undefined" && V && V.data && String(V.data.fund || "").trim()); /* already on the form from an earlier answer (12:09 AM call, Nov 1: reported left out while the form kept it) */ /* a state with two entities is a choice still to make (10:05 AM call) */
-  if (f.k === "campaign") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all) || [...new Set(Object.values(ENTITY_STATE).filter(Boolean))].some(s => all.includes(s.toLowerCase()));
-  if (OPTION_WORDS[f.k]) return Object.values(OPTION_WORDS[f.k]).some(re => re.test(all) || re.test(all.replace(/-/g, " ")));
+  if (LIST_WORDS[f.k]) return Object.values(LIST_WORDS[f.k]).some(re => re.test(all) || re.test(all.replace(/-/g, " "))); /* campaign included: a state name or a national word */
   if (f.type === "money") return /\$|\d|\b(thousand|hundred|million|grand|bucks|dollars)\b/.test(listWordsOut(all));
   if (f.type === "date") { const w = listWordsOut(all); return DATE_WORDS.test(w) || /\d/.test(w); }
   return false; /* free text: the app can't tell, so it asks */

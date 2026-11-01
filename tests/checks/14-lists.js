@@ -44,7 +44,18 @@ test("One lists module: short forms are heard for every list, and the evidence g
     const out = [], one = (k, t, want) => { const h = listMatch(k, t).hits; if (h.length !== 1 || h[0] !== want) out.push(`${k}: "${t}" -> ${JSON.stringify(h)}, not ${want}`); };
     [["fund", "C3", "Citizens Alliance C3"], ["fund", "C-3.", "Citizens Alliance C3"], ["fund", "the c 3", "Citizens Alliance C3"], ["fund", "Idaho C4", "C.A. Idaho C4"],
      ["capacity", "bee", "B"], ["capacity", "it's a C", "C"], ["capacity", "about 300 thousand", "A"], ["method", "card", "Credit card"], ["method", "a check", "Check"],
-     ["meetingType", "in-person", "In person"], ["askType", "a pledge", "Pledge"], ["frequency", "every month", "Monthly"], ["confirmedBy", "by email", "Email"], ["status", "waiting", "Waiting"]].forEach(a => one(...a));
+     ["meetingType", "in-person", "In person"], ["askType", "a pledge", "Pledge"], ["frequency", "every month", "Monthly"], ["confirmedBy", "by email", "Email"], ["status", "waiting", "Waiting"],
+     ["status", "it's done", "Done"], ["status", "I've started on it", "In progress"], ["outcome", "she's really interested", "Interested, continue cultivation"], ["outcome", "he passed on it", "Not interested"],
+     ["campaign", "the national one", "National"], ["campaign", "nationwide", "National"], ["campaign", "Pennsylvania", "Pennsylvania"]].forEach(a => one(...a));
+    /* Nov 1: every list with a words table is heard the same way by the answer-taker and the evidence guard, for each value's own name */
+    Object.entries(LIST_WORDS).forEach(([k, tbl]) => Object.keys(tbl).forEach(v => { if (!/^(true|false)$/.test(v)) { const t = "i'd say " + v.toLowerCase() + ".";
+      if (!listMatch(k, t).hits.includes(v)) out.push(`matcher: ${k} "${t}" misses ${v}`); if (listHeard(k, v, [t]) !== true) out.push(`guard: ${k} "${t}" not counted for ${v}`); } }));
+    Object.keys(LIST_WORDS).forEach(k => { if (!LISTS()[k] && !["ally", "dnc", "permText"].includes(k)) out.push("words for a list that isn't in LISTS: " + k); });
+    if (listMatch("campaign", "The PAC. C.A. Idaho PAC.").hits.length) out.push("an entity answer was taken as a campaign"); /* Oct 25 */
+    if (listTake("campaign", "the state one", ["National", "Idaho"]) !== "Idaho") out.push("\"the state one\" wasn't the entity's own state"); if (listTake("campaign", "the state one") !== null) out.push("\"the state one\" with no entity picked a state");
+    if (fieldEvidence("opportunity", { k: "campaign", type: "select" }, "North Dakota", { fund: "C.A. North Dakota C4" }, ["the north dakota campaign."]) !== true) out.push("evidence: North Dakota campaign refused");
+    if (fieldEvidence("opportunity", { k: "campaign", type: "select" }, "National", { fund: "C.A. North Dakota C4" }, ["log an interaction with ruth."]) !== false) out.push("evidence: an unsaid National campaign kept");
+    if (fieldEvidence("interaction", { k: "outcome", type: "select" }, "Not now, revisit", {}, ["she said not now, maybe next year."]) !== true) out.push("evidence: outcome words refused");
     if (listMatch("fund", "C4").hits.length !== 5) out.push("\"C4\" should fit the five C4s");
     if (listTake("fund", "C4") !== null) out.push("\"C4\" was taken as one entity");
     if (listMatch("fund", "Idaho").hits.length !== 2) out.push("\"Idaho\" should fit two entities");
@@ -105,8 +116,8 @@ test("Pat's Pennsylvania C4 loop (Oct 31): once the entity is on the Record the 
   ok(/Ara asked the question herself: "How much was the ask\?"/.test(await p.log()), "Ara's question wasn't counted: " + (await p.log()).slice(-300));
   // Nov 1: a check on where we were stands down when another form is open by the time Ara's reply comes (the app's stale line 23 s later)
   await p.evaluate(() => contextWatch("reconnect", { who: "Ruth", q: "Which entity?", line: "We're on the add planned ask for Ruth. Which entity?" }));
-  await p.evaluate(() => { G.ctxWatch.form = "plan"; G.ctxWatch.seq = -1; });
+  await p.evaluate(() => { Object.assign(checkNow("ctxWatch"), { form: "plan", seq: -1 }); });
   await araSays("Sorry, I lost you for a moment. What would you like to do?"); await p.waitForTimeout(200);
-  ok(/Another form opened: the ask for where we were stands down/.test(await p.log()) && await p.evaluate(() => !G.ctxWatch), "the check didn't stand down for another form: " + (await p.log()).slice(-300));
+  ok(/Another form opened: the ask for where we were stands down/.test(await p.log()) && await p.evaluate(() => !checkNow("ctxWatch")), "the check didn't stand down for another form: " + (await p.log()).slice(-300));
 });
 };

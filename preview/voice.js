@@ -636,7 +636,7 @@ function cutQBack() {
     if (!G.live || G.cutQ !== c) return;
     if (playingLeft() > 0.1 || replyBusy()) { setTimeout(go, 300); return; }
     G.cutQ = null;
-    if (G.ctxWatch || !G.ws || G.ws.readyState !== 1) return; /* the line closed meanwhile: the reconnect says where we were */
+    if (checkNow("ctxWatch") || !G.ws || G.ws.readyState !== 1) return; /* the line closed meanwhile: the reconnect says where we were */
     if ((G.heardN || 0) > c.heardN) { act("step", "The officer spoke after the sound came back: Ara's cut question is not asked again"); return; }
     if (G.lastBotAt > c.at && sameWords(lastQuestionOf(G.lastBot || "")) === sameWords(c.q)) { act("step", "Ara has said her cut question again since (the reconnect): not asked again"); return; } /* Carverhill's 10:58 PM lock, Oct 31: the note from before the lock outlived the reopen */
     const g = `The phone paused the sound while your last question was playing, so the officer missed part of it. Ask it again now, briefly, in your own words, with no apology: "${c.q}"`;
@@ -804,7 +804,7 @@ function resumeModal() {
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " + (r.where ? r.where + " " : "") : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
-  G.live = false; G.hands = false; G.saveCheck = null; formBack(); G.savedByWords = 0; G.sync = null; G.syncN = 0; G.syncPending = null; G.nudge = null; G.ctxWatch = null; G.stateOkAt = 0; clearTimeout(G.syncTimer); G.hfYesAt = 0; G.resumedHeardN = 0; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();
+  G.live = false; G.hands = false; G.saveCheck = null; formBack(); G.savedByWords = 0; G.sync = null; G.syncN = 0; G.syncPending = null; checkEnd("the call ended"); G.stateOkAt = 0; clearTimeout(G.syncTimer); G.hfYesAt = 0; G.resumedHeardN = 0; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
@@ -959,12 +959,14 @@ function ask(request) {
   if (!G.live) { startCall(request ? `The officer opened the conversation from the app: ${request}` : null); return; }
   if (request) notice(`The officer tapped: ${request}`);
 }
+// does this reply of Ara's count for a check? Not a silent tool call, the app's own forced line, a dropped double or a cancelled reply
+const replyCounts = (r) => !!(G.bot && G.bot.trim()) && !G.dropNext && G.respForcedSeq !== G.respSeq && (r || {}).status !== "cancelled";
 function onEvent(e) {
   const t = e.type || "";
-  if (t === "response.created") smSend("ARA_STARTED"); else if (/audio\.delta$/.test(t)) { if (!araSounding()) smSend("ARA_SOUND"); } else if (t === "response.done") smSend("ARA_DONE"); /* the machine hears every reply, dropped ones too */
+  if (t === "response.created") smSend("ARA_STARTED"); else if (/audio\.delta$/.test(t)) { if (!araSounding()) smSend("ARA_SOUND"); } else if (t === "response.done") smSend("ARA_DONE", { words: replyCounts(e.response) }) /* words: replyCounts, as the app's own checks judge it */; /* the machine hears every reply, dropped ones too */
   if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; G.responding = false; flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
-  if (t === "input_audio_buffer.speech_started") { if (G.nudge) { act("step", "The officer spoke: the ask for the tool call stands down"); G.nudge = null; } if (G.ctxWatch) { act("step", "The officer spoke: the ask for where we were stands down"); G.ctxWatch = null; } G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true; smSend("SPEECH_START");
+  if (t === "input_audio_buffer.speech_started") { const ck = checkNow("nudge") || checkNow("ctxWatch"); if (ck) { act("step", `The officer spoke: the ask for ${ck.kind === "nudge" ? "the tool call" : "where we were"} stands down`); checkEnd("the officer spoke"); } /* a yes/no or a say check waits for the words, not the sound (a cough is not an answer) */ G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true; smSend("SPEECH_START");
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0;
       clearTimeout(G.idleTimer);
@@ -1169,11 +1171,11 @@ const PROMISE_RE = /fill in the form|let'?s (add|create|record|log|start|open|ma
 const FORM_REQ_RE = /\bform\b|\b(new|create|add|make|open|start|record|log|schedule|enter)\b.{0,40}\b(contact|task|opportunit|meeting|interaction|pledge|gift|ask|plan|report|payment)/i;
 const NOT_ANSWER_RE = /\?\s*$|^(what|who|when|where|how|why|is|are|do|does|did|can|could|would|should|which|tell me|show|read|repeat|say (that|it) again|cancel|undo|never mind|stop|wait|hold on|go back|i'?ve parked|i'?m parked|hey ara|are you|hello|yes|yeah|yep|no|nope|skip|none|nothing|save|ok|okay|sure|thanks|thank you)\b/i;
 function toolCheck(r) {
-  if (!G.live || G.idleEnding || G.respTool || !G.bot || r.status === "cancelled" || G.respForcedSeq === G.respSeq || G.dropNext) { if (G.nudge && G.respTool) G.nudge = null; return; }
+  if (!G.live || G.idleEnding || G.respTool || !replyCounts(r)) { if (G.respTool) checkEnd("the tool was called", "nudge"); return; }
   const heard = G.lastHeard && Date.now() - (G.lastHeard.at || 0) < 45000 ? String(G.lastHeard.text || "").trim() : "";
-  if (G.nudge) { // a retry came back, still without the tool call
-    if (G.nudge.tries >= TOOL_ASKS) { act("step", `Ara still didn't call the tool after ${TOOL_ASKS} asks ("${G.bot.slice(0, 80)}"): waiting for the officer`); G.nudge = null; return; }
-    G.nudge.tries++; act("step", `Ara answered again without the tool call ("${G.bot.slice(0, 80)}"): asked again (${G.nudge.tries} of ${TOOL_ASKS})`); const g = G.nudge.guide; setTimeout(() => { if (G.live && G.nudge) askReply(g); }, 0); return; }
+  const nd = checkNow("nudge"); if (nd) { // a retry came back, still without the tool call
+    if (nd.tries >= TOOL_ASKS) { act("step", `Ara still didn't call the tool after ${TOOL_ASKS} asks ("${G.bot.slice(0, 80)}"): waiting for the officer`); checkEnd("no tool call after the asks", "nudge"); return; }
+    nd.tries++; act("step", `Ara answered again without the tool call ("${G.bot.slice(0, 80)}"): asked again (${nd.tries} of ${TOOL_ASKS})`); const g = nd.guide; setTimeout(() => { if (G.live && checkNow("nudge") === nd) askReply(g); }, 0); return; }
   let kind = "", guide = "";
   const acted = (G.heardN || 0) <= (G.toolHeardN || 0); /* a tool call already answered the officer's last words (Patient Pat: "In person." was filled, then Ara's "Okay." to the app's guidance drew three asks) */
   if (acted) return;
@@ -1182,8 +1184,8 @@ function toolCheck(r) {
   else if (V && V.fromVoice && !formIs("optional") && heard && !NOT_ANSWER_RE.test(heard) && !hfYes(heard) && !/\?\s*$/.test(G.bot) && heard.split(/\s+/).length <= 40) { const tl = TOOLS.find(x => x.action === V.action); if (!tl) return; kind = "fill the form";
     guide = `The officer answered the open ${ACTIONS[V.action] && ACTIONS[V.action].title ? ACTIONS[V.action].title : "form"} form's question with "${heard.slice(0, 120)}", and your last reply had no tool call, so nothing was filled in. Call ${tl.name} now with what they said (keep the fields already in). Say nothing else; the app asks the next question.`; }
   if (!kind) return;
-  oneCheck("nudge"); G.nudge = { kind, tries: 1, guide, at: Date.now() }; guardFired("Ara talked but didn't " + kind, `"${G.bot.slice(0, 80)}" after "${heard.slice(0, 60)}"`);
-  act("step", `Ara talked but didn't ${kind} ("${G.bot.slice(0, 80)}"): asked again for the tool call (1 of ${TOOL_ASKS})`); setTimeout(() => { if (G.live && G.nudge) askReply(guide); }, 0);
+  const started = checkStart("nudge", { what: kind, guide }); guardFired("Ara talked but didn't " + kind, `"${G.bot.slice(0, 80)}" after "${heard.slice(0, 60)}"`);
+  act("step", `Ara talked but didn't ${kind} ("${G.bot.slice(0, 80)}"): asked again for the tool call (1 of ${TOOL_ASKS})`); setTimeout(() => { if (G.live && checkNow("nudge") === started) askReply(guide); }, 0);
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;

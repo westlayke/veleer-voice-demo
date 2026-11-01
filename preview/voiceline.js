@@ -26,7 +26,8 @@ const araSounding = () => araIs("playing"); /* its sound is arriving */
 function officerState() { return G.speechOn ? "speaking" : "silent"; }
 function formState() { return typeof V === "undefined" || !V ? (G.lastSaved && G.lastSaved.at && Date.now() - G.lastSaved.at < 120000 ? "saved" : "none") : G.saveCheck ? "readback" : V.opt ? "optional" : "asking"; }
 const officerSpeaking = () => officerState() === "speaking", formIs = (...s) => s.includes(formState());
-const formEvent = (type) => smSend(type, { form: typeof V !== "undefined" && V ? V.action : "" });
+const formNow = () => typeof V !== "undefined" && V ? V.action : ""; /* the open form's action, "" for none */
+const formEvent = (type) => smSend(type, { form: formNow() });
 const formBack = () => formEvent(typeof V !== "undefined" && V && V.opt ? "FORM_OPTIONAL" : "FORM_ASKING"); /* a read-back closed: back to the questions */
 
 /* ---------- timings: tune here ---------- */
@@ -333,10 +334,18 @@ const downSince = () => Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now
 // a line has ended (a drop, or the phone locked): the turn on it, its watches and its sound go, and the socket is closed
 /* one check on Ara at a time: a new one ends the others, and a drop ends them all (the reconnect asks where we were afresh). The shadow
    state machine found both (Oct 31 Pat run: a yes-or-no check alive after a drop 32 times, the where-we-were check on top of another 33 times) */
-const CHECKS = ["ctxWatch", "sayWatch", "ynWatch", "nudge"];
-function oneCheck(keep) { CHECKS.forEach(k => { if (k !== keep && G[k]) { vlog(`check ${k} ended: ${keep ? keep + " started" : "the line dropped"}`); G[k] = null; } }); }
+/* ---------- the one check on Ara (state machine phase 4, Nov 1 2026) ----------
+   A check is the app watching Ara's next reply for what it asked of her: ctxWatch (say where we were after a drop), sayWatch (ask the question
+   she was given), ynWatch (follow the officer's yes or no), nudge (call the tool her words promised). One at a time: a new one ends the old.
+   G.check holds the one check and its data (tries, guide, question...); checkNow() is what the app reads. On preview-sm machine.js
+   points them at the machine's check part, which ends a check by itself when the officer speaks, the form changes, the line drops or the call
+   ends, and the four flags (G.ctxWatch, G.sayWatch, G.ynWatch, G.nudge) and oneCheck() are gone. */
+function checkNow(kind) { const c = G.check; return c && (!kind || c.kind === kind) ? c : null; } /* the check waiting now (of this kind), with its data */
+function checkStart(kind, data) { const was = checkNow(); if (was) vlog(`check ${was.kind} ended: ${kind} started`); /* checkNow: the machine's truth on preview-sm, where it may have ended the check already */
+  G.check = Object.assign({ at: Date.now(), tries: 1, form: formNow() }, data || {}, { kind }); smSend("CHECK_START", { kind, data: G.check, form: G.check.form }); return G.check; }
+function checkEnd(why, kind) { const c = G.check; if (!c || (kind && c.kind !== kind)) return; if (why && checkNow()) vlog(`check ${c.kind} ended: ${why}`); G.check = null; smSend("CHECK_END"); }
 function resetLine() {
-  smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; G.cutQ = null; oneCheck(null); /* a cut question is re-put by the reconnect, not by the sound coming back */
+  smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; G.cutQ = null; checkEnd("the line dropped"); /* a cut question is re-put by the reconnect, not by the sound coming back */
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); stopPlayback();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
 }
@@ -402,31 +411,31 @@ async function openAgain(lock) {
 // covers a late yes after a save. reconnectBy "app" (Settings, or window.__reconnectBy in the harness) keeps the scripted line: both ways measured by Patient Pat.
 const CONTEXT_ASKS = 3, OPEN_Q = /what (would you like|do you want) to do|what'?s next|what next/i; /* "What next?" too (Carverhill's 2:52 PM call, Oct 30) */
 const RECONNECT_BY = () => window.__reconnectBy || (typeof S !== "undefined" && S.settings && S.settings.reconnectBy) || "ara";
-function contextWatch(kind, w) { oneCheck("ctxWatch"); G.ctxWatch = { kind, need: { who: w.who || "", q: w.q }, tries: 1, at: Date.now(), seq: G.respSeq || 0, line: w.line, guide: w.guide, form: V ? V.action : "" }; } /* seq: the reply this was armed in (a tool call's) is not the answer */
+function contextWatch(kind, w) { checkStart("ctxWatch", { what: kind, need: { who: w.who || "", q: w.q }, seq: G.respSeq || 0, line: w.line, guide: w.guide }); } /* seq: the reply this was armed in (a tool call's) is not the answer */
 function contextAsk(kind, w) {
   const guide = `The line was down and is back. Say sorry in a few words, then say in one sentence where we were${w.who ? ` (name ${w.who})` : ""}: ${(w.q && w.line.endsWith(w.q) ? w.line.slice(0, -w.q.length) : w.line).trim().replace(/"/g, "'")} ${G.spokeInGap ? " Say too that you missed what they said while the line was down." : ""} Then ask this question word for word: "${w.q}". Never ask what they'd like to do or what's next; nothing else.`;
   contextWatch(kind, Object.assign({ guide }, w)); act("step", `Ara is asked to say where we were herself (${kind}, 1 of ${CONTEXT_ASKS})`); askReply(guide);
 }
 function contextCheck(r) {
-  const c = G.ctxWatch; if (!c || !G.live) return;
-  if ((V ? V.action : "") !== c.form) { act("step", "Another form opened: the ask for where we were stands down"); G.ctxWatch = null; return; }
-  if (r.status === "cancelled" || G.respForcedSeq === G.respSeq || G.dropNext || G.respSeq === c.seq) return;
+  const c = checkNow("ctxWatch"); if (!c || !G.live) return;
+  if (formNow() !== c.form) { act("step", "Another form opened: the ask for where we were stands down"); checkEnd("", "ctxWatch"); return; }
+  if (r.status === "cancelled" || G.respForcedSeq === G.respSeq || G.dropNext || G.respSeq === c.seq) return; /* not replyCounts: a wordless reply (a refused tool call) is judged below */
   // Carverhill's 2:52 PM call (Oct 30): the service replayed save_form after the pickup, the guard refused it, and clearing the watch here let her "Tommy
   // Toyota is saved. What next?" through unchecked
-  if (!G.bot) { if (G.respTool) { if (G.toolRefusedSeq === G.respSeq) act("step", "A tool call a guard refused while Ara was asked where we were: her words are still awaited"); else G.ctxWatch = null; }
+  if (!G.bot) { if (G.respTool) { if (G.toolRefusedSeq === G.respSeq) act("step", "A tool call a guard refused while Ara was asked where we were: her words are still awaited"); else checkEnd("", "ctxWatch"); }
     return; } /* she opened something instead: not a context line, but she acted */
   const bot = G.bot.trim(), q = lastQuestionOf(bot), named = !c.need.who || new RegExp("\\b" + c.need.who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(bot);
   const asked = /\?\s*$/.test(bot) && wordOverlap(sameWords(q), sameWords(c.need.q)) >= 0.5, open = OPEN_Q.test(bot) && !OPEN_Q.test(c.need.q);
   const secs = Math.round((Date.now() - c.at) / 100) / 10;
-  if (named && asked && !open) { act("step", `Ara said where we were on try ${c.tries} (${secs} s after the first ask): "${bot.slice(0, 80)}"`); G.ctxWatch = null; return; }
+  if (named && asked && !open) { act("step", `Ara said where we were on try ${c.tries} (${secs} s after the first ask): "${bot.slice(0, 80)}"`); checkEnd("", "ctxWatch"); return; }
   const why = open ? "asked an open question" : !named ? `didn't name ${c.need.who}` : "didn't ask the pending question";
-  if (c.tries >= CONTEXT_ASKS) { act("step", `Ara didn't say where we were in ${CONTEXT_ASKS} tries (${why}, "${bot.slice(0, 80)}"): the app stops asking and says nothing (Carverhill, Nov 1: no app lines in new fixes)`); guardFired("Ara didn't say where we were", `"${bot.slice(0, 80)}"`); G.ctxWatch = null; return; }
+  if (c.tries >= CONTEXT_ASKS) { act("step", `Ara didn't say where we were in ${CONTEXT_ASKS} tries (${why}, "${bot.slice(0, 80)}"): the app stops asking and says nothing (Carverhill, Nov 1: no app lines in new fixes)`); guardFired("Ara didn't say where we were", `"${bot.slice(0, 80)}"`); checkEnd("", "ctxWatch"); return; }
   /* the retry asks only for what was missing, never a second sorry; the last try gives her the sentence word for word, still in her own voice (Carverhill, Nov 1) */
   const where = (c.need.q && c.line.endsWith(c.need.q) ? c.line.slice(0, -c.need.q.length) : c.line).replace(/^Sorry, I lost you for a moment\.\s*/i, "").trim().replace(/"/g, "'"), say = `${where} ${c.need.q}`.trim();
   c.tries++; const last = c.tries >= CONTEXT_ASKS; act("step", `Ara's reply ${why} ("${bot.slice(0, 80)}"): asked again for where we were (${c.tries} of ${CONTEXT_ASKS}${last ? ", the sentence word for word" : ", the missing part only"})`);
   const g = last ? `Your last reply ("${bot.slice(0, 100)}") ${why}. Don't say sorry again. Say exactly this, word for word, and nothing else: "${say}"`
     : `Your last reply ("${bot.slice(0, 100)}") ${why}. Don't say sorry again and don't repeat yourself. Say only: "${say}" Never ask what they'd like to do or what's next.`;
-  setTimeout(() => { if (G.live && G.ctxWatch === c) askReply(g); }, 0);
+  setTimeout(() => { if (G.live && checkNow("ctxWatch") === c) askReply(g); }, 0);
 }
 // the last line before the drop (Ara's question, or the app's save line) as something for Ara to say herself: the person it names, and its question word for word
 function lastLineContext(line) { const w = typeof whereWeAre === "function" ? whereWeAre() : null, who = w && w.who && new RegExp("\\b" + w.who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(line) ? w.who : ""; return { kind: "last line", line, who, q: typeof lastQuestionOf === "function" ? lastQuestionOf(line) : line }; }
