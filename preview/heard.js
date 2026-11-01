@@ -12,7 +12,24 @@ function outLevel() {
   const d = new Float32Array(a.fftSize); a.getFloatTimeDomainData(d); let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] * d[i];
   return Math.sqrt(s / (d.length / 4));
 }
-function heardTick() { if (!G.live || !G.ctx || !(playingLeft() > 0)) return; const l = outLevel(); if (l > (G.outPeak || 0)) G.outPeak = l; if (l > OUT_QUIET) G.soundEver = true; } /* the phone has produced sound in this call: a typed run never does */
+function heardTick() { if (!G.live || !G.ctx || !(playingLeft() > 0)) { G.clockSeen = null; return; } clockWatch(); const l = outLevel(); if (l > (G.outPeak || 0)) G.outPeak = l; if (l > OUT_QUIET) G.soundEver = true; }
+/* the phone's sound engine can say it is running while its clock stands still (Carverhill's 10:02 PM call, Oct 31: after a 15 s lock the fresh engine
+   never advanced, 30 s of Ara's audio queued on it, nothing heard). Queued audio with a clock that hasn't moved for CLOCK_STILL_MS: start the sound
+   and mic afresh (once per call), then Ara is asked to say her last line again, in her own words; the app says nothing itself */
+const CLOCK_STILL_MS = 1500;
+function clockWatch() {
+  const now = Date.now(), t = G.ctx.currentTime, seen = G.clockSeen;
+  if (!seen || seen.ctx !== G.ctx || t !== seen.t) { G.clockSeen = { ctx: G.ctx, t, at: now }; return; }
+  if (now - seen.at < CLOCK_STILL_MS || G.ctx.state !== "running" || G.clockStuckAt) return;
+  G.clockStuckAt = now; const line = G.lastBot || "";
+  act("step", `The phone's sound clock stood still for ${((now - seen.at) / 1000).toFixed(1)} s with ${playingLeft().toFixed(1)} s of Ara's audio queued (sound ${G.ctx.state}): nothing was heard`);
+  if (typeof audioRetry !== "function" || !audioRetry("after the sound clock stood still")) { act("step", "The sound can't be started afresh again this call"); return; }
+  setTimeout(() => { if (!G.live || !line) return;
+    const q = typeof lastQuestionOf === "function" ? lastQuestionOf(line) : line;
+    const g = `The phone played none of your last reply, so the officer heard nothing. Say it again now, in your own words, with no apology: "${line.slice(0, 300)}"`;
+    act("step", `Sound started afresh: Ara is asked to say her last line again ("${line.slice(0, 80)}")`);
+    if (typeof sayWatch === "function" && /\?\s*$/.test(q)) sayWatch(q, g); askReply(g); }, 1200);
+} /* the phone has produced sound in this call: a typed run never does */
 setInterval(heardTick, 250);
 function heardProblem(r) {
   const words = r.text.trim().split(/\s+/).length;

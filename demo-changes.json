@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 10:14 PM",
+      "change": "Preview: if the phone's sound engine says it is running but its clock stands still while Ara's audio is queued (seen right after a lock), the app starts the sound and mic afresh and asks Ara to say her last line again in her own words. The app says nothing itself.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Go\": in the 10:02 PM call the line went silent after the second lock test; the fresh sound engine never advanced its clock and 30 seconds of Ara's audio sat queued, unheard"
+    },
+    {
       "date": "Oct 31, 9:59 PM",
       "change": "Preview: the app keeps only one check on Ara at a time (where we were, ask this question, follow this yes or no, call the tool); a new check ends the others, and a dropped line ends them all, so a stale check can no longer fire after a reconnect. The state machine page's machine now waits for the end of speech before counting the officer's words, and notices every way a line comes back.",
       "area": "Voice",

@@ -1017,4 +1017,18 @@ test("Shadow machine findings (Oct 31): one check on Ara at a time, and a drop e
   await p.waitForTimeout(150);
   ok(!(await p.evaluate(() => G.ynWatch || G.sayWatch)), "a check outlived the drop: " + await live());
 });
+test("Carverhill's 10:02 PM call (Oct 31): a sound engine whose clock stands still with Ara's audio queued is started afresh, and Ara says her last line again", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const n0 = await p.evaluate(() => __sent.length);
+  const ctxN = await p.evaluate(() => { window.__ctx0 = G.ctx; G.audioRetried = false; G.lastBot = "Ask recorded for Roger. The next step is to record the gift. Do you want to do that now, yes or no?";
+    Object.defineProperty(G.ctx, "currentTime", { get: () => 5, configurable: true }); G.playHead = 35; return 1; });
+  await p.waitForTimeout(3800);
+  const log = await p.log();
+  ok(/sound clock stood still for \d\.\d s with 30\.0 s of Ara's audio queued/.test(log), "the still clock wasn't noticed: " + log.split("\n").slice(-6).join(" | ").slice(0, 400));
+  ok(/Starting the sound and mic afresh after the sound clock stood still/.test(log) && await p.evaluate(() => G.ctx !== window.__ctx0 && G.playHead === 0), "the sound wasn't started afresh");
+  const c = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "response.create" && x.response && x.response.instructions).map(x => x.response.instructions), n0);
+  ok(c.some(g => /played none of your last reply/.test(g) && /record the gift/.test(g)), "Ara wasn't asked to say her last line again: " + JSON.stringify(c).slice(0, 300));
+  ok(await p.evaluate((n) => !__sent.slice(n).some(s => s.includes("force_message")), n0) && await p.evaluate(() => !!G.sayWatch), "the app said the line itself, or no check on Ara's repeat");
+  ok(ctxN === 1, "");
+});
 };
