@@ -27,7 +27,7 @@ function spokenAmount(raw) {
 const dayWord = (iso) => { const t = typeof todayISO === "function" ? todayISO() : ""; if (!iso || !t) return ""; const d = Math.round((new Date(iso) - new Date(t)) / 86400000); return d === 0 ? "today" : d === 1 ? "tomorrow" : d === -1 ? "yesterday" : ""; };
 const dateSaid = (iso) => { const w = dayWord(iso); return fmtDate(iso) + (w ? ` (${w})` : ""); };
 /* the next-step question, as the app words it or as Ara words it herself ("Do you want to set that now, and if so, what is it and when is it due?", next-step-no run, Nov 1) */
-const NEXT_ASKED_RE = /set (it|that|one) now|set (a|the) next step|next step.*yes or no|what is it and when is it due|next step.*when is it due/i;
+const NEXT_ASKED_RE = /set (it|that|one) now|set (a|the) next step|next step.*yes or no|what is it and when is it due/i; /* never "What's the next step, and when is it due?" itself: that is the detail question after a yes */
 const dateSpoken = (iso) => dateSaid(iso).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1"); /* "Nov 1, today": the day word spoken after the date */
 const PLEDGE_FOLLOWUP_DAYS = 10; // demo default; the guide's pledge reminder interval is still open with the customer
 const ASK_CHECK_DAYS = 14; // a setting: an ask still waiting for its answer gets a task to check on it within this many days (Carverhill, Oct 28: 30, then 14 the same day)
