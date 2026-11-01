@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "STAMP",
+      "change": "The time limits on the yes-or-no and say-the-question checks are the state machine's own timers (a nudge restarts the clock); the app's checks keep no clocks of their own.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Do 1 please\" (Nov 1, 11:47 AM): the first of the refactors listed with the step 3 build."
+    },
+    {
       "date": "Nov 1, 11:41 AM",
       "change": "After the officer says no to the next-step offer, the where-we-were line after a drop names what was just saved and the recommended next step and ends with \"What would you like to do?\" instead of asking yes or no again.",
       "area": "Voice",

@@ -1184,4 +1184,18 @@ test("Carverhill's 11:00 AM call (Nov 1): after a no to the next step, where we 
   const again = await p.evaluate(() => { const c = contactById(S.sel.contact); grokSaved("contact", { contact: c }); G.saveAck = null; return { declined: G.lastSaved.declined, w: whereWeAre() }; });
   ok(!again.declined && again.w.kind === "saved" && /Do you want to do that now, yes or no\?$/.test(again.w.line), "a new save didn't offer its next step: " + JSON.stringify(again));
 });
+
+test("State machine (Nov 1): a yes/no or say check ends by the machine's clock after its time limit, a nudge restarts the clock, and a kind with no limit stays", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { window.__maxMs = CHECK_RULES.ynWatch.maxMs; CHECK_RULES.ynWatch.maxMs = 600; checkStart("ynWatch", { what: "next", ans: "yes", heardN: G.heardN || 0 }); });
+  await p.waitForTimeout(400); ok(await p.evaluate(() => !!checkNow("ynWatch")), "the check ended before its time limit");
+  await p.evaluate(() => { smSend("CHECK_NUDGED"); }); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => !!checkNow("ynWatch")), "the nudge didn't restart the clock");
+  await p.waitForTimeout(400);
+  const r = await p.evaluate(() => ({ now: checkNow(), ended: __sm.ended["ynWatch: its time limit passed"] }));
+  ok(!r.now && r.ended === 1 && /check ynWatch ended by the machine: its time limit passed/.test(await p.log()), "the check didn't end at its time limit, or the reason wasn't logged: " + JSON.stringify(r) + " " + (await p.log()).slice(-200));
+  await p.evaluate(() => { CHECK_RULES.ynWatch.maxMs = window.__maxMs; checkStart("ctxWatch", { what: "drop", need: { who: "", q: "What would you like to do?" }, seq: G.respSeq || 0, line: "x", guide: "y" }); });
+  await p.waitForTimeout(1200); ok(await p.evaluate(() => !!checkNow("ctxWatch")), "a kind with no time limit was ended by the clock");
+  await p.evaluate(() => { checkEnd("", "ctxWatch"); });
+});
 };

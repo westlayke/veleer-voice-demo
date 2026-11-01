@@ -14,7 +14,7 @@
   /* the facts the parts read: the officer's last words and when their speech started, when the line went down, the replies started */
   const facts = SM.facts = { lastWords: null, speechAt: 0, downAt: 0, respN: 0 }; /* respN: replies started, so a check armed mid-reply doesn't count that reply */
   const END_WHY = { SPEECH_START: "the officer spoke", LINE_DROP: "the line dropped", CALL_END: "the call ended", FORM_OPEN: "the form changed", FORM_CLOSED: "the form closed", ARA_DONE: "Ara's replies were used up" }; /* why the machine ended a check, by the event */
-  const TICK_MS = 250, ASKED_MAX_MS = 10000, REFUSED_MS = 6000, NEXT_STEP_MS = 120000;
+  const TICK_MS = 250, ASKED_MAX_MS = 10000, REFUSED_MS = 6000, NEXT_STEP_MS = 120000, NO_LIMIT_MS = 24 * 3600e3; /* NO_LIMIT_MS: a check kind with no time limit in CHECK_RULES */
 
   /* ---------- the machine ---------- */
   const countsReply = ({ context, event }) => !!event.words && !!context.check && context.check.respN !== facts.respN;
@@ -54,10 +54,10 @@
         saved: { after: { [NEXT_STEP_MS]: "none" }, on: { FORM_OPEN: "asking", FORM_READBACK: "readback", FORM_CLOSED: "none" } } } }, /* a saved form's next-step offer is over two minutes after the save */
       check: { initial: "none", states: {
         none: { on: { CHECK_START: { target: "waiting", actions: "startCheck" } } },
-        /* one check at a time: a new one replaces the old; it ends when the officer speaks, the form changes, the line drops,
-           or Ara has replied as often as that kind allows (the app's own pass/fail decides earlier, through CHECK_END) */
-        waiting: { on: {
-          CHECK_START: { target: "waiting", reenter: true, actions: "startCheck" }, CHECK_END: { target: "none", actions: "endCheck" },
+        /* one check at a time: a new one replaces the old; it ends when the officer speaks, the form changes, the line drops, its kind's time
+           limit passes (restarted by the app's nudge), or Ara has replied as often as that kind allows (the app's own pass/fail decides earlier, through CHECK_END) */
+        waiting: { after: { stale: { target: "none", actions: ["machineEnd", "endCheck"] } }, on: {
+          CHECK_START: { target: "waiting", reenter: true, actions: "startCheck" }, CHECK_END: { target: "none", actions: "endCheck" }, CHECK_NUDGED: { target: "waiting", reenter: true },
           SPEECH_START: { target: "none", actions: ["machineEnd", "endCheck"], guard: "spokenEnds" }, LINE_DROP: { target: "none", actions: ["machineEnd", "endCheck"] }, CALL_END: { target: "none", actions: ["machineEnd", "endCheck"] },
           FORM_OPEN: { target: "none", actions: ["machineEnd", "endCheck"], guard: "formChanged" }, FORM_CLOSED: { target: "none", actions: ["machineEnd", "endCheck"], guard: "formChanged" },
           ARA_DONE: [{ target: "none", actions: ["machineEnd", "endCheck"], guard: "repliesUsed" }, { actions: "countReply", guard: "countsReply" }] } } } }
@@ -68,10 +68,11 @@
       endCheck: assign({ check: null }),
       /* the machine ended the check itself (Nov 1 Pat run: 340 stale yes/no watches after Ara opened the offered form), with the reason logged;
          a check the app ends first (its own stand-down line) never gets here */
-      machineEnd: ({ context, event }) => { const c = context.check; if (!c) return; const why = END_WHY[event.type] || event.type, k = `${c.kind}: ${why}`; SM.ended[k] = (SM.ended[k] || 0) + 1;
+      machineEnd: ({ context, event }) => { const c = context.check; if (!c) return; const why = END_WHY[event.type] || (/^xstate\.after/.test(event.type) ? "its time limit passed" : event.type), k = `${c.kind}: ${why}`; SM.ended[k] = (SM.ended[k] || 0) + 1;
         act("step", c.kind === "ctxWatch" && event.type === "FORM_OPEN" ? "Another form opened: the ask for where we were stands down (the machine)" : `check ${c.kind} ended by the machine: ${why}`); }, /* the app's own wording, so the reports count it the same */
       countReply: assign({ check: ({ context }) => context.check ? Object.assign({}, context.check, { replies: context.check.replies + 1 }) : null })
     },
+    delays: { stale: ({ context }) => context.check && checkRule(context.check.kind).maxMs || NO_LIMIT_MS },
     guards: {
       formChanged: ({ context, event }) => !!context.check && (event.form || "") !== context.check.form,
       spokenEnds: ({ context }) => !!context.check && checkRule(context.check.kind).onSpeech, /* a yes/no or say check waits for the officer's words, not the sound */

@@ -177,7 +177,7 @@ const voiceRule = (action) => VOICE_RULES[action] || {};
    net is one more), whether the officer's voice alone ends it (a yes/no or say check waits for the words: a cough is not an answer), and how long it stands */
 const CHECK_RULES = {
   ctxWatch: { asks: 3, onSpeech: true },                /* where we were after a drop */
-  sayWatch: { asks: 2, onSpeech: false, maxMs: 20000 }, /* the question Ara was told to ask */
+  sayWatch: { asks: 2, onSpeech: false, maxMs: 20000 }, /* the question Ara was told to ask; maxMs: the machine ends the check after this, the clock restarted by a nudge */
   ynWatch: { asks: 2, onSpeech: false, maxMs: 20000 },  /* Ara following the officer's yes or no */
   nudge: { asks: 3, onSpeech: true }                     /* the tool call Ara owes */
 };

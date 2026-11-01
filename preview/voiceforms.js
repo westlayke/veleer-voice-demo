@@ -234,7 +234,6 @@ function yesNoPending() {
   return null;
 }
 // the guidance for a reply to the officer's yes or no, and the watch that checks the reply follows it (one firmer nudge, never an app re-ask)
-const YN_WATCH_MS = CHECK_RULES.ynWatch.maxMs;
 function answerGuide(heard) {
   const p = yesNoPending(), a = p ? followAnswer(heard) : null; if (!p || !a) return "";
   const guide = `The officer just said "${String(heard).trim()}", answering your question "${p.q}". ${a === "yes" ? p.yes : p.no}`;
@@ -244,7 +243,7 @@ function answerGuide(heard) {
 function yesNoHeard(text) { checkEnd("", "ynWatch"); if (V || (G.lastSaved && Date.now() - G.lastSaved.at < 10 * 60e3)) answerGuide(text); }
 function ynCheck(r) {
   const w = checkNow("ynWatch"); if (!w || !G.live) return;
-  if (Date.now() - w.at > YN_WATCH_MS || (G.heardN || 0) > w.heardN) { checkEnd("", "ynWatch"); return; } /* stale, or the officer has spoken again */
+  if ((G.heardN || 0) > w.heardN) { checkEnd("", "ynWatch"); return; } /* the officer has spoken again (a stale check the machine ends by itself, CHECK_RULES maxMs) */
   if (r.status === "cancelled" || G.dropNext) return;
   if (G.respForcedSeq === G.respSeq) { checkEnd("the app's own line", "ynWatch"); return; } /* the app's own line (another check can't be waiting: one at a time) */
   const bot = String(G.bot || "").trim(); if (!bot && !G.respTool) return;
@@ -255,20 +254,19 @@ function ynCheck(r) {
   else if (w.what === "step" && w.ans === "no" && /do that now/i.test(bot)) why = "offered the same step again";
   if (!why) { if (w.tries > 1) act("step", `Ara followed the officer's ${w.ans} after one nudge`); checkEnd("", "ynWatch"); return; }
   if (w.tries >= CHECK_RULES.ynWatch.asks) { act("step", `Ara's reply still ${why} after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't follow a yes-or-no answer after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "ynWatch"); return; }
-  w.tries++; w.at = Date.now(); act("step", `Ara's reply ${why} after the officer's ${w.ans} ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't follow a yes-or-no answer", `${why}: "${bot.slice(0, 80)}"`);
+  w.tries++; smSend("CHECK_NUDGED"); act("step", `Ara's reply ${why} after the officer's ${w.ans} ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't follow a yes-or-no answer", `${why}: "${bot.slice(0, 80)}"`);
   const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") ${why}. Do it now.`; setTimeout(() => { if (G.live && checkNow("ynWatch") === w) askReply(g); }, 0);
 }
 // guidance with a check (Oct 31, the test of the middle path): the app tells Ara what to ask; if her reply doesn't ask it, one nudge, then the app waits
-// for the officer (formReask's 13 s backstop still stands). Cleared when the officer speaks again or after SAY_WATCH_MS.
-const SAY_WATCH_MS = CHECK_RULES.sayWatch.maxMs;
+// for the officer (formReask's 13 s backstop still stands). Cleared when the officer speaks again, or by the machine after its time limit (CHECK_RULES).
 function sayWatch(q, guideText) { checkStart("sayWatch", { q, guide: guideText, heardN: G.heardN || 0 }); }
 function sayCheck(r) {
   const w = checkNow("sayWatch"); if (!w || !G.live) return;
-  if (Date.now() - w.at > SAY_WATCH_MS || (G.heardN || 0) > w.heardN) { checkEnd("", "sayWatch"); return; }
+  if ((G.heardN || 0) > w.heardN) { checkEnd("", "sayWatch"); return; }
   if (!replyCounts(r)) return; const bot = G.bot.trim();
   if (wordOverlap(sameWords(lastQuestionOf(bot)), sameWords(w.q)) >= 0.6 && /\?\s*$/.test(bot)) { act("step", `Ara asked the question herself${w.tries > 1 ? " after one nudge" : ""}: "${w.q}"`); checkEnd("", "sayWatch"); return; }
   if (w.tries >= CHECK_RULES.sayWatch.asks) { act("step", `Ara's reply still didn't ask "${w.q}" after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't ask the question after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "sayWatch"); return; }
-  w.tries++; w.at = Date.now(); act("step", `Ara's reply didn't ask "${w.q}" ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't ask the question she was given", `"${bot.slice(0, 80)}"`);
+  w.tries++; smSend("CHECK_NUDGED"); act("step", `Ara's reply didn't ask "${w.q}" ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't ask the question she was given", `"${bot.slice(0, 80)}"`);
   const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") didn't ask it. Ask it now.`; setTimeout(() => { if (G.live && checkNow("sayWatch") === w) askReply(g); }, 0);
 }
 // the officer's answer to Ara's own next-step question counts the same as the app's (Oct 31: she asked "Do you want to set it now?" from still_needed, and the app,
