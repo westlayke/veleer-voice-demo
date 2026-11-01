@@ -128,6 +128,7 @@ const STAND_IN = () => {
       if (/The officer (just said|had already answered that question[^:]*): "(No|Nope|Not now)[.!]?"/i.test(instr)) { ws.say("Okay. What would you like to do?", window.__latency()); return; } /* a no to a yes-or-no question: Grok asks what's next */
       { const rq = instr.match(/Ask them the pending question again[^"]*"([^"]+)"/); if (rq) { /* the app's 13 s re-ask (formReask, Oct 30 6:28 PM build): put the pending question again */
           const qs = rq[1].match(/[^.?!]*\?/g); ws.say(qs ? qs[qs.length - 1].trim() : rq[1].trim(), window.__latency()); return; } }
+      { const ax = instr.match(/(?:First say: "([^"]*)" )?Ask exactly: "([^"]+)"/); if (ax) { ws.say([ax[1], ax[2]].filter(Boolean).join(" "), window.__latency()); return; } } /* a question the app hands to Ara word for word (the entity, the amount, substantive; Nov 1) */
       { const sn = instr.match(/Still needed: ([^.]+)\./); if (sn) { ws.say(`What's the ${sn[1].split(/,| and /)[0].replace(/\s*\(.*$/, "").trim().toLowerCase()}?`, window.__latency()); return; } }
       if (/never read it aloud/.test(instr) && /question/.test(instr)) { const q = (instr.match(/"([^"]+\?)"/) || [])[1]; if (q) { ws.say(q, window.__latency()); return; } }
       { const yes = /The officer (just said|had already answered that question[^:]*): "(Yes|Yeah|Yep)[.!]?"/i.test(instr), note = (this.lastOut && this.lastOut.note) || "", fromNote = /Reply to the officer from the tool result/.test(instr) && /Open that step now/.test(note);

@@ -147,7 +147,10 @@ test("Ara: an interaction report keeps only what the officer said (substantive, 
   ok(d && !d.nextStep && !d.nextDue && !d.outcome && !d.substantive, "fields the officer never said stayed on the form: " + JSON.stringify(d && { nextStep: d.nextStep, outcome: d.outcome, substantive: d.substantive }));
   ok(!r.ask_exactly && /Ask exactly: "Was it a substantive interaction/.test(r.status || ""), "Ara wasn't asked to ask whether it was substantive after dropping Grok's own answer: " + JSON.stringify(r));
   ok(/Left out of the form because the officer never said it: substantive, next step, outcome/.test(r.status || r.error || r.next || ""), "the tool reply didn't tell Ara what was left out: " + JSON.stringify(r));
-  await said(p, "Yes, it was.");
+  // Grok's own substantive value is no evidence until the officer has answered the question (Nov 1): sent before Ara asks, it is dropped and the question stands
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true });
+  ok(await p.evaluate(() => V && !V.fromVoice.has("substantive")) && /Ask exactly: "Was it a substantive interaction/.test(r.status || ""), "Grok's substantive value was kept before the officer answered the question: " + JSON.stringify(r));
+  await p.says("Was it a substantive interaction, one that moved the relationship forward, yes or no?"); await said(p, "Yes, it was.");
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true, nextStep: "Follow up on Ken's interest in the North Dakota work", nextDue: "2026-11-01" });
   ok(r.still_needed && r.still_needed.some(x => /Next step/.test(x)), "after the officer's yes the next step wasn't asked for: " + JSON.stringify(r));
   // Carverhill's 9:14 AM call (Oct 29): the invented next step was dropped and the officer heard only "I didn't catch the next step from you", so the app now asks its own question in the same line

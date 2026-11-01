@@ -100,7 +100,8 @@ function amountSaid(n, lines) {
   });
 }
 // true when the value can stand, false when nothing the officer said supports it, null when the rule doesn't apply to this field.
-// ctx: asked = the line Ara said just before the officer's latest; askedSubst = the app itself asked the substantive question (its answer is taken as said)
+// ctx: asked = the line Ara said just before the officer's latest; askedSubst = the officer has answered the substantive question (the line before their
+// answer asked it; Nov 1: a question merely sent to Ara is no evidence, she may not have said it)
 function fieldEvidence(action, f, v, data, lines, ctx = {}) {
   if (!f || EVIDENCE_SKIP.has(f.k) || v === null || v === undefined || v === "") return null;
   if (f.type === "money" && !(toNum(v) > 0)) return false; // $0, or no amount at all (Oct 25 consistency run: amount 0 was read back as $0 and saved)
@@ -133,7 +134,7 @@ function fieldSaidIn(action, f, lines) {
 function applyEvidence(action, data, name) {
   const A = ACTIONS[action]; if (!A) return [];
   const lines = G.live ? evidenceLines() : []; // nothing said yet in this call (or a typed test): nothing to check against, except a $0
-  const ctx = { asked: typeof askedBefore === "function" ? askedBefore() : "", askedSubst: !!(V && V.action === "interaction" && V.askedSubst) };
+  const ctx = { asked: typeof askedBefore === "function" ? askedBefore() : "", askedSubst: !!(V && V.action === "interaction" && typeof officerSubstantive === "function" && officerSubstantive() !== null) };
   const dropped = [], trio = {};
   const pre = voiceRule(action).prefilled || [];
   A.fields.forEach(f => {

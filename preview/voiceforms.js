@@ -16,11 +16,13 @@ const NEXT_STEP_Q = "A substantive interaction needs a next step, which becomes 
 // the officer's yes or no to the substantive question, from their last line (Grok sometimes doesn't pass it on): only a line said after the question
 // was heard, the line before theirs in the transcript (Carverhill's 12:53 PM call, Nov 1: "We had a good meeting", said to "What happened?", was taken as
 // a no to a question a slow line never played)
-function officerSubstantive() { const r = G.recent || []; let i = r.length - 1; while (i >= 0 && r[i].startsWith("Officer: ")) i--;
-  const t = i < r.length - 1 ? r[r.length - 1].slice(9) : ""; if (!t || i < 0 || !/\bsubstantive\b/i.test(r[i]) || !/\?\s*$/.test(r[i].trim())) return null;
+const substAsked = (line) => { const q = lastQuestionOf(line); return /\bsubstantive\b/i.test(q) && /\?$/.test(q); }; /* a transcript line whose last question is the substantive one */
+function officerSubstantive() { const r = G.recent || []; let j = r.length - 1; while (j >= 0 && !r[j].startsWith("Officer: ")) { if (substAsked(r[j])) return null; j--; } /* Ara's words after the answer are fine unless she asked again */
+  let i = j; while (i >= 0 && r[i].startsWith("Officer: ")) i--; if (j < 0 || i < 0 || !substAsked(r[i])) return null; /* the line before the officer's block must be the question */
+  const t = r.slice(i + 1, j + 1).map(l => l.slice(9)).join(" ").trim(); /* the whole block: "Yes." then "She's keen." */
   if (/\b(not|no|wasn't|isn't)\b/i.test(t) && !/\bbut yes\b/i.test(t)) return false; return hfYes(t) || /\bsubstantive\b/i.test(t) || appYes(t) ? true : null; } /* "It was." / "Very much so" to the question */
 /* Ara asks the substantive question herself, with the say-check (Carverhill, Nov 1: the app always makes Ara ask); the app says nothing */
-function askSubstantive(lead) { V.askedSubst = true; const g = `${lead ? `First say: "${lead}" ` : ""}Ask exactly: "${SUBST_Q}"`; act("step", "Ara is asked whether the interaction was substantive herself"); sayWatch(SUBST_Q, g); return g; }
+function askSubstantive(lead) { V.askedSubst = true; act("step", "Ara is asked whether the interaction was substantive herself"); sayWatch(SUBST_Q, `Ask exactly: "${SUBST_Q}"`); return `${lead ? `First say: "${lead.replace(/"/g, "'")}" ` : ""}Ask exactly: "${SUBST_Q}"`; }
 const OPT_OFFER = `The required details are in. Before anything else, ask exactly this: "Would you like to add more details? I can take you through them one at a time." If yes, call optional_fields with step start. If no, ask them to check the draft and tap the button.`;
 // the A to E ranges are read out once per call; after that the question is short, so it can be cut in on (Oct 28: the long line was said twice and couldn't be interrupted)
 const CAP_RANGES = "A is $250,000 and up, B is $100,000 to $250,000, C is $25,000 to $100,000, D is $5,000 to $25,000, and E is under $5,000.";
@@ -440,7 +442,7 @@ async function hfSave(callId, data, lead, short) { /* short: only the changed fi
   // an interaction report is never read back without the substantive answer (Oct 25: saved as not substantive, never asked)
   if (voiceRule(V.action).alwaysAsk === "substantive" && !V.fromVoice.has("substantive")) {
     const v = V.askedSubst ? officerSubstantive() : null;
-    if (v === null) { toolReply(callId, { ok: false, saved: false, field: "substantive", status: `Not read back yet. ${askSubstantive(lead)} After the answer, call show_interaction_draft with substantive true or false.` }); return; }
+    if (v === null) { toolReply(callId, { ok: false, saved: false, field: "substantive", error: "Not read back yet: whether it was substantive is still unanswered.", status: `Not read back yet. ${askSubstantive(lead)}`, next: "After the answer, call show_interaction_draft with substantive true or false." }); return; }
     const cur = readDraft(); cur.substantive = v; V.fromVoice.add("substantive"); V.data = prefill(V.action, cur, V.target); renderOverlay(); act("step", `substantive ${v}, from the officer's words`);
   }
   { const d = readDraft(); if (wantsNextStep(V.action, d, V.target) && (optEmpty(d.nextStep) || optEmpty(d.nextDue)) && !V.nextSkipped) {
@@ -546,7 +548,7 @@ function formPosition() {
   if (G.hands && G.saveCheck && G.saveCheck.key === key) return { where: `The "${A.title}" form has been read back in full and is waiting for the officer's yes to save it; the app asks "${SAVE_Q}" again itself.`, ask: readbackLine() };
   if (V.opt && V.opt.cur) { const st = optSteps().find(x => x.k === V.opt.cur); if (st) return { where: `The optional questions for the "${A.title}" form are at "${label(st.k)}" (the earlier ones are done); the app asks it again itself.`, ask: optQuestion(st, optWho(), V.opt.only === st.k) }; }
   if (V.choice === "saveOrOpt") return { where: `Every required field of the "${A.title}" form is in; the app asked whether to save it or add the optional details first, and asks again itself.`, ask: `That's everything the ${formName(A)} form needs. Save it, or add the optional details first?` };
-  if (voiceRule(V.action).alwaysAsk === "substantive" && V.askedSubst && !V.fromVoice.has("substantive")) return { where: "You asked whether the interaction was substantive and the answer is still awaited.", ask: SUBST_Q };
+  if (voiceRule(V.action).alwaysAsk === "substantive" && V.askedSubst && !V.fromVoice.has("substantive")) return { where: "Whether the interaction was substantive is still unanswered.", ask: SUBST_Q };
   const needF = (A.fields || []).filter(f => f.req && !f.fixed && optEmpty(d[f.k])), need = needF.map(f => f.label);
   if (need.length) return { where: `The "${A.title}" form still needs: ${need.join(", ")}; the app asks for the first of those itself.`, ask: reqQuestion(V.action, needF, d) };
   { const q = oneOfQuestion(V.action, d); if (q) return { where: `The "${A.title}" form still needs an email or a mobile; the app asks for it itself.`, ask: q }; }
@@ -554,7 +556,7 @@ function formPosition() {
   // every required field is in: the form still has a question, the same one the form flow would ask next (1:14 PM call, Oct 29: an empty question here
   // made the reconnect say "Could you say that again?", and Ara guessed "that" from two forms earlier). One rule for every form.
   // (arm() puts the form in the state that question implies; only the caller that actually asks it calls arm, the status readers don't)
-  if (voiceRule(V.action).alwaysAsk === "substantive" && !V.fromVoice.has("substantive")) return { where: "The interaction report still needs to know whether it was substantive.", ask: SUBST_Q, arm: () => { V.askedSubst = true; } };
+  if (voiceRule(V.action).alwaysAsk === "substantive" && !V.fromVoice.has("substantive")) return { where: "The interaction report still needs to know whether it was substantive; that question is pending.", ask: SUBST_Q, arm: () => { V.askedSubst = true; } };
   if (wantsNextStep(V.action, d, V.target) && (optEmpty(d.nextStep) || optEmpty(d.nextDue)) && !V.nextSkipped) { const follow = awaitingAsk(V.action, d);
     return { where: `The "${A.title}" form needs its next step; the app asks its own next-step question itself. After the answer, call the draft tool with nextStep and nextDue in the officer's words.`, ask: follow ? (V.askedFollow === "own" ? FOLLOW_OWN_Q : FOLLOW_Q(V.target)) : (V.askedNext === "own" ? NEXT_OWN_Q : NEXT_STEP_Q), arm: () => { if (follow) V.askedFollow = V.askedFollow || true; else V.askedNext = V.askedNext || true; } }; }
   if (!V.askedOptional && !formIs("optional") && optSteps().length > 1) return { where: `Every required field of the "${A.title}" form is in; the app asks whether to save it or add the optional details first, itself.`, ask: `That's everything the ${formName(A)} form needs for ${optWho()}. Save it, or add the optional details first?`, arm: () => { V.askedOptional = true;
