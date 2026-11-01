@@ -885,6 +885,7 @@ test("Next step and step offers (Oct 31): a yes or no to Ara's own next-step que
   // Nov 1 next-step-no run (3 of 5 unsaved): her reply to the no has no tool call: one nudge to call the draft tool again, then none
   n0 = (await creates()).length; await araSays("No problem."); await p.waitForTimeout(200);
   c = await creates(); ok(c.length === n0 + 1 && /That is a no: the report goes on without a next step/.test(c[c.length - 1]) && /Your last reply \("No problem\."\) didn't call the draft tool again/.test(c[c.length - 1]), "no nudge when Ara's reply to the no had no tool call: " + JSON.stringify(c.slice(n0)));
+  ok(await p.evaluate(() => __sent.slice(-12).map(s => JSON.parse(s)).some(e => e.type === "conversation.item.create" && e.item.role === "user" && /the officer didn't speak\) Your last reply didn't call the draft tool again/.test(e.item.content[0].text))), "the nudge didn't go as a conversation item before the reply request (Nov 1 option 2)");
   await araSays("Okay."); await p.waitForTimeout(200);
   ok((await creates()).length === n0 + 1 && /still didn't call the draft tool again after one nudge/.test(await p.log()), "a second nudge went out, or the miss wasn't logged: " + (await p.log()).slice(-300));
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito" });

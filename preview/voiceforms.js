@@ -262,8 +262,14 @@ function ynCheck(r) {
   if (!why) { if (w.tries > 1) act("step", `Ara followed the officer's ${w.ans} after one nudge`); checkEnd("", "ynWatch"); return; }
   if (w.tries >= CHECK_RULES.ynWatch.asks) { act("step", `Ara's reply still ${why} after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't follow a yes-or-no answer after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "ynWatch"); return; }
   w.tries++; smSend("CHECK_NUDGED"); act("step", `Ara's reply ${why} after the officer's ${w.ans} ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't follow a yes-or-no answer", `${why}: "${bot.slice(0, 80)}"`);
-  const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") ${why}. Do it now.`; setTimeout(() => { if (G.live && checkNow("ynWatch") === w) askReply(g); }, 0);
+  const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") ${why}. Do it now.`; setTimeout(() => { if (G.live && checkNow("ynWatch") === w) nudgeAra(g, why); }, 0);
 }
+/* Nov 1 diag run (next-step-no, 4 of 4 misses): after a reply the voice service started itself from the officer's words, a bare reply request got no
+   reply at all, while the same request after a tool result answers in under a second. The experiment (Carverhill, option 2): the nudge goes as a
+   conversation item first, so there is something new in the conversation, then the reply request with the guidance as before. */
+function nudgeAra(g, why) {
+  send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: `(The app noticed this; the officer didn't speak) Your last reply ${why}. Do it now, without repeating this.` }] } });
+  askReply(g); }
 // guidance with a check (Oct 31, the test of the middle path): the app tells Ara what to ask; if her reply doesn't ask it, one nudge, then the app waits
 // for the officer (formReask's 13 s backstop still stands). Cleared when the officer speaks again, or by the machine after its time limit (CHECK_RULES).
 function sayWatch(q, guideText) { checkStart("sayWatch", { q, guide: guideText, heardN: G.heardN || 0 }); }
