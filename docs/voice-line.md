@@ -70,8 +70,7 @@ Carry on) waits `SOUND_START_MS` (2 s) for the fresh sound engine to run (`sound
 is told on screen and the call waits up to `SOUND_HELD_MS` (30 s) instead of 6 s; a line Ara says into a paused sound engine is
 kept (`G.unheard`) and said again as a scripted line when the sound is back (`soundBack`). The **page going hidden**
 (the phone locking, or a switch to another app) is **lock = pause** since October 26: a locked iPhone mutes the mic and
-pauses the sound anyway, so `appHidden` closes the line `LOCK_CLOSE_MS` (10 s since Oct 30; 3 s before: the phone auto-locked three times on Oct 30 and was unlocked within 7 s each time) after the page hides (`lockPause`; nothing is
-charged while the phone sits locked), keeps the conversation id, and the moment the app is back `lockResume` reopens the
+pauses the sound anyway, so `appHidden` closes the line at once (`lockPause`; nothing is charged while the phone sits locked; a 10 s grace from Oct 30 to Oct 31, 3 s before that, kept the line open for a quick unlock, but on every short lock of Oct 31 the line that stayed open was dead afterwards), keeps the conversation id, and the moment the app is back `lockResume` reopens the
 line on the same conversation through `openAgain`, the shared tail of `reconnect`: a voice pass, then `openSocket`, then
 the pending question asked again as a scripted line. No drop tone, no "line dropped" recording, no Carry on tap. Before the
 line reopens, `restartAudio` (voice.js) starts the sound and mic afresh through `openAudio`, the call's audio set-up: iOS

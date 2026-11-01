@@ -394,15 +394,13 @@ test("Hands-free: a planned ask with no entity said is read back without one and
   ok(/entity/i.test(txt) && !/Citizens Alliance C3|National C3/.test(txt), "the app didn't ask for the entity, or named one: " + txt.slice(0, 300));
 });
 
-test("The phone locking (page hidden) closes the line a few seconds later and reopens the same conversation when the app is back, no Carry on tap", async (p) => {
+test("The phone locking (page hidden) closes the line at once and reopens the same conversation when the app is back, no Carry on tap", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   await p.evaluate(() => { G.convId = "conv_locktest"; G.convAt = Date.now(); window.__lockWs = window.__ws; window.__lockCtx = G.ctx; window.__lockStream = G.stream; Object.defineProperty(document, "visibilityState", { get: () => "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
-  await p.waitForTimeout(1500);
-  ok(await p.evaluate(() => G.live && !!G.hiddenAt && !G.lockPaused && G.ws === window.__lockWs), "the line was closed within 1.5 s of the page going hidden (a quick app switch shouldn't drop it)");
+  await p.waitForTimeout(300);
+  ok(await p.evaluate(() => G.live && !!G.hiddenAt && !!G.lockPaused && G.ws === null), "the line wasn't closed the moment the page went hidden (Oct 31: a line kept open through a short lock was dead afterwards, three times)");
   await p.evaluate(() => { const tr = G.stream.getAudioTracks()[0]; Object.defineProperty(tr, "muted", { get: () => true, configurable: true }); tr.onmute && tr.onmute(); soundPaused(G.ctx); }); /* the phone mutes the mic and pauses the sound at the lock (Oct 26) */
-  await p.waitForTimeout(3000);
-  ok(await p.evaluate(() => G.live && !!G.hiddenAt && !G.lockPaused && G.ws === window.__lockWs), "the line was closed within 4.5 s of the page going hidden (Oct 30: an auto-lock undone within 7 s keeps the line)");
-  await p.waitForTimeout(7000);
+  await p.waitForTimeout(2500);
   ok(await p.evaluate(() => G.live && !!G.lockPaused && G.ws === null && window.__lockWs.readyState === 3 && /Paused/.test(G.status)), "the line wasn't closed after the lock (xAI would charge for a locked phone): " + await p.evaluate(() => G.status));
   await p.evaluate(() => { Object.defineProperty(document, "visibilityState", { get: () => "visible", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
   await p.waitForFunction(() => G.ws && G.ws !== window.__lockWs && G.status === "Listening", null, { timeout: 5000 }).catch(() => {});

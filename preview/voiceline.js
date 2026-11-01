@@ -96,10 +96,10 @@ const LOC_FRESH_MS = 120000;                // a position older than this is not
 const STABLE_MS = 20000;                     // a line open this long before it drops starts the reconnect count afresh (separate drops on a drive aren't one failure)
 const SOUND_BACK_MS = 6000;
 const MIC_BACK_MS = 45000;
-// (3 s until Oct 30: the phone auto-locked three times that day and was unlocked within 7 s; now a quick unlock keeps the line) the phone locking (or a
-// switch to another app) hides the page: the line is closed this long after, so nothing is charged while the phone sits locked, and reopened when the
-// app is back (Oct 26 pocket tests: a locked iPhone mutes the mic and pauses the sound anyway)
-const LOCK_CLOSE_MS = 10000;
+// the phone locking (or a switch to another app) hides the page: the line is closed at once and reopened on the same conversation when the app is back
+// (Oct 26 pocket tests: a locked iPhone mutes the mic and pauses the sound anyway). A 10 s grace kept the line open for a quick unlock (3 s before Oct 30),
+// but on every short lock of Oct 31 (9:16, 10:47, 11:02 PM) the line that stayed open was dead afterwards, found only by the 4 s check (Carverhill, Oct 31 11:11 PM: "Yes do it")
+const LOCK_CLOSE_MS = 0;
 const LOCK_MAX_MS = RESUME_MS;               // hidden longer than this (the conversation can no longer be picked up on xAI) ends the call with the Carry on card
 /* MIC_BACK_MS: a muted mic gets longer than the sound, since iOS shows "Audio Recording / Stop audio recording?" and the mic is back on Cancel, which takes a reach (Oct 26 drive). SOUND_BACK_MS: when the phone pauses the app's sound (a notification, Siri, another app), keep the call this long while it comes back */
 
@@ -598,7 +598,8 @@ function replyCheck(r) {
 // same conversation the moment the app is back, with the pending question asked again (like a reconnect after a dead spot, no Carry on tap).
 // Hidden longer than LOCK_MAX_MS, the call ends and the Carry on card shows. The call used to end the moment the phone locked.
 function appHidden() {
-  if (G.hiddenAt || !G.live) return; G.hiddenAt = Date.now(); G.lockPaused = 0; vlog("app hidden"); netLog(`App hidden (phone locked or switched away): the line closes in ${LOCK_CLOSE_MS / 1000} s and reopens when the app is back`);
+  if (G.hiddenAt || !G.live) return; G.hiddenAt = Date.now(); G.lockPaused = 0; vlog("app hidden"); netLog("App hidden (phone locked or switched away): the line closes now and reopens on the same conversation when the app is back");
+  lockPause();
   const tick = setInterval(() => {
     if (!G.live) { clearInterval(tick); G.hiddenAt = 0; G.lockPaused = 0; return; }
     if (document.visibilityState === "visible") {
@@ -610,7 +611,7 @@ function appHidden() {
       else { G.pauseBackAt = Date.now(); act("step", "App hidden for " + s + " s, then back (line still open)"); /* the mic the phone took at the lock comes back fresh; if it can't, the call ends as before */
         if (micGone && typeof restartAudio === "function") restartAudio("after the phone took the mic at the lock").then(ok => { if (!ok && G.live) interrupted("mic ended", "Your phone took the microphone away (a call, Siri or the recording dialog)."); }); }
       return; }
-    if (!G.lockPaused && Date.now() - G.hiddenAt > LOCK_CLOSE_MS) lockPause();
+    if (!G.lockPaused && Date.now() - G.hiddenAt > LOCK_CLOSE_MS) lockPause(); /* a line opened again while hidden (a reconnect in flight at the lock) */
     if (Date.now() - G.hiddenAt > LOCK_MAX_MS) { clearInterval(tick); G.hiddenAt = 0; G.lockPaused = 0; G.endedByLock = true; interrupted("app hidden for " + Math.round(LOCK_MAX_MS / 60000) + " minutes", `The app was in the background for ${Math.round(LOCK_MAX_MS / 60000)} minutes, longer than a paused conversation is kept.`); }
   }, 500);
 }

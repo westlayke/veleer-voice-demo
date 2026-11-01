@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 11:12 PM",
+      "change": "The line to xAI closes the moment the phone locks (or the app is switched away) and reopens on the same conversation the moment the app is back, whatever the length of the lock. Until now a lock under 10 s kept the line open; on every short lock of Oct 31 that line was dead afterwards and was only found by the 4 s check, so the question came back 10 s or more after the unlock instead of about 6.",
+      "area": "voice (voiceline.js LOCK_CLOSE_MS, appHidden)",
+      "requestedBy": "Carverhill",
+      "why": "\"Yes do it\" (Oct 31, 11:11 PM ET) after his 9:16, 10:47 and 11:02 PM lock tests all showed the kept line dead."
+    },
+    {
       "date": "Oct 31, 11:08 PM",
       "change": "A cut question is not asked again twice. The note the app keeps when the phone pauses the sound mid-question now clears when the line ends (the reconnect re-puts the question), and stands down when Ara has already said that question again since. The state machine tolerates a reply request sent while the last reply's sound is still playing.",
       "area": "voice (voice.js cutQBack, voiceline.js resetLine, machine.js)",
