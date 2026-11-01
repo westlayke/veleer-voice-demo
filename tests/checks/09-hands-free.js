@@ -1033,8 +1033,13 @@ test("Carverhill's 10:02 PM call (Oct 31) and 12:02 AM call (Nov 1): a sound eng
   // the fresh engine's clock is dead too, twice more: each is closed and another started; the fourth time the app gives up on fresh starts
   for (const k of [2, 3]) { await stick(); await p.waitForTimeout(4300); log = await p.log();
     ok(new RegExp(`fresh start ${k - 1} of 3 had a dead clock too`).test(log) && new RegExp(`afresh after the sound clock stood still \\(${k} of 3`).test(log) && await p.evaluate(() => G.ctx !== window.__ctx0), `fresh start ${k} didn't happen: ` + log.split("\n").slice(-4).join(" | ").slice(0, 300)); }
-  await stick(); await p.waitForTimeout(4300); log = await p.log();
-  ok(/3 fresh starts had dead clocks too, so the sound can't be started afresh again this call/.test(log) && await p.evaluate(() => G.ctx === window.__ctx0 && G.live), "a fourth dead clock wasn't given up on: " + log.split("\n").slice(-3).join(" | ").slice(0, 300));
+  await stick(); await p.waitForTimeout(6000); log = await p.log();
+  ok(/3 fresh starts had dead clocks too, so the Carry on card is shown/.test(log) && /pausing and resuming the engine/.test(log), "a fourth dead clock wasn't given up on, or no pause and resume was tried first: " + log.slice(-700));
+  // the usual Carry on card, with the reason: its tap starts the sound and mic inside the touch (Carverhill, Nov 1: the card, not a new button)
+  await p.waitForTimeout(500);
+  ok(await p.evaluate(() => !G.live) && await p.isVisible("#rsmGo") && /kept its sound off after the lock/.test(await p.evaluate(() => document.getElementById("modal").innerText)), "the Carry on card with the reason wasn't shown: " + (await p.evaluate(() => document.getElementById("modal").innerText)).slice(0, 200));
+  await p.tap("#rsmGo"); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => G.live && G.ctx !== window.__ctx0 && G.clockStuckN === 0 && !G.clockGaveUp), "Carry on didn't start a call with fresh sound and a fresh watch");
 });
 test("State machine phase 2 (Nov 1): on preview-sm the line and Ara parts answer from the app's own events, and agree with the old flags", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);

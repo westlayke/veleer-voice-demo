@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 12:42 AM",
+      "change": "A sound engine with a dead clock is first paused and resumed once; if three fresh engines in a row are dead too, the usual Carry on card is shown with the reason (\"Your phone kept its sound off after the lock\"), since sound started inside a tap is honoured by the phone.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "His 12:25 AM call (Nov 1): after a forced lock mid-sentence, four engines in a row had dead clocks and the call stayed silent until he tapped End. He asked for the Carry on card rather than a new button."
+    },
+    {
       "date": "Nov 1, 12:18 AM",
       "change": "A sound engine whose clock stands still after a lock is closed and started afresh up to three times a call (was once, with the dead engine left open), and Ara then says her last line again word for word (asked for it in her own words she said \"Silence.\"). While the clock is dead nothing counts as playing: the screen says Listening and the app stops waiting on sound that can't come.",
       "area": "Voice",

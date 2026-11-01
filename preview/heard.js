@@ -26,7 +26,13 @@ function clockWatch() {
   if (!seen || seen.ctx !== G.ctx || t !== seen.t) { G.clockSeen = { ctx: G.ctx, t, at: now }; return; }
   if (now - seen.at < CLOCK_STILL_MS || G.ctx.state !== "running" || (G.clockStuckAt && now - G.clockStuckAt < CLOCK_STILL_MS + 2000)) return;
   const n = G.clockStuckN || 0, line = G.lastBot || "";
-  if (n >= CLOCK_RESTARTS) { if (!G.clockGaveUp) { G.clockGaveUp = true; act("step", `The phone's sound clock stood still again with ${playingRaw().toFixed(1)} s of Ara's audio queued: ${CLOCK_RESTARTS} fresh starts had dead clocks too, so the sound can't be started afresh again this call`); } return; }
+  if (!seen.resumed) { /* first a pause and resume of the engine itself (cheap; a second judgement follows CLOCK_STILL_MS later) */
+    const still = ((now - seen.at) / 1000).toFixed(1); seen.resumed = true; seen.at = now; const ctx = G.ctx;
+    act("step", `The phone's sound clock stood still for ${still} s with ${playingRaw().toFixed(1)} s of Ara's audio queued: pausing and resuming the engine`);
+    G.selfSuspend = ctx; ctx.suspend().then(() => ctx.resume()).catch(() => {}).then(() => { if (G.selfSuspend === ctx) G.selfSuspend = null; }); return; }
+  if (n >= CLOCK_RESTARTS) { if (!G.clockGaveUp) { G.clockGaveUp = true;
+      act("step", `The phone's sound clock stood still again with ${playingRaw().toFixed(1)} s of Ara's audio queued: ${CLOCK_RESTARTS} fresh starts had dead clocks too, so the Carry on card is shown (sound started inside a tap is honoured by the phone; Carverhill, Nov 1: the usual card, not a new button)`);
+      interrupted("the phone kept its sound engine stopped after the lock", "Your phone kept its sound off after the lock. Tap Carry on to bring it back."); } return; }
   G.clockStuckAt = now; G.clockStuckN = n + 1;
   act("step", `The phone's sound clock stood still for ${((now - seen.at) / 1000).toFixed(1)} s with ${playingRaw().toFixed(1)} s of Ara's audio queued (sound ${G.ctx.state}${n ? `; fresh start ${n} of ${CLOCK_RESTARTS} had a dead clock too` : ""}): nothing was heard`);
   if (typeof restartAudio !== "function") return;
@@ -38,7 +44,7 @@ function clockWatch() {
     setTimeout(() => { if (!G.live || !line) return;
       act("step", `Sound started afresh: Ara says her last line again, word for word ("${line.slice(0, 80)}")`);
       G.lastBot = ""; /* else the repeat is cut as a doubled reply */ forceSay(line); }, 1200); });
-} /* the phone has produced sound in this call: a typed run never does */
+}
 setInterval(heardTick, 250);
 function heardProblem(r) {
   const words = r.text.trim().split(/\s+/).length;

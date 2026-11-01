@@ -572,7 +572,7 @@ async function openAudio() {
   if (!G.live || G.ctx !== ctx) { try { stream.getTracks().forEach(t => t.stop()); } catch (x) {} return false; } // hung up, or started over, while the mic was asked for
   G.stream = stream;
   // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
-  ctx.onstatechange = () => { if (G.live && G.ctx === ctx && !lineIs("opening") && ctx.state !== "running") soundPaused(ctx); };
+  ctx.onstatechange = () => { if (G.live && G.ctx === ctx && !lineIs("opening") && ctx.state !== "running" && G.selfSuspend !== ctx) soundPaused(ctx); }; /* the app's own pause and resume of a dead clock (heard.js) is not the phone pausing the sound */
   const mine = (tr) => G.stream && G.stream.getAudioTracks().includes(tr); // a mic replaced after a lock no longer speaks for the call
   stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && mine(tr) && !lineIs("opening")) micMuted(tr); }; tr.onended = () => micEnded(tr, mine); });
   const srcNode = ctx.createMediaStreamSource(stream);
