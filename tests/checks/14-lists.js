@@ -89,4 +89,24 @@ test("One lists module: an entity answer that fits several is asked back, a repe
   await said(p, "Idaho."); r = await ara(p, "optional_fields", { step: "answer", value: "Idaho" });
   ok((await p.evaluate(() => V.data.campaign)) === "Idaho", "the campaign wasn't taken once the question had played: " + JSON.stringify(r).slice(0, 300));
 });
+
+test("Pat's Pennsylvania C4 loop (Oct 31): once the entity is on the Record the ask form, Ara is asked for the amount alone and the app checks she asks it", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { const c = S.contacts.find(x => x.first === "Ruth"); S.opps.filter(o => o.contactId === c.id).forEach(o => { o.fund = ""; o.campaign = ""; (o.asks || []).length = 0; }); });
+  await said(p, "Record the ask for Ruth, today, in person.");
+  let r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", date: new Date().toISOString().slice(0, 10), meetingType: "In person" });
+  ok(r.ask_exactly === "How much was the ask, and for which entity?", "the pair question wasn't asked first: " + JSON.stringify(r).slice(0, 300));
+  await said(p, "The Pennsylvania C4, Pennsylvania.");
+  r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", fund: "C.A. Pennsylvania C4", campaign: "Pennsylvania" });
+  ok((await p.evaluate(() => V.data.fund)) === "C.A. Pennsylvania C4", "the entity wasn't kept");
+  ok(!r.ask_exactly && /^Ask exactly: "How much was the ask\?"/.test(r.status || "") && !/The app asked for the first one itself/.test(r.status || ""), "the amount alone wasn't handed to Ara: " + JSON.stringify(r).slice(0, 400));
+  const araSays = (text) => p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: text }, { type: "response.done", response: { status: "completed" } }]);
+  await araSays("Got it, Pennsylvania C4. How much was the ask?"); await p.waitForTimeout(200);
+  ok(/Ara asked the question herself: "How much was the ask\?"/.test(await p.log()), "Ara's question wasn't counted: " + (await p.log()).slice(-300));
+  // Nov 1: a check on where we were stands down when another form is open by the time Ara's reply comes (the app's stale line 23 s later)
+  await p.evaluate(() => contextWatch("reconnect", { who: "Ruth", q: "Which entity?", line: "We're on the add planned ask for Ruth. Which entity?" }));
+  await p.evaluate(() => { G.ctxWatch.form = "plan"; G.ctxWatch.seq = -1; });
+  await araSays("Sorry, I lost you for a moment. What would you like to do?"); await p.waitForTimeout(200);
+  ok(/Another form opened: the ask for where we were stands down/.test(await p.log()) && await p.evaluate(() => !G.ctxWatch), "the check didn't stand down for another form: " + (await p.log()).slice(-300));
+});
 };

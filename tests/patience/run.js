@@ -183,11 +183,12 @@ const BOOK = [
   { q: /Shall I use that/i, say: "Use that.", tool: (line, ctx) => forForm(ctx, { nextStep: "Follow up with Jordan to get an answer on the ask", nextDue: F }) },
   { q: /Move \w+ to Cultivation, or defer\?/i, say: "Move to Cultivation.", tool: ["show_cultivation_decision", { contact_name: C, decision: "Move to Cultivation" }] },
   { q: /Move (\w+ )?to Cultivation\?/i, say: "Yes.", tool: ["save_form", { confirmed: true }] },
+  { q: /How much (was the ask|is the gift|is the pledge), and for which entity/i, say: (ctx) => `Twenty-five thousand dollars, for ${ctx.ent.said}.`, tool: (line, ctx) => forForm(ctx, { amount: 25000, fund: ctx.ent.fund }) }, /* before the bare entity entries: until Nov 1 "for which entity?" matched them first and Pat never gave the amount (the Pennsylvania C4 loop) */
+  { q: /How much (was the ask|is the gift|is the pledge)\?/i, say: "Twenty-five thousand dollars.", tool: (line, ctx) => forForm(ctx, { amount: 25000 }) }, /* the amount alone, once the entity is on the form (Nov 1) */
   { q: /Which entity, and which campaign|Which entity\?/i, say: (ctx) => `${cap(ctx.ent.said)}, ${ctx.ent.campaign}.`, tool: (line, ctx) => forForm(ctx, { fund: ctx.ent.fund, campaign: ctx.ent.campaign }) },
   { q: /Which campaign/i, say: (ctx) => `${ctx.ent.campaign}.`, tool: (line, ctx) => forForm(ctx, { campaign: ctx.ent.campaign }) },
   { q: /Which entity\?/i, say: (ctx) => `${cap(ctx.ent.said)}.`, tool: (line, ctx) => forForm(ctx, { fund: ctx.ent.fund }) },
   { q: /planned ask date/i, say: "Today, twenty-five thousand dollars.", tool: ["show_ask_plan_draft", { contact_name: C, plannedDate: T, amount: 25000 }] },
-  { q: /How much (was the ask|is the gift|is the pledge), and for which entity/i, say: (ctx) => `Twenty-five thousand dollars, for ${ctx.ent.said}.`, tool: (line, ctx) => forForm(ctx, { amount: 25000, fund: ctx.ent.fund }) },
   { q: /When was it received, and how was it paid/i, say: "Today, by check.", tool: (line, ctx) => forForm(ctx, { date: T, method: "Check" }) },
   { q: /Ally - Do Not Solicit, or Do Not Contact/i, say: "Neither.", tool: ["optional_fields", { step: "answer", value: "neither" }] },
   { q: /What's the type\?/i, say: "In person.", tool: (line, ctx) => forForm(ctx, { meetingType: "In person" }) },

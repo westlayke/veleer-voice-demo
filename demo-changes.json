@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 8:20 PM",
+      "change": "Preview: after a dropped line, if Ara doesn't say where we were, the app asks her again for just the missing part (no second \"sorry\"), then once more with the exact sentence, in her own voice. After that the app says nothing; it no longer plays its own fallback line. The check stops if another form has opened. On Record the ask, Record pledge and Record gift, once the entity is on the form, Ara is asked for the amount alone (\"How much was the ask?\") instead of the two-part question again.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"I don't want the app saying lines in new fixes\" and \"Ok go build these fixes\": Pat's run found a conversation asked the entity 125 times, and \"Sorry, I lost you for a moment\" said four times after a drop, the last one out of date."
+    },
+    {
       "date": "Oct 31, 5:57 PM",
       "change": "After a reconnect with a form open, Ara (not the app) says where we were, including any confirmation the dropped line never played (\"Rating B is on the form\"), and the app checks her reply (asked again up to 3 times). A line that arrived with no sound counts as answered only by words that start after it would have finished playing; otherwise it is asked for again. \"Save it\" after a save is never a yes to the next step. The where-we-were check moved into voiceline.js with the rest of the reconnect.",
       "area": "Voice",

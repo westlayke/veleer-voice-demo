@@ -360,10 +360,10 @@ const REQ_Q = {
   "interaction.date": () => "When was it, and was it in person, a phone call, a video call, an email, or an event?", "ask.date": () => "When was the ask made, and was it in person, a phone call, a video call, an email, or an event?",
   "interaction.summary": () => "What happened? A sentence or two.", "ask.summary": () => "How did it go? A sentence or two.",
   "plan.fund": () => entityListHeard() ? "Which entity?" : `The entities: ${ENTITY_LIST_SPOKEN()} Which entity?`, /* the list is read every time the question is asked afresh (Oct 30), the campaign follows on its own */ "plan.plannedDate": () => "When is the planned ask date, and for how much?",
-  "ask.amount": () => "How much was the ask, and for which entity?", "ask.response": () => "What was the response: accepted, countered, declined, or still waiting?",
+  "ask.amount": (w, d) => d.fund ? "How much was the ask?" : "How much was the ask, and for which entity?", "ask.response": () => "What was the response: accepted, countered, declined, or still waiting?",
   "response.response": () => "What was the answer: accepted, countered, or declined?", "response.date": () => "When did you hear?",
-  "pledge.amount": () => "How much is the pledge, and for which entity?", "pledge.confirmedBy": () => "How was it confirmed, by email, phone or in person, and when?", "pledge.firstDue": () => "When is the first payment due?",
-  "gift.amount": () => "How much is the gift, and for which entity?", "gift.date": () => "When was it received, and how was it paid?", "payment.date": () => "When was it received, and how was it paid?",
+  "pledge.amount": (w, d) => d.fund ? "How much is the pledge?" : "How much is the pledge, and for which entity?", "pledge.confirmedBy": () => "How was it confirmed, by email, phone or in person, and when?", "pledge.firstDue": () => "When is the first payment due?",
+  "gift.amount": (w, d) => d.fund ? "How much is the gift?" : "How much is the gift, and for which entity?", "gift.date": () => "When was it received, and how was it paid?", "payment.date": () => "When was it received, and how was it paid?",
   "task.text": () => "What's the task?", "task.due": () => "When is it due?",
   "meeting.title": () => "What's the meeting about?", "meeting.date": () => "When is it, date and time?",
   "cultivate.decision": (w) => `Move ${w} to Cultivation, or defer?`, "cultivate.reason": () => "What's the reason to defer, and when should it come up again?",
@@ -376,6 +376,9 @@ function oneOfQuestion(action, d) {
   const who = (d && d.first) || "them", noEmail = typeof officerSaidNone === "function" && officerSaidNone("email"), noMobile = typeof officerSaidNone === "function" && officerSaidNone("mobile");
   return noEmail && !noMobile ? `What's ${who}'s mobile number?` : noMobile && !noEmail ? `What's ${who}'s email address?` : `What's ${who}'s email address or mobile number?`;
 }
+/* the amount alone, once the entity of its pair is on the form: Ara asks it, the app checks (Pat's Pennsylvania C4 loop, Oct 31: the pair question went out
+   again and again after only the entity was given; Carverhill, Nov 1: no new app lines) */
+const HALF_PAIR_Q = /^How much (was the ask|is the pledge|is the gift)\?$/;
 function reqQuestion(action, fields, d) {
   const f = fields[0]; if (!f) return ""; const who = V && V.target && V.target.contact ? V.target.contact.first : (d && d.first) || "them";
   const q = REQ_Q[action + "." + f.k] || REQ_Q[f.k]; if (q) return q(who, d || {});
