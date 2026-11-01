@@ -215,7 +215,7 @@ function nextStepNo(text) {
   const last = ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").trim(); if (!last.endsWith(NEXT_Q.trim())) return false;
   if (G.noAt && Date.now() - G.noAt < 3000) return true; G.noAt = Date.now(); /* the transcript lands two or three times */
   if (G.lastSaved) G.lastSaved.declined = true; /* Carverhill's 11:00 AM call (Nov 1): after his no, two drops re-offered the step; where we were now ends with the open question */
-  act("step", "a no to the next step: the app asks what they'd like to do"); stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now();
+  act("step", "a no to the next step: the app asks what they'd like to do"); stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); }
   forceSay(NEXT_NO_Q); return true;
 }
 // Ara's own yes-or-no question that the officer's words answer, with what each answer means (Carverhill, Oct 31: Ara, not the app, follows the

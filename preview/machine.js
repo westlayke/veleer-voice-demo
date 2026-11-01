@@ -13,7 +13,7 @@
   const SM = window.__sm = { ended: {}, transitions: 0, log: [], events: [] }; /* ended: checks the machine ended itself, by kind and reason */ /* events: the last 200 the app sent, for the harnesses */
   /* the facts the parts read: the officer's last words and when their speech started, when the line went down, the replies started */
   const facts = SM.facts = { lastWords: null, speechAt: 0, downAt: 0, respN: 0 }; /* respN: replies started, so a check armed mid-reply doesn't count that reply */
-  const END_WHY = { SPEECH_START: "the officer spoke", LINE_DROP: "the line dropped", CALL_END: "the call ended", FORM_OPEN: "the form changed", FORM_CLOSED: "the form closed", ARA_DONE: "Ara's replies were used up" }; /* why the machine ended a check, by the event */
+  const END_WHY = { SPEECH_START: "the officer spoke", LINE_DROP: "the line dropped", CALL_END: "the call ended", FORM_OPEN: "the form changed", FORM_CLOSED: "the form closed", FORM_SAVED: "the form was saved", ARA_DONE: "Ara's replies were used up" }; /* why the machine ended a check, by the event */
   const TICK_MS = 250, ASKED_MAX_MS = 10000, REFUSED_MS = 6000, NEXT_STEP_MS = 120000, NO_LIMIT_MS = 24 * 3600e3; /* NO_LIMIT_MS: a check kind with no time limit in CHECK_RULES */
 
   /* ---------- the machine ---------- */
@@ -59,17 +59,19 @@
         waiting: { after: { stale: { target: "none", actions: ["machineEnd", "endCheck"] } }, on: {
           CHECK_START: { target: "waiting", reenter: true, actions: "startCheck" }, CHECK_END: { target: "none", actions: "endCheck" }, CHECK_NUDGED: { target: "waiting", reenter: true },
           SPEECH_START: { target: "none", actions: ["machineEnd", "endCheck"], guard: "spokenEnds" }, LINE_DROP: { target: "none", actions: ["machineEnd", "endCheck"] }, CALL_END: { target: "none", actions: ["machineEnd", "endCheck"] },
-          FORM_OPEN: { target: "none", actions: ["machineEnd", "endCheck"], guard: "formChanged" }, FORM_CLOSED: { target: "none", actions: ["machineEnd", "endCheck"], guard: "formChanged" },
+          FORM_OPEN: { target: "none", actions: ["machineEnd", "endCheck"], guard: "formChanged" }, FORM_CLOSED: { target: "none", actions: ["machineEnd", "endCheck"], guard: "formChanged" }, FORM_SAVED: { target: "none", actions: ["machineEnd", "endCheck"], guard: "formChanged" },
           ARA_DONE: [{ target: "none", actions: ["machineEnd", "endCheck"], guard: "repliesUsed" }, { actions: "countReply", guard: "countsReply" }] } } } }
     },
   }, {
     actions: {
       startCheck: assign({ check: ({ event }) => ({ kind: event.kind, data: event.data || null, at: Date.now(), replies: 0, form: event.form, respN: facts.respN }) }),
       endCheck: assign({ check: null }),
-      /* the machine ended the check itself (Nov 1 Pat run: 340 stale yes/no watches after Ara opened the offered form), with the reason logged;
-         a check the app ends first (its own stand-down line) never gets here */
+      /* the machine ended the check itself (Nov 1 Pat run: 340 stale yes/no watches after Ara opened the offered form), with the reason logged
+         in the app's own words (step 4, Nov 1: the app no longer stands a check down for speech, a form change, a drop or the call's end itself);
+         a check the app ends first (its pass or fail) never gets here */
       machineEnd: ({ context, event }) => { const c = context.check; if (!c) return; const why = END_WHY[event.type] || (/^xstate\.after/.test(event.type) ? "its time limit passed" : event.type), k = `${c.kind}: ${why}`; SM.ended[k] = (SM.ended[k] || 0) + 1;
-        act("step", c.kind === "ctxWatch" && event.type === "FORM_OPEN" ? "Another form opened: the ask for where we were stands down (the machine)" : `check ${c.kind} ended by the machine: ${why}`); }, /* the app's own wording, so the reports count it the same */
+        const ask = `the ask for ${c.kind === "nudge" ? "the tool call" : "where we were"} stands down`;
+        act("step", event.type === "SPEECH_START" ? `The officer spoke: ${ask}` : c.kind === "ctxWatch" && event.type === "FORM_OPEN" ? `Another form opened: ${ask}` : `check ${c.kind} ended by the machine: ${why}`); },
       countReply: assign({ check: ({ context }) => context.check ? Object.assign({}, context.check, { replies: context.check.replies + 1 }) : null })
     },
     delays: { stale: ({ context }) => context.check && checkRule(context.check.kind).maxMs || NO_LIMIT_MS },

@@ -9,7 +9,7 @@ test("Hands-free: Ara saves only after a read-back and the officer's yes, money 
   let r = await ara(p, "save_form", { confirmed: false });
   ok(r.ok === false && /Hands-free mode is off/.test(r.error), "save_form worked with hands-free off: " + JSON.stringify(r));
   // the officer turns it on by voice; the draft tool now points Ara at save_form
-  await said(p, "I'm driving"); await p.waitForTimeout(900); // tool calls right after a voice command are ignored
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
   ok(await p.isVisible(".cb-hf.on"), "the call bar does not show Hands-free on");
   r = await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" });
   // the app reads a finished draft back itself, as a scripted line, without waiting for Ara to call save_form (Oct 25: she said "Tap Confirm")

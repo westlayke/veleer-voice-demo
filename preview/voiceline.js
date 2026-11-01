@@ -343,7 +343,7 @@ function checkStart(kind, data) { const was = checkNow(); if (was) vlog(`check $
   const c = Object.assign({ at: Date.now(), tries: 1, form: formNow() }, data || {}, { kind }); smSend("CHECK_START", { kind, data: c, form: c.form }); return c; }
 function checkEnd(why, kind) { const c = checkNow(); if (!c || (kind && c.kind !== kind)) return; if (why) vlog(`check ${c.kind} ended: ${why}`); smSend("CHECK_END"); }
 function resetLine() {
-  checkEnd("the line dropped"); smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; G.cutQ = null; /* a cut question is re-put by the reconnect, not by the sound coming back */
+  smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; G.cutQ = null; /* a cut question is re-put by the reconnect, not by the sound coming back */
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); stopPlayback();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
 }
@@ -416,7 +416,6 @@ function contextAsk(kind, w) {
 }
 function contextCheck(r) {
   const c = checkNow("ctxWatch"); if (!c || !G.live) return;
-  if (formNow() !== c.form) { act("step", "Another form opened: the ask for where we were stands down"); checkEnd("", "ctxWatch"); return; }
   if (r.status === "cancelled" || G.respForcedSeq === G.respSeq || G.dropNext || G.respSeq === c.seq) return; /* not replyCounts: a wordless reply (a refused tool call) is judged below */
   // Carverhill's 2:52 PM call (Oct 30): the service replayed save_form after the pickup, the guard refused it, and clearing the watch here let her "Tommy
   // Toyota is saved. What next?" through unchecked

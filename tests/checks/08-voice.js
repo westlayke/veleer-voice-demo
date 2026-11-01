@@ -54,7 +54,7 @@ test("Jacqueline's call: a dropped rating is said to be not caught before it's a
   let forced = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
   ok(forced.length === 1 && /^Everything required is in on the new contact form\. You could still add how we met and capacity rating\. Next, Dana's capacity rating/.test(forced[0]) && /which an opportunity needs\. (A is \$250,000 and up|A to E: which fits Dana)/.test(forced[0]), "\"what fields are left?\" with everything required in didn't list the optional ones and the pending question: " + JSON.stringify(forced));
   // a form with required fields still empty: the list, then Ara asks for the first one
-  await p.evaluate(() => { V = null; G.cmdAt = 0; renderOverlay(); }); // (the command's own guard against a repeated tool call is not what's checked here)
+  await p.evaluate(() => { V = null; renderOverlay(); });
   await said(p, "Plan an ask for Ruth Abernathy.");
   r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   ok(r.still_needed && r.still_needed.length === 2, "the planned ask didn't need its fields: " + JSON.stringify(r));
@@ -962,7 +962,7 @@ test("Ara: an entity comes from the state the officer names, a rating is never i
 });
 test("Carverhill's Bugs call (Oct 28): \"in-person\" is in person; \"a follow-up in seven days\" keeps the date the officer gave; a three-word echo isn't the scripted line; a replayed tool call after a pick-up isn't done twice", async (p) => {
   await signIn(p);
-  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; G.cmdAt = 0; paintCall(); });
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); });
   await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(x => x.stage !== "Closed"); o.stage = "Ask Planning"; o.asks = [{ fund: "Citizens Alliance C3", campaign: "National", amount: 50000, askType: "Outright", status: "Planned", plannedDate: "2026-10-28" }]; delete o.pledge; S.tasks = S.tasks.filter(t => t.oppId !== o.id); window.__who = (() => { const c = S.contacts.find(c => c.id === o.contactId); return [c.first + " " + c.last, c.first]; })(); });
   const [name, first] = await p.evaluate(() => window.__who);
   await said(p, `Let's record the ask for ${name}.`);
@@ -1245,7 +1245,7 @@ test("Ara: a tool call that lands before the officer's transcript waits for it (
 
 test("Carverhill's Ruth call (Oct 28): \"change the amount of the ask\" is the amount asked, not an agreed amount, and the next-step line has no day count", async (p) => {
   await signIn(p);
-  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; G.cmdAt = 0; paintCall(); });
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); });
   await said(p, "Let's go record the ask for Ruth Abernathy. It was an in-person meeting.");
   let r = await ara(p, "show_ask_result_draft", { contact_name: "Ruth Abernathy", date: "2026-10-28", meetingType: "In person" });
   ok(r.ok && (await p.evaluate(() => V && V.action === "ask")), "the ask form didn't open: " + JSON.stringify(r));
@@ -1266,7 +1266,7 @@ test("Carverhill's Ruth call (Oct 28): \"change the amount of the ask\" is the a
 
 test("Awaiting answer (Oct 28): Ara explains the follow-up task is required and suggests the words; the officer's yes fills it; hands-free asks the same way", async (p) => {
   await signIn(p);
-  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; G.cmdAt = 0; paintCall(); });
+  await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => { G.hands = false; paintCall(); });
   await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(x => x.stage !== "Closed"); o.stage = "Ask Planning"; o.asks = [{ fund: "Citizens Alliance C3", campaign: "National", amount: 5800, askType: "Outright", status: "Planned", plannedDate: "2026-10-23" }]; delete o.pledge; S.tasks = S.tasks.filter(t => t.oppId !== o.id); window.__who = (() => { const c = S.contacts.find(c => c.id === o.contactId); return [c.first + " " + c.last, c.first]; })(); });
   const [name, first] = await p.evaluate(() => window.__who);
   await said(p, `Let's record the ask for ${name}. It was in person yesterday. He's going to think about it.`);

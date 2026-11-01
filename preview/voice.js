@@ -822,7 +822,7 @@ function endCall(why) {
 }
 // a call has ended: the line, the turn, the scripted-line watches and the call's clocks go back to their start
 function resetCall() {
-  checkEnd("the call ended"); smSend("CALL_END"); G.micEndedAtLock = false; /* the check ends first, so the app's own log line stands */
+  smSend("CALL_END"); G.micEndedAtLock = false; /* the machine ends any check waiting on Ara */
   G.ws = G.stream = G.ctx = G.node = null;
   G.buf = [];
   resetTurn();
@@ -905,7 +905,7 @@ function voiceCommand(text) {
   else if (cmd === "restart") { if (!V) return false; say = `The officer said "start over". The app cleared the ${restartForm()} form. Ask for the first detail again.`; }
   else if (cmd === "back") { if (V) return false; const b = document.querySelector("header.top .back"); if (!b) return false; const where = BACK_NAMES[b.dataset.go] || "the previous screen"; go(b.dataset.go); say = { force: `Back on ${where}.` }; }
   vlog("voice command: " + cmd); act("step", "voice command " + cmd);
-  stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now(); // drop whatever the model started to do with those words
+  stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } // drop whatever the model started to do with those words
   if (say === null) hfAnnounce(); else if (say.force) forceSay(say.force, say.then); else guide(say); return true;
 }
 // Guidance for Ara's next reply only: it travels with the reply request (xAI's per-response instructions), so it never sits in the
@@ -966,7 +966,7 @@ function onEvent(e) {
   if (t === "response.created") smSend("ARA_STARTED"); else if (/audio\.delta$/.test(t)) { if (!araSounding()) smSend("ARA_SOUND"); } else if (t === "response.done") smSend("ARA_DONE", { words: replyCounts(e.response) }) /* words: replyCounts, as the app's own checks judge it */; /* the machine hears every reply, dropped ones too */
   if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
-  if (t === "input_audio_buffer.speech_started") { const ck = checkNow(); if (ck && checkRule(ck.kind).onSpeech) { act("step", `The officer spoke: the ask for ${ck.kind === "nudge" ? "the tool call" : "where we were"} stands down`); checkEnd("the officer spoke"); } /* a yes/no or a say check waits for the words, not the sound (a cough is not an answer) */ G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; smSend("SPEECH_START");
+  if (t === "input_audio_buffer.speech_started") { G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; smSend("SPEECH_START");
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0;
       clearTimeout(G.idleTimer);

@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "STAMP",
+      "change": "Step 4 of the state-machine plan: every guard counted (real calls since Oct 25, Pat, real Ara) and the one that never fired, \"tool call right after a voice command\", taken out. The app no longer stands a check down itself when the officer speaks, the line drops, the call ends or the form changes: the state machine ends it and logs the same line (a saved form now counts as a form change too). No new app lines.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill \"Yes\" (Nov 1, 12:53 PM) to step 4: take out the guards the machine now covers, run Pat and real Ara on that build, then go live after his call on it."
+    },
+    {
       "date": "Nov 1, 12:50 PM",
       "change": "Once the app has answered the officer's words itself (a bare no to the next step, undo, repeat, cancel), the turn watchdog never asks Ara to answer those words again; and Ara's end-call tool is refused unless the officer said something about ending (goodbye, hang up, that's all, I'm done, stop for now).",
       "area": "Voice",

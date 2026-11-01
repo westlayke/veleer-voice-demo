@@ -310,7 +310,6 @@ function onTool(callId, name, args, held) {
     const pos = typeof formPosition === "function" ? formPosition() : null; guardFired("tool call replayed after a pickup", name);
     toolReply(callId, { ok: false, error: `This call was already handled before the line dropped; nothing changed. ${pos ? pos.where : G.savedLine ? `The last form was saved (${G.savedLine}); no form is open.` : "No form is open."} Don't repeat it: go on with what the officer says next.` }); return; }
   (G.toolKeys = (G.toolKeys || []).slice(-5)).push({ key, at: Date.now() });
-  if (G.cmdAt && Date.now() - G.cmdAt < 800) { vlog(`${name}: ignored, the app had just carried out a voice command`); guardFired("tool call right after a voice command", name); toolReply(callId, { ok: false, error: "Ignored: the app already carried out the officer's command. Don't repeat it; go on with what the officer says next." }); return; }
   if (Object.hasOwn(TOOL_HANDLERS, name)) { TOOL_HANDLERS[name](callId, data, name); return; }
   draftTool(callId, name, data);
 }
