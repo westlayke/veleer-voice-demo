@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 1:07 AM",
+      "change": "Lock follow-ups from the 12:58 AM call: one fresh start before the Carry on card (the card now shows at about 8 s instead of 21 s, since a second fresh engine was dead too), and Carry on now picks up the same conversation with a fresh voice pass: the pass the button's touch had warmed a line with was spent, and every resume with it was refused.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "The 12:58 AM lock call: the Carry on tap brought sound back but Ara started a new conversation, and the card took 21 s."
+    },
+    {
       "date": "Nov 1, 12:42 AM",
       "change": "A sound engine with a dead clock is first paused and resumed once; if three fresh engines in a row are dead too, the usual Carry on card is shown with the reason (\"Your phone kept its sound off after the lock\"), since sound started inside a tap is honoured by the phone.",
       "area": "Voice",

@@ -1087,7 +1087,7 @@ test("OpenAI voice engine (Oct 27): the pass, the socket, the session shape, scr
   await p.waitForFunction(() => G.live, null, { timeout: 8000 });
   const url = await p.evaluate(() => __wsUrls[__wsUrls.length - 1]), protos = await p.evaluate(() => __wsProtos);
   ok(/^wss:\/\/api\.openai\.com\/v1\/realtime\?model=gpt-realtime-2\.1$/.test(url), "the socket isn't OpenAI's: " + url);
-  ok(protos[0] === "realtime" && /^openai-insecure-api-key\.test-pass$/.test(protos[1] || ""), "the subprotocols don't carry the pass: " + JSON.stringify(protos));
+  ok(protos[0] === "realtime" && /^openai-insecure-api-key\.test-pass(-\d+)?$/.test(protos[1] || ""), "the subprotocols don't carry the pass: " + JSON.stringify(protos));
   const sess = await p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(x => x.type === "session.update").map(x => x.session));
   ok(sess.length >= 1 && sess[0].type === "realtime" && sess[0].model === "gpt-realtime-2.1" && sess[0].audio.input.turn_detection.type === "server_vad" && sess[0].audio.input.transcription.model && sess[0].audio.output.voice === "marin" && sess[0].tools.length > 10 && sess[0].instructions.length > 1000, "the OpenAI session body is wrong: " + JSON.stringify(sess.map(x => ({ type: x.type, model: x.model, td: x.audio && x.audio.input && x.audio.input.turn_detection, tr: x.audio && x.audio.input && x.audio.input.transcription, voice: x.audio && x.audio.output && x.audio.output.voice, tools: x.tools && x.tools.length, il: x.instructions && x.instructions.length }))).slice(0, 600));
   ok(!sess.some(x => x.resumption || x.replace || x.keyterms), "xAI-only extras were sent to OpenAI: " + JSON.stringify(sess.map(x => Object.keys(x))));
@@ -1178,7 +1178,7 @@ test("Gemini voice engine (Oct 27): the setup message, transcripts and tool call
   await signIn(p);
   await p.waitForFunction(() => G.live, null, { timeout: 8000 }).catch(async () => { throw new Error("the call never went live: " + JSON.stringify({ errors: p.errors, status: await p.evaluate(() => G.status), urls: await p.evaluate(() => window.__wsUrls), vlog: await p.evaluate(() => (G.vlog || []).slice(-6)) })); });
   const url = await p.evaluate(() => __wsUrls[__wsUrls.length - 1]);
-  ok(/^wss:\/\/generativelanguage\.googleapis\.com\/ws\/google\.ai\.generativelanguage\.v1beta\.GenerativeService\.BidiGenerateContentConstrained\?access_token=test-pass$/.test(url), "the socket isn't Gemini's: " + url);
+  ok(/^wss:\/\/generativelanguage\.googleapis\.com\/ws\/google\.ai\.generativelanguage\.v1beta\.GenerativeService\.BidiGenerateContentConstrained\?access_token=test-pass(-\d+)?$/.test(url), "the socket isn't Gemini's: " + url);
   const raw = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)), n);
   let out = await raw(0); const setup = out.find(x => x.setup);
   ok(setup && setup.setup.model === "models/gemini-3.8-live" && setup.setup.generationConfig.responseModalities[0] === "AUDIO" && setup.setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName === "Kore" && setup.setup.systemInstruction.parts[0].text.length > 1000 && setup.setup.tools[0].functionDeclarations.length > 10 && setup.setup.inputAudioTranscription && setup.setup.outputAudioTranscription, "the setup message is wrong: " + JSON.stringify(setup).slice(0, 300));

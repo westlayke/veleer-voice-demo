@@ -245,8 +245,13 @@ test("Oct 24 call fixes: the phone pausing the sound doesn't end the call, and C
   ok(await p.evaluate(() => !G.live), "the call didn't end when the sound stayed paused");
   ok(await p.isVisible("#rsmGo") && /kept the sound/.test(await p.evaluate(() => document.getElementById("modal").innerText)), "no Carry on with the reason after the sound stayed paused: " + await p.evaluate(() => document.getElementById("modal").innerText.slice(0, 200)));
   await p.evaluate(() => { window.AudioContext = window.__heldAC2; });
+  // Carry on picks up the same conversation with a fresh pass: the one the button's touch warmed a line with is spent (Nov 1: every Carry on had been refused and opened a new conversation)
+  await p.evaluate(() => { G.convId = "conv_test1"; G.convAt = Date.now(); warmLine(); }); await p.waitForTimeout(300);
+  const warmN = await p.evaluate(() => (window.__wsProtoList || []).length);
   await p.tap("#rsmGo"); await p.waitForTimeout(1500);
   ok(await p.evaluate(() => G.live && G.hands), "hands-free was lost after Carry on");
+  const socks = await p.evaluate((n) => ({ urls: window.__wsUrls.slice(n - 1), protos: window.__wsProtoList.slice(n - 1).map(x => x[0]) }), warmN);
+  ok(socks.urls.length === 2 && !/conversation_id/.test(socks.urls[0]) && /conversation_id=conv_test1/.test(socks.urls[1]) && socks.protos[0] !== socks.protos[1] && /^xai-client-secret\.test-pass-\d+$/.test(socks.protos[1]), "the resumed line reused the warmed line's pass, or didn't carry the conversation: " + JSON.stringify(socks));
   ok(await p.evaluate(() => __sent.join(" ").includes("Hands-free mode is still on")), "Ara wasn't told hands-free is still on");
 });
 
@@ -1016,7 +1021,7 @@ test("Shadow machine findings (Oct 31): one check on Ara at a time, and a drop e
   await p.waitForTimeout(150);
   ok(!(await p.evaluate(() => G.ynWatch || G.sayWatch)), "a check outlived the drop: " + await live());
 });
-test("Carverhill's 10:02 PM call (Oct 31) and 12:02 AM call (Nov 1): a sound engine whose clock stands still with Ara's audio queued is closed and started afresh, up to three times, Ara says her last line again word for word, and a dead clock counts as nothing playing", async (p) => {
+test("Carverhill's 10:02 PM call (Oct 31) and 12:02 AM call (Nov 1): a sound engine whose clock stands still with Ara's audio queued is closed and started afresh once, Ara says her last line again word for word, and a dead clock counts as nothing playing", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const n0 = await p.evaluate(() => __sent.length);
   const stick = () => p.evaluate(() => { window.__ctx0 = G.ctx; G.lastBot = "Ask recorded for Roger. The next step is to record the gift. Do you want to do that now, yes or no?"; G.status = "Speaking";
@@ -1027,14 +1032,12 @@ test("Carverhill's 10:02 PM call (Oct 31) and 12:02 AM call (Nov 1): a sound eng
   ok(await p.evaluate(() => G.status !== "Speaking"), "the screen kept Speaking on a dead clock");
   let log = await p.log();
   ok(/sound clock stood still for \d\.\d s with 30\.0 s of Ara's audio queued/.test(log), "the still clock wasn't noticed: " + log.split("\n").slice(-6).join(" | ").slice(0, 400));
-  ok(/Starting the sound and mic afresh after the sound clock stood still \(1 of 3; the dead engine is closed first\)/.test(log) && await p.evaluate(() => G.ctx !== window.__ctx0 && G.playHead === 0 && window.__ctx0.state === "closed"), "the sound wasn't started afresh with the dead engine closed first: " + log.split("\n").slice(-4).join(" | ").slice(0, 300));
+  ok(/Starting the sound and mic afresh after the sound clock stood still \(1 of 1; the dead engine is closed first\)/.test(log) && await p.evaluate(() => G.ctx !== window.__ctx0 && G.playHead === 0 && window.__ctx0.state === "closed"), "the sound wasn't started afresh with the dead engine closed first: " + log.split("\n").slice(-4).join(" | ").slice(0, 300));
   ok(await p.evaluate((n) => __sent.slice(n).some(s => s.includes("force_message") && s.includes("record the gift")), n0) && /says her last line again, word for word/.test(log), "Ara wasn't given her last line to say again word for word: " + log.split("\n").slice(-4).join(" | ").slice(0, 300));
   ok(await p.evaluate((n) => !__sent.slice(n).some(s => /played none of your last reply/.test(s)), n0), "Ara was still asked for the line in her own words");
-  // the fresh engine's clock is dead too, twice more: each is closed and another started; the fourth time the app gives up on fresh starts
-  for (const k of [2, 3]) { await stick(); await p.waitForTimeout(4300); log = await p.log();
-    ok(new RegExp(`fresh start ${k - 1} of 3 had a dead clock too`).test(log) && new RegExp(`afresh after the sound clock stood still \\(${k} of 3`).test(log) && await p.evaluate(() => G.ctx !== window.__ctx0), `fresh start ${k} didn't happen: ` + log.split("\n").slice(-4).join(" | ").slice(0, 300)); }
+  // the fresh engine's clock is dead too: one fresh start is all the app tries (three in a row never helped on Nov 1), then the Carry on card
   await stick(); await p.waitForTimeout(6000); log = await p.log();
-  ok(/3 fresh starts had dead clocks too, so the Carry on card is shown/.test(log) && /pausing and resuming the engine/.test(log), "a fourth dead clock wasn't given up on, or no pause and resume was tried first: " + log.slice(-700));
+  ok(/1 fresh start had a dead clock too, so the Carry on card is shown/.test(log) && /pausing and resuming the engine/.test(log), "a second dead clock wasn't given up on, or no pause and resume was tried first: " + log.slice(-700));
   // the usual Carry on card, with the reason: its tap starts the sound and mic inside the touch (Carverhill, Nov 1: the card, not a new button)
   await p.waitForTimeout(500);
   ok(await p.evaluate(() => !G.live) && await p.isVisible("#rsmGo") && /kept its sound off after the lock/.test(await p.evaluate(() => document.getElementById("modal").innerText)), "the Carry on card with the reason wasn't shown: " + (await p.evaluate(() => document.getElementById("modal").innerText)).slice(0, 200));

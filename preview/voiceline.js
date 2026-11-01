@@ -242,8 +242,9 @@ function openSocket(token, first, second, warm) {
   // a line opened again within 25 minutes picks up the same conversation (xAI keeps it 30 minutes)
   const P = PROV(), resume = P.resume && G.convId && Date.now() - (G.convAt || 0) < RESUME_MS ? G.convId : null;
   const useWarm = !!(warm && warm.ws && warm.ws.readyState <= 1 && !resume && !second && !P.open);
+  if (warm && warm.ws && !useWarm) { try { warm.ws.close(); } catch (e) {} warm.ws = null; /* a warmed line not used (a resumed conversation) is closed, not left open */
+    if (resume) { token = null; vlog("the warmed line spent the pass: a fresh one for the resumed conversation"); } } /* a pass opens one line: the one the Carry on button warmed on touch had used it, and every resume with it was refused before it opened (Nov 1, three Carry ons) */
   if (!useWarm && !token) { getToken().then(tk => openSocket(tk, first, second)).catch(e => { endCall("couldn't start: " + String(e && e.message || e)); toast(callError(e)); }); return; } /* the warmed line went before the tap finished: a fresh pass */
-  if (warm && warm.ws && !useWarm) { try { warm.ws.close(); } catch (e) {} warm.ws = null; } /* a warmed line not used (a resumed conversation) is closed, not left open */
   const ws = useWarm ? warm.ws : P.open ? P.open(token, resume) : new WebSocket(P.url(resume, token), P.protocols(token));
   ws.resumed = resume; if (useWarm) { ws.onerror = null; ws.warmed = true; } try { ws.binaryType = "arraybuffer"; } catch (e) {} /* audio can come as binary frames (binAudio) */
   if (second) G.tries.add(ws); else { G.ws = ws; G.tries = new Set([ws]); }

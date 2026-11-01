@@ -19,7 +19,7 @@ function heardTick() { if (!G.live || !G.ctx || !(playingRaw() > 0)) { G.clockSe
    dead clock too, and the call sat on "Speaking" with nothing heard), then Ara says her last line again word for word (asked for it in her own words
    she answered "Silence." four times out of four). While the clock is dead nothing counts as playing: the screen says Listening and the app's waits
    for her sound stand down */
-const CLOCK_STILL_MS = 1500, CLOCK_RESTARTS = 3;
+const CLOCK_STILL_MS = 1500, CLOCK_RESTARTS = 1; /* one fresh start, then the Carry on card (Carverhill's 12:25 and 12:58 AM calls, Nov 1: three fresh starts in a row never helped and the card came 21 s after the unlock; one brings it to about 8 s) */
 function clockDead() { const s = G.clockSeen; return !!(s && G.ctx && s.ctx === G.ctx && G.ctx.currentTime === s.t && Date.now() - s.at >= CLOCK_STILL_MS); }
 function clockWatch() {
   const now = Date.now(), t = G.ctx.currentTime, seen = G.clockSeen;
@@ -31,7 +31,7 @@ function clockWatch() {
     act("step", `The phone's sound clock stood still for ${still} s with ${playingRaw().toFixed(1)} s of Ara's audio queued: pausing and resuming the engine`);
     G.selfSuspend = ctx; ctx.suspend().then(() => ctx.resume()).catch(() => {}).then(() => { if (G.selfSuspend === ctx) G.selfSuspend = null; }); return; }
   if (n >= CLOCK_RESTARTS) { if (!G.clockGaveUp) { G.clockGaveUp = true;
-      act("step", `The phone's sound clock stood still again with ${playingRaw().toFixed(1)} s of Ara's audio queued: ${CLOCK_RESTARTS} fresh starts had dead clocks too, so the Carry on card is shown (sound started inside a tap is honoured by the phone; Carverhill, Nov 1: the usual card, not a new button)`);
+      act("step", `The phone's sound clock stood still again with ${playingRaw().toFixed(1)} s of Ara's audio queued: ${CLOCK_RESTARTS} fresh start${CLOCK_RESTARTS === 1 ? " had a dead clock" : "s had dead clocks"} too, so the Carry on card is shown (sound started inside a tap is honoured by the phone; Carverhill, Nov 1: the usual card, not a new button)`);
       interrupted("the phone kept its sound engine stopped after the lock", "Your phone kept its sound off after the lock. Tap Carry on to bring it back."); } return; }
   G.clockStuckAt = now; G.clockStuckN = n + 1;
   act("step", `The phone's sound clock stood still for ${((now - seen.at) / 1000).toFixed(1)} s with ${playingRaw().toFixed(1)} s of Ara's audio queued (sound ${G.ctx.state}${n ? `; fresh start ${n} of ${CLOCK_RESTARTS} had a dead clock too` : ""}): nothing was heard`);
