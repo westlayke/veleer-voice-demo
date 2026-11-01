@@ -537,7 +537,7 @@ test("Carverhill's 1:14 PM call (Oct 29): a form with every required field in st
   await ara(p, "show_interaction_draft", { contact_name: "James Okafor" });
   await said(p, "In person."); await ara(p, "show_interaction_draft", { contact_name: "James Okafor", date: "2026-10-29", meetingType: "In person" });
   await said(p, "He's excited about giving to Citizens Alliance."); await ara(p, "show_interaction_draft", { contact_name: "James Okafor", summary: "He's excited about giving to Citizens Alliance." });
-  await said(p, "Yes."); await ara(p, "show_interaction_draft", { contact_name: "James Okafor", substantive: true }); await p.waitForTimeout(300);
+  await p.says("Was it a substantive interaction, one that moved the relationship forward, yes or no?"); await said(p, "Yes."); await ara(p, "show_interaction_draft", { contact_name: "James Okafor", substantive: true }); await p.waitForTimeout(300);
   // the line drops before the next-step question went out: the fresh line says the form and asks the next step itself, never "say that again"
   await p.evaluate(() => { window.__ws0 = __ws; G.forced = null; G.pendingForce = null; clearTimeout(G.forceTimer); __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1800);
   const out = await p.evaluate(() => ({ forced: __sent.filter(s => /force_message/.test(s)).map(s => JSON.parse(s).item.content[0].text).pop() || "", told: (G.justNow || {}).text || "", log: ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | ") }));
@@ -859,7 +859,7 @@ test("Next step and step offers (Oct 31): a yes or no to Ara's own next-step que
   // 1. Ara asks the next-step question herself (from still_needed); the officer says yes; her reply misses it: one nudge, then none
   await said(p, "Log an interaction with Ruth, I met her at the Halloween party today.");
   let r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", date: today, meetingType: "Event", summary: "Met Ruth at the Halloween party." });
-  await said(p, "Yes, it was."); r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", substantive: true });
+  await p.says("Was it a substantive interaction, one that moved the relationship forward, yes or no?"); await said(p, "Yes, it was."); r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", substantive: true });
   await p.evaluate(() => { V.askedNext = false; }); /* as if the app had not asked: Ara asks it herself */
   await araSays("A substantive interaction needs a next step. Do you want to set it now, yes or no?"); await p.waitForTimeout(100);
   await said(p, "Yes."); await p.waitForTimeout(100);
@@ -877,7 +877,7 @@ test("Next step and step offers (Oct 31): a yes or no to Ara's own next-step que
   await p.evaluate(() => { V = null; G.recent = []; checkEnd("", "ynWatch"); renderOverlay(); });
   await said(p, "Log a phone call with Ken Ito today, we talked about the gala.");
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: today, meetingType: "Phone call", summary: "Talked about the gala." });
-  await said(p, "Yes, it was."); r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true });
+  await p.says("Was it a substantive interaction, one that moved the relationship forward, yes or no?"); await said(p, "Yes, it was."); r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true });
   await p.evaluate(() => { V.askedNext = false; });
   await araSays("It needs a next step, which becomes a task. Do you want to set it now, yes or no?"); await p.waitForTimeout(100);
   await said(p, "No."); await p.waitForTimeout(100);
