@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 5:29 PM",
+      "change": "Experiment (option 2): when Ara's reply to the officer's yes or no misses what it should do, the app's one nudge now goes as a conversation item first, then the reply request. The real-Ara test harness waits 20 s (was 10 s) for her follow-up after a reply with no question.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Nov 1 diag run: after a reply the voice service started itself from the officer's words, a bare reply request got no reply at all (4 of 4 misses); the same request after a tool result answers in under a second. Carverhill: \"Do the test in option 2 and let me know what you then recommend\"."
+    },
+    {
       "date": "Nov 1, 4:09 PM",
       "change": "The next-step question counts in Ara's own wording too (\"Do you want to set that now, and if so, what is it and when is it due?\"), so the officer's yes or no is taken and the read-back follows. The real Ara test harness now waits for a nudge's follow-up reply before hanging up.",
       "area": "Voice",
