@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 9:33 PM",
+      "change": "Preview: right after the phone locks or pauses the sound, if Ara's reply doesn't start within 4 seconds, the app opens a fresh line straight away instead of waiting about 20 seconds with the \"taking a moment\" fillers. This happens once per pause. After the reconnect, Ara says where we were as usual.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Go\": in the 9:16 PM call the voice service's line went dead during a lock and the cut question took 35 seconds to come back"
+    },
+    {
       "date": "Oct 31, 9:08 PM",
       "change": "Preview: if the phone pauses the sound while Ara is asking a question (a screen lock, a notification), then once the sound is back Ara is asked to put the question again in her own words, once, and the app checks she did. Nothing is repeated if the officer has already answered. The app says nothing itself.",
       "area": "Voice",

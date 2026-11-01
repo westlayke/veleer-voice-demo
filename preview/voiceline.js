@@ -523,6 +523,7 @@ function cue(kind) {
 const CREATE_WAIT_MS = 2500; // serial engines: a second reply request waits for the first to report started (or this long)
 // a reply is running, or was asked for and hasn't reported started yet: on a serial engine nothing else may ask for one (OpenAI refuses it)
 const replyBusy = () => G.responding || (PROV().serial && !!G.createAt && Date.now() - G.createAt < CREATE_WAIT_MS);
+const PAUSE_FRESH_MS = 30000, PAUSE_ASK_MS = 4000; /* a reply request within 30 s of a lock or sound pause gets 4 s to start */
 function askReply(guidance) {
   if (guidance !== undefined) G.askGuide = guidance; // the same guidance goes again if the app has to ask twice
   if (PROV().serial && replyBusy()) { // one at a time: held until the running reply is done
@@ -533,6 +534,12 @@ function askReply(guidance) {
   send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now(); /* G.slowSaid is cleared when a reply starts, not on a re-ask: "Ara's taking a moment" once per wait, then "Still waiting on Ara" (Oct 28 4:41 PM call: it repeated every 9 s) */
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
   G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
+  /* right after the phone locked or paused the sound, the voice service's line can be dead while it still looks open (Carverhill's 9:18 PM
+     call, Oct 31: no reply to the cut-question ask, 20 s of fillers before the reconnect): no reply started in 4 s means a fresh line, once per pause */
+  if (Date.now() - (G.pauseBackAt || 0) < PAUSE_FRESH_MS) { G.pauseBackAt = 0; const pws = G.ws; clearTimeout(G.pauseWatch);
+    G.pauseWatch = setTimeout(() => { if (!G.live || !G.asked || G.ws !== pws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+      clearTimeout(G.askWatch); G.askWatch = null; clearTimeout(G.tickWatch); G.asked = false; G.retried = 0;
+      act("step", `No reply started ${PAUSE_ASK_MS / 1000} s after the phone paused the sound: fresh line`); reconnect("the line went quiet after the phone paused"); }, PAUSE_ASK_MS); }
   // no reply at the first tick: test the line then, so a bad line gets a fresh one about 9 s sooner (seen Oct 24: 13 s to notice)
   const ws = G.ws; G.tickWatch = setTimeout(() => { if (!G.live || !G.asked || G.ws !== ws) return;
     pingMs(EARLY_PING_MS).then(ms => { if (!G.live || !G.asked || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
@@ -580,7 +587,7 @@ function appHidden() {
       if (G.ctx && G.ctx.state !== "running") G.ctx.resume().catch(() => {});
       const micGone = G.micEndedAtLock; G.micEndedAtLock = false;
       if (paused) { act("step", `App hidden for ${s} s: reopening the line on the same conversation`); lockResume(); }
-      else { act("step", "App hidden for " + s + " s, then back (line still open)"); /* the mic the phone took at the lock comes back fresh; if it can't, the call ends as before */
+      else { G.pauseBackAt = Date.now(); act("step", "App hidden for " + s + " s, then back (line still open)"); /* the mic the phone took at the lock comes back fresh; if it can't, the call ends as before */
         if (micGone && typeof restartAudio === "function") restartAudio("after the phone took the mic at the lock").then(ok => { if (!ok && G.live) interrupted("mic ended", "Your phone took the microphone away (a call, Siri or the recording dialog)."); }); }
       return; }
     if (!G.lockPaused && Date.now() - G.hiddenAt > LOCK_CLOSE_MS) lockPause();
@@ -609,7 +616,7 @@ function soundPaused(ctx, limit = SOUND_BACK_MS) { // limit: how long to wait fo
   const tick = setInterval(() => {
     if (!G.live || G.ctx !== ctx) { clearInterval(tick); G.soundPausedAt = 0; return; }
     if (!G.soundPausedAt) { clearInterval(tick); return; }
-    if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); if (typeof soundBack === "function") soundBack(); return; }
+    if (ctx.state === "running") { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(1); G.soundPausedAt = 0; G.pauseBackAt = Date.now(); vlog("sound back after " + s + " s"); act("step", "Sound paused by the phone for " + s + " s, then came back"); if (typeof soundBack === "function") soundBack(); return; }
     if (document.visibilityState === "visible") ctx.resume().catch(() => {});
     if (Date.now() - G.soundPausedAt > hiddenLimit(limit)) { clearInterval(tick); const s = ((Date.now() - G.soundPausedAt) / 1000).toFixed(0); G.soundPausedAt = 0;
       if (audioRetry(`after the sound stayed paused for ${s} s`)) return; /* one fresh start before giving up (Oct 28: the card came up after the unlock wait) */

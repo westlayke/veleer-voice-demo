@@ -825,6 +825,7 @@ function resetCall() {
   G.unheard = null;
   G.unheardResp = 0;
   G.cutQ = null;
+  G.pauseBackAt = 0; clearTimeout(G.pauseWatch);
   G.resend = null;
   if (G.silentWait) { clearTimeout(G.silentWait.still);
     clearTimeout(G.silentWait.resend);

@@ -973,4 +973,18 @@ test("Carverhill's 8:58 PM call (Oct 31): a question the phone's sound pause cut
   ok(!(await creates(n0)).some(g => /missed part of it/.test(g)), "the question was asked again though the officer had spoken");
   ok(/not asked again/.test(await p.log()), "the stand-down wasn't logged");
 });
+test("Carverhill's 9:18 PM call (Oct 31): right after the phone paused the sound, a reply request that doesn't start in 4 s gets a fresh line; otherwise the usual wait", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  // 1. no pause: a reply request that doesn't start keeps the usual wait (no fresh line at 4.5 s)
+  let n = await p.evaluate(() => { G.pauseBackAt = 0; askReply("Ask the officer what they would like to do."); return __wsUrls.length; });
+  await p.waitForTimeout(4600);
+  ok(await p.evaluate((n) => __wsUrls.length === n, n), "a fresh line opened without a pause");
+  await p.evaluate(() => { clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.asked = false; G.askWatch = null; });
+  // 2. the sound just came back from a pause: no reply started in 4 s -> fresh line, once
+  n = await p.evaluate(() => { G.pauseBackAt = Date.now() - 2000; askReply("Ask it again now: \"Do you want to do that now, yes or no?\""); return __wsUrls.length; });
+  await p.waitForTimeout(4600);
+  ok(/No reply started 4 s after the phone paused the sound: fresh line/.test(await p.log()), "no fresh line 4 s after a pause");
+  ok(await p.waitForFunction((n) => __wsUrls.length > n, n, { timeout: 8000 }).then(() => true, () => false), "the line wasn't reopened");
+  ok(await p.evaluate(() => !G.pauseBackAt), "the pause was not used up (it would fire again)");
+});
 };
