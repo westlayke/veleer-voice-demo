@@ -217,7 +217,7 @@ function nextStepNo(text) {
   if (!/^(no|nope|not now|not right now|no not now|not yet|no not yet)$/.test(t)) return false;
   const last = ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").trim(); if (!last.endsWith(NEXT_Q.trim())) return false;
   if (G.noAt && Date.now() - G.noAt < 3000) return true; G.noAt = Date.now(); /* the transcript lands two or three times */
-  act("step", "a no to the next step: the app asks what they'd like to do"); stopPlayback(); if (G.responding) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now();
+  act("step", "a no to the next step: the app asks what they'd like to do"); stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now();
   forceSay(NEXT_NO_Q); return true;
 }
 // Ara's own yes-or-no question that the officer's words answer, with what each answer means (Carverhill, Oct 31: Ara, not the app, follows the
@@ -501,7 +501,7 @@ function hfYesHeard(text) {
   if (c.key !== V.action + JSON.stringify(readDraft()) || Date.now() - (G.hfYesAt || 0) < HF_YES_AGAIN_MS) return false;
   if (c.step === "amount" && c.askedByApp && !amountAnswered(c)) { act("step", `"${String(text).slice(0, 40)}" not taken as the amount yes: it came before the amount check was said`); return false; }
   G.hfYesAt = Date.now(); const title = ACTIONS[V.action].title;
-  stopPlayback(); if (G.responding) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } /* whatever Ara started to say about the yes; her save_form still gets its answer (hfSave: already saved) */
+  stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } /* whatever Ara started to say about the yes; her save_form still gets its answer (hfSave: already saved) */
   if (secondYes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; c.askedByApp = true; c.askedAt = Date.now(); paintCall(); act("step", `the officer's yes to the ${title} read-back: the app checks the amount itself`);
     forceSay(`Just to be sure, the amount is ${money(readDraft()[secondYes(V.action)])}. Is that right?`); return true; }
   const r = hfCommit();

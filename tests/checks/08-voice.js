@@ -228,7 +228,7 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   const st = await p.evaluate(() => { G.status = "Speaking"; G.playHead = 0; G.sources = []; idleCheck(); return G.status; });
   ok(st === "Listening", "the screen kept saying Speaking with nothing playing: " + st);
   // 4. a status recording still playing when the line returns is cut, and "You're back" isn't said over it
-  const back = await p.evaluate(() => { const n = ACT.q.length; G.downAt = Date.now() - 6000; G.lineEndAt = Date.now() + 2000; G.lineSrc = { stop() { window.__lineStopped = true; } }; downEnd(true); return { stopped: window.__lineStopped, log: ACT.q.slice(n).map(a => a.text).join(" | ") }; });
+  const back = await p.evaluate(() => { const n = ACT.q.length; __down(Date.now() - 6000); G.lineEndAt = Date.now() + 2000; G.lineSrc = { stop() { window.__lineStopped = true; } }; downEnd(true); return { stopped: window.__lineStopped, log: ACT.q.slice(n).map(a => a.text).join(" | ") }; });
   ok(back.stopped && /status line was cut short/.test(back.log) && !/You're back with Ara/.test(back.log), "the status recording wasn't cut when the line returned: " + JSON.stringify(back));
 });
 
@@ -1350,13 +1350,13 @@ test("Reconnect lines with the officer's name (Oct 28): fetched once from the ke
   ok(await p.evaluate(() => __tts.length === 0), "the lines were fetched a second time although the phone has them");
   // with the lines decoded, the dropped line and the still-trying lines come with the name, in turn; back too
   const saidLines = (log) => (log.match(/The phone said \(recording\): "[^"]*"/g) || []).map(x => x.replace(/^[^"]*"/, "").replace(/"$/, ""));
-  await p.evaluate(() => { namedTexts("Pat").forEach(t => { namedBuf[t] = G.ctx.createBuffer(1, 240, 24000); }); G.live = true; G.downAt = Date.now() - 6000; G.downN = 0; downSay("dropped"); downSay("still"); downSay("still"); downSay("still"); });
-  await p.waitForTimeout(150); await p.evaluate(() => downEnd(true)); /* a status line still playing would be cut instead */
+  await p.evaluate(() => { namedTexts("Pat").forEach(t => { namedBuf[t] = G.ctx.createBuffer(1, 240, 24000); }); G.live = true; __down(Date.now() - 6000); G.downN = 0; downSay("dropped"); downSay("still"); downSay("still"); downSay("still"); });
+  await p.waitForTimeout(150); await p.evaluate(() => { downEnd(true); __down(0); }); /* a status line still playing would be cut instead */
   let said = saidLines(await p.evaluate(() => ACT.q.map(a => a.text).join(" | ")));
   ok(said.join("|") === "The line dropped, Pat. Reconnecting you to Ara.|Still trying, Pat. I'm not giving up on you.|Hang in there, Pat. I'll keep knocking until Ara answers.|No signal yet, Pat, but I'm as determined as ever.|You're back with Ara, Pat.", "the named lines weren't said in turn: " + JSON.stringify(said));
   // a phone without the named lines falls back to the stock recordings
-  await p.evaluate(() => { Object.keys(namedBuf).forEach(k => delete namedBuf[k]); ACT.q.length = 0; G.downAt = Date.now() - 6000; G.downN = 0; downSay("dropped"); downSay("still"); });
-  await p.waitForTimeout(150); await p.evaluate(() => { G.lineEndAt = 0; downEnd(true); }); /* as if the recording had finished */
+  await p.evaluate(() => { Object.keys(namedBuf).forEach(k => delete namedBuf[k]); ACT.q.length = 0; __down(Date.now() - 6000); G.downN = 0; downSay("dropped"); downSay("still"); });
+  await p.waitForTimeout(150); await p.evaluate(() => { G.lineEndAt = 0; downEnd(true); __down(0); }); /* as if the recording had finished */
   said = saidLines(await p.evaluate(() => ACT.q.map(a => a.text).join(" | ")));
   ok(said.join("|") === "The line dropped. Reconnecting you to Ara.|Still trying to reconnect.|You're back with Ara.", "without the named lines the stock recordings weren't used: " + JSON.stringify(said));
   // the give-up is 10 minutes, warned from 8 (Carverhill Oct 29; an 8-minute dead spot, Oct 28)

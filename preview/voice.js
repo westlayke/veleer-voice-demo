@@ -340,7 +340,7 @@ function paintCall() {
   document.body.classList.toggle("incall", G.live);
   el.hidden = !G.live;
   if (!G.live) return;
-  el.innerHTML = `<div class="cb-in"><span class="dot ${/^(Connecting|Reconnecting)/.test(G.status) ? "a" : "g"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div>${G.saveCheck ? `<div class="cb-yes">Say “yes” to save</div>` : ""}</div><button class="btn quiet cb-hf${G.hands ? " on" : ""}" data-act3="hands" aria-pressed="${!!G.hands}" title="${G.hands ? "Hands-free is on: Ara saves when you say yes. Tap to turn it off" : "Hands-free is off: tap to let Ara save when you say yes"}">${CAR} ${G.hands ? "Turn hands-free off" : "Turn hands-free on"}</button><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
+  el.innerHTML = `<div class="cb-in"><span class="dot ${lineUp() ? "g" : "a"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div>${G.saveCheck ? `<div class="cb-yes">Say “yes” to save</div>` : ""}</div><button class="btn quiet cb-hf${G.hands ? " on" : ""}" data-act3="hands" aria-pressed="${!!G.hands}" title="${G.hands ? "Hands-free is on: Ara saves when you say yes. Tap to turn it off" : "Hands-free is off: tap to let Ara save when you say yes"}">${CAR} ${G.hands ? "Turn hands-free off" : "Turn hands-free on"}</button><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
   capTick();
 }
 const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
@@ -482,7 +482,7 @@ function playPcm(i16) {
   const at = Math.max(G.ctx.currentTime + 0.02, G.playHead, lineEnd); src.start(at); G.playHead = at + buf.duration;
   if (G.respAudio) { if (G.respAudio.t0 == null) G.respAudio.t0 = at; G.respAudio.end = G.playHead; } /* where this reply's audio sits on the clock, for a truncate on interruption */
   const cap = G.caps && G.caps[G.caps.length - 1]; if (cap) { if (cap.t0 == null) cap.t0 = at; cap.t1 = G.playHead; }
-  src.resp = G.respSeq; src.endAt = G.playHead; G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); };
+  src.resp = G.respSeq; src.endAt = G.playHead; G.sources.push(src); src.onended = () => { G.sources = G.sources.filter(s => s !== src); if (!G.sources.length) smSend("ARA_PLAYED"); };
 }
 // stop one reply's queued audio and nothing else (Oct 28 10:06 PM: cutting a late scripted copy with stopPlayback() also cut the read-back Ara was still saying)
 function stopResp(seq) { const cut = G.sources.filter(s => s.resp === seq); cut.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = G.sources.filter(s => s.resp !== seq);
@@ -494,7 +494,7 @@ function truncateSpoken() {
   const ms = Math.max(0, Math.round((now - r.t0) * 1000)); send({ type: "conversation.item.truncate", item_id: r.itemId, content_index: 0, audio_end_ms: ms });
   vlog(`interrupted after ${ms} ms of ${Math.round((r.end - r.t0) * 1000)}: the rest is cut from the record`); r.itemId = null;
 }
-function stopPlayback() { if (G.sources.length) vlog(`playback stopped (${G.sources.length} chunks cut)`); G.sources.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = []; G.playHead = 0; }
+function stopPlayback() { if (G.sources.length) vlog(`playback stopped (${G.sources.length} chunks cut)`); G.sources.forEach(s => { try { s.stop(); } catch (e) {} }); G.sources = []; G.playHead = 0; smSend("ARA_PLAYED"); }
 
 // keep the screen on while a conversation runs (the phone would otherwise auto-lock and pause the web app)
 async function keepAwake() {
@@ -572,9 +572,9 @@ async function openAudio() {
   if (!G.live || G.ctx !== ctx) { try { stream.getTracks().forEach(t => t.stop()); } catch (x) {} return false; } // hung up, or started over, while the mic was asked for
   G.stream = stream;
   // a phone call, timer, alarm or Siri takes the speaker or mic: the audio pauses or the mic goes quiet
-  ctx.onstatechange = () => { if (G.live && G.ctx === ctx && G.status !== "Connecting…" && ctx.state !== "running") soundPaused(ctx); };
+  ctx.onstatechange = () => { if (G.live && G.ctx === ctx && !lineIs("opening") && ctx.state !== "running") soundPaused(ctx); };
   const mine = (tr) => G.stream && G.stream.getAudioTracks().includes(tr); // a mic replaced after a lock no longer speaks for the call
-  stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && mine(tr) && G.status !== "Connecting…") micMuted(tr); }; tr.onended = () => micEnded(tr, mine); });
+  stream.getAudioTracks().forEach(tr => { tr.onmute = () => { if (G.live && mine(tr) && !lineIs("opening")) micMuted(tr); }; tr.onended = () => micEnded(tr, mine); });
   const srcNode = ctx.createMediaStreamSource(stream);
   const onPcm = (f32) => {
     if (G.ctx !== ctx) return;
@@ -586,7 +586,7 @@ async function openAudio() {
         if (rms < BARGE_RMS) f32 = new Float32Array(f32.length); else G.barge = (G.barge || 0) + 1;
       }
       if (!(G.playHead > G.ctx.currentTime + 0.03)) { let sq = 0; for (let i = 0; i < f32.length; i += 4) sq += f32[i] * f32[i]; const lvl = window.__quietMic ? 0 : Math.sqrt(sq / (f32.length / 4)); /* __quietMic: the harness's fake mic is loud */
-      if (lvl > SPEAK_RMS) { if (!G.speechSince) G.speechSince = Date.now(); G.loudAt = Date.now(); if (/^Reconnecting/.test(G.status)) { if (!G.gapLoud) G.gapLoud = Date.now(); else if (Date.now() - G.gapLoud > GAP_SPEECH_MS) G.spokeInGap = true; } } else { G.gapLoud = 0; if (G.speechSince && Date.now() - (G.loudAt || 0) > 8000) G.speechSince = 0; } }
+      if (lvl > SPEAK_RMS) { if (!G.speechSince) G.speechSince = Date.now(); G.loudAt = Date.now(); if (lineIs("reconnecting", "down")) { if (!G.gapLoud) G.gapLoud = Date.now(); else if (Date.now() - G.gapLoud > GAP_SPEECH_MS) G.spokeInGap = true; } } else { G.gapLoud = 0; if (G.speechSince && Date.now() - (G.loudAt || 0) > 8000) G.speechSince = 0; } }
     G.buf.push(downsample(f32, G.ctx.sampleRate));
       const total = G.buf.reduce((n, a) => n + a.length, 0);
       if (total < 2400) return; // ~100 ms
@@ -698,7 +698,7 @@ async function startCall(opening) {
   G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */
   { const vb = document.querySelector("#overlay .vfill");
     if (vb) vb.remove(); }
-  G.status = "Connecting…";
+  G.status = "Connecting…"; smSend("CALL_START");
   G.bot = "";
   G.caps = [];
   G.tour = G.tourEnding = false;
@@ -804,7 +804,7 @@ function endCall(why) {
 }
 // a call has ended: the line, the turn, the scripted-line watches and the call's clocks go back to their start
 function resetCall() {
-  G.micEndedAtLock = false;
+  smSend("CALL_END"); G.micEndedAtLock = false;
   G.ws = G.stream = G.ctx = G.node = null;
   G.buf = [];
   G.audioOn = false;
@@ -815,7 +815,6 @@ function resetCall() {
   G.dropNext = false;
   G.speechSince = 0;
   G.probing = false;
-  G.stalled = false;
   G.spokeInGap = false;
   G.undoSaid = false;
   G.forced = null;
@@ -890,7 +889,7 @@ function voiceCommand(text) {
   else if (cmd === "restart") { if (!V) return false; say = `The officer said "start over". The app cleared the ${restartForm()} form. Ask for the first detail again.`; }
   else if (cmd === "back") { if (V) return false; const b = document.querySelector("header.top .back"); if (!b) return false; const where = BACK_NAMES[b.dataset.go] || "the previous screen"; go(b.dataset.go); say = { force: `Back on ${where}.` }; }
   vlog("voice command: " + cmd); act("step", "voice command " + cmd);
-  stopPlayback(); if (G.responding) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now(); // drop whatever the model started to do with those words
+  stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now(); // drop whatever the model started to do with those words
   if (say === null) hfAnnounce(); else if (say.force) forceSay(say.force, say.then); else guide(say); return true;
 }
 // Guidance for Ara's next reply only: it travels with the reply request (xAI's per-response instructions), so it never sits in the
@@ -946,13 +945,14 @@ function ask(request) {
 }
 function onEvent(e) {
   const t = e.type || "";
+  if (t === "response.created") smSend("ARA_STARTED"); else if (/audio\.delta$/.test(t)) { if (!araSounding()) smSend("ARA_SOUND"); } else if (t === "response.done") smSend("ARA_DONE"); /* the machine hears every reply, dropped ones too */
   if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; G.responding = false; flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
   if (t === "input_audio_buffer.speech_started") { if (G.nudge) { act("step", "The officer spoke: the ask for the tool call stands down"); G.nudge = null; } if (G.ctxWatch) { act("step", "The officer spoke: the ask for where we were stands down"); G.ctxWatch = null; } G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true;
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0;
       clearTimeout(G.idleTimer);
-      if (G.responding) send({ type: "response.cancel" });
+      if (araBusy()) send({ type: "response.cancel" });
       stopPlayback();
       if (G.forced) { G.forced = null;
         clearTimeout(G.forceTimer); } /* a goodbye still waiting to be said is dropped */
@@ -981,7 +981,7 @@ function onEvent(e) {
   if (/input_audio_transcription\.completed/.test(t) && e.transcript && onlyNoise(e.transcript)) act("step", `Heard only noise ("${String(e.transcript).slice(0, 40)}"): not taken as the officer speaking`);
   else if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1;
     G.heardWait = null;
-    if (!G.turnOpen && !G.responding && !G.speechOn) { G.turnOpen = Date.now();
+    if (!G.turnOpen && !araBusy() && !G.speechOn) { G.turnOpen = Date.now();
       G.turnStep = 0; } /* the officer's turn is open until a reply starts (turnWatch); a partial transcript while they are still talking opens nothing (real-line runs Oct 29: "taking a moment" 4 s into a long sentence) */
     G.lastHeard = { text: e.transcript, n: G.heardN, at: Date.now(), repeat: !!(G.lastHeard && Date.now() - G.lastHeard.at < REPEAT_MS && sameWords(e.transcript).startsWith(sameWords(G.lastHeard.text))) };
     act("user", e.transcript);
@@ -1000,7 +1000,7 @@ function onEvent(e) {
   else if (t === "response.done" && G.bot) { G.lastBot = G.bot; G.lastBotAt = Date.now(); act("grok", G.bot); if (typeof lineHeard === "function") lineHeard(G.bot); recent(botName(), G.bot); saveAckCheck(G.bot); }
   if (t === "response.done") { contextCheck(e.response || {}); toolCheck(e.response || {}); if (typeof ynCheck === "function") ynCheck(e.response || {}); if (typeof sayCheck === "function") sayCheck(e.response || {}); replyCheck(e.response || {}); G.bot = ""; }
   if (t === "input_audio_buffer.speech_started") { busy(); if (G.idleEnding) { G.idleEnding = false; clearTimeout(G.idleTimer); } truncateSpoken(); stopPlayback(); G.status = "Listening"; G.bot = ""; G.caps = []; paintCall();
-    if (G.asked && !G.responding && PROV().forceItem) { if (G.savedAt && Date.now() - G.savedAt < SAVE_ECHO_MS) act("step", "The officer spoke right after a save: the save confirmation is still coming (not cancelled)"); /* Oct 28 12:54 PM call: a repeated "yes, save it" cancelled the confirmation and the officer heard nothing */
+    if (G.asked && !araBusy() && PROV().forceItem) { if (G.savedAt && Date.now() - G.savedAt < SAVE_ECHO_MS) act("step", "The officer spoke right after a save: the save confirmation is still coming (not cancelled)"); /* Oct 28 12:54 PM call: a repeated "yes, save it" cancelled the confirmation and the officer heard nothing */
       else { clearTimeout(G.askWatch);
         G.askWatch = null;
         clearTimeout(G.tickWatch);
@@ -1009,7 +1009,7 @@ function onEvent(e) {
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…";
     G.speechOn = false;
     G.heardWait = { n: G.heardN || 0, at: Date.now() };
-    if (!G.responding) { G.turnOpen = Date.now();
+    if (!araBusy()) { G.turnOpen = Date.now();
       G.turnStep = 0; if (typeof thinkArm === "function") thinkArm(); }
     paintCall(); } /* a reply already running (the app's save line on a quick "yes") answers this turn: real-line runs Oct 29 said "Ara's taking a moment" 3 s after every save line */ /* the transcript of this turn is still to come: a tool call before it waits (onTool) */
   else if (t === "response.created" && G.retriedAt && !G.asked && G.spokeSince > G.retriedAt && Date.now() - G.retriedAt < 30000 && !G.heardSinceRetry) {
@@ -1169,7 +1169,7 @@ function toolCheck(r) {
 }
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;
-  if (!G.responding) { flushQueued(); return; }
+  if (!araBusy()) { flushQueued(); return; }
   clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { G.responding = false; flushQueued(); }, 6000); // in case response.done never arrives
 }
 // The app's answer to a tool call. Only data goes back in the tool result; anything about what to say next rides with the reply request

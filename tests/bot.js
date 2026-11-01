@@ -24,6 +24,9 @@ const FAKES = () => {
   window.WebSocket = class { constructor(u, protos) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__wsProtos = protos || []; window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); try { const e = JSON.parse(d); if (e.type === "session.update" && !window.__noReceipt) setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "session.updated" }) }), 40); /* the service confirms every update, in order (the state receipt) */ if (e.item && e.item.type === "force_message" && !window.__noAutoForce) { // xAI plays a scripted line as a response of its own
           setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.created" }) }), 20); setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }), 60); } } catch (x) {} } close() { this.readyState = 3; } };
   window.__logs = [];
+  /* pokes that move the old flags AND the state machine on preview-sm (phase 2: the app reads the machine there): the line down since `at` (0 = up), a reply open or not */
+  window.__down = (at) => { G.downAt = at; if (window.__sm) { if (at) { __sm.send("LINE_DROP"); __sm.send("LINE_DOWN"); __sm.facts.downAt = at; } else __sm.send("LINE_UP"); } };
+  window.__busy = (on) => { G.responding = on; if (window.__sm) __sm.send(on ? "ARA_STARTED" : "ARA_DONE"); };
   const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/log/.test(String(u))) { if (o && o.body) window.__logs.push(JSON.parse(o.body)); return Promise.resolve(new Response('{"logging":true}', { status: 200 })); }
     return /workers\.dev/.test(String(u)) ? Promise.resolve(new Response('{"value":"test-pass"}', { status: 200 })) : f(u, o); };
 };

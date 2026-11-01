@@ -140,7 +140,7 @@ test("Hands-free: a new opportunity always asks the campaign when the entity has
   await p.evaluate(() => { window.__ws0 = __ws; G.lastAct = Date.now() - 61000; G.loudAt = 0; /* a form is open: the phone allows 60 s of quiet (Oct 28) */ const keep = setInterval(() => { if (!G.live) return clearInterval(keep); G.lastMsg = Date.now(); G.loudAt = 0; G.speechSince = 0; }, 100); window.__keep = keep; }); // the test browser's pretend mic beeps
   await p.waitForTimeout(4500);
   ok(await p.evaluate(() => __ws === __ws0 && G.idleEnding && G.forced && /Should I hang up now/.test(G.forced.text)), "a live line with a slow test was reconnected instead of the normal quiet hang-up (Ara's scripted question)");
-  await p.evaluate(() => { clearInterval(__keep); G.responding = true; __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
+  await p.evaluate(() => { clearInterval(__keep); __busy(true); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); });
   await p.waitForTimeout(3400); // long enough for a pending scripted line's fallback, which must not happen
   const off = await p.evaluate(() => ({ live: G.live, ending: G.idleEnding, forced: !!G.forced, fallback: __sent.some(s => s.includes("Should I hang up now") && JSON.parse(s).type === "response.create"), cancel: __sent.some(s => JSON.parse(s).type === "response.cancel") }));
   ok(off.live && !off.ending && !off.forced && !off.fallback && off.cancel, "the officer's late answer didn't call off the hang-up cleanly: " + JSON.stringify(off));
@@ -838,7 +838,7 @@ test("Carverhill's 5:50 PM call (Oct 30): the late-copy watch ends on a new line
   await p.waitForFunction(() => G.status === "Listening" && !G.forced && !G.pendingForce && !G.downAt, null, { timeout: 8000 }).catch(() => {}); await p.waitForTimeout(1500);
   ok(await p.evaluate(() => FORM_REASK_MS === 13000), "the form re-ask isn't at 13 s");
   const n2 = await p.evaluate(() => __sent.length);
-  await p.evaluate(() => { G.asked = false; G.forced = null; G.pendingForce = null; G.turnOpen = 0; G.downAt = 0; if (G.silentWait) { clearTimeout(G.silentWait.resend); G.silentWait = null; } G.lastAct = Date.now() - 13500; clearTimeout(G.forceTimer); }); /* the soundless lines above left a sound wait behind */ await p.waitForTimeout(2500);
+  await p.evaluate(() => { G.asked = false; G.forced = null; G.pendingForce = null; G.turnOpen = 0; __down(0); if (G.silentWait) { clearTimeout(G.silentWait.resend); G.silentWait = null; } G.lastAct = Date.now() - 13500; clearTimeout(G.forceTimer); }); /* the soundless lines above left a sound wait behind */ await p.waitForTimeout(2500);
   ok(/Quiet for 1[34] s with the New contact form open: Ara is asked to put the pending question again/.test(await p.log()), "13 s of quiet with a form open didn't get the re-ask: " + JSON.stringify(await p.evaluate(() => [!!V, G.turnOpen, G.asked, !!G.forced, !!G.pendingForce, !!G.silentWait, G.downAt, G.status, G.idleEnding])) + (await p.log()).slice(-300));
   ok(await p.evaluate((n2) => __sent.slice(n2).some(s => { const x = JSON.parse(s); return x.type === "response.create" && /quiet for 1[34] seconds/.test(x.response && x.response.instructions || "") && /email address or mobile number/.test(x.response.instructions); }), n2), "Ara wasn't asked for the pending question with its words: " + JSON.stringify(await p.evaluate((n2) => __sent.slice(n2).slice(-2), n2)).slice(0, 400));
   ok(await p.evaluate((n2) => !__sent.slice(n2).some(s => /force_message/.test(s)), n2), "the app put the question itself as a scripted line: " + JSON.stringify(await p.evaluate((n2) => __sent.slice(n2).filter(s => /force_message/.test(s)).map(s => s.slice(0, 200)), n2)) + (await p.log()).slice(-500));
@@ -1031,4 +1031,24 @@ test("Carverhill's 10:02 PM call (Oct 31): a sound engine whose clock stands sti
   ok(await p.evaluate((n) => !__sent.slice(n).some(s => s.includes("force_message")), n0) && await p.evaluate(() => !!G.sayWatch), "the app said the line itself, or no check on Ara's repeat");
   ok(ctxN === 1, "");
 });
+test("State machine phase 2 (Nov 1): on preview-sm the line and Ara parts answer from the app's own events, and agree with the old flags", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const st = () => p.evaluate(() => ({ phase: __sm.phase, line: lineState(), ara: araState(), up: lineUp(), busy: araBusy(), flagLine: G.status, down: downAt() }));
+  let s = await st(); ok(s.phase === 2 && s.line === "connected" && s.up && /^(idle|asked)$/.test(s.ara) && !s.busy, "after the line opened: " + JSON.stringify(s) + " events " + JSON.stringify(await p.evaluate(() => __sm.events.slice(-12)))); /* asked: the pretend line never answers the opening reply request */
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created", response: { id: "r1" } }) }); });
+  s = await st(); ok(s.ara === "generating" && s.busy, "a reply started: " + JSON.stringify(s));
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio.delta", delta: btoa(String.fromCharCode(0, 0, 0, 0)), item_id: "i1" }) }); });
+  s = await st(); ok(s.ara === "playing" && s.busy, "its sound arrived: " + JSON.stringify(s));
+  await p.evaluate(() => { stopPlayback(); __ws.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }); });
+  s = await st(); ok(s.ara === "idle" && !s.busy, "the reply is done and nothing is left to play: " + JSON.stringify(s));
+  /* a line test, then a drop: the line part moves with the app's events, and the reconnect brings it back */
+  await p.evaluate(() => { G.drops = 0; G.loudAt = 0; G.speechSince = 0; __ws.onclose({ code: 1006, reason: "" }); });
+  await p.waitForTimeout(120);
+  s = await st(); ok(/^(reconnecting|down)$/.test(s.line) && !s.up && s.ara === "idle", "right after the drop: " + JSON.stringify(s));
+  await p.waitForFunction(() => lineState() === "connected" && G.status === "Listening", null, { timeout: 8000 });
+  s = await st(); ok(s.up && !s.down, "after the reconnect: " + JSON.stringify(s));
+  await p.waitForTimeout(1500);
+  const diffs = await p.evaluate(() => Object.keys(__sm.counts).filter(k => /^(line|ara):/.test(k)));
+  ok(!diffs.length, "the machine and the old flags disagreed on the line or Ara: " + diffs.join("; "));
+}, { page: "preview-sm.html" });
 };

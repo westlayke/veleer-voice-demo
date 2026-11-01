@@ -4,6 +4,22 @@
 // quiet detection, asking Grok again when it goes silent, and the sounds and spoken line when the service is down.
 // What Ara is told after a reconnect is reconnectLine() below; the doubled-reply guard is in onEvent() in voice.js.
 
+/* ---------- where the line and Ara stand: one reader (state machine phase 2, Nov 1 2026) ----------
+   Every part of the app asks these, never the flags. On the main preview they answer from the flags below; on preview-sm, machine.js
+   replaces them with the machine's answer (the flags are then written but read by nothing), and smSend carries the app's events to it.
+   Line: opening (the call's first line), connected, testing (a line test running), reconnecting (a line ended, none open yet), down (the phone
+   said so, still trying), ended. Ara: idle, asked (a reply or scripted line requested), generating (a reply open, no sound yet), playing (its
+   sound is arriving), draining (the reply is done, its sound still playing). lineN: the line number, up by one each time a line opens. */
+let smSend = () => {};
+const lineN = () => G.lineN || 0;
+function lineState() { return !G.live ? "ended" : G.status === "Connecting…" ? "opening" : G.downAt ? "down" : G.lockPaused || /^Reconnecting/.test(G.status) ? "reconnecting" : G.probing ? "testing" : "connected"; }
+function araState() { return G.responding ? (G.audioOn ? "playing" : "generating") : playingLeft() > 0 ? "draining" : G.asked ? "asked" : "idle"; }
+function downAt() { return G.downAt || 0; }
+const lineIs = (...s) => s.includes(lineState()), araIs = (...s) => s.includes(araState());
+const lineUp = () => lineIs("connected", "testing"); /* a line is open and in use */
+const araBusy = () => araIs("generating", "playing"); /* a reply is open: the service is still sending */
+const araSounding = () => araIs("playing"); /* its sound is arriving */
+
 /* ---------- timings: tune here ---------- */
 const IDLE_MS = 30000, IDLE_HF_MS = 30000;   // hang up after this much quiet, in both modes (Carverhill, Oct 30: Ara asks first, 10 s before)
 const IDLE_ASK_BEFORE_MS = 10000;            // Ara asks "Should I hang up now, yes or no?" this long before the quiet limit; yes or no answer by then = goodbye
@@ -65,7 +81,7 @@ function namedLoad() { let st = null; try { st = JSON.parse(localStorage.getItem
 function decodeNamed() { const c = G.ctx; if (!c) return; Object.entries(namedRaw).forEach(([t, b]) => { if (!namedBuf[t] && b) c.decodeAudioData(b.slice(0)).then(buf => { namedBuf[t] = buf; }).catch(() => {}); }); }
 // fetched once per name (the key holder keeps each line 30 days, so the second phone with the same name waits on nobody), never while a line is down
 async function prepNamedLines(why) {
-  const n = officerFirst(); if (G.namedBusy || G.downAt || !navigator.onLine) return; namedLoad();
+  const n = officerFirst(); if (G.namedBusy || lineIs("down") || !navigator.onLine) return; namedLoad();
   const want = namedTexts(n).filter(t => !namedRaw[t]); if (!want.length) { decodeNamed(); return; }
   G.namedBusy = true; let got = 0, fail = "";
   for (const t of want) { try { const r = await fetch(tokenUrl() + "/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE }, body: JSON.stringify({ text: t, voice: NAMED_VOICE }), signal: AbortSignal.timeout(15000) }); /* the demo code too: without it the key holder refused every line (Oct 28, never fetched on any phone) */
@@ -118,16 +134,16 @@ const idleMs = () => typeof V !== "undefined" && V && ACTIONS[V.action] ? Math.m
 // usual watch), a fresh line at TURN_GIVE_UP_MS whatever happened. The hang-up is held off while a turn is open. No words from the turn: noise.
 // the officer stopped and no reply has started THINK_MS later: a soft two-note tone, so they know Ara is on it; "Ara's taking a moment." still follows at TICK_MS
 function thinkArm() { clearTimeout(G.thinkT); const at = G.turnOpen; if (!at) return;
-  G.thinkT = setTimeout(() => { if (!G.live || G.turnOpen !== at || G.responding || G.audioOn || G.speechOn || G.forced || G.pendingForce || playingLeft() > 0 || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  G.thinkT = setTimeout(() => { if (!G.live || G.turnOpen !== at || araBusy() || G.speechOn || G.forced || G.pendingForce || playingLeft() > 0 || G.idleEnding || !lineUp()) return;
     cue("think"); G.thinkAt = Date.now(); act("step", `No reply ${THINK_MS / 1000} s after the officer stopped: soft thinking tone`); }, THINK_MS); }
 function turnWatch() {
-  if (!G.live || !G.turnOpen || G.asked || G.forced || G.pendingForce || G.responding || G.audioOn || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  if (!G.live || !G.turnOpen || G.asked || G.forced || G.pendingForce || araBusy() || G.idleEnding || !lineUp()) return;
   const heard = G.lastHeard && G.lastHeard.at >= G.turnOpen - 1500 ? String(G.lastHeard.text || "") : "", dt = Date.now() - G.turnOpen;
   if (!heard) { if (dt > TURN_TEST_MS) G.turnOpen = 0; return; }
   if (dt >= TICK_MS && !G.turnStep) { G.turnStep = 1; quietSay("Ara's answer");
     act("step", `No reply started ${TICK_MS / 1000} s after the officer spoke ("${heard.slice(0, 60)}"): the phone says Ara's taking a moment`); }
-  else if (dt >= TURN_TEST_MS && G.turnStep === 1) { G.turnStep = 2; const ws = G.ws, at = G.turnOpen;
-    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.turnOpen !== at || G.ws !== ws || G.responding || G.asked || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  else if (dt >= TURN_TEST_MS && G.turnStep === 1) { G.turnStep = 2; const ln = lineN(), at = G.turnOpen;
+    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.turnOpen !== at || lineN() !== ln || araBusy() || G.asked || !lineUp()) return;
       G.turnOpen = 0;
       if (typeof ms !== "number" || ms > SLOW_LINE_MS) { act("step", `No reply ${TURN_TEST_MS / 1000} s after the officer spoke, on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
       act("step", `No reply ${TURN_TEST_MS / 1000} s after the officer spoke on a healthy line: asked for one with their words`); G.retriedAt = Date.now(); G.heardSinceRetry = false;
@@ -140,27 +156,27 @@ function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWat
   if (G.live && G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); if (!quietSay("a reply")) { cue("wait"); vlog("still working: tick"); } } /* the quiet clock keeps the recordings coming every 5 s after this (Oct 30) */
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
   if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
-  if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || /^(Connecting|Reconnecting)/.test(G.status)) return;
-  const playing = G.audioOn || G.responding || (G.ctx && G.playHead > G.ctx.currentTime);
+  if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || !lineUp()) return;
+  const playing = araBusy() || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
-  if (G.probing) return;
+  if (lineIs("testing")) return;
   // the officer is talking but the voice service hasn't heard anything: the line may have stalled without closing (seen Oct 24 in a dead spot)
   const talking = G.speechSince && Date.now() - G.speechSince > STALL_MS && Date.now() - (G.lastMsg || 0) > STALL_MS;
   const since = Date.now() - (G.lastAct || Date.now());
   const quiet = since >= idleAskMs() && (Date.now() - (G.loudAt || 0) >= idleAskMs() || since >= NOISE_CAP_MS) && !G.turnOpen; /* the question comes IDLE_ASK_BEFORE_MS before the limit (Oct 30) */ /* never a goodbye while the officer's words are unanswered (turnWatch reconnects instead) */ // sound on the mic counts as talking, but not for more than a minute (road noise)
   formReask(since);
   if (!talking && !quiet) return;
-  G.probing = true; const ws = G.ws;
-  pingMs(LINE_TEST_MS).then(ms => { G.probing = false; if (!G.live || G.ws !== ws || G.idleEnding || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  G.probing = true; smSend("TEST_START"); const ln = lineN();
+  pingMs(LINE_TEST_MS).then(ms => { G.probing = false; smSend("TEST_END"); if (!G.live || lineN() !== ln || G.idleEnding || !lineUp()) return;
     const fresh = Date.now() - (G.lastMsg || 0) < LINE_TEST_MS; // the voice service is still sending: the line is alive, however slow the test (seen Oct 24: a 2.7 s test while Grok was answering)
-    if (!fresh && (typeof ms !== "number" || (talking && ms > STALL_SLOW_MS))) { G.stalled = true; G.speechSince = 0; netLog(`Line stalled (${talking ? "officer talking, nothing heard back" : "12 s of quiet"})`, ms); reconnect("the line stalled"); if (talking) G.spokeInGap = true; /* what they said never reached the voice service: the new line asks them to say it again */ return; }
+    if (!fresh && (typeof ms !== "number" || (talking && ms > STALL_SLOW_MS))) { G.speechSince = 0; netLog(`Line stalled (${talking ? "officer talking, nothing heard back" : "12 s of quiet"})`, ms); reconnect("the line stalled"); if (talking) G.spokeInGap = true; /* what they said never reached the voice service: the new line asks them to say it again */ return; }
     if (talking) { G.speechSince = 0; return; } // the line is fine: it was background noise
     if (Date.now() - (G.lastAct || Date.now()) >= idleAskMs()) idleStart(); });
 }
 // With a form open, quiet for FORM_REASK_MS and nothing awaited: Ara is asked to put the pending question again, in her own words; the app says
 // nothing itself (Carverhill, Oct 30 6:06 PM: "don't want the app to do the re-ask"). Once per quiet spell; the hang-up question still comes at 50 s.
 function formReask(since) {
-  if (typeof formPosition !== "function" || !V || !ACTIONS[V.action] || G.turnOpen || G.asked || G.forced || G.pendingForce || G.silentWait || G.downAt) return;
+  if (typeof formPosition !== "function" || !V || !ACTIONS[V.action] || G.turnOpen || G.asked || G.forced || G.pendingForce || G.silentWait || lineIs("down")) return;
   if (since < FORM_REASK_MS || !(Date.now() - (G.loudAt || 0) >= FORM_REASK_MS || since >= NOISE_CAP_MS) || G.formReaskAt > (G.lastAct || 0)) return;
   const fp = formPosition(); if (!fp || !fp.ask) return; G.formReaskAt = Date.now();
   act("step", `Quiet for ${Math.round(since / 1000)} s with the ${ACTIONS[V.action].title} form open: Ara is asked to put the pending question again`);
@@ -252,16 +268,16 @@ function openSocket(token, first, second, warm) {
     else { sessUpdate(sessionCfg()); sendExtras(); }
     syncMark(ws.resumed ? "line picked up" : G.drops ? "new line" : "call start"); /* the configuration just sent carries Ara's state: its receipt is logged, and resent if none comes */
     if (G.drops && P.replay) replayRecent(); if (typeof first === "function") first(); else guide(first);
-    downEnd(true); G.openedAt = Date.now(); linePrep(); setTimeout(() => prepNamedLines("line open"), 4000);
+    downEnd(true); G.openedAt = Date.now(); G.lineN = lineN() + 1; smSend("LINE_UP"); linePrep(); setTimeout(() => prepNamedLines("line open"), 4000);
     if (ws.resumed) { netLog("Picked up the same conversation"); G.resumedAt = Date.now(); G.resumedHeardN = G.heardN || 0; } /* a replayed tool call can only come before the officer's first words on the new line (Oct 29) */
-    G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.stalled = false; G.spokeInGap = false; }, 0);
+    G.status = "Listening"; G.lastMsg = Date.now(); G.speechSince = 0; busy(); paintCall(); setTimeout(() => { G.spokeInGap = false; }, 0);
     vlog(`connected in ${Date.now() - G.t0} ms (voice pass ${G.passReady ? "was ready" : "fetched on tap"}${ws.warmed ? ", line warmed on touch" : ""})`);
     netLog(`Voice line open in ${Date.now() - t0} ms${ws.warmed ? " (warmed on touch)" : ""}${second ? " (the second line)" : ""}${G.drops ? ` (reconnect ${G.drops})` : ""}`);
     if (G.drops) setTimeout(prefetchToken, 2000); // the ready pass was used: have the next one ready for another drop (seen Oct 24: 7 s to fetch one)
     clearInterval(G.netTick); G.netTick = setInterval(async () => { if (!(G.live && G.ws === ws)) return; const ms = await pingMs(); netLog("Reading", ms);
       // nothing was expected from Grok (the officer was thinking), so nothing else notices a dead network: a second quick test, then a fresh line (Oct 25: 35 s of "Hello?")
-      if (typeof ms === "number" || !G.live || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
-      const again = await pingMs(LINE_TEST_MS); if (typeof again === "number" || !G.live || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+      if (typeof ms === "number" || !G.live || G.ws !== ws || !lineUp()) return;
+      const again = await pingMs(LINE_TEST_MS); if (typeof again === "number" || !G.live || G.ws !== ws || !lineUp()) return;
       act("step", "The line went quiet (two test requests unanswered): fresh line"); reconnect("the line went quiet"); }, 30000);
   };
   ws.onmessage = (m) => { if (G.ws !== ws) return; G.lastMsg = G.convAt = Date.now();
@@ -271,7 +287,7 @@ function openSocket(token, first, second, warm) {
   ws.onclose = (ev) => {
     if (G.ws !== ws || !G.live) return;
     vlog("connection closed " + (ev && ev.code));
-    const opened = !!G.lastMsg && G.status !== "Connecting…";
+    const opened = !!ws.opened;
     netLog(`Voice line closed (code ${ev && ev.code}${ev && ev.reason ? ", " + String(ev.reason).slice(0, 120) : ""})${opened ? "" : " before it opened"}`);
     if (document.visibilityState === "hidden") { if (G.hiddenAt) { lockPause("the line closed by itself"); return; } interrupted("connection closed while away", "The connection closed while the app was in the background."); return; } // locked: the line reopens when the app is back
     if (!opened && ws.resumed) { G.convId = null; act("step", "Couldn't pick up the same conversation: opening a new one"); reconnect("the conversation couldn't be picked up"); return; }
@@ -310,7 +326,7 @@ const downSince = () => Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now
 const CHECKS = ["ctxWatch", "sayWatch", "ynWatch", "nudge"];
 function oneCheck(keep) { CHECKS.forEach(k => { if (k !== keep && G[k]) { vlog(`check ${k} ended: ${keep ? keep + " started" : "the line dropped"}`); G[k] = null; } }); }
 function resetLine() {
-  resetTurn(); G.retriedAt = 0; G.dropNext = false; oneCheck(null);
+  smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; oneCheck(null);
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); stopPlayback();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
 }
@@ -341,7 +357,7 @@ async function openAgain(lock) {
     const ready = !!TOK.p, tp = Date.now();
     try { token = await getToken(); act("step", `Voice pass ${ready ? "was ready" : "fetched"} in ${Date.now() - tp} ms`); break; }
     catch (e) { const msg = String(e && e.message || e).slice(0, 80); if (!G.live) return;
-      if (msg === "bad_code" || /^service_/.test(msg) || Date.now() - (G.downAt || tp) > DOWN_GIVE_UP_MS) { netLog("Couldn't get a voice pass (" + msg + ")"); voiceUnavailable("no voice pass: " + msg); return; }
+      if (msg === "bad_code" || /^service_/.test(msg) || Date.now() - (downAt() || tp) > DOWN_GIVE_UP_MS) { netLog("Couldn't get a voice pass (" + msg + ")"); voiceUnavailable("no voice pass: " + msg); return; }
       act("step", `No voice pass yet (${msg}): trying again in ${TOKEN_RETRY_MS / 1000} s`); await new Promise(r => setTimeout(r, TOKEN_RETRY_MS)); }
   }
   if (!G.live) return;
@@ -454,26 +470,26 @@ function downSay(kind) { // the dropped line, then the still-trying lines in tur
   return sayLocal(DOWN_LINES[0], "dropped", namedText("dropped"));
 }
 function downStart() {
-  if (G.downAt) return; G.downAt = G.lastDropAt = Date.now(); G.downN = 0; G.slowSaid = false; G.quietAt = Date.now(); linePrep();
-  G.downTimer = setTimeout(() => { if (!G.live || !G.downAt) return; G.downSaid = true; downSay("dropped"); }, SAY_DOWN_MS); /* then the quiet clock says the still-trying lines, every 5 s of silence */
+  if (lineIs("down")) return; G.downAt = G.lastDropAt = Date.now(); smSend("LINE_DOWN"); G.downN = 0; G.slowSaid = false; G.quietAt = Date.now(); linePrep();
+  G.downTimer = setTimeout(() => { if (!G.live || !lineIs("down")) return; G.downSaid = true; downSay("dropped"); }, SAY_DOWN_MS); /* then the quiet clock says the still-trying lines, every 5 s of silence */
 }
 // ---------- the quiet clock: while the app waits on anything, the officer never hears more than QUIET_MS of silence (Carverhill, Oct 30: an 11 s gap on his 2:52 PM call) ----------
 // What is being waited on, or "" when nothing is: the line itself, a scripted line, a reply the app asked for, the sound of a words-only line, Ara's words
 // after a reply started, or Ara's answer to the officer's own turn. The hang-up countdown and a paused sound are not waits.
 function waitingOn() {
   if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || G.lockPaused) return "";
-  if (G.downAt || /^(Connecting|Reconnecting)/.test(G.status)) return G.downSaid ? "the line" : ""; /* the dropped line itself comes at SAY_DOWN_MS */
+  if (!lineUp()) return G.downSaid ? "the line" : ""; /* the dropped line itself comes at SAY_DOWN_MS */
   if ((G.forced && !G.forced.started) || G.pendingForce) return "a scripted line";
   if (G.asked) return "a reply";
   if (G.silentWait) return "the sound of Ara's line";
-  if (G.responding && !G.audioOn) return "Ara's words";
+  if (araIs("generating")) return "Ara's words";
   if (G.turnOpen && G.lastHeard && G.lastHeard.at >= G.turnOpen - 1500) return "Ara's answer";
   return "";
 }
 const lastSoundAt = () => Math.max(G.t0 || 0, G.lastSoundAt || 0, G.lineEndAt || 0, G.lastHeard ? G.lastHeard.at || 0 : 0, G.speechStopAt || 0, G.quietAt || 0);
 function quietWatch() {
   if (!G.live) return;
-  if (playingLeft() > 0 || G.audioOn || (G.lineEndAt && Date.now() < G.lineEndAt)) { G.lastSoundAt = Date.now(); return; } /* Ara or the phone is sounding */
+  if (playingLeft() > 0 || araSounding() || (G.lineEndAt && Date.now() < G.lineEndAt)) { G.lastSoundAt = Date.now(); return; } /* Ara or the phone is sounding */
   if (G.speechOn) { G.speechStopAt = Date.now(); return; } /* the officer is talking */
   const on = waitingOn(); if (!on) return;
   const gap = Date.now() - lastSoundAt(); if (gap < QUIET_MS) return;
@@ -482,11 +498,11 @@ function quietWatch() {
 // one status recording now, from the clock or from a site that used to speak on its own timer: the still-trying lines while the line is down, "Ara's taking a moment."
 // the first time, then the quiet lines in turn (the named ones from the phone's store, else the stock recording). Never within QUIET_SPACING_MS of the last sound.
 function quietSay(on, gap) {
-  if (!G.live || playingLeft() > 0 || G.audioOn || (G.lineEndAt && Date.now() < G.lineEndAt) || G.speechOn) return false;
+  if (!G.live || playingLeft() > 0 || araSounding() || (G.lineEndAt && Date.now() < G.lineEndAt) || G.speechOn) return false;
   if (Date.now() - lastSoundAt() < QUIET_SPACING_MS) return false;
   G.quietAt = Date.now(); const secs = Math.round((gap || Date.now() - lastSoundAt()) / 1000);
   let said;
-  if (G.downAt) said = downSay("still");
+  if (lineIs("down")) said = downSay("still");
   else if (!G.slowSaid) { said = sayLocal("Ara's taking a moment.", "slow"); if (said) { G.slowSaid = true; G.slowAt = Date.now(); } }
   else { const i = G.quietN = (G.quietN || 0) + 1, t = QUIET_LINES[(i - 1) % QUIET_LINES.length]; said = sayLocal(t, "", t) || sayLocal("Ara's taking a moment.", "slow"); }
   if (said) act("step", `Quiet for ${secs} s while waiting on ${on}: the phone filled it`); else vlog(`quiet clock: nothing to play (sound not running) while waiting on ${on}`);
@@ -500,7 +516,7 @@ function cutStatusLine(why) {
 }
 function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;
   const cut = cutStatusLine("the line came back");
-  if (G.downAt) { vlog(`line back after ${Math.round((Date.now() - G.downAt) / 1000)} s`); if (back && !cut && Date.now() - G.downAt >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back", namedText("back")); }
+  if (downAt()) { vlog(`line back after ${Math.round((Date.now() - downAt()) / 1000)} s`); if (back && !cut && Date.now() - downAt() >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back", namedText("back")); }
   G.downAt = 0; G.downSaid = false; G.warnSaid = false; G.lastTry = false; }
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {
@@ -526,7 +542,7 @@ function cue(kind) {
 // which left the officer in silence until the 12-second hang-up. The app asks once more, then logs it.
 const CREATE_WAIT_MS = 2500; // serial engines: a second reply request waits for the first to report started (or this long)
 // a reply is running, or was asked for and hasn't reported started yet: on a serial engine nothing else may ask for one (OpenAI refuses it)
-const replyBusy = () => G.responding || (PROV().serial && !!G.createAt && Date.now() - G.createAt < CREATE_WAIT_MS);
+const replyBusy = () => araBusy() || (PROV().serial && !!G.createAt && Date.now() - G.createAt < CREATE_WAIT_MS);
 const PAUSE_FRESH_MS = 30000, PAUSE_ASK_MS = 4000; /* a reply request within 30 s of a lock or sound pause gets 4 s to start */
 function askReply(guidance) {
   if (guidance !== undefined) G.askGuide = guidance; // the same guidance goes again if the app has to ask twice
@@ -534,19 +550,19 @@ function askReply(guidance) {
     G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; clearTimeout(G.qTimer);
     const again = () => { if (!G.live || !G.qCreate) return; if (replyBusy()) { G.qTimer = setTimeout(again, 200); return; } flushQueued(); }; G.qTimer = setTimeout(again, 200); /* waits for the first request to report started (or CREATE_WAIT_MS); zeroing G.createAt after 500 ms sent the second too soon and OpenAI refused it (Oct 27, 7:03 PM run) */
     vlog("reply request held: one at a time on " + PROV().name); return; }
-  G.createAt = Date.now();
+  G.createAt = Date.now(); smSend("ARA_ASKED"); /* before the request goes: a test line answers it in the same instant */
   send(G.askGuide ? { type: "response.create", response: { instructions: "App guidance for this reply only (never read it aloud): " + G.askGuide } } : { type: "response.create" }); G.asked = true; G.askedAt = Date.now(); /* G.slowSaid is cleared when a reply starts, not on a re-ask: "Ara's taking a moment" once per wait, then "Still waiting on Ara" (Oct 28 4:41 PM call: it repeated every 9 s) */
   clearTimeout(G.askWatch); clearTimeout(G.tickWatch);
   G.askWatch = setTimeout(() => { G.askWatch = null; if (!G.live || !G.asked) return; G.asked = false; replyCheck({ status: "never started" }); }, ASK_AGAIN_MS);
   /* right after the phone locked or paused the sound, the voice service's line can be dead while it still looks open (Carverhill's 9:18 PM
      call, Oct 31: no reply to the cut-question ask, 20 s of fillers before the reconnect): no reply started in 4 s means a fresh line, once per pause */
-  if (Date.now() - (G.pauseBackAt || 0) < PAUSE_FRESH_MS) { G.pauseBackAt = 0; const pws = G.ws; clearTimeout(G.pauseWatch);
-    G.pauseWatch = setTimeout(() => { if (!G.live || !G.asked || G.ws !== pws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  if (Date.now() - (G.pauseBackAt || 0) < PAUSE_FRESH_MS) { G.pauseBackAt = 0; const pln = lineN(); clearTimeout(G.pauseWatch);
+    G.pauseWatch = setTimeout(() => { if (!G.live || !G.asked || lineN() !== pln || !lineUp()) return;
       clearTimeout(G.askWatch); G.askWatch = null; clearTimeout(G.tickWatch); G.asked = false; G.retried = 0;
       act("step", `No reply started ${PAUSE_ASK_MS / 1000} s after the phone paused the sound: fresh line`); reconnect("the line went quiet after the phone paused"); }, PAUSE_ASK_MS); }
   // no reply at the first tick: test the line then, so a bad line gets a fresh one about 9 s sooner (seen Oct 24: 13 s to notice)
-  const ws = G.ws; G.tickWatch = setTimeout(() => { if (!G.live || !G.asked || G.ws !== ws) return;
-    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || !G.asked || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  const ln = lineN(); G.tickWatch = setTimeout(() => { if (!G.live || !G.asked || lineN() !== ln || !lineUp()) return;
+    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || !G.asked || lineN() !== ln || !lineUp()) return;
       if (typeof ms === "number" && ms <= SLOW_LINE_MS) return; // a healthy line: Grok is just slow, keep waiting
       clearTimeout(G.askWatch); G.askWatch = null; G.asked = false;
       act("step", `No reply started after ${TICK_MS / 1000} s on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); }); }, TICK_MS);
@@ -565,12 +581,12 @@ function replyCheck(r) {
     G.retriedAt = Date.now(); G.heardSinceRetry = false; askReply((heard && typeof answerGuide === "function" && answerGuide(heard)) || (heard ? `The officer just said: "${heard}". ` : "") + "Answer that now, out loud in one or two sentences, or call the tool it needs." + (G.askGuide ? " " + G.askGuide : "")); return; }
   if (G.retried > MAX_ASKS) { act("step", `Grok gave ${why} after asking again`); G.retried = 0; reconnect("the voice service stopped answering"); return; }
   // asking again on a slow line only piles up late answers (seen Oct 24: six "I'm here"s at once): test the line first, and on a slow one start a fresh line
-  const ws = G.ws; busy();
-  pingMs(LINE_TEST_MS).then(ms => { if (!G.live || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  const ln = lineN(); busy();
+  pingMs(LINE_TEST_MS).then(ms => { if (!G.live || lineN() !== ln || !lineUp()) return;
     const slow = typeof ms !== "number" || ms > SLOW_LINE_MS;
     if (slow) { act("step", `Grok gave ${why} on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); return; }
     act("step", `Grok gave ${why}, asked again`);
-    G.retriedAt = Date.now(); G.heardSinceRetry = false; if (!G.responding) askReply(); });
+    G.retriedAt = Date.now(); G.heardSinceRetry = false; if (!araBusy()) askReply(); });
 }
 
 /* ---------- the phone pauses the app's sound ---------- */
@@ -606,7 +622,7 @@ function lockPause(why) { // close the line while the phone is locked; the conve
 }
 async function lockResume() { // the app is back: reopen the line on the same conversation, no tone, no "line dropped" recording
   if (!G.live || G.ws) return;
-  G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.stalled = false; G.audioRetried = false; paintCall();
+  G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.audioRetried = false; paintCall();
   if (typeof restartAudio === "function") await restartAudio(); // iOS brings the sound back on the earpiece after a lock: a fresh start puts it on the speaker again (Carverhill, Oct 26)
   if (G.live && typeof keepAwake === "function") keepAwake(); // the wake lock was released at the lock: ask for it again
   if (!G.live || G.ws || !G.lockResume) return;
@@ -658,6 +674,7 @@ function forceSay(text, then, fallback, waited = 0) {
   if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text), text)) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
   G.forced = { at: Date.now(), events: [], text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false, itemId: null, byId: false, ids: {} };
   if (G.pendingForce === text) G.pendingForce = null; /* itemId: the id xAI gives the line when it accepts it; the reply carrying that id on its item and audio is the line (real-Ara run, Oct 30: 30 of 30; an id of our own is not kept) */
+  smSend("ARA_ASKED");
   if (PROV().forceItem) send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });
   else { G.forced.viaReply = true; G.createAt = Date.now(); forceByReply(text); } /* an engine without force_message is asked to say it in a reply of its own: a reply request like any other, so the next one waits for it */
   vlog("scripted line: " + text);
@@ -667,11 +684,11 @@ function forceSay(text, then, fallback, waited = 0) {
 // a scripted line is not a reply request, so the 4 s tick and the early line test above didn't cover it: 12.7 s of silence before "Ara's taking a moment" after a save line (Carverhill's 7:39 AM call, Oct 29)
 // Nothing started 4 s after the line went out: the phone says "Ara's taking a moment." and tests the line; a slow line gets a fresh one (which re-asks the pending question), a healthy one keeps waiting for the 8 s fallback
 function forceTick(now) {
-  clearTimeout(G.forceTick); const f = G.forced, ws = G.ws; if (!f || f.viaReply) return; /* a line said through a reply request is covered by askReply's own watch */
-  G.forceTick = setTimeout(() => { if (!G.live || G.forced !== f || f.started || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+  clearTimeout(G.forceTick); const f = G.forced, ln = lineN(); if (!f || f.viaReply) return; /* a line said through a reply request is covered by askReply's own watch */
+  G.forceTick = setTimeout(() => { if (!G.live || G.forced !== f || f.started || lineN() !== ln || !lineUp()) return;
     if (!quietSay("a scripted line")) cue("wait");
     act("step", `Nothing back ${TICK_MS / 1000} s after a scripted line: the phone says Ara's taking a moment and tests the line (${forcedTrace(f)})`);
-    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.forced !== f || f.started || G.ws !== ws || /^(Connecting|Reconnecting)/.test(G.status)) return;
+    pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.forced !== f || f.started || lineN() !== ln || !lineUp()) return;
       if (typeof ms === "number" && ms <= SLOW_LINE_MS) return; // a healthy line: the voice service is just slow, the 8 s fallback still applies
       clearTimeout(G.forceTimer); G.forced = null; G.pendingForce = f.text; /* the fresh line asks the pending question itself (formPosition), so the scripted line isn't lost */
       act("step", `Scripted line not started after ${TICK_MS / 1000} s on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); }); }, now ? 0 : TICK_MS);

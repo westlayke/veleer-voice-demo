@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 10:42 PM",
+      "change": "State machine phase 2 on preview-sm: the line and Ara parts are now the app's truth there. The app sends their events itself (line opened, ended, down, a line test, a reply asked for, started, sounding, done, played out) and every part of the app asks lineState()/araState()/downAt() instead of reading G.responding, G.audioOn, G.probing, G.downAt or the line meaning of G.status (about 75 reads in voiceline.js, voice.js, heard.js and voiceforms.js). On the main preview the same readers answer from the flags, so nothing changes there. Timers that watched for the same line now use the line number. G.stalled (written, never read) removed. The machine's Ara part gained a draining state (reply done, sound still playing). New check \"State machine phase 2 (Nov 1)\" runs on preview-sm.",
+      "area": "voice (preview-sm.html, voiceline.js, voice.js, heard.js, voiceforms.js, machine.js)",
+      "requestedBy": "Carverhill",
+      "why": "\"Yes\" (Nov 1, 10:22 PM ET) to the phase 2 plan: Line and Ara regions take over, measured against phase 1 and the baseline before his driveway run."
+    },
+    {
       "date": "Oct 31, 10:14 PM",
       "change": "Preview: if the phone's sound engine says it is running but its clock stands still while Ara's audio is queued (seen right after a lock), the app starts the sound and mic afresh and asks Ara to say her last line again in her own words. The app says nothing itself.",
       "area": "Voice",
