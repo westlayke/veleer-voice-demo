@@ -368,10 +368,9 @@ function draftTool(callId, name, data) {
   // a next-step due date with no next step, on the meeting's own day or earlier, is the meeting date filed in the wrong place (seen Oct 24)
   if (tool.action === "interaction" && data.nextDue && !String(data.nextStep || "").trim() && !(V && V.data && String(V.data.nextStep || "").trim())) { const nd = normDate(data.nextDue);
     if (nd && (nd <= todayISO() || nd === normDate(data.date || ""))) { vlog(`${name}: dropped next-step due date "${data.nextDue}" (no next step, not in the future)`); delete data.nextDue; } }
-  // Ara just asked whether it was substantive: take the officer's yes or no if Grok didn't send it
+  // Ara just asked whether it was substantive: take the officer's yes or no if Grok didn't send it (only an answer that followed the question)
   if (tool.action === "interaction" && V && V.action === "interaction" && V.askedSubst && !V.fromVoice.has("substantive") && data.substantive === undefined) {
-    const t = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9);
-    if (t) { data.substantive = hfYes(t) || /\bsubstantive\b/i.test(t) && !/\b(not|no|wasn't)\b/i.test(t); vlog(`${name}: substantive ${data.substantive}, from the officer's words`); } }
+    const v = officerSubstantive(); if (v !== null) { data.substantive = v; vlog(`${name}: substantive ${v}, from the officer's words`); } }
   if (data._dropped) { vlog(`${name}: left out ${data._dropped.join(", ")} (the officer didn't say it)`); act("step", `Left out ${data._dropped.join(", ")} the voice model filled in without the officer saying it`); }
   const movedNote = (data._moved || []).map(x => " " + x).join(""); delete data._moved;
   const droppedList = data._dropped || [], droppedNote = droppedList.length ? ` Left out of the form because the officer never said it: ${droppedList.join(", ")}. Never fill those in yourself, never read them back, never say "noted" or "got it" for them, and if the officer asks where a value came from, say it was your guess and the app removed it; the app asks what it needs.` : "";
@@ -430,9 +429,9 @@ function draftTool(callId, name, data) {
   if (missedSpelling.length) { toolReply(callId, { ok: true, button: A.saveLabel, status: `The officer just spelled out ${missedSpelling.map(w => `"${spellOut(w)}" (${w.charAt(0) + w.slice(1).toLowerCase()})`).join(" and ")}, but this update didn't use it. Call this tool again now with that exact spelling in the field they named (for a name, first or last as they said; for an email, the part before the @). If they changed how a name is spelled and the email uses that name, ask once whether the email should change to match. Don't ask them to repeat it.` });
     return; }
   // every interaction report: ask whether it was substantive (Oct 24: saved as not substantive without asking, which kept the opportunity in Qualification)
-  if (R.alwaysAsk === "substantive" && !missing.length && !V.askedSubst && !V.fromVoice.has("substantive")) { V.askedSubst = true;
-    toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: SUBST_Q, next: "After the officer answers, call this tool again with substantive true or false." + droppedNote });
-    return; } // the app asks it itself (Oct 25: Ara skipped the question when it was only guidance)
+  if (R.alwaysAsk === "substantive" && !missing.length && !V.askedSubst && !V.fromVoice.has("substantive")) {
+    toolReply(callId, { ok: true, button: A.saveLabel, status: `${askSubstantive()} After the officer answers, call this tool again with substantive true or false.${droppedNote}` });
+    return; } // Ara asks it, checked and nudged once (Oct 25: she skipped it as plain guidance; Nov 1, Carverhill: the app always makes Ara ask, with the check)
   if (V.opt && V.opt.only && !empty(d[V.opt.only])) { V.opt = null; formEvent("FORM_ASKING"); } // the one field asked for came in through this tool instead
   if (oneOf && !missing.length) { // one of the pair is in: ask once for the other (the policy's "needs one of")
     if ((empty(d.email) || empty(d.mobile)) && !V.askedOther && ((empty(d.email) && noEmail) || (empty(d.mobile) && noMobile))) { V.askedOther = true; vlog(`${name}: not asking for the ${empty(d.email) ? "email" : "mobile"}, the officer said there is none`); } // never "an email as well?" after "No email" (Oct 27)

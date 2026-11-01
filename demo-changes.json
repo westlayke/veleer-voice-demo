@@ -3,6 +3,13 @@
   "changes": [
     {
       "date": "STAMP",
+      "change": "Ara asks whether an interaction was substantive herself (guidance with the app's check and one nudge); the app's scripted version of that question is gone, including the reminder before a read-back. The officer's yes or no counts only when it follows the question in the transcript, so an answer to an earlier question (\"We had a good meeting\" to \"What happened?\") is never read as a no.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Carverhill's 12:53 PM call (Nov 1): the app's substantive question never played on a slow line and his earlier words were taken as a no, so the report saved as not substantive. Carverhill 2:07 PM: \"I don't want the app asking questions, make Ara do it\"; 2:10 PM: new rule, the app always makes Ara ask unless Claude raises a reason for him to decide."
+    },
+    {
+      "date": "STAMP",
       "change": "Step 4 of the state-machine plan: every guard counted (real calls since Oct 25, Pat, real Ara) and the one that never fired, \"tool call right after a voice command\", taken out. The app no longer stands a check down itself when the officer speaks, the line drops, the call ends or the form changes: the state machine ends it and logs the same line (a saved form now counts as a form change too). No new app lines.",
       "area": "Voice",
       "requestedBy": "Carverhill",

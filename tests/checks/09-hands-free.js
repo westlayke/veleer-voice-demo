@@ -202,8 +202,8 @@ test("Oct 24 call fixes: email spelling, substantive asked and read back, edits 
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
   // the interaction report asks whether it was substantive, takes the officer's yes, then needs a next step
   r = await ara(p, "show_interaction_draft", { contact_name: "Pat Moss", date: "2026-10-24", meetingType: "Video call", summary: "Very interested in New Hampshire." });
-  ok(/substantive interaction/i.test(r.ask_exactly || "") && !r.still_needed, "the app didn't ask whether it was substantive: " + JSON.stringify(r));
-  await said(p, "Yes, it was.");
+  ok(!r.ask_exactly && /Ask exactly: "Was it a substantive interaction/.test(r.status || "") && !r.still_needed, "Ara wasn't asked to ask whether it was substantive: " + JSON.stringify(r));
+  await p.says("Was it a substantive interaction, one that moved the relationship forward, yes or no?"); await said(p, "Yes, it was.");
   r = await ara(p, "show_interaction_draft", { contact_name: "Pat Moss" });
   ok((r.still_needed || []).some(x => /Next step/.test(x)), "a yes to substantive didn't make the next step needed: " + JSON.stringify(r));
   r = await ara(p, "show_interaction_draft", { contact_name: "Pat Moss", substantive: false });
@@ -321,11 +321,11 @@ test("Hands-free: an interaction report is never read back without the substanti
   await said(p, "I'm driving"); await p.waitForTimeout(900);
   await said(p, "Log an interaction with Ruth, I met her at the Halloween party yesterday.");
   let r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", date: "2026-10-24", meetingType: "Event", summary: "Met Ruth at the Halloween party." });
-  ok(/substantive interaction/i.test(r.ask_exactly || "") && !r.read_back, "the finished report was read back before the substantive question: " + JSON.stringify(r));
+  ok(!r.ask_exactly && /Ask exactly: "Was it a substantive interaction/.test(r.status || "") && !r.read_back, "the finished report was read back before the substantive question: " + JSON.stringify(r));
   await p.evaluate(() => { V.askedSubst = false; }); // as if Ara had skipped the question (Oct 25)
   r = await ara(p, "save_form", { confirmed: false });
-  ok(r.saved === false && /substantive interaction/i.test(r.ask_exactly || "") && !r.read_back, "save_form read back without the substantive answer: " + JSON.stringify(r));
-  await said(p, "Yes, it was.");
+  ok(r.saved === false && !r.ask_exactly && /Ask exactly: "Was it a substantive interaction/.test(r.status || "") && !r.read_back, "save_form read back without the substantive answer: " + JSON.stringify(r));
+  await p.says("Was it a substantive interaction, one that moved the relationship forward, yes or no?"); await said(p, "Yes, it was.");
   r = await ara(p, "save_form", { confirmed: false });
   ok(r.saved === false && /Do you want to set it now, yes or no\?$/.test(r.ask_exactly || "") && (await p.isChecked("#f_substantive")), "the yes wasn't taken, or the next step wasn't asked as a yes-or-no decision (Oct 30): " + JSON.stringify(r));
   await said(p, "Sure."); // a short answer that isn't a no is a yes
@@ -340,7 +340,7 @@ test("Hands-free: an interaction report is never read back without the substanti
   await p.evaluate(() => { V = null; G.recent = []; renderOverlay(); });
   await said(p, "Log a phone call with Ken Ito today, we talked about the gala.");
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: today, meetingType: "Phone call", summary: "Talked about the gala." });
-  await said(p, "Yes, it was."); r = await ara(p, "save_form", { confirmed: false });
+  await p.says("Was it a substantive interaction, one that moved the relationship forward, yes or no?"); await said(p, "Yes, it was."); r = await ara(p, "save_form", { confirmed: false });
   ok(/Do you want to set it now, yes or no\?$/.test(r.ask_exactly || ""), "the second report didn't ask the next-step question: " + JSON.stringify(r));
   await said(p, "No."); r = await ara(p, "save_form", { confirmed: false });
   ok(/Yes to save, or no to change something\?$/.test(r.read_back || "") && !/next step/.test(r.read_back || "") && await p.evaluate(() => V.nextSkipped && !formPosition().ask.includes("next step")) && /The officer said no to setting a next step now: the report goes on without one/.test(await p.evaluate(() => ACT.q.concat(__logs.flatMap(l => l.events || [l])).map(a => a.text).join(" | "))), "a no to the next-step question didn't go on to the read-back without one: " + JSON.stringify([r.read_back, r.ask_exactly, await p.evaluate(() => [V.nextSkipped, formPosition().ask])]));
@@ -1219,5 +1219,27 @@ test("Carverhill's 12:25 PM call (Nov 1): a no to the next step is answered by t
   await said(p, "That's all for today, goodbye."); await p.waitForTimeout(200);
   const r2 = await ara(p, "stop_conversation", {}); await p.waitForTimeout(1600);
   ok(!(await p.evaluate(() => G.live)) && r2.ok, "stop_conversation after the officer said goodbye didn't end the call: " + JSON.stringify(r2).slice(0, 300));
+});
+test("Carverhill's 12:53 PM call (Nov 1): Ara asks whether it was substantive (checked, nudged once); an answer to an earlier question is never taken as the yes or no, and the question is put again before any read-back", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  await said(p, "Log an interaction with Ruth, I emailed her yesterday.");
+  let r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", date: "2026-10-31", meetingType: "Email" });
+  ok(/What happened/.test(r.ask_exactly || ""), "the summary wasn't asked for: " + JSON.stringify(r));
+  await said(p, "We had a good meeting."); // the answer to "What happened?"
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", summary: "We had a good meeting." });
+  ok(!r.ask_exactly && /Ask exactly: "Was it a substantive interaction, one that moved the relationship forward, yes or no\?"/.test(r.status || "") && await p.evaluate(() => !!checkNow("sayWatch")), "Ara wasn't asked to put the substantive question, with the say-check: " + JSON.stringify(r));
+  // the question never reaches the officer (a slow line) and Ara's next draft call comes without the answer: the officer's last words are NOT the answer
+  r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy", summary: "We had a good meeting." });
+  ok(await p.evaluate(() => V && !V.fromVoice.has("substantive") && !document.getElementById("f_substantive").checked), "\"We had a good meeting\" was taken as the answer to a question never asked: " + JSON.stringify(await p.evaluate(() => ({ data: V && V.data, fromVoice: V && [...V.fromVoice], recent: G.recent }))));
+  ok(r.saved === false && !r.read_back && !r.ask_exactly && /Not read back yet\. Ask exactly: "Was it a substantive interaction/.test(r.status || ""), "the report was read back without the substantive answer, or the question wasn't given to Ara again: " + JSON.stringify(r));
+  // Ara replies without asking it: nudged once, then she asks; the officer's no then counts
+  await p.says("Got it, the summary is noted."); await p.waitForTimeout(150);
+  ok(/Ara's reply didn't ask "Was it a substantive interaction[^"]*" \(.*\): nudged once/.test(await p.log()), "Ara wasn't nudged: " + (await p.log()).slice(-300));
+  await p.says("Was it a substantive interaction, one that moved the relationship forward, yes or no?"); await p.waitForTimeout(150);
+  ok(/Ara asked the question herself after one nudge/.test(await p.log()) && await p.evaluate(() => !checkNow("sayWatch")), "Ara's question after the nudge wasn't counted: " + (await p.log()).slice(-300));
+  await said(p, "No, it wasn't."); r = await ara(p, "show_interaction_draft", { contact_name: "Ruth Abernathy" });
+  ok(await p.evaluate(() => V && V.data.substantive === false && V.fromVoice.has("substantive")) && /not substantive/.test(r.read_back || ""), "the officer's no after the question wasn't taken, or the read-back didn't follow: " + JSON.stringify(r) + " " + JSON.stringify(await p.evaluate(() => V && V.data)));
+  ok(!/One more thing/.test(await p.evaluate(() => __sent.join("|"))) && !(await p.evaluate(() => __sent.some(s => /force_message/.test(s) && /substantive interaction/.test(s)))), "the app said the substantive question itself");
 });
 };

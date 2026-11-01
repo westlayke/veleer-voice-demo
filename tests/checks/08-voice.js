@@ -145,7 +145,7 @@ test("Ara: an interaction report keeps only what the officer said (substantive, 
   let r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", date: "2026-10-25", meetingType: "In person", summary: "Met Ken this morning; talked about the gala and the North Dakota work.", substantive: true, outcome: "Interested, continue cultivation", nextStep: "Follow up on Ken's interest in the North Dakota work", nextDue: "2026-11-01" });
   let d = await p.evaluate(() => V && V.data);
   ok(d && !d.nextStep && !d.nextDue && !d.outcome && !d.substantive, "fields the officer never said stayed on the form: " + JSON.stringify(d && { nextStep: d.nextStep, outcome: d.outcome, substantive: d.substantive }));
-  ok(/substantive interaction/i.test(r.ask_exactly || ""), "the app didn't ask the substantive question after dropping Grok's own answer: " + JSON.stringify(r));
+  ok(!r.ask_exactly && /Ask exactly: "Was it a substantive interaction/.test(r.status || ""), "Ara wasn't asked to ask whether it was substantive after dropping Grok's own answer: " + JSON.stringify(r));
   ok(/Left out of the form because the officer never said it: substantive, next step, outcome/.test(r.status || r.error || r.next || ""), "the tool reply didn't tell Ara what was left out: " + JSON.stringify(r));
   await said(p, "Yes, it was.");
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito", substantive: true, nextStep: "Follow up on Ken's interest in the North Dakota work", nextDue: "2026-11-01" });
