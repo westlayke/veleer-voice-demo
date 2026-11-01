@@ -2,7 +2,7 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
-      "date": "STAMP",
+      "date": "Nov 1, 2:06 PM",
       "change": "Ara answers \"which opportunities are in Qualification?\" and \"which are ready to move to Cultivation?\": the list tool takes a stage and a ready-only flag, opens the Opportunities board at that stage and hands Ara the count and names to read out (ready = marked Ready for Cultivation, the Needs attention rule).",
       "area": "Voice",
       "requestedBy": "Carverhill",
