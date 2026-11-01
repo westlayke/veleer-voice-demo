@@ -49,6 +49,9 @@ on:
       drop_after_save:
         description: "Share of saves followed 2.5-5.5 s later by a drop, so Ara has to say where we were (Carverhill's 10:36 AM call, Oct 30). 0 = none"
         default: "0"
+      page:
+        description: "Page Ara talks to: preview-flow.html (the preview) or preview-sm.html (the preview with the shadow state machine)"
+        default: "preview-flow.html"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -104,6 +107,7 @@ jobs:
           FAULTS: ${{ inputs.faults }}
           SOUNDLESS: ${{ inputs.soundless }}
           DROP_AFTER_SAVE: ${{ inputs.drop_after_save }}
+          PAGE: ${{ inputs.page }}
         run: node tests/ara-consistency/run.js
       - uses: actions/upload-artifact@v4 # spoken runs: the sound clips on their own (one conversation per flow, officer + Ara + noise, with transcripts), to download from the run page and listen to
         if: always() && inputs.spoken == '1'
@@ -134,7 +138,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { path: all, pattern: "ara-consistency-results-${{ matrix.provider }}-*" }
       - name: One report for all machines (in the log too, since artifacts can't be fetched from the cloud session)
-        env: { PROVIDER: "${{ matrix.provider }}", COMBINE: all, SOUNDLESS: "${{ inputs.soundless }}", FAULTS: "${{ inputs.faults }}", DROP_AFTER_SAVE: "${{ inputs.drop_after_save }}", SPOKEN: "${{ inputs.spoken }}", NOISE: "${{ inputs.noise }}" }
+        env: { PROVIDER: "${{ matrix.provider }}", COMBINE: all, SOUNDLESS: "${{ inputs.soundless }}", FAULTS: "${{ inputs.faults }}", DROP_AFTER_SAVE: "${{ inputs.drop_after_save }}", SPOKEN: "${{ inputs.spoken }}", NOISE: "${{ inputs.noise }}", PAGE: "${{ inputs.page }}" }
         run: node tests/ara-consistency/run.js
       - uses: actions/upload-artifact@v4
         if: always()

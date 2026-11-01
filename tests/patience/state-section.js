@@ -24,4 +24,12 @@ function contextSection(ss) {
     `Drops with no form open ${heard.length}: ${Object.entries(heard.reduce((m, h) => { m[h.how] = (m[h.how] || 0) + 1; return m; }, {})).map(([k, v]) => k + " " + v).join(", ") || "none"}. The officer heard a line with the context ${heard.filter(h => h.text && !h.bare).length} times, a bare "what would you like to do?" ${heard.filter(h => h.bare).length} times, nothing ${heard.filter(h => !h.text).length} times; median wait from the line coming back to hearing it ${med == null ? "n/a" : med + " s"}${secs.length ? ", slowest " + secs[secs.length - 1] + " s" : ""}.`, "",
     ...(mode === "app" ? [] : [line("reconnect"), "", line("late-yes"), "", `The app checked Ara's reply ${n(/^Ara said where we were|^Ara's reply .*asked again|^Ara didn't say where we were/)} times: passed ${n(/^Ara said where we were/)}, asked again ${n(/asked again for where we were/)}, fell back to its own line ${n(/the app says it itself/)}, gave up and said nothing ${n(/the app stops asking and says nothing/)}, stood down for the officer ${n(/stands down/)}.`]), ""];
 }
-module.exports = { stateSection };
+// the shadow state machine (preview-sm.html, phase 1, Oct 31): each kind of disagreement with the flags, the conversations it came up in, and one example
+function smSection(convs) {
+  const on = convs.filter(c => c.sm); if (!on.length) return [];
+  const by = {}; on.forEach(c => Object.entries(c.sm.counts || {}).forEach(([k, n]) => { const b = by[k] = by[k] || { n: 0, convs: 0, ex: null }; b.n += n; b.convs++; if (!b.ex) b.ex = (c.sm.diffs || []).find(d => `${d.part}: machine ${d.machine}, flags ${d.flags}` === k) || null; }));
+  const rows = Object.entries(by).sort((a, b) => b[1].n - a[1].n);
+  return ["## State machine (shadow)", "", `${on.length} conversations ran the shadow machine: ${on.reduce((m, c) => m + (c.sm.transitions || 0), 0)} state changes, ${rows.reduce((m, r) => m + r[1].n, 0)} disagreements with the flags lasting 0.6 s or more.`, "",
+    ...(rows.length ? ["| Disagreement | Times | Conversations | Example (status, form) |", "|---|---|---|---|", ...rows.map(([k, b]) => `| ${k} | ${b.n} | ${b.convs} | ${b.ex ? `${b.ex.status || ""}, ${b.ex.form || "no form"}` : ""} |`)] : ["None."]), ""];
+}
+module.exports = { stateSection, smSection };

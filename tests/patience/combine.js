@@ -15,7 +15,7 @@ const out = [`# Patient Pat, combined: ${runs.length} run(s), ${convs.length} co
   "| Fault | Thrown |", "|---|---|", ...Object.entries(fby).sort((a, b) => b[1] - a[1]).map(([k, v]) => `| ${k} | ${v} |`), "",
   "| Seed | Conversations | Minutes | Asks | Per 10 min | Closed Won | Hung up |", "|---|---|---|---|---|---|---|",
   ...runs.map(r => { const cs = r.convs || [], m = cs.reduce((a, c) => a + (c.minutes || 0), 0), n = cs.reduce((a, c) => a + (c.asks || []).length, 0); return `| ${r.seed} | ${cs.length} | ${m} | ${n} | ${m ? Math.round(n / m * 100) / 10 : 0} | ${cs.filter(c => c.closedWon).length} | ${cs.filter(c => c.hungUp).length} |`; }), ""];
-const { stateSection } = require("./state-section.js");
+const { stateSection, smSection } = require("./state-section.js");
 const { stepsLines } = require("../steps.js");
 const { faultSection, entitySection } = require("./fault-section.js");
-console.log(out.concat(faultSection(convs), entitySection(convs), ["## Discrete steps and the app's scripted lines", "", ...stepsLines(convs), ""], stateSection(convs)).join("\n"));
+console.log(out.concat(faultSection(convs), entitySection(convs), ["## Discrete steps and the app's scripted lines", "", ...stepsLines(convs), ""], stateSection(convs), smSection(convs)).join("\n"));

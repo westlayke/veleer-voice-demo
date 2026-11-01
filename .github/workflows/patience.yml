@@ -26,6 +26,9 @@ on:
       drop_after_save:
         description: "Share of saves followed by a dropped line 2.5-5.5 s later (0 = none; 0.5 = half), the 10:36 AM call's case"
         default: "0"
+      page:
+        description: "Page Pat talks to: preview-flow.html (the preview) or preview-sm.html (the preview with the shadow state machine)"
+        default: "preview-flow.html"
       entity:
         description: "Entity Pat names, by spoken name (e.g. National C4); blank = a different one per conversation; old = the pre-Oct 31 answer"
         default: ""
@@ -60,6 +63,7 @@ jobs:
           RECONNECT: ${{ inputs.reconnect }}
           DROP_AFTER_SAVE: ${{ inputs.drop_after_save }}
           ENTITY: ${{ inputs.entity }}
+          PAGE: ${{ inputs.page }}
         run: MAX_MS=$(( ${MAX_MIN:-30} * 60000 )) node tests/patience/run.js
       - name: Report (in the log, since artifacts can't be fetched from the cloud session; the summary last, so a tail of the log has it)
         if: always()

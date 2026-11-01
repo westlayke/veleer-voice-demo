@@ -208,7 +208,7 @@ async function conversation(browser, base, n) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true, permissions: ["microphone"] });
   await ctx.addInitScript(FAKES, cfg); await ctx.addInitScript(STAND_IN); await ctx.addInitScript({ content: `window.__stepTool = (() => { const C = ${JSON.stringify(C)}, T = ${JSON.stringify(T)}; return ${STEP_TOOL.toString()}; })();` }); /* the step a next-step offer names, for the stand-in's yes */
   const p = await ctx.newPage(); p.on("pageerror", e => conv.errors.push("page: " + e.message));
-  await p.goto(base + "preview-flow.html"); await p.waitForTimeout(900);
+  await p.goto(base + (process.env.PAGE || "preview-flow.html")); await p.waitForTimeout(900);
   await p.tap("text=I'd rather type my name"); await p.waitForTimeout(400); await p.fill("#wlName", NAME); await p.tap("text=Start");
   await p.waitForFunction(() => window.__ws && G.live && G.status === "Listening", null, { timeout: 15000 });
   // a seeded random number stream in Node for the officer's side (patience, turn faults)
@@ -292,6 +292,7 @@ async function conversation(browser, base, n) {
   if (process.env.DEBUG) { console.log(conv.lines.join("\n")); console.log(conv.log.join("\n")); console.log("GUIDANCE\n" + conv.guidance.join("\n")); if (conv.sync && conv.sync.falseNudgeNotes && conv.sync.falseNudgeNotes.length) console.log("ASKS WITH NO TOOL MISSING\n" + conv.sync.falseNudgeNotes.join("\n")); }
   conv.longest = Math.max(0, ...conv.asks.map(a => a.silence));
   conv.steps = await p.evaluate(stepsInPage).catch(() => null);
+  conv.sm = await p.evaluate(() => window.__sm ? { counts: __sm.counts, transitions: __sm.transitions, diffs: __sm.diffs.slice(-60) } : null).catch(() => null); /* the shadow state machine (preview-sm.html): where its picture disagreed with the flags */
   conv.quiet = await p.evaluate(() => { /* stretches of silence: between one sound starting and the next (Ara's sounded lines, the officer's words, the phone's recordings), less the estimated length of the earlier one (2.5 words a second, recordings 2 s); Carverhill, Oct 30: never more than 5 or 6 s */
     const ev = (window.__lines || []).filter(l => !l.noaudio).map(l => ({ at: l.at, len: l.from === "officer" ? 0 : Math.min(12000, 400 * String(l.text).split(/\s+/).length) })).concat((window.__phoneSaid || []).map(s => ({ at: s.at, len: 2000 }))).sort((a, b) => a.at - b.at);
     const gaps = []; for (let i = 1; i < ev.length; i++) gaps.push(Math.max(0, ev[i].at - ev[i - 1].at - ev[i - 1].len) / 1000); return { longest: Math.round(10 * Math.max(0, ...gaps)) / 10, over: gaps.filter(g => g > 6.5).length, n: gaps.length }; }).catch(() => null);
@@ -305,7 +306,7 @@ async function conversation(browser, base, n) {
   await ctx.close(); return conv;
 }
 
-const { stateSection } = require("./state-section.js");
+const { stateSection, smSection } = require("./state-section.js");
 const { faultSection, entitySection } = require("./fault-section.js");
 const { stepsInPage, stepsLines } = require("../steps.js");
 if (require.main === module) (async () => {
@@ -330,6 +331,7 @@ if (require.main === module) (async () => {
     "## Silence", "", `Stretches with no sound (estimated, speaking time taken off): longest ${Math.max(0, ...convs.map(c => c.quiet ? c.quiet.longest : 0))} s; over 6.5 s: ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.over : 0), 0)} of ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.n : 0), 0)} stretches, in ${convs.filter(c => c.quiet && c.quiet.over).length} of ${convs.length} conversations.`, "",
     ...faultSection(convs), ...entitySection(convs),
     ...stateSection(convs),
+    ...smSection(convs),
     "## Each ask", "", "| Conv | At | Silence | Cause | Status | Form | Last heard |", "|---|---|---|---|---|---|---|", ...convs.flatMap(c => c.asks.map(a => `| ${c.n} | ${Math.round(a.at / 1000)} s | ${a.silence} s | ${a.cause} | ${a.status} | ${a.form || ""} | ${a.lastHeard.replace(/\|/g, "/")} |`)), "",
     "## Questions the answer book had no entry for", "", ...[...new Set(convs.flatMap(c => c.unanswered))].map(q => `- ${q}`), "",
     ...convs.flatMap(c => [`<details><summary>Conversation ${c.n} log</summary>`, "", "```", (c.log || []).join("\n").slice(0, 40000), "```", "</details>", ""])].join("\n");

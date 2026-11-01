@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#e6edf7">
+<meta name="apple-mobile-web-app-title" content="Citizens VCRM">
+<link rel="apple-touch-icon" href="apple-touch-icon-v5.png">
+<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="icon" href="icon-192-v5.png">
+<title>Citizens VCRM (preview, state machine)</title>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}
+.hintcard .hc-off { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; }
+.hintcard .hc-off input { width: 18px; height: 18px; margin: 0; }
+.hintcard .hc-ex { font-size: 17px; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: 12px; padding: 12px 14px; line-height: 1.35; }
+.saypills .ex, .exlist .ex { display: inline-flex; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 999px; border: 1px dashed var(--line); color: var(--fg); background: var(--surface2); cursor: default; }
+.exlist { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.actgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; } .actgrid .btn { font-size: 15px; padding: 0 10px; }
+.exhead { font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+.exlead { font-size: 13px; color: var(--muted); padding: 12px 12px 0; }
+</style>
+</head><body>
+<link rel="stylesheet" href="preview/app.css?b=1793494341">
+
+<div class="app" id="app"></div>
+<nav class="tabbar" aria-label="Main"><div class="in" id="tabs"></div></nav>
+<div id="overlay"></div>
+<div id="modal"></div>
+<div id="toastHost"></div>
+<div id="callbar" class="callbar" hidden aria-live="polite"></div>
+
+<script>
+"use strict";
+const BUILD = "Oct 31, 8:52 PM ET", VERSION_FILE = "preview-version.json"; // BUILD is stamped at publish time
+</script>
+<script src="preview/lists.js?b=1793494341"></script>
+<script src="preview/core.js?b=1793494341"></script>
+<script src="preview/provider.js?b=1793494341"></script>
+<script src="preview/drafts.js?b=1793494341"></script>
+<script src="preview/voice.js?b=1793494341"></script>
+<script src="preview/voiceline.js?b=1793494341"></script>
+<script src="preview/heard.js?b=1793494341"></script>
+<script src="preview/validate.js?b=1793494341"></script>
+<script src="preview/aratools.js?b=1793494341"></script>
+<script src="preview/voiceforms.js?b=1793494341"></script>
+<script src="preview/screens.js?b=1793494341"></script>
+<script src="preview/guide.js?b=1793494341"></script>
+<script src="preview/vendor/xstate-5.33.3.umd.min.js"></script>
+<script src="preview/machine.js?b=1793494341"></script>
+<script src="preview/start.js?b=1793494341"></script>
+
+</body></html>

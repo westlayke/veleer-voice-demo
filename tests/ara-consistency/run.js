@@ -5,6 +5,7 @@
 // Nothing reaches the activity log or the Cloudflare Worker: the token comes from this script and log posts stay here.
 const http = require("http"), fs = require("fs"), path = require("path");
 const { stepsInPage, stepsLines } = require("../steps.js");
+const { smSection } = require("../patience/state-section.js");
 let chromium; try { ({ chromium } = require("playwright")); } catch (e) { try { ({ chromium } = require("/opt/node-tools/node_modules/playwright")); } catch (e2) { /* the combine job needs no browser */ } }
 const FLOWS = require("./flows");
 
@@ -124,7 +125,7 @@ async function converse(browser, base, flow, n) {
   await p.exposeFunction("__tap", (dir, s) => { let e; try { e = JSON.parse(s); } catch (x) { return; } if (e && e.type) (dir === "sent" ? onSent : onGot)(e); });
   p.on("websocket", ws => { if (!ENGINE.host.test(ws.url())) return; const line = { opened: Date.now(), closed: 0 }; lines.add(line); convLines.push(line); ws.on("close", () => { line.closed = Date.now(); }); });
   try {
-    await p.goto(base + "preview-flow.html"); await p.waitForTimeout(800);
+    await p.goto(base + (process.env.PAGE || "preview-flow.html")); await p.waitForTimeout(800);
     await p.tap("text=I'd rather type my name"); await p.fill("#wlName", "Dana"); await p.tap("text=Start"); await p.waitForTimeout(600);
     await p.evaluate(({ prov, spoken, noise, turn, micHp, plan }) => { window.__provider = prov; if (turn) window.__turn = turn; if (micHp) window.__micHp = micHp;
       if (spoken) { // the microphone is a stream this script plays the officer's lines into (plus a steady noise), through the app's own capture path
@@ -251,6 +252,7 @@ async function converse(browser, base, flow, n) {
     await p.waitForTimeout(300);
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
     conv.steps = await p.evaluate(stepsInPage).catch(() => null);
+    conv.sm = await p.evaluate(() => window.__sm ? { counts: __sm.counts, transitions: __sm.transitions, diffs: __sm.diffs.slice(-60) } : null).catch(() => null); /* the shadow state machine (preview-sm.html) */
     conv.forms = await p.evaluate(() => window.__forms || []);
     conv.drops = await p.evaluate(() => window.__drops || []);
     conv.soundless = (await p.evaluate(() => (window.__soundless || []).map(m => ({ id: m.id, forced: m.forced, text: m.text, at: m.at, doneAt: m.doneAt, late: m.late, delay: m.delay, copyAt: m.copyAt, skipped: m.skipped, audioN: m.audioN })))).filter(m => !m.skipped);
@@ -381,6 +383,7 @@ function report(convs, extra) {
   if (DROP_AFTER_SAVE) { const rows = convs.flatMap(c => c.acts.filter(a => a.role === "step" && /where we were|^(Reconnected|Line reopened): /.test(a.text)).map(a => `${c.flow} #${c.n}: ${a.text.slice(0, 160)}`)), n = convs.flatMap(c => c.faults.filter(f => f.when === "after a save")).length;
     md += `## Drops after a save (DROP_AFTER_SAVE ${DROP_AFTER_SAVE}): Ara says where we were\n\n${n} drops right after a save. Ara said where we were herself on the first try ${rows.filter(r => /said where we were on try 1/.test(r)).length} times, on a later try ${rows.filter(r => /said where we were on try [2-9]/.test(r)).length}, and the app said it itself ${rows.filter(r => /didn't say where we were in/.test(r)).length} times.\n\n` + rows.map(r => `- ${r.replace(/\|/g, "/")}`).join("\n") + "\n\n"; }
   md += `## Discrete steps and the app's scripted lines\n\n${stepsLines(convs).join("\n")}\n\n`;
+  { const sm = smSection(convs); if (sm.length) md += sm.join("\n") + "\n"; }
   md += `## Rule breaks\n\n| Rule | Checked | Broken | Rate |\n|---|---:|---:|---:|\n` + rows.map(r => `| ${r.rule} | ${r.checked} | ${r.broken} | ${r.rate}% |`).join("\n") + "\n\n";
   md += `## By flow\n\n| Flow | Conversations | Ended saved | Avg cost | Avg minutes |\n|---|---:|---:|---:|---:|\n` + Object.entries(byFlow).map(([k, f]) => `| ${k} | ${f.n} | ${f.saved} | ${money(f.cost / f.n)} | ${(f.min / f.n).toFixed(2)} |`).join("\n") + "\n\n";
   // reply time by flow: mean, standard deviation, median, 90th percentile (Carverhill, Oct 27: "compare standard deviation on response times too")

@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 8:52 PM",
+      "change": "New test page with a state machine watching the voice call alongside the existing code (phase 1 of the state machine work). It changes nothing the officer hears; it only logs where its picture of the call disagrees with the app's flags, so the test runs can show where the two differ.",
+      "area": "Voice (test page only)",
+      "requestedBy": "Carverhill",
+      "why": "\"Go for phase 1\": one state machine for the voice core, started as a shadow so it can be measured before it takes over."
+    },
+    {
       "date": "Oct 31, 8:20 PM",
       "change": "Preview: after a dropped line, if Ara doesn't say where we were, the app asks her again for just the missing part (no second \"sorry\"), then once more with the exact sentence, in her own voice. After that the app says nothing; it no longer plays its own fallback line. The check stops if another form has opened. On Record the ask, Record pledge and Record gift, once the entity is on the form, Ara is asked for the amount alone (\"How much was the ask?\") instead of the two-part question again.",
       "area": "Voice",
