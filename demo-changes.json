@@ -2,7 +2,7 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
-      "date": "STAMP",
+      "date": "Nov 1, 12:19 PM",
       "change": "The time limits on the yes-or-no and say-the-question checks are the state machine's own timers (a nudge restarts the clock); the app's checks keep no clocks of their own.",
       "area": "Voice",
       "requestedBy": "Carverhill",
