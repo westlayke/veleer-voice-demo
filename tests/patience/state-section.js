@@ -34,6 +34,6 @@ function tally(on, pick) { const by = {}; on.forEach(c => Object.entries(pick(c)
 // checks the machine ended by itself (Nov 1): by kind and reason, with the conversations it happened in
 function endedRows(on, total) {
   const rows = Object.entries(tally(on, c => c.sm.ended)).sort((a, b) => b[1].n - a[1].n); if (!rows.length) return [];
-  return [`Checks the machine ended before the app did: ${total(rows)} (the app's copy ended with them; checks the app ended itself are not counted here).`, "", "| Check and reason | Times | Conversations |", "|---|---|---|", ...rows.map(([k, b]) => `| ${k} | ${b.n} | ${b.convs} |`), ""];
+  return [`Checks the machine ended: ${total(rows)} (the officer spoke, the form changed, the line dropped, the call ended, the time limit or the replies ran out; a check the app ended on its own pass or fail is not counted here).`, "", "| Check and reason | Times | Conversations |", "|---|---|---|", ...rows.map(([k, b]) => `| ${k} | ${b.n} | ${b.convs} |`), ""];
 }
 module.exports = { stateSection, smSection };

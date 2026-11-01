@@ -66,12 +66,13 @@
     actions: {
       startCheck: assign({ check: ({ event }) => ({ kind: event.kind, data: event.data || null, at: Date.now(), replies: 0, form: event.form, respN: facts.respN }) }),
       endCheck: assign({ check: null }),
-      /* the machine ended the check itself (Nov 1 Pat run: 340 stale yes/no watches after Ara opened the offered form), with the reason logged
-         in the app's own words (step 4, Nov 1: the app no longer stands a check down for speech, a form change, a drop or the call's end itself);
-         a check the app ends first (its pass or fail) never gets here */
+      /* the machine ended the check itself, with the reason logged: a stand-down for the officer's speech or a form change in the app's own
+         wording (the reports count "stands down"), a drop or the call's end in the voice log only; a check the app ends first (its pass or fail,
+         through CHECK_END) never gets here */
       machineEnd: ({ context, event }) => { const c = context.check; if (!c) return; const why = END_WHY[event.type] || (/^xstate\.after/.test(event.type) ? "its time limit passed" : event.type), k = `${c.kind}: ${why}`; SM.ended[k] = (SM.ended[k] || 0) + 1;
-        const ask = `the ask for ${c.kind === "nudge" ? "the tool call" : "where we were"} stands down`;
-        act("step", event.type === "SPEECH_START" ? `The officer spoke: ${ask}` : c.kind === "ctxWatch" && event.type === "FORM_OPEN" ? `Another form opened: ${ask}` : `check ${c.kind} ended by the machine: ${why}`); },
+        if (event.type === "LINE_DROP" || event.type === "CALL_END") { vlog(`check ${c.kind} ended: ${why}`); return; }
+        const standDown = event.type === "SPEECH_START" ? "The officer spoke" : c.kind === "ctxWatch" && /^FORM_/.test(event.type) ? why.charAt(0).toUpperCase() + why.slice(1) : "";
+        act("step", standDown ? `${standDown}: the ask for ${c.kind === "nudge" ? "the tool call" : "where we were"} stands down` : `check ${c.kind} ended by the machine: ${why}`); },
       countReply: assign({ check: ({ context }) => context.check ? Object.assign({}, context.check, { replies: context.check.replies + 1 }) : null })
     },
     delays: { stale: ({ context }) => context.check && checkRule(context.check.kind).maxMs || NO_LIMIT_MS },

@@ -63,7 +63,7 @@ test("Jacqueline's call: a dropped rating is said to be not caught before it's a
   forced = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
   ok(forced.length === 1 && /^Still needed on the add planned ask form: planned ask date and amount\. Optional, if you want them: participants in the ask\.$/.test(forced[0]), "the list of fields left is wrong: " + JSON.stringify(forced));
   // a dropped amount the form needs: the app says it didn't catch it, then Ara asks (the tool result carries what was said)
-  await p.waitForTimeout(900); await said(p, "On December first."); // the command's 800 ms guard against a repeated tool call has passed
+  await said(p, "On December first.");
   r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", plannedDate: "2026-12-01", amount: 25000 });
   ok(/^I didn't catch the amount from you, so it's not on the form\. How much is the amount\?$/.test(r.ask_exactly || "") && r.still_needed && r.still_needed.includes("Amount") && /Still needed: Amount/.test(r.next || "") && /never say "noted"/.test(r.next || ""), "a dropped required amount wasn't owned up to before the ask: " + JSON.stringify(r));
 });

@@ -114,10 +114,10 @@ test("Pat's Pennsylvania C4 loop (Oct 31): once the entity is on the Record the 
   const araSays = (text) => p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: text }, { type: "response.done", response: { status: "completed" } }]);
   await araSays("Got it, Pennsylvania C4. How much was the ask?"); await p.waitForTimeout(200);
   ok(/Ara asked the question herself: "How much was the ask\?"/.test(await p.log()), "Ara's question wasn't counted: " + (await p.log()).slice(-300));
-  // Nov 1: a check on where we were stands down when another form is open by the time Ara's reply comes (the app's stale line 23 s later)
+  // Nov 1: a check on where we were stands down as soon as another form opens (the app's stale line 23 s later); the machine ends it, in the app's words
   await p.evaluate(() => contextWatch("reconnect", { who: "Ruth", q: "Which entity?", line: "We're on the add planned ask for Ruth. Which entity?" }));
-  await p.evaluate(() => { Object.assign(checkNow("ctxWatch"), { form: "plan", seq: -1 }); });
+  await p.evaluate(() => { checkNow("ctxWatch").seq = -1; smSend("FORM_OPEN", { form: "plan" }); });
   await araSays("Sorry, I lost you for a moment. What would you like to do?"); await p.waitForTimeout(200);
-  ok(/Another form opened: the ask for where we were stands down/.test(await p.log()) && await p.evaluate(() => !checkNow("ctxWatch")), "the check didn't stand down for another form: " + (await p.log()).slice(-300));
+  ok(/The form changed: the ask for where we were stands down/.test(await p.log()) && await p.evaluate(() => !checkNow("ctxWatch")), "the check didn't stand down for another form: " + (await p.log()).slice(-300));
 });
 };

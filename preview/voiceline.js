@@ -340,7 +340,7 @@ const downSince = () => Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now
    The machine's check part holds the one check and its data (tries, guide, question...); checkNow() reads it; the machine ends a check by itself when the officer speaks (the kinds CHECK_RULES allows), the form changes, the line drops, the call ends or Ara's
    replies are used up (CHECK_RULES in core.js). */
 function checkStart(kind, data) { const was = checkNow(); if (was) vlog(`check ${was.kind} ended: ${kind} started`);
-  const c = Object.assign({ at: Date.now(), tries: 1, form: formNow() }, data || {}, { kind }); smSend("CHECK_START", { kind, data: c, form: c.form }); return c; }
+  const c = Object.assign({ at: Date.now(), tries: 1 }, data || {}, { kind }); smSend("CHECK_START", { kind, data: c, form: formNow() }); return c; }
 function checkEnd(why, kind) { const c = checkNow(); if (!c || (kind && c.kind !== kind)) return; if (why) vlog(`check ${c.kind} ended: ${why}`); smSend("CHECK_END"); }
 function resetLine() {
   smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; G.cutQ = null; /* a cut question is re-put by the reconnect, not by the sound coming back */
