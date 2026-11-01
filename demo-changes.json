@@ -6,7 +6,7 @@
       "change": "After the officer says no to the next-step offer, the where-we-were line after a drop names what was just saved and the recommended next step and ends with \"What would you like to do?\" instead of asking yes or no again.",
       "area": "Voice",
       "requestedBy": "Carverhill",
-      "why": "His 11:00 AM call (Nov 1): after his no, two drops offered the same step again and he said no three times; 12:30 PM: the line should repeat what was just done and recommend the next step in the flow."
+      "why": "His 11:00 AM call (Nov 1): after his no, two drops offered the same step again and he said no three times; 11:30 AM: the line should repeat what was just done and recommend the next step in the flow."
     },
     {
       "date": "Nov 1, 11:41 AM",
