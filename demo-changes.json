@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 4:09 PM",
+      "change": "The next-step question counts in Ara's own wording too (\"Do you want to set that now, and if so, what is it and when is it due?\"), so the officer's yes or no is taken and the read-back follows. The real Ara test harness now waits for a nudge's follow-up reply before hanging up.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Yes to both\" (Nov 1, 3:48 PM ET) to the two follow-ups from the next-step-no run (3 of 5 saved)."
+    },
+    {
       "date": "Nov 1, 3:07 PM",
       "change": "Spooky mode is available any time of year, from Settings or by saying \"spooky mode\" (it used to switch itself off on Nov 1); the Halloween visitors on their own are still October-only.",
       "area": "Voice",
