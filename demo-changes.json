@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 1:31 AM",
+      "change": "State machine phase 3 on the state-machine preview page only: the officer part (silent, speaking, said, uncertain) and the form part (none, asking, optional, read-back, saved) are now the app's own truth there, sent by the app at every place a form opens, closes, saves or changes stage and at every speech event, and read through officerState()/formState(). The main preview is unchanged. The check part is still shadow.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Can you test phase 3 of the state machine overnight\" (Nov 1, 2:11 AM): phase 3 built so Pat and real Ara can run on it overnight."
+    },
+    {
       "date": "Nov 1, 1:07 AM",
       "change": "Lock follow-ups from the 12:58 AM call: one fresh start before the Carry on card (the card now shows at about 8 s instead of 21 s, since a second fresh engine was dead too), and Carry on now picks up the same conversation with a fresh voice pass: the pass the button's touch had warmed a line with was spent, and every resume with it was refused.",
       "area": "Voice",

@@ -27,6 +27,8 @@ const FAKES = () => {
   /* pokes that move the old flags AND the state machine on preview-sm (phase 2: the app reads the machine there): the line down since `at` (0 = up), a reply open or not */
   window.__down = (at) => { G.downAt = at; if (window.__sm) { if (at) { __sm.send("LINE_DROP"); __sm.send("LINE_DOWN"); __sm.facts.downAt = at; } else __sm.send("LINE_UP"); } };
   window.__busy = (on) => { G.responding = on; if (window.__sm) __sm.send(on ? "ARA_STARTED" : "ARA_DONE"); };
+  window.__speech = (on) => { G.speechOn = on; if (window.__sm) __sm.send(on ? "SPEECH_START" : "SPEECH_STOP"); }; /* phase 3: the officer talking or not */
+  window.__form = (type) => { if (window.__sm) __sm.send(type, { form: typeof V !== "undefined" && V ? V.action : "" }); }; /* phase 3: a form event after a check sets the form's flags by hand */
   const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/log/.test(String(u))) { if (o && o.body) window.__logs.push(JSON.parse(o.body)); return Promise.resolve(new Response('{"logging":true}', { status: 200 })); }
     return /workers\.dev/.test(String(u)) ? Promise.resolve(new Response(JSON.stringify({ value: "test-pass-" + (window.__passN = (window.__passN || 0) + 1) }), { status: 200 })) : f(u, o); }; /* each pass is its own: a spent one can be told from a fresh one */
 };

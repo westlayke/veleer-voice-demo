@@ -3,16 +3,19 @@
 // the form and the one check waiting on Ara.
 // Phase 2 (Nov 1): the LINE and ARA parts are the app's truth on this page. The app sends their events itself (smSend in voiceline.js and
 // voice.js: a line opened, ended, went down, a line test, a reply asked for, started, sounding, done, played out), and every part of the app
-// reads them through lineState()/araState()/downAt() (voiceline.js), which this file points at the machine. The old flags (G.responding,
-// G.audioOn, G.probing, G.downAt, the line meaning of G.status) are still written by the shared files for the main preview, but nothing reads
-// them here; they go when the machine moves to the main page. The officer, form and check parts are still SHADOW: they change nothing, and
-// every 250 ms the machine's picture is compared with the flags'; a difference that lasts 600 ms or more is one "disagreement", logged once
-// ("State machine: ...") and kept in window.__sm for the harnesses. The line and Ara parts are compared too, machine against the dead flags,
-// so a missed event shows up as a disagreement.
+// reads them through lineState()/araState()/downAt() (voiceline.js), which this file points at the machine.
+// Phase 3 (Nov 1, Carverhill: "Can you test phase 3 of the state machine overnight"): the OFFICER and FORM parts too. The app sends the speech
+// events (onEvent in voice.js: speech started, stopped, words in) and the form events (formEvent in every place a form opens, closes, saves or
+// changes stage: aratools.js, drafts.js, guide.js, screens.js, voice.js, voiceforms.js), and reads officerState()/formState() (voiceline.js),
+// pointed at the machine here. The old flags (G.responding, G.audioOn, G.probing, G.downAt, G.speechOn, the stage meaning of G.saveCheck and
+// V.opt) are still written by the shared files for the main preview, but nothing on this page reads them for a state; they go when the machine
+// moves to the main page. The CHECK part is still SHADOW: it changes nothing. Every 250 ms the machine's picture is compared with the flags';
+// a difference that lasts 600 ms or more is one "disagreement", logged once ("State machine: ...") and kept in window.__sm for the harnesses.
+// The four live parts are compared too, machine against the dead flags, so a missed event shows up as a disagreement.
 (function () {
   if (typeof XState === "undefined" || typeof G === "undefined") return;
   const { createMachine, createActor, assign } = XState;
-  const SM = window.__sm = { diffs: [], counts: {}, transitions: 0, log: [], events: [], phase: 2 }; /* events: the last 200 the app sent, for the harnesses */
+  const SM = window.__sm = { diffs: [], counts: {}, transitions: 0, log: [], events: [], phase: 3 }; /* events: the last 200 the app sent, for the harnesses */
   /* the facts every part can read: the line number (an old line's events are ignored), the event number, the officer's last words, the open form, when the line went down */
   const facts = SM.facts = { lineN: 0, eventN: 0, lastWords: null, form: "", speechAt: 0, downAt: 0 };
   const DIFF_MS = 600, TICK_MS = 250, RESP_LIMIT = { where: 3, ask: 2, yesno: 2, tool: 4 }, ASKED_MAX_MS = 10000;
@@ -75,37 +78,31 @@
   const actor = createActor(machine); actor.start();
   let last = JSON.stringify(actor.getSnapshot().value);
   actor.subscribe(s => { const v = JSON.stringify(s.value); if (v !== last) { SM.transitions++; last = v; } });
-  const send = (type, extra) => { facts.eventN++; facts.lineN = lineN(); SM.events.push(Date.now() + " " + type); if (SM.events.length > 200) SM.events.shift(); try { actor.send(Object.assign({ type }, extra || {})); } catch (e) { note("send failed: " + e.message); } };
+  const send = (type, extra) => { facts.eventN++; facts.lineN = lineN(); SM.events.push(Date.now() + " " + type); if (SM.events.length > 200) SM.events.shift();
+    if (type === "SPEECH_START") facts.speechAt = Date.now(); else if (type === "WORDS") facts.lastWords = { text: extra && extra.text || "", at: Date.now() }; else if (type === "FORM_OPEN" || type === "FORM_CLOSED") facts.form = extra && extra.form || "";
+    try { actor.send(Object.assign({ type }, extra || {})); } catch (e) { note("send failed: " + e.message); } };
   const state = () => actor.getSnapshot().value;
   SM.state = state; SM.send = send; SM.machine = machine;
   function note(text) { SM.log.push(Date.now() + " " + text); if (SM.log.length > 400) SM.log.shift(); }
 
-  /* ---------- phase 2: the line and Ara parts are what the app reads; the flags' own answers are kept for the comparison ---------- */
-  const flagLine = lineState, flagAra = araState, flagDownAt = downAt;
+  /* ---------- phases 2 and 3: the line, Ara, officer and form parts are what the app reads; the flags' own answers are kept for the comparison ---------- */
+  const flagLine = lineState, flagAra = araState, flagDownAt = downAt, flagOfficer = officerState, flagForm = formState;
   smSend = send;
   lineState = () => state().line;
   araState = () => state().ara;
   downAt = () => facts.downAt;
+  officerState = () => state().officer;
+  formState = () => state().form;
 
-  /* ---------- what the machine still listens to through wrappers (officer, form, check: shadow) ---------- */
+  /* ---------- what the machine still listens to through wrappers (check: shadow) ---------- */
   const wrap = (name, before, after) => { const f = window[name]; if (typeof f !== "function") { note("not found: " + name); return; }
     window[name] = function () { try { before && before.apply(this, arguments); } catch (e) {} const r = f.apply(this, arguments); try { after && after.apply(this, [r].concat([].slice.call(arguments))); } catch (e) {} return r; }; };
-  wrap("onEvent", (e) => {
-    const t = e && e.type || "";
-    if (t === "input_audio_buffer.speech_started") { facts.speechAt = Date.now(); send("SPEECH_START"); }
-    else if (t === "input_audio_buffer.speech_stopped") send("SPEECH_STOP");
-    else if (/input_audio_transcription\.completed$/.test(t)) { facts.lastWords = { text: e.transcript || "", at: Date.now() }; send("WORDS"); }
-  });
-  /* a check starts on the form as it stands now, not as the last tick saw it */
   const KIND = { ctxWatch: "where", sayWatch: "ask", ynWatch: "yesno", nudge: "tool" };
-  wrap("oneCheck", (keep) => { if (keep) { feedForm(); send("CHECK_START", { kind: KIND[keep] || keep }); } }); /* every check on Ara starts through oneCheck */
-  ["draftTool", "grokSaved", "hfReadback", "cancelForm", "optStep"].forEach(n => wrap(n, null, () => feedForm()));
+  wrap("oneCheck", (keep) => { if (keep) send("CHECK_START", { kind: KIND[keep] || keep }); }); /* every check on Ara starts through oneCheck */
 
   /* ---------- the picture the flags give, the same five parts ---------- */
   function flagPicture() {
-    const line = flagLine(), ara = flagAra();
-    const officer = G.speechOn ? "speaking" : "silent";
-    const form = typeof V === "undefined" || !V ? (G.lastSaved && G.lastSaved.at && Date.now() - G.lastSaved.at < 120000 ? "saved" : "none") : G.saveCheck ? "readback" : V.opt ? "optional" : "asking";
+    const line = flagLine(), ara = flagAra(), officer = flagOfficer(), form = flagForm();
     const checks = [G.ctxWatch && "where", G.sayWatch && "ask", G.ynWatch && "yesno", G.nudge && "tool"].filter(Boolean);
     return { line, officer, ara, form, check: checks.length ? checks.join("+") : "none" };
   }
@@ -117,16 +114,8 @@
     form: (m, f) => m === f || (m === "saved" && f === "none") || (m === "none" && f === "saved"),
     check: (m, f) => (m === "none") === (f === "none") && !/\+/.test(f)
   };
-  /* the form part follows V (the form events come from watching V; phase 3 makes them the app's own) */
-  let formSeen = "", rbSeen = false, optSeen = false, savedSeen = 0;
-  function feedForm() {
-    const a = typeof V !== "undefined" && V ? V.action : "";
-    if (G.lastSaved && G.lastSaved.at && G.lastSaved.at !== savedSeen) { savedSeen = G.lastSaved.at; send("FORM_SAVED"); }
-    if (a !== formSeen) { facts.form = a; send(a ? "FORM_OPEN" : "FORM_CLOSED", { form: a }); formSeen = a; rbSeen = optSeen = false; }
-    if (a) { const rb = !!G.saveCheck, op = !!V.opt; if (rb && !rbSeen) send("FORM_READBACK"); else if (!rb && rbSeen) send(op ? "FORM_OPTIONAL" : "FORM_ASKING");
-      if (op && !optSeen && !rb) send("FORM_OPTIONAL"); rbSeen = rb; optSeen = op; }
-    else if (state().form === "saved" && G.lastSaved && Date.now() - G.lastSaved.at > 120000) send("NEXT_OVER");
-  }
+  /* a saved form's next-step offer is over two minutes after the save (the flags' own window) */
+  function feedSaved() { if (state().form === "saved" && G.lastSaved && Date.now() - G.lastSaved.at > 120000) send("NEXT_OVER"); }
   /* the checks the app arms inline (no function to listen to) start when their flag appears; any check ends when its flags clear */
   let checksSeen = "none";
   function feedChecks(f) {
@@ -141,7 +130,7 @@
   function compare() {
     if (!G.live && state().line === "ended") { Object.keys(open).forEach(k => delete open[k]); return; }
     const m = state(), f = flagPicture(), now = Date.now();
-    feedForm(); feedChecks(f);
+    feedSaved(); feedChecks(f);
     ["line", "officer", "ara", "form", "check"].forEach(part => {
       const mv = typeof m[part] === "string" ? m[part] : Object.keys(m[part])[0], fv = f[part];
       if (SAME[part](mv, fv)) { if (open[part] && open[part].logged) note(`${part} agrees again after ${((now - open[part].at) / 1000).toFixed(1)} s`); delete open[part]; return; }
@@ -151,11 +140,11 @@
         open[part].logged = true; const k = `${part}: machine ${mv}, flags ${fv}`; SM.counts[k] = (SM.counts[k] || 0) + 1;
         const d = { at: now, part, machine: mv, flags: fv, status: G.status, form: typeof V !== "undefined" && V ? V.action : "", lineN: facts.lineN };
         SM.diffs.push(d); if (SM.diffs.length > 500) SM.diffs.shift();
-        if (SM.counts[k] <= 3 && typeof act === "function") act("step", `State machine: the ${part} is "${mv}" but the flags say "${fv}" (${part === "line" || part === "ara" ? "the machine decides on this page" : "shadow only, nothing changed"})`);
+        if (SM.counts[k] <= 3 && typeof act === "function") act("step", `State machine: the ${part} is "${mv}" but the flags say "${fv}" (${part === "check" ? "shadow only, nothing changed" : "the machine decides on this page"})`);
       }
     });
   }
   setInterval(() => { try { compare(); } catch (e) { note("compare failed: " + e.message); } }, TICK_MS);
   setInterval(() => { try { if (state().ara === "draining" && !(playingLeft() > 0)) send("ARA_PLAYED"); } catch (e) {} }, TICK_MS); /* a source whose onended never fires */
-  note("state machine started, phase 2 (XState " + (XState.VERSION || "5.33.3") + ")");
+  note("state machine started, phase 3 (XState " + (XState.VERSION || "5.33.3") + ")");
 })();

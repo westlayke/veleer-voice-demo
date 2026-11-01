@@ -383,7 +383,7 @@ test("Hands-free: when Ara reads a form back herself, in full, and the officer s
   // but a read-back that left a field out still gets the app's own
   await said(p, "New contact: Rita Moss, rita at example dot org, mobile 555 010 0166.");
   r = await ara(p, "show_contact_draft", { first: "Rita", last: "Moss", email: "rita@example.org", mobile: "(555) 010-0166" });
-  await p.evaluate(() => { V.opt = null; recent("Ara", "New contact: Rita Moss, rita at example dot org. Shall I save it?"); }); // the mobile was left out (and Ara skipped the app's rating question)
+  await p.evaluate(() => { V.opt = null; __form("FORM_ASKING"); recent("Ara", "New contact: Rita Moss, rita at example dot org. Shall I save it?"); }); // the mobile was left out (and Ara skipped the app's rating question)
   await said(p, "Yes");
   r = await ara(p, "save_form", { confirmed: true });
   ok(r.saved === false && /Yes to save, or no to change something\?$/.test(r.read_back || "") && !(await state(p)).contacts.some(c => c.last === "Moss"), "an incomplete read-back by Ara was accepted: " + JSON.stringify(r));
@@ -549,7 +549,7 @@ test("Carverhill's 1:14 PM call (Oct 29): a form with every required field in st
   // a contact form with everything in and the optional details not yet offered: the position is the save-or-optional question
   await p.evaluate(() => { try { closeOverlay(); } catch (e) {} V = null; });
   await said(p, "New contact, Jordan Pike, email jpike at example dot com."); await ara(p, "show_contact_draft", { first: "Jordan", last: "Pike", email: "jpike@example.com" }); await p.waitForTimeout(300);
-  const fp = await p.evaluate(() => { V.askedCap = true; V.opt = null; V.askedOptional = false; V.choice = null; return formPosition(); });
+  const fp = await p.evaluate(() => { V.askedCap = true; V.opt = null; __form("FORM_ASKING"); V.askedOptional = false; V.choice = null; return formPosition(); });
   ok(/^That's everything the new contact form needs for Jordan\. Save it, or add the optional details first\?$/.test(fp.ask), "a complete contact form's position isn't the save-or-optional question: " + JSON.stringify(fp));
 });
 test("Carverhill's 6:22 and 6:23 PM calls (Oct 29): a question is never a yes, a muted mic blocks the idle hang-up, a save drops the stale read-back", async (p) => {
@@ -1047,7 +1047,7 @@ test("Carverhill's 10:02 PM call (Oct 31) and 12:02 AM call (Nov 1): a sound eng
 test("State machine phase 2 (Nov 1): on preview-sm the line and Ara parts answer from the app's own events, and agree with the old flags", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const st = () => p.evaluate(() => ({ phase: __sm.phase, line: lineState(), ara: araState(), up: lineUp(), busy: araBusy(), flagLine: G.status, down: downAt() }));
-  let s = await st(); ok(s.phase === 2 && s.line === "connected" && s.up && /^(idle|asked)$/.test(s.ara) && !s.busy, "after the line opened: " + JSON.stringify(s) + " events " + JSON.stringify(await p.evaluate(() => __sm.events.slice(-12)))); /* asked: the pretend line never answers the opening reply request */
+  let s = await st(); ok(s.phase === 3 && s.line === "connected" && s.up && /^(idle|asked)$/.test(s.ara) && !s.busy, "after the line opened: " + JSON.stringify(s) + " events " + JSON.stringify(await p.evaluate(() => __sm.events.slice(-12)))); /* asked: the pretend line never answers the opening reply request */
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.created", response: { id: "r1" } }) }); });
   s = await st(); ok(s.ara === "generating" && s.busy, "a reply started: " + JSON.stringify(s));
   await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "response.output_audio.delta", delta: btoa(String.fromCharCode(0, 0, 0, 0)), item_id: "i1" }) }); });
@@ -1063,5 +1063,34 @@ test("State machine phase 2 (Nov 1): on preview-sm the line and Ara parts answer
   await p.waitForTimeout(1500);
   const diffs = await p.evaluate(() => Object.keys(__sm.counts).filter(k => /^(line|ara):/.test(k)));
   ok(!diffs.length, "the machine and the old flags disagreed on the line or Ara: " + diffs.join("; "));
+}, { page: "preview-sm.html" });
+test("State machine phase 3 (Nov 1): on preview-sm the officer and form parts answer from the app's own events, and agree with the old flags", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const st = () => p.evaluate(() => ({ phase: __sm.phase, officer: officerState(), talking: officerSpeaking(), form: formState(), flagOfficer: G.speechOn ? "speaking" : "silent", flagForm: !V ? (G.lastSaved && Date.now() - G.lastSaved.at < 120000 ? "saved" : "none") : G.saveCheck ? "readback" : V.opt ? "optional" : "asking" }));
+  const msg = (type, more) => p.evaluate(([type, more]) => { __ws.onmessage({ data: JSON.stringify(Object.assign({ type }, more || {})) }); }, [type, more]);
+  let s = await st(); ok(s.phase === 3 && s.officer === "silent" && !s.talking && s.form === "none", "at the start: " + JSON.stringify(s));
+  /* the officer talks: speaking while the mic hears them, said once their words are in, silent again when a reply starts */
+  await msg("input_audio_buffer.speech_started"); s = await st(); ok(s.officer === "speaking" && s.talking, "speech started: " + JSON.stringify(s));
+  await msg("input_audio_buffer.speech_stopped"); s = await st(); ok(s.officer === "silent" && !s.talking, "speech stopped with no words yet: " + JSON.stringify(s));
+  await msg("conversation.item.input_audio_transcription.completed", { transcript: "Add a task for Ruth: send her the board deck, due November 30th." }); s = await st(); ok(s.officer === "said", "the words came in: " + JSON.stringify(s));
+  await msg("response.created", { response: { id: "r1" } }); s = await st(); ok(s.officer === "silent", "a reply started: " + JSON.stringify(s));
+  await p.evaluate(() => { stopPlayback(); }); await msg("response.done", { response: { status: "completed" } });
+  /* a form: open (asking), read back by the app in hands-free, saved on the yes; the machine's answer is what the app reads */
+  let r = await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-11-30" }); await p.waitForTimeout(200);
+  s = await st(); ok(s.form === "readback" && s.flagForm === "readback" && await p.isVisible("text=Say “yes” to save"), "the finished draft wasn't read back and waiting: " + JSON.stringify(s) + " reply " + JSON.stringify(r) + " log " + (await p.log()).slice(-400) + " events " + JSON.stringify(await p.evaluate(() => __sm.events.slice(-8))));
+  await said(p, "No, make it December 1st."); await p.waitForTimeout(200);
+  s = await st(); ok(s.form === "asking" && s.flagForm === "asking" && !(await p.isVisible("text=Say “yes” to save")), "the no didn't take the form back to its questions: " + JSON.stringify(s));
+  await ara(p, "show_task_draft", { contact_name: "Ruth Abernathy", text: "Send Ruth the board deck", due: "2026-12-01" }); await p.waitForTimeout(200);
+  s = await st(); ok(s.form === "readback", "the changed draft wasn't read back again: " + JSON.stringify(s));
+  await said(p, "Yes, save it."); await p.waitForTimeout(400);
+  s = await st(); ok(s.form === "saved" && s.flagForm === "saved" && (await state(p)).tasks.some(t => t.text === "Send Ruth the board deck"), "the yes didn't save, or the form part isn't saved: " + JSON.stringify(s));
+  /* a form opened by a tap and closed by its own close button */
+  await said(p, "New contact, Nell Rowe."); await ara(p, "show_contact_draft", { first: "Nell", last: "Rowe" }); await p.waitForTimeout(200);
+  s = await st(); ok(s.form === "asking" && s.flagForm === "asking", "a new contact still missing its email or mobile isn't the asking stage: " + JSON.stringify(s));
+  await p.tap("[data-act=close]"); await p.waitForTimeout(200);
+  s = await st(); ok(s.form === "none" && /^(none|saved)$/.test(s.flagForm), "the closed form isn't none: " + JSON.stringify(s));
+  await p.waitForTimeout(1500);
+  const diffs = await p.evaluate(() => Object.keys(__sm.counts).filter(k => /^(officer|form):/.test(k)));
+  ok(!diffs.length, "the machine and the old flags disagreed on the officer or the form: " + diffs.join("; "));
 }, { page: "preview-sm.html" });
 };

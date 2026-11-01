@@ -393,7 +393,7 @@ function draftTool(callId, name, data) {
   if (same) { const cur = readDraft(), waiting = G.hands && G.saveCheck && G.saveCheck.key === V.action + JSON.stringify(cur); (V.history = V.history || []).push(Object.assign({}, cur)); if (V.history.length > 20) V.history.shift();
     const changed = said.filter(k => String(cur[k] ?? "") !== String(data[k] ?? "")); said.forEach(k => { cur[k] = data[k]; }); said.forEach(k => V.fromVoice.add(k)); V = Object.assign({}, V, { action: tool.action, target, data: prefill(tool.action, cur, target), fromVoice: V.fromVoice });
     if (waiting && changed.length) { reread = readbackParts(ACTIONS[tool.action], voiceRule(tool.action), V.data, changed).join(", "); if (reread) { reread = reread.charAt(0).toUpperCase() + reread.slice(1) + "."; act("step", `The officer changed ${changed.join(", ")} on the form that was read back: the app re-reads just that`); } } }
-  else V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice: new Set(said) };
+  else { V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice: new Set(said) }; formEvent("FORM_OPEN"); }
   renderOverlay();
   const A = ACTIONS[tool.action], R = voiceRule(tool.action), d = V.data, empty = (v) => v === null || v === undefined || String(v).trim() === "";
   const condReq = new Set(R.requiredWhen ? R.requiredWhen(d) : []); /* required under a condition the form declares (a reason when declined or deferred) */
@@ -426,7 +426,7 @@ function draftTool(callId, name, data) {
   if (R.alwaysAsk === "substantive" && !missing.length && !V.askedSubst && !V.fromVoice.has("substantive")) { V.askedSubst = true;
     toolReply(callId, { ok: true, button: A.saveLabel, ask_exactly: SUBST_Q, next: "After the officer answers, call this tool again with substantive true or false." + droppedNote });
     return; } // the app asks it itself (Oct 25: Ara skipped the question when it was only guidance)
-  if (V.opt && V.opt.only && !empty(d[V.opt.only])) V.opt = null; // the one field asked for came in through this tool instead
+  if (V.opt && V.opt.only && !empty(d[V.opt.only])) { V.opt = null; formEvent("FORM_ASKING"); } // the one field asked for came in through this tool instead
   if (oneOf && !missing.length) { // one of the pair is in: ask once for the other (the policy's "needs one of")
     if ((empty(d.email) || empty(d.mobile)) && !V.askedOther && ((empty(d.email) && noEmail) || (empty(d.mobile) && noMobile))) { V.askedOther = true; vlog(`${name}: not asking for the ${empty(d.email) ? "email" : "mobile"}, the officer said there is none`); } // never "an email as well?" after "No email" (Oct 27)
     if ((empty(d.email) || empty(d.mobile)) && !V.askedOther) { V.askedOther = true;
@@ -435,11 +435,11 @@ function draftTool(callId, name, data) {
       return; }
   }
   // a field the form declares to ask first (the rating an opportunity will need, Carverhill, Oct 25), then the rest of the optional details are offered
-  if (R.askFirst && !missing.length && empty(d[R.askFirst]) && !V.askedCap && !V.opt) { V.askedCap = true; V.opt = { done: [], only: R.askFirst }; optAsk(callId, droppedNeeded([optLabel(A.fields.find(f => f.k === R.askFirst))]).length ? notCaught([optLabel(A.fields.find(f => f.k === R.askFirst))]) : undefined); return; }
+  if (R.askFirst && !missing.length && empty(d[R.askFirst]) && !V.askedCap && !V.opt) { V.askedCap = true; V.opt = { done: [], only: R.askFirst }; formEvent("FORM_OPTIONAL"); optAsk(callId, droppedNeeded([optLabel(A.fields.find(f => f.k === R.askFirst))]).length ? notCaught([optLabel(A.fields.find(f => f.k === R.askFirst))]) : undefined); return; }
   // only the follow-up task is left on an awaiting ask: the app asks it in its own words, with the suggested wording (Carverhill, Oct 28)
   if (awaitingAsk(tool.action, d) && missing.length === 1 && /follow-up task/.test(missing[0])) { const s = followUpSuggestion(target);
     toolReply(callId, { ok: true, button: A.saveLabel, field: "nextStep", ask_exactly: FOLLOW_Q(target), next: `If the officer says yes, call this tool with nextStep "${s.text}" and nextDue ${s.due}; if they give their own words or date, use those.${droppedNote}${movedNote}` }); return; }
-  if (!missing.length && !V.askedOptional && !V.opt && !reread && optSteps(tool.action).length) { offerMore(callId); return; } /* every form: the optional details offered once (the policy) */
+  if (!missing.length && !V.askedOptional && !formIs("optional") && !reread && optSteps(tool.action).length) { offerMore(callId); return; } /* every form: the optional details offered once (the policy) */
   // hands-free: a finished draft is read back by the app straight away, instead of waiting for Ara to call save_form (Oct 25: she said "Tap Confirm" instead)
   if (!missing.length && G.hands && !R.noVoiceSave) { hfSave(callId, { confirmed: false }, reread ? reread : undefined, reread ? true : false); return; }
   const needed = missing.length ? droppedNeeded(missing) : [];

@@ -340,7 +340,7 @@ function paintCall() {
   document.body.classList.toggle("incall", G.live);
   el.hidden = !G.live;
   if (!G.live) return;
-  el.innerHTML = `<div class="cb-in"><span class="dot ${lineUp() ? "g" : "a"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div>${G.saveCheck ? `<div class="cb-yes">Say “yes” to save</div>` : ""}</div><button class="btn quiet cb-hf${G.hands ? " on" : ""}" data-act3="hands" aria-pressed="${!!G.hands}" title="${G.hands ? "Hands-free is on: Ara saves when you say yes. Tap to turn it off" : "Hands-free is off: tap to let Ara save when you say yes"}">${CAR} ${G.hands ? "Turn hands-free off" : "Turn hands-free on"}</button><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
+  el.innerHTML = `<div class="cb-in"><span class="dot ${lineUp() ? "g" : "a"}"></span><div class="cb-t"><b>${esc(G.status)}</b><div class="cb-cap" id="cbCap" hidden></div>${formIs("readback") ? `<div class="cb-yes">Say “yes” to save</div>` : ""}</div><button class="btn quiet cb-hf${G.hands ? " on" : ""}" data-act3="hands" aria-pressed="${!!G.hands}" title="${G.hands ? "Hands-free is on: Ara saves when you say yes. Tap to turn it off" : "Hands-free is off: tap to let Ara save when you say yes"}">${CAR} ${G.hands ? "Turn hands-free off" : "Turn hands-free on"}</button><button class="btn quiet cb-end" data-act3="end">End</button></div>`;
   capTick();
 }
 const TOKEN_URL = "https://veleer-voice.klaracey.workers.dev"; // shared key-holder service; anyone with a demo link can start a conversation
@@ -804,7 +804,7 @@ function resumeModal() {
 const resumeLine = (r) => `The officer's last conversation with you was cut off (a phone call, an alarm or the phone locking) and they tapped Carry on. ${r.lines.length ? `The last things said were:\n${r.lines.join("\n")}\n` : ""}${r.draft ? r.draft + " Nothing on that open form is saved yet: never say it is saved, marked or done, say it's on the form. " + (r.where ? r.where + " " : "") : ""}${r.hands ? "Hands-free mode is still on: you save with the officer's yes after a read-back, as before. Don't announce it. " : ""}Say "${spookyMode() ? "Welcome back to the haunted CRM" : xmasMode() ? "Welcome back, and Merry Christmas" : "Welcome back"}"${spookyMode() ? " in your haunted-house host voice" : xmasMode() ? " in your warm Christmas host voice" : ""} and, in one short sentence, what you were doing together, then ask the next question needed to finish it. Do not start over or ask for anything already filled in. Anything already done before the cut-off stays done${spookyMode() ? " (spooky mode is already on: don't turn it on again or announce it)" : xmasMode() ? " (Christmas mode is already on: don't turn it on again or announce it)" : ""}; never redo it.`;
 function endCall(why) {
   clearInterval(G.idleTick); clearInterval(G.netTick); clearTimeout(G.idleTimer); G.idleEnding = false;
-  G.live = false; G.hands = false; G.saveCheck = null; G.savedByWords = 0; G.sync = null; G.syncN = 0; G.syncPending = null; G.nudge = null; G.ctxWatch = null; G.stateOkAt = 0; clearTimeout(G.syncTimer); G.hfYesAt = 0; G.resumedHeardN = 0; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();
+  G.live = false; G.hands = false; G.saveCheck = null; formBack(); G.savedByWords = 0; G.sync = null; G.syncN = 0; G.syncPending = null; G.nudge = null; G.ctxWatch = null; G.stateOkAt = 0; clearTimeout(G.syncTimer); G.hfYesAt = 0; G.resumedHeardN = 0; G.qGuide = ""; G.askGuide = ""; stopPlayback(); letSleep(); if (typeof downEnd === "function") downEnd(); if (typeof locStop === "function") locStop();
   try { G.ws && G.ws.close(); } catch (e) {} closeTries();
   try { G.stream && G.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { G.ctx && G.ctx.close(); } catch (e) {}
@@ -887,8 +887,8 @@ function formCommand(t) {
   if (!words.length || words.some(w => w !== "C" && w !== "R")) return null;
   return words.includes("R") ? "restart" : "cancel";
 }
-function cancelForm() { const what = ACTIONS[V.action].title, back = V.backTo; V = null; renderOverlay(); if (back) go(back); return what; }
-function restartForm() { V.history = []; V.data = prefill(V.action, {}, V.target); V.fromVoice = new Set(); V.askedOther = V.askedOptional = false; V.opt = null; renderOverlay(); return ACTIONS[V.action].title; }
+function cancelForm() { const what = ACTIONS[V.action].title, back = V.backTo; V = null; formEvent("FORM_CLOSED"); renderOverlay(); if (back) go(back); return what; }
+function restartForm() { V.history = []; V.data = prefill(V.action, {}, V.target); V.fromVoice = new Set(); V.askedOther = V.askedOptional = false; V.opt = null; formEvent("FORM_ASKING"); renderOverlay(); return ACTIONS[V.action].title; }
 function voiceCommand(text) {
   const t = String(text).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim().replace(/^((please|okay|ok|um|uh|hey|ara|so) )+/, "").replace(/ please$/, "");
   const hit = VOICE_CMDS.find(([re]) => re.test(t)), cmd = hit ? hit[1] : formCommand(t); if (!cmd) return false;
@@ -964,7 +964,7 @@ function onEvent(e) {
   if (t === "response.created") smSend("ARA_STARTED"); else if (/audio\.delta$/.test(t)) { if (!araSounding()) smSend("ARA_SOUND"); } else if (t === "response.done") smSend("ARA_DONE"); /* the machine hears every reply, dropped ones too */
   if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; G.responding = false; flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
-  if (t === "input_audio_buffer.speech_started") { if (G.nudge) { act("step", "The officer spoke: the ask for the tool call stands down"); G.nudge = null; } if (G.ctxWatch) { act("step", "The officer spoke: the ask for where we were stands down"); G.ctxWatch = null; } G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true;
+  if (t === "input_audio_buffer.speech_started") { if (G.nudge) { act("step", "The officer spoke: the ask for the tool call stands down"); G.nudge = null; } if (G.ctxWatch) { act("step", "The officer spoke: the ask for where we were stands down"); G.ctxWatch = null; } G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true; smSend("SPEECH_START");
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0;
       clearTimeout(G.idleTimer);
@@ -997,9 +997,10 @@ function onEvent(e) {
   if (/input_audio_transcription\.completed/.test(t) && e.transcript && onlyNoise(e.transcript)) act("step", `Heard only noise ("${String(e.transcript).slice(0, 40)}"): not taken as the officer speaking`);
   else if (/input_audio_transcription\.completed/.test(t) && e.transcript) { G.heardN = (G.heardN || 0) + 1;
     G.heardWait = null;
-    if (!G.turnOpen && !araBusy() && !G.speechOn) { G.turnOpen = Date.now();
+    if (!G.turnOpen && !araBusy() && !officerSpeaking()) { G.turnOpen = Date.now();
       G.turnStep = 0; } /* the officer's turn is open until a reply starts (turnWatch); a partial transcript while they are still talking opens nothing (real-line runs Oct 29: "taking a moment" 4 s into a long sentence) */
     G.lastHeard = { text: e.transcript, n: G.heardN, at: Date.now(), repeat: !!(G.lastHeard && Date.now() - G.lastHeard.at < REPEAT_MS && sameWords(e.transcript).startsWith(sameWords(G.lastHeard.text))) };
+    smSend("WORDS", { text: e.transcript });
     act("user", e.transcript);
     recent("Officer", e.transcript);
     if (typeof idleAnswer === "function" && idleAnswer(e.transcript)) {} else if (!(typeof hfYesHeard === "function" && hfYesHeard(e.transcript)) && !voiceCommand(e.transcript) && typeof nextStepNo === "function") nextStepNo(e.transcript);
@@ -1023,7 +1024,7 @@ function onEvent(e) {
         G.asked = false;
         act("step", "The officer spoke while a reply was still requested: that request is dropped (one question, one answer)"); } } } /* no response.cancel here: nothing is being generated yet and the service answers "Cancellation failed: no active response found" (Oct 28) */ /* Oct 25 review item 10: stacked re-asks gave three "I'm here" in a row */
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…";
-    G.speechOn = false;
+    G.speechOn = false; smSend("SPEECH_STOP");
     G.heardWait = { n: G.heardN || 0, at: Date.now() };
     if (!araBusy()) { G.turnOpen = Date.now();
       G.turnStep = 0; if (typeof thinkArm === "function") thinkArm(); }
@@ -1178,7 +1179,7 @@ function toolCheck(r) {
   if (acted) return;
   if (!V && heard && (PROMISE_RE.test(G.bot) || FORM_REQ_RE.test(heard) && !NOT_ANSWER_RE.test(heard))) { kind = "open the form"; /* her own promise counts even after a bare yes (Patient Pat: "Sure, let's add that." to the next-step yes, no tool) */
     guide = (PROMISE_RE.test(G.bot) ? `Your reply ("${G.bot.slice(0, 120)}") promised a form but had no tool call` : `The officer asked for a form ("${heard.slice(0, 120)}") and your last reply had no tool call`) + `, so nothing opened on the screen. Call that form's tool now, with whatever fields you have (none is fine); the app then asks the first question. Say nothing else.`; }
-  else if (V && V.fromVoice && !V.opt && heard && !NOT_ANSWER_RE.test(heard) && !hfYes(heard) && !/\?\s*$/.test(G.bot) && heard.split(/\s+/).length <= 40) { const tl = TOOLS.find(x => x.action === V.action); if (!tl) return; kind = "fill the form";
+  else if (V && V.fromVoice && !formIs("optional") && heard && !NOT_ANSWER_RE.test(heard) && !hfYes(heard) && !/\?\s*$/.test(G.bot) && heard.split(/\s+/).length <= 40) { const tl = TOOLS.find(x => x.action === V.action); if (!tl) return; kind = "fill the form";
     guide = `The officer answered the open ${ACTIONS[V.action] && ACTIONS[V.action].title ? ACTIONS[V.action].title : "form"} form's question with "${heard.slice(0, 120)}", and your last reply had no tool call, so nothing was filled in. Call ${tl.name} now with what they said (keep the fields already in). Say nothing else; the app asks the next question.`; }
   if (!kind) return;
   oneCheck("nudge"); G.nudge = { kind, tries: 1, guide, at: Date.now() }; guardFired("Ara talked but didn't " + kind, `"${G.bot.slice(0, 80)}" after "${heard.slice(0, 60)}"`);

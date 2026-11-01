@@ -19,6 +19,15 @@ const lineIs = (...s) => s.includes(lineState()), araIs = (...s) => s.includes(a
 const lineUp = () => lineIs("connected", "testing"); /* a line is open and in use */
 const araBusy = () => araIs("generating", "playing"); /* a reply is open: the service is still sending */
 const araSounding = () => araIs("playing"); /* its sound is arriving */
+/* phase 3 (Nov 1): the officer and the form. Officer: silent, speaking (the mic hears them), said (their words are in and no reply has started),
+   uncertain (the line dropped mid-sentence). Form: none, asking (open, its fields asked for), optional (the optional questions), readback (read
+   back and waiting for the yes), saved (just saved, its next step offered). V, G.saveCheck and V.opt stay the form's data; these answer where it
+   stands. The app sends the events itself (formEvent at every place the form opens, closes, saves or changes stage; the speech events in onEvent). */
+function officerState() { return G.speechOn ? "speaking" : "silent"; }
+function formState() { return typeof V === "undefined" || !V ? (G.lastSaved && G.lastSaved.at && Date.now() - G.lastSaved.at < 120000 ? "saved" : "none") : G.saveCheck ? "readback" : V.opt ? "optional" : "asking"; }
+const officerSpeaking = () => officerState() === "speaking", formIs = (...s) => s.includes(formState());
+const formEvent = (type) => smSend(type, { form: typeof V !== "undefined" && V ? V.action : "" });
+const formBack = () => formEvent(typeof V !== "undefined" && V && V.opt ? "FORM_OPTIONAL" : "FORM_ASKING"); /* a read-back closed: back to the questions */
 
 /* ---------- timings: tune here ---------- */
 const IDLE_MS = 30000, IDLE_HF_MS = 30000;   // hang up after this much quiet, in both modes (Carverhill, Oct 30: Ara asks first, 10 s before)
@@ -134,7 +143,7 @@ const idleMs = () => typeof V !== "undefined" && V && ACTIONS[V.action] ? Math.m
 // usual watch), a fresh line at TURN_GIVE_UP_MS whatever happened. The hang-up is held off while a turn is open. No words from the turn: noise.
 // the officer stopped and no reply has started THINK_MS later: a soft two-note tone, so they know Ara is on it; "Ara's taking a moment." still follows at TICK_MS
 function thinkArm() { clearTimeout(G.thinkT); const at = G.turnOpen; if (!at) return;
-  G.thinkT = setTimeout(() => { if (!G.live || G.turnOpen !== at || araBusy() || G.speechOn || G.forced || G.pendingForce || playingLeft() > 0 || G.idleEnding || !lineUp()) return;
+  G.thinkT = setTimeout(() => { if (!G.live || G.turnOpen !== at || araBusy() || officerSpeaking() || G.forced || G.pendingForce || playingLeft() > 0 || G.idleEnding || !lineUp()) return;
     cue("think"); G.thinkAt = Date.now(); act("step", `No reply ${THINK_MS / 1000} s after the officer stopped: soft thinking tone`); }, THINK_MS); }
 function turnWatch() {
   if (!G.live || !G.turnOpen || G.asked || G.forced || G.pendingForce || araBusy() || G.idleEnding || !lineUp()) return;
@@ -339,7 +348,7 @@ async function reconnect(why) {
     cutStatusLine("the last try is announced");
     sayLocal(DOWN_LINES[3], "last", namedText("last")); } /* Carverhill, Oct 29: tell them when it's the last try */ // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
   G.drops++; G.status = "Reconnecting…"; G.createAt = 0; G.turnOpen = 0;
-  if (G.speechOn) { G.cutMidSpeech = true; G.speechOn = false; } /* the officer was mid-sentence when the line went: what was heard is a fragment, not their answer (real-line run, Oct 29: "You said: Record the") */
+  if (officerSpeaking()) { G.cutMidSpeech = true; G.speechOn = false; } /* the officer was mid-sentence when the line went: what was heard is a fragment, not their answer (real-line run, Oct 29: "You said: Record the") */
   resetLine(); paintCall();
   if (typeof watchOff === "function") watchOff("a new line"); /* whatever the app asks on the new line is its first telling there */
   if (G.drops === 1) cue("drop");
@@ -491,7 +500,7 @@ const lastSoundAt = () => Math.max(G.t0 || 0, G.lastSoundAt || 0, G.lineEndAt ||
 function quietWatch() {
   if (!G.live) return;
   if (playingLeft() > 0 || araSounding() || (G.lineEndAt && Date.now() < G.lineEndAt)) { G.lastSoundAt = Date.now(); return; } /* Ara or the phone is sounding */
-  if (G.speechOn) { G.speechStopAt = Date.now(); return; } /* the officer is talking */
+  if (officerSpeaking()) { G.speechStopAt = Date.now(); return; } /* the officer is talking */
   const on = waitingOn(); if (!on) return;
   const gap = Date.now() - lastSoundAt(); if (gap < QUIET_MS) return;
   quietSay(on, gap);
@@ -499,7 +508,7 @@ function quietWatch() {
 // one status recording now, from the clock or from a site that used to speak on its own timer: the still-trying lines while the line is down, "Ara's taking a moment."
 // the first time, then the quiet lines in turn (the named ones from the phone's store, else the stock recording). Never within QUIET_SPACING_MS of the last sound.
 function quietSay(on, gap) {
-  if (!G.live || playingLeft() > 0 || araSounding() || (G.lineEndAt && Date.now() < G.lineEndAt) || G.speechOn) return false;
+  if (!G.live || playingLeft() > 0 || araSounding() || (G.lineEndAt && Date.now() < G.lineEndAt) || officerSpeaking()) return false;
   if (Date.now() - lastSoundAt() < QUIET_SPACING_MS) return false;
   G.quietAt = Date.now(); const secs = Math.round((gap || Date.now() - lastSoundAt()) / 1000);
   let said;

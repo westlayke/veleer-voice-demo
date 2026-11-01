@@ -138,7 +138,7 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("[data-act2]"); if (!a) return;
   const act = a.dataset.act2;
   if (act === "mic") { if (G.live) endCall("officer tapped the mic"); else ask(null); }
-  else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; renderOverlay(); } }
+  else if (act === "cultivate") { const o = oppById(S.sel.opp); if (o) { const t = { contact: contactById(o.contactId), opp: o }; V = { action: "cultivate", target: t, data: prefill("cultivate", {}, t), fromVoice: new Set() }; formEvent("FORM_OPEN"); renderOverlay(); } }
   else if (act === "oppview") { S.oppView = a.dataset.v; save(); render(); }
   else if (act === "cfilt") { S.cFilter = a.dataset.v; save(); render(); }
   else if (act === "ofilt") { S.oFilter = a.dataset.v; save(); render(); }

@@ -433,7 +433,7 @@ function callDoneModal() {
     delete S.pendingCall; save(); h.innerHTML = "";
     S.sel.contact = c.id; go("contact");
     const t = resolveTarget("interaction", who);
-    V = { action: "interaction", target: t, data: prefill("interaction", { meetingType: "Phone call", date: todayISO() }, t), fromVoice: new Set() }; renderOverlay();
+    V = { action: "interaction", target: t, data: prefill("interaction", { meetingType: "Phone call", date: todayISO() }, t), fromVoice: new Set() }; formEvent("FORM_OPEN"); renderOverlay();
     startCall(`The officer just finished a phone call with ${who}. The Interaction report is already on screen with Phone call and today's date. Ask how the call went, then fill in the report by calling show_interaction_draft for ${who} after each answer.`);
   };
   document.getElementById("cdX").onclick = () => { delete S.pendingCall; save(); h.innerHTML = ""; toast(`You can log it later from ${c.first}'s record.`); };

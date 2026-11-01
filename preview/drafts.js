@@ -236,7 +236,7 @@ function openForm(action, cid, item) {
   if (target.route) action = target.route;
   let backTo = null; // Oct 28 (Carverhill): a form opened from the Tasks list goes back there on cancel; a save stays on the record
   if (action === "response" && target.opp && !(S.screen === "opp" && S.sel.opp === target.opp.id)) { backTo = S.screen === "tasks" ? "tasks" : null; S.sel.opp = target.opp.id; S.screen = "opp"; save(); render(); } // the task's link lands on the opportunity, with the form over it
-  V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true, backTo }; renderOverlay(); spookyCue("creak");
+  V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true, backTo }; formEvent("FORM_OPEN"); renderOverlay(); spookyCue("creak");
   if (action === "response") focusField(document.getElementById("f_response")); // straight to the field the officer came for
   if (G.live) guide(`The officer opened the ${ACTIONS[action].title} form${target.contact ? " for " + nameOf(target.contact) : ""} by tapping. In a few words, say you see it and that they can tell you the details (you fill it in with ${toolFor(action)}).`);
 }
@@ -297,7 +297,7 @@ function renderOverlay() {
 }
 document.getElementById("overlay").addEventListener("click", (e) => {
   const a = e.target.closest("[data-act]"); if (!a) return;
-  if (a.dataset.act === "close") { const back = V && V.backTo; V = null; renderOverlay(); if (back) go(back); }
+  if (a.dataset.act === "close") { const back = V && V.backTo; V = null; formEvent("FORM_CLOSED"); renderOverlay(); if (back) go(back); }
   else if (a.dataset.act === "voicefill") voiceFill();
   else if (a.dataset.act === "save") saveDraft();
 });
@@ -352,7 +352,7 @@ function saveDraft() {
   try { act("form", formLog(A, d, V.fromVoice, V.typed)); } catch (e) {}
   const result = APPLY[action](d, t);
   G.lastSave = { undo, at: Date.now(), action, hf: !!G.hfTry }; // a hands-free save can be taken back by saying "undo"
-  save(); V = null; renderOverlay(); render(); window.scrollTo(0, 0);
+  save(); V = null; formEvent("FORM_SAVED"); renderOverlay(); render(); window.scrollTo(0, 0);
   setWhatNext(action, result, t); if (G.whatNext) render();
   toast(A.saved + (result && result.note ? ". " + result.note : ""), () => { S = JSON.parse(undo); G.whatNext = null; save(); render(); });
   if (action === "payment" || action === "gift") celebrate(); // the money came in: a pledge payment or an outright gift

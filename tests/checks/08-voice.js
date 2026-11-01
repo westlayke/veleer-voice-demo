@@ -418,7 +418,7 @@ test("Ara: after a reconnect the app says where the form stands and asks the pen
   ok(f.some(t => /^Sorry, I lost you for a moment\. We're on the new contact for Nora\. New contact: Nora Quist, email, nora@example\.org[^]*Yes to save, or no to change something\?$/.test(t)), "the read-back wasn't repeated by the app after the reconnect: " + JSON.stringify(f));
   ok(/has been read back in full and is waiting for the officer's yes to save it/.test(i), "Ara's instructions don't say the form is waiting for a yes: " + i.slice(-400));
   // a form with required fields still missing: Ara is guided as before, told what's still needed
-  await p.evaluate(() => { V = null; G.saveCheck = null; renderOverlay && renderOverlay(); });
+  await p.evaluate(() => { V = null; G.saveCheck = null; __form("FORM_CLOSED"); renderOverlay && renderOverlay(); });
   await p.evaluate(() => { V = null; });
   await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
   n0 = await p.evaluate(() => __sent.length);
@@ -801,7 +801,7 @@ test("Reconnect with no form open (Oct 29): the app says the sorry and the quest
   await p.waitForFunction(() => G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(600);
   ok((await lastForced()) === "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now? I didn't catch your answer.", "words lost in the gap didn't get the whole line plus 'I didn't catch your answer': " + (await lastForced()));
   // the line went while the officer was still talking (speech started, never stopped): what was heard is a fragment, so the answer counts as lost (real-line run, Oct 29: "You said: Record the")
-  await p.evaluate(() => { G.lastBot = "Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?"; G.lastBotAt = Date.now(); G.lastHeard = { text: "Record the", n: (G.heardN || 0) + 1, at: Date.now() }; G.speechOn = true; });
+  await p.evaluate(() => { G.lastBot = "Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now?"; G.lastBotAt = Date.now(); G.lastHeard = { text: "Record the", n: (G.heardN || 0) + 1, at: Date.now() }; __speech(true); });
   await drop();
   ok((await lastForced()) === "Sorry, I lost you for a moment. Billy is now in Cultivation. The next step is to add a planned ask. Do you want to do that now? I didn't catch your answer." && await p.evaluate(() => !G.speechOn && !G.cutMidSpeech), "a fragment heard as the line went was taken for the officer's answer: " + (await lastForced()));
   // the officer had spoken after a statement (no question): the app asks them to say it again
@@ -1049,7 +1049,7 @@ test("Ara: a drop with no form open comes back to the person just worked on, and
   let r = await ara(p, "show_contact_draft", { first: "Nora", last: "Quist", email: "nora@example.org", mobile: "(555) 010-0188" });
   ok(r.field === "capacity", "the rating wasn't asked first: " + JSON.stringify(r));
   // the officer answers before the questions have started (Oct 25: "a capacity rating of C" got every option read out)
-  await p.evaluate(() => { V.opt = null; });
+  await p.evaluate(() => { V.opt = null; __form("FORM_ASKING"); });
   r = await ara(p, "optional_fields", { step: "answer", value: "C" });
   ok((await p.inputValue("#f_capacity")) === "C" && r.field === "howMet" && /^Rating C is on the form\. Next field: how you met Nora/.test(r.ask_exactly || ""), "the rating said before the questions wasn't taken: " + JSON.stringify(r));
   await p.tap("[data-act=save]"); await p.waitForTimeout(400);
