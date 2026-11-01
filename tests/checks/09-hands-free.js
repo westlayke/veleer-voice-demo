@@ -1198,4 +1198,26 @@ test("State machine (Nov 1): a yes/no or say check ends by the machine's clock a
   await p.waitForTimeout(1200); ok(await p.evaluate(() => !!checkNow("ctxWatch")), "a kind with no time limit was ended by the clock");
   await p.evaluate(() => { checkEnd("", "ctxWatch"); });
 });
+
+test("Carverhill's 12:25 PM call (Nov 1): a no to the next step is answered by the app's line, so the officer's turn is closed (no re-ask of \"No.\" to Ara); stop_conversation is refused unless the officer asked to end", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.live && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { window.__quietMic = true; G.audioEver = true; });
+  const araSays = (text) => p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: text }, { type: "response.done", response: { status: "completed" } }]);
+  const asks = () => p.evaluate(() => __sent.map(s => JSON.parse(s)).filter(e => e.type === "response.create" && e.response && e.response.instructions).map(e => e.response.instructions));
+  const saved = await p.evaluate(() => { const c = S.contacts.find(x => !x.capacity && !x.dnc && !x.ally) || S.contacts[0]; S.screen = "contact"; S.sel.contact = c.id; grokSaved("contact", { contact: c }); G.saveAck = null; return { line: G.savedLine, next: G.lastSaved.nextLine }; }); await p.waitForTimeout(400);
+  await araSays(`${saved.line}. ${saved.next}`); await p.waitForTimeout(150);
+  // the officer stops talking, then the transcript lands: the app's own line answers it (its reply comes as words only, as on the call)
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_stopped" }) }); });
+  const n0 = (await asks()).length; await said(p, "No."); await p.waitForTimeout(400);
+  /* a trailing bit of speech (a breath, the car) ends 0.4 s later with no words of its own: on the call it reopened the officer's turn with "No." as its words */
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_started" }) }); __ws.onmessage({ data: JSON.stringify({ type: "input_audio_buffer.speech_stopped" }) }); }); await p.waitForTimeout(9000);
+  const a = (await asks()).slice(n0), log = await p.log();
+  ok(!a.some(g => /The officer just said: "No\."/.test(g)) && !/asked for one with their words/.test(log) && !/soft thinking tone/.test(log), "the app re-asked Ara to answer the no it had already answered: " + JSON.stringify({ a, tail: log.slice(-400) }));
+  // Ara calls stop_conversation with no word from the officer about ending: refused, the call stays open
+  const r = await ara(p, "stop_conversation", {}); await p.waitForTimeout(1600);
+  ok(await p.evaluate(() => G.live) && /didn't ask to end/i.test(JSON.stringify(r)), "stop_conversation ended the call on no word from the officer: " + JSON.stringify(r).slice(0, 300));
+  await said(p, "That's all for today, goodbye."); await p.waitForTimeout(200);
+  const r2 = await ara(p, "stop_conversation", {}); await p.waitForTimeout(1600);
+  ok(!(await p.evaluate(() => G.live)) && r2.ok, "stop_conversation after the officer said goodbye didn't end the call: " + JSON.stringify(r2).slice(0, 300));
+});
 };
