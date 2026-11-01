@@ -1064,6 +1064,18 @@ test("State machine phase 2 (Nov 1): on preview-sm the line and Ara parts answer
   const diffs = await p.evaluate(() => Object.keys(__sm.counts).filter(k => /^(line|ara):/.test(k)));
   ok(!diffs.length, "the machine and the old flags disagreed on the line or Ara: " + diffs.join("; "));
 }, { page: "preview-sm.html" });
+test("State machine phase 4 (Nov 1): a yes/no watch ends when Ara opens the offered form, and the app's copy ends with it, with the reason logged", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { G.hands = false; const c = S.contacts.find(x => x.first === "Ken"); c.capacity = "B"; S.opps = S.opps.filter(o => o.contactId !== c.id); save(); checkStart("ynWatch", { what: "next", ans: "yes", heardN: G.heardN || 0 }); }); /* Ken has no open opportunity, so the draft opens */
+  ok(await p.evaluate(() => !!checkNow("ynWatch")), "the yes/no watch wasn't armed");
+  await ara(p, "show_opportunity_draft", { contact_name: "Ken Ito" }); await p.waitForTimeout(300);
+  const r = await p.evaluate(() => ({ now: checkNow(), flag: G.check, ended: window.__sm ? __sm.ended : null, counts: window.__sm ? __sm.counts : null }));
+  if (await p.evaluate(() => !!window.__sm)) {
+    ok(!r.now && !r.flag && r.ended["ynWatch: the form changed"] === 1 && /check ynWatch ended by the machine: the form changed/.test(await p.log()), "the watch didn't end with the form, or the app's copy stayed: " + JSON.stringify(r) + " " + (await p.log()).slice(-300) + " SM " + JSON.stringify(await p.evaluate(() => ({ log: __sm.log.slice(-6), events: __sm.events.slice(-8), st: __sm.state() }))));
+    await p.waitForTimeout(900); ok(!Object.keys(await p.evaluate(() => __sm.counts)).some(k => /^check/.test(k)), "a stale check was reported as a disagreement: " + JSON.stringify(await p.evaluate(() => __sm.counts)));
+  } else ok(!r.flag, "on the flags page the app's own check should have passed the watch when Ara opened the form: " + JSON.stringify(r)); /* ynCheck at response.done: Ara followed the yes */
+});
+
 test("State machine phase 3 (Nov 1): on preview-sm the officer and form parts answer from the app's own events, and agree with the old flags", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const st = () => p.evaluate(() => ({ phase: __sm.phase, officer: officerState(), talking: officerSpeaking(), form: formState(), flagOfficer: G.speechOn ? "speaking" : "silent", flagForm: !V ? (G.lastSaved && Date.now() - G.lastSaved.at < 120000 ? "saved" : "none") : G.saveCheck ? "readback" : V.opt ? "optional" : "asking" }));

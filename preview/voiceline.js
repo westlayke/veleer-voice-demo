@@ -343,9 +343,9 @@ const downSince = () => Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now
 function checkNow(kind) { const c = G.check; return c && (!kind || c.kind === kind) ? c : null; } /* the check waiting now (of this kind), with its data */
 function checkStart(kind, data) { const was = checkNow(); if (was) vlog(`check ${was.kind} ended: ${kind} started`); /* checkNow: the machine's truth on preview-sm, where it may have ended the check already */
   G.check = Object.assign({ at: Date.now(), tries: 1, form: formNow() }, data || {}, { kind }); smSend("CHECK_START", { kind, data: G.check, form: G.check.form }); return G.check; }
-function checkEnd(why, kind) { const c = G.check; if (!c || (kind && c.kind !== kind)) return; if (why && checkNow()) vlog(`check ${c.kind} ended: ${why}`); G.check = null; smSend("CHECK_END"); }
+function checkEnd(why, kind) { const c = G.check; if (!c || (kind && c.kind !== kind)) return; if (why) vlog(`check ${c.kind} ended: ${why}`); G.check = null; smSend("CHECK_END"); }
 function resetLine() {
-  smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; G.cutQ = null; checkEnd("the line dropped"); /* a cut question is re-put by the reconnect, not by the sound coming back */
+  checkEnd("the line dropped"); smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; G.cutQ = null; /* a cut question is re-put by the reconnect, not by the sound coming back */
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); stopPlayback();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
 }

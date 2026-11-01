@@ -252,7 +252,7 @@ async function converse(browser, base, flow, n) {
     await p.waitForTimeout(300);
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
     conv.steps = await p.evaluate(stepsInPage).catch(() => null);
-    conv.sm = await p.evaluate(() => window.__sm ? { counts: __sm.counts, transitions: __sm.transitions, diffs: __sm.diffs.slice(-60) } : null).catch(() => null); /* the shadow state machine (preview-sm.html) */
+    conv.sm = await p.evaluate(() => window.__sm ? { counts: __sm.counts, ended: __sm.ended, transitions: __sm.transitions, diffs: __sm.diffs.slice(-60) } : null).catch(() => null); /* the shadow state machine (preview-sm.html) */
     conv.forms = await p.evaluate(() => window.__forms || []);
     conv.drops = await p.evaluate(() => window.__drops || []);
     conv.soundless = (await p.evaluate(() => (window.__soundless || []).map(m => ({ id: m.id, forced: m.forced, text: m.text, at: m.at, doneAt: m.doneAt, late: m.late, delay: m.delay, copyAt: m.copyAt, skipped: m.skipped, audioN: m.audioN })))).filter(m => !m.skipped);

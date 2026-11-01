@@ -20,12 +20,14 @@
 (function () {
   if (typeof XState === "undefined" || typeof G === "undefined") return;
   const { createMachine, createActor, assign } = XState;
-  const SM = window.__sm = { diffs: [], counts: {}, transitions: 0, log: [], events: [], phase: 4 }; /* events: the last 200 the app sent, for the harnesses */
+  const SM = window.__sm = { diffs: [], counts: {}, ended: {}, transitions: 0, log: [], events: [], phase: 4 }; /* ended: checks the machine ended itself, by kind and reason */ /* events: the last 200 the app sent, for the harnesses */
   /* the facts every part can read: the line number (an old line's events are ignored), the event number, the officer's last words, the open form, when the line went down */
-  const facts = SM.facts = { lineN: 0, eventN: 0, lastWords: null, form: "", speechAt: 0, downAt: 0 };
+  const facts = SM.facts = { lineN: 0, eventN: 0, lastWords: null, form: "", speechAt: 0, downAt: 0, respN: 0 }; /* respN: replies started, so a check armed mid-reply doesn't count that reply */
+  const END_WHY = { SPEECH_START: "the officer spoke", LINE_DROP: "the line dropped", CALL_END: "the call ended", FORM_OPEN: "the form changed", FORM_CLOSED: "the form closed", ARA_DONE: "Ara's replies were used up" }; /* why the machine ended a check, by the event */
   const DIFF_MS = 600, TICK_MS = 250, RESP_LIMIT = { ctxWatch: 4, sayWatch: 3, ynWatch: 3, nudge: 4 } /* one more than the app's own asks: the app decides, this is the net */, ASKED_MAX_MS = 10000;
 
   /* ---------- the machine ---------- */
+  const countsReply = ({ context, event }) => !!event.words && !!context.check && context.check.respN !== facts.respN;
   const machine = createMachine({
     id: "voice", type: "parallel",
     context: { check: null },
@@ -64,20 +66,27 @@
            or Ara has replied as often as that kind allows (the app's own pass/fail decides earlier, through CHECK_END) */
         waiting: { on: {
           CHECK_START: { target: "waiting", reenter: true, actions: "startCheck" }, CHECK_END: { target: "none", actions: "endCheck" },
-          SPEECH_START: { target: "none", actions: "endCheck", guard: "spokenEnds" }, LINE_DROP: { target: "none", actions: "endCheck" }, CALL_END: { target: "none", actions: "endCheck" },
-          FORM_OPEN: { target: "none", actions: "endCheck", guard: "formChanged" }, FORM_CLOSED: { target: "none", actions: "endCheck", guard: "formChanged" },
-          ARA_DONE: [{ target: "none", actions: "endCheck", guard: "repliesUsed" }, { actions: "countReply", guard: ({ event }) => !!event.words }] } } } }
+          SPEECH_START: { target: "none", actions: ["machineEnd", "endCheck"], guard: "spokenEnds" }, LINE_DROP: { target: "none", actions: ["machineEnd", "endCheck"] }, CALL_END: { target: "none", actions: ["machineEnd", "endCheck"] },
+          FORM_OPEN: { target: "none", actions: ["machineEnd", "endCheck"], guard: "formChanged" }, FORM_CLOSED: { target: "none", actions: ["machineEnd", "endCheck"], guard: "formChanged" },
+          ARA_DONE: [{ target: "none", actions: ["machineEnd", "endCheck"], guard: "repliesUsed" }, { actions: "countReply", guard: "countsReply" }] } } } }
     },
   }, {
     actions: {
-      startCheck: assign({ check: ({ event }) => ({ kind: event.kind, data: event.data || null, at: Date.now(), replies: 0, form: event.form }) }),
+      startCheck: assign({ check: ({ event }) => ({ kind: event.kind, data: event.data || null, at: Date.now(), replies: 0, form: event.form, respN: facts.respN }) }),
       endCheck: assign({ check: null }),
+      /* the machine ended the check itself (Nov 1 Pat run: 340 stale yes/no watches after Ara opened the offered form): the app's copy ends
+         with it, with the reason logged, unless the app ends it in the same breath (its own stand-down line then stands) */
+      machineEnd: ({ context, event }) => { const c = context.check; if (!c) return; const why = END_WHY[event.type] || event.type;
+        setTimeout(() => { if (!G.check || G.check !== c.data) return; const k = `${c.kind}: ${why}`; SM.ended[k] = (SM.ended[k] || 0) + 1;
+          act("step", c.kind === "ctxWatch" && event.type === "FORM_OPEN" ? "Another form opened: the ask for where we were stands down (the machine)" : `check ${c.kind} ended by the machine: ${why}`); /* the app's own wording, so the reports count it the same */
+          checkEnd("", c.kind); }, 0); },
       countReply: assign({ check: ({ context }) => context.check ? Object.assign({}, context.check, { replies: context.check.replies + 1 }) : null })
     },
     guards: {
       formChanged: ({ context, event }) => !!context.check && (event.form || "") !== context.check.form,
       spokenEnds: ({ context }) => !!context.check && (context.check.kind === "nudge" || context.check.kind === "ctxWatch"), /* a yes/no or say check waits for the officer's words, not the sound */
-      repliesUsed: ({ context, event }) => !!event.words && !!context.check && context.check.replies + 1 >= (RESP_LIMIT[context.check.kind] || 3),
+      countsReply, /* a worded reply, not the one the check was armed in (the app skips it too) */
+      repliesUsed: (a) => countsReply(a) && a.context.check.replies + 1 >= (RESP_LIMIT[a.context.check.kind] || 3),
       audioLeft: () => playingLeft() > 0
     }
   });
@@ -85,7 +94,7 @@
   let last = JSON.stringify(actor.getSnapshot().value);
   actor.subscribe(s => { const v = JSON.stringify(s.value); if (v !== last) { SM.transitions++; last = v; } });
   const send = (type, extra) => { facts.eventN++; facts.lineN = lineN(); SM.events.push(Date.now() + " " + type); if (SM.events.length > 200) SM.events.shift();
-    if (type === "SPEECH_START") facts.speechAt = Date.now(); else if (type === "WORDS") facts.lastWords = { text: extra && extra.text || "", at: Date.now() }; else if (type === "FORM_OPEN" || type === "FORM_CLOSED") facts.form = extra && extra.form || "";
+    if (type === "SPEECH_START") facts.speechAt = Date.now(); else if (type === "ARA_STARTED") facts.respN++; else if (type === "WORDS") facts.lastWords = { text: extra && extra.text || "", at: Date.now() }; else if (type === "FORM_OPEN" || type === "FORM_CLOSED") facts.form = extra && extra.form || "";
     try { actor.send(Object.assign({ type }, extra || {})); } catch (e) { note("send failed: " + e.message); } };
   const state = () => actor.getSnapshot().value;
   SM.state = state; SM.send = send; SM.machine = machine;

@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 9:32 AM",
+      "change": "State machine (preview-sm only): when the machine ends a check by itself (the form changed, the line dropped, the call ended, Ara's replies used up), the app's copy ends with it and the reason is logged, so a yes/no watch no longer sits stale after Ara opens the offered form (Pat: 340 such cases in 97 of 100 conversations). The reply a check was armed in doesn't count toward its limit, as in the app. Pat's report now counts checks the machine ended, by reason.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Yes do step 1 now\" (Nov 1): the stale yes/no watch found by the first Pat run on phase 4."
+    },
+    {
       "date": "Nov 1, 8:15 AM",
       "change": "One words table for every pick list (lists.js LIST_WORDS): the outcome, campaign and task status words join the option words, so the answer-taker and the evidence guard hear every list the same way. The campaign and outcome special cases in validate.js and the campaign answer code in voiceforms.js are gone; a campaign answer that names an entity is still not a campaign, and \"the state one\" is the entity's own state. 14-lists check now proves every list value is heard by both.",
       "area": "Voice",

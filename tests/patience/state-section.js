@@ -27,9 +27,17 @@ function contextSection(ss) {
 // the shadow state machine (preview-sm.html, phase 1, Oct 31): each kind of disagreement with the flags, the conversations it came up in, and one example
 function smSection(convs) {
   const on = convs.filter(c => c.sm); if (!on.length) return [];
-  const by = {}; on.forEach(c => Object.entries(c.sm.counts || {}).forEach(([k, n]) => { const b = by[k] = by[k] || { n: 0, convs: 0, ex: null }; b.n += n; b.convs++; if (!b.ex) b.ex = (c.sm.diffs || []).find(d => `${d.part}: machine ${d.machine}, flags ${d.flags}` === k) || null; }));
-  const rows = Object.entries(by).sort((a, b) => b[1].n - a[1].n);
-  return ["## State machine (shadow)", "", `${on.length} conversations ran the shadow machine: ${on.reduce((m, c) => m + (c.sm.transitions || 0), 0)} state changes, ${rows.reduce((m, r) => m + r[1].n, 0)} disagreements with the flags lasting 0.6 s or more.`, "",
-    ...(rows.length ? ["| Disagreement | Times | Conversations | Example (status, form) |", "|---|---|---|---|", ...rows.map(([k, b]) => `| ${k} | ${b.n} | ${b.convs} | ${b.ex ? `${b.ex.status || ""}, ${b.ex.form || "no form"}` : ""} |`)] : ["None."]), ""];
+  const by = tally(on, c => c.sm.counts); on.forEach(c => Object.keys(c.sm.counts || {}).forEach(k => { if (!by[k].ex) by[k].ex = (c.sm.diffs || []).find(d => `${d.part}: machine ${d.machine}, flags ${d.flags}` === k) || null; }));
+  const rows = Object.entries(by).sort((a, b) => b[1].n - a[1].n), total = (rs) => rs.reduce((m, r) => m + r[1].n, 0);
+  return ["## State machine (shadow)", "", `${on.length} conversations ran the shadow machine: ${on.reduce((m, c) => m + (c.sm.transitions || 0), 0)} state changes, ${total(rows)} disagreements with the flags lasting 0.6 s or more.`, "",
+    ...(rows.length ? ["| Disagreement | Times | Conversations | Example (status, form) |", "|---|---|---|---|", ...rows.map(([k, b]) => `| ${k} | ${b.n} | ${b.convs} | ${b.ex ? `${b.ex.status || ""}, ${b.ex.form || "no form"}` : ""} |`)] : ["None."]), "",
+    ...endedRows(on, total)];
+}
+// counts per key across conversations: { key: { n, convs } }
+function tally(on, pick) { const by = {}; on.forEach(c => Object.entries(pick(c) || {}).forEach(([k, n]) => { const b = by[k] = by[k] || { n: 0, convs: 0 }; b.n += n; b.convs++; })); return by; }
+// checks the machine ended by itself (phase 4, Nov 1): by kind and reason, with the conversations it happened in
+function endedRows(on, total) {
+  const rows = Object.entries(tally(on, c => c.sm.ended)).sort((a, b) => b[1].n - a[1].n); if (!rows.length) return [];
+  return [`Checks the machine ended before the app did: ${total(rows)} (the app's copy ended with them; checks the app ended itself are not counted here).`, "", "| Check and reason | Times | Conversations |", "|---|---|---|", ...rows.map(([k, b]) => `| ${k} | ${b.n} | ${b.convs} |`), ""];
 }
 module.exports = { stateSection, smSection };
