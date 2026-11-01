@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "STAMP",
+      "change": "Once the app has answered the officer's words itself (a bare no to the next step, undo, repeat, cancel), the turn watchdog never asks Ara to answer those words again; and Ara's end-call tool is refused unless the officer said something about ending (goodbye, hang up, that's all, I'm done, stop for now).",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "His 12:25 PM call (Nov 1): after his no to the next step a trailing bit of sound reopened the turn, the watchdog asked Ara to answer \"No.\" alone, and she ended the call with \"Silence.\""
+    },
+    {
       "date": "Nov 1, 12:19 PM",
       "change": "The time limits on the yes-or-no and say-the-question checks are the state machine's own timers (a nudge restarts the clock); the app's checks keep no clocks of their own.",
       "area": "Voice",

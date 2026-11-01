@@ -57,6 +57,7 @@ function officerResponse() {
   return /\b(handed (me|us|over)|gave (me|us) (a|the|his|her|their) check|wrote (me |us )?(a|the) check|said yes|agreed|accepted|committed|he's in|she's in|they're in|yes to)\b/.test(t) ? "Accepted" : null;
 }
 // the last few officer lines, newest last, and the line Ara said just before the officer's latest
+const END_WORDS = /\b(good ?bye|bye|hang up|end the call|stop (the call|for now|here|now)|that'?s (all|it)( for (now|today))?|i'?m done|we'?re done|all done|talk (to you )?later|see you|signing off|that will do)\b/; /* the officer's own words about ending the call */
 function officerLines(n = 4) { return (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-n).map(l => l.slice(9).toLowerCase().replace(/[’‘]/g, "'")); }
 function askedBefore(n = 1) { const r = G.recent || [];
   let i = r.length - 1;

@@ -137,6 +137,9 @@ const TOOL_HANDLERS = {
     return;
   },
   stop_conversation(callId, data, name) {
+    /* a hang-up can't be undone: only on the officer's own word about ending (Carverhill's 12:25 PM call, Nov 1: Ara ended the call on a bare "No.") */
+    if (!officerLines(2).some(l => END_WORDS.test(l))) { vlog(`${name}: refused, the officer didn't ask to end the call`); guardFired("stop_conversation with no word from the officer about ending", officerLines(1)[0] || "");
+      toolReply(callId, { ok: false, error: "The officer didn't ask to end the call. Carry on; if nothing is pending, ask what they'd like to do." }); return; }
     toolReply(callId, { ok: true }, false);
     G.status = "Ending…"; paintCall();
     const waitEnd = Date.now() + 8000;

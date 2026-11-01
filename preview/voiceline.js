@@ -138,13 +138,16 @@ const idleMs = () => typeof V !== "undefined" && V && ACTIONS[V.action] ? Math.m
 // test at TURN_TEST_MS (slow line: fresh line, which asks "Could you say that again?"; healthy: one reply request with their words, then the
 // usual watch), a fresh line at TURN_GIVE_UP_MS whatever happened. The hang-up is held off while a turn is open. No words from the turn: noise.
 // the officer stopped and no reply has started THINK_MS later: a soft two-note tone, so they know Ara is on it; "Ara's taking a moment." still follows at TICK_MS
+// the app itself carried out the officer's last words (a bare no to the next step, undo, repeat, cancel: G.cmdAt): nothing is owed on that turn
+// (Carverhill's 12:25 PM call, Nov 1: a trailing bit of sound reopened the turn after his no, the watchdog asked Ara to answer "No." alone, and she hung up)
+const turnAnswered = () => !!(G.cmdAt && G.lastHeard && G.cmdAt >= G.lastHeard.at);
 function thinkArm() { clearTimeout(G.thinkT); const at = G.turnOpen; if (!at) return;
-  G.thinkT = setTimeout(() => { if (!G.live || G.turnOpen !== at || araBusy() || officerSpeaking() || G.forced || G.pendingForce || playingLeft() > 0 || G.idleEnding || !lineUp()) return;
+  G.thinkT = setTimeout(() => { if (!G.live || G.turnOpen !== at || turnAnswered() || araBusy() || officerSpeaking() || G.forced || G.pendingForce || playingLeft() > 0 || G.idleEnding || !lineUp()) return;
     cue("think"); G.thinkAt = Date.now(); act("step", `No reply ${THINK_MS / 1000} s after the officer stopped: soft thinking tone`); }, THINK_MS); }
 function turnWatch() {
   if (!G.live || !G.turnOpen || G.asked || G.forced || G.pendingForce || araBusy() || G.idleEnding || !lineUp()) return;
   const heard = G.lastHeard && G.lastHeard.at >= G.turnOpen - 1500 ? String(G.lastHeard.text || "") : "", dt = Date.now() - G.turnOpen;
-  if (!heard) { if (dt > TURN_TEST_MS) G.turnOpen = 0; return; }
+  if (!heard || turnAnswered()) { if (dt > TURN_TEST_MS || turnAnswered()) G.turnOpen = 0; return; }
   if (dt >= TICK_MS && !G.turnStep) { G.turnStep = 1; quietSay("Ara's answer");
     act("step", `No reply started ${TICK_MS / 1000} s after the officer spoke ("${heard.slice(0, 60)}"): the phone says Ara's taking a moment`); }
   else if (dt >= TURN_TEST_MS && G.turnStep === 1) { G.turnStep = 2; const ln = lineN(), at = G.turnOpen;
