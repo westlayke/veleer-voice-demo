@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 11:56 PM",
+      "change": "A freshly started mic the phone lets go of 20 s later (nothing said into it) is started afresh once more, silently, instead of ending the call and showing Carry on; a second ending still ends the call. Calls on the phase 2 page now log as preview-sm.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "His 11:21 and 11:30 PM calls (Nov 1): after a forced lock the mic ended 20.0 s after the app's restart both times, ending the call mid-conversation; when he spoke within 20 s it stayed."
+    },
+    {
       "date": "Oct 31, 11:12 PM",
       "change": "The line to xAI closes the moment the phone locks (or the app is switched away) and reopens on the same conversation the moment the app is back, whatever the length of the lock. Until now a lock under 10 s kept the line open; on every short lock of Oct 31 that line was dead afterwards and was only found by the 4 s check, so the question came back 10 s or more after the unlock instead of about 6.",
       "area": "voice (voiceline.js LOCK_CLOSE_MS, appHidden)",
@@ -507,7 +514,7 @@
     },
     {
       "date": "Oct 28, 11:57 AM",
-      "change": "Preview: on the Tasks list, a task that opens a field on a record now shows a chip under its text naming the field and its value now (\"Response: Awaiting ›\"); tapping the chip or the task text opens Record the response on the opportunity. The generic Edit link on every task row is now a muted pencil, so blue is reserved for \"opens a field\". Option A + B from the task-row mockups.",
+      "change": "Preview: on the Tasks list, a task that opens a field on a record now shows a chip under its text naming the field and its value now (\"Response: Awaiting \u203a\"); tapping the chip or the task text opens Record the response on the opportunity. The generic Edit link on every task row is now a muted pencil, so blue is reserved for \"opens a field\". Option A + B from the task-row mockups.",
       "area": "Tasks",
       "requestedBy": "Carverhill",
       "why": "Oct 28, 11:25 AM ET: \"provide a better visual cue on the task list to show a user they can link directly to a form field on an opportunity or contact record and edit it by clicking from the task\"; 11:46 AM: \"Implement a + b recommended on preview\""
@@ -1293,7 +1300,7 @@
     },
     {
       "date": "Oct 23, 2026",
-      "change": "\"Next\" appears once per record. The What's next card is gone. The Contact and Opportunity records each have one Next block (the Next: line and the next-step buttons, under the stepper). After a save it shows \"✓ Planned ask saved\" (or whatever was saved) and briefly highlights. The checklist panels below explain what's needed and no longer say Next: \"To reach Cultivation\" (and so on) on the opportunity, and \"To create an opportunity\" on the contact (was Path to opportunity).",
+      "change": "\"Next\" appears once per record. The What's next card is gone. The Contact and Opportunity records each have one Next block (the Next: line and the next-step buttons, under the stepper). After a save it shows \"\u2713 Planned ask saved\" (or whatever was saved) and briefly highlights. The checklist panels below explain what's needed and no longer say Next: \"To reach Cultivation\" (and so on) on the opportunity, and \"To create an opportunity\" on the contact (was Path to opportunity).",
       "area": "Screens"
     },
     {
@@ -1363,7 +1370,7 @@
     },
     {
       "date": "Oct 22, 2026",
-      "change": "The + menu's Record the ask list now says why each opportunity is there, Ask Planning first: \"Ask Planning · planned for (date)\", \"Ask Made · record the answer\" (the investor's response to an ask already made) and \"Cultivation · unplanned ask\" (the guide lets an unplanned ask be recorded; it passes through Ask Planning in the same save).",
+      "change": "The + menu's Record the ask list now says why each opportunity is there, Ask Planning first: \"Ask Planning \u00b7 planned for (date)\", \"Ask Made \u00b7 record the answer\" (the investor's response to an ask already made) and \"Cultivation \u00b7 unplanned ask\" (the guide lets an unplanned ask be recorded; it passes through Ask Planning in the same save).",
       "area": "Screens"
     },
     {
@@ -1478,7 +1485,7 @@
     },
     {
       "date": "Oct 20, 2026",
-      "change": "Fix: Ara can set the capacity rating while adding a contact. The rating is accepted whenever the officer names it (not only after the optional-details question), in any wording (\"C\", \"C · $25k to $100k\", or a dollar amount like $150,000, which becomes B). If Ara uses her rating tool while the New contact form is open, the rating goes on that form. Test bot check added (26).",
+      "change": "Fix: Ara can set the capacity rating while adding a contact. The rating is accepted whenever the officer names it (not only after the optional-details question), in any wording (\"C\", \"C \u00b7 $25k to $100k\", or a dollar amount like $150,000, which becomes B). If Ara uses her rating tool while the New contact form is open, the rating goes on that form. Test bot check added (26).",
       "area": "Preview"
     },
     {
@@ -1553,7 +1560,7 @@
     },
     {
       "date": "Oct 20, 2026",
-      "change": "List rows (Contacts, Opportunities, Home) use a drawn iPhone-style chevron, centred on the row, instead of the thin › character. The whole row stays the tap target.",
+      "change": "List rows (Contacts, Opportunities, Home) use a drawn iPhone-style chevron, centred on the row, instead of the thin \u203a character. The whole row stays the tap target.",
       "area": "Preview"
     },
     {
@@ -1563,7 +1570,7 @@
     },
     {
       "date": "Oct 20, 2026",
-      "change": "Live: standard back button (chevron plus screen name, 44 × 44 tap area) and screen titles centred in the header.",
+      "change": "Live: standard back button (chevron plus screen name, 44 \u00d7 44 tap area) and screen titles centred in the header.",
       "area": "Went live"
     },
     {
@@ -1573,7 +1580,7 @@
     },
     {
       "date": "Oct 20, 2026",
-      "change": "Back button made iPhone standard on every screen: a full-size chevron plus the name of the screen it goes back to (for example \"‹ Contacts\"), with a 44 × 44 tap area (was a small ‹ character with a 13 × 32 tap area).",
+      "change": "Back button made iPhone standard on every screen: a full-size chevron plus the name of the screen it goes back to (for example \"\u2039 Contacts\"), with a 44 \u00d7 44 tap area (was a small \u2039 character with a 13 \u00d7 32 tap area).",
       "area": "Preview"
     },
     {
@@ -1683,7 +1690,7 @@
     },
     {
       "date": "Oct 19, 2026",
-      "change": "\"Say things like…\" voice options all brand blue (were five colours by kind of work).",
+      "change": "\"Say things like\u2026\" voice options all brand blue (were five colours by kind of work).",
       "area": "Preview"
     },
     {
@@ -1743,7 +1750,7 @@
     },
     {
       "date": "Oct 19, 2026",
-      "change": "The ? next to Say things like… now opens a short How to talk to Ara card (4 steps) instead of the full welcome popup. It closes with an × at the top right, a Close button, a tap outside, or Esc.",
+      "change": "The ? next to Say things like\u2026 now opens a short How to talk to Ara card (4 steps) instead of the full welcome popup. It closes with an \u00d7 at the top right, a Close button, a tap outside, or Esc.",
       "area": "Preview"
     },
     {
@@ -1758,7 +1765,7 @@
     },
     {
       "date": "Oct 19, 2026",
-      "change": "Home has a slim card at the top: app icon, \"Add the Citizens VCRM button to your home screen\", \"Open the demo like an app. Show me how\". Tapping it opens Settings at that section, which flashes briefly. It disappears once the app is opened from the home screen, and the × hides it (Restart brings it back).",
+      "change": "Home has a slim card at the top: app icon, \"Add the Citizens VCRM button to your home screen\", \"Open the demo like an app. Show me how\". Tapping it opens Settings at that section, which flashes briefly. It disappears once the app is opened from the home screen, and the \u00d7 hides it (Restart brings it back).",
       "area": "Preview"
     },
     {
@@ -1903,7 +1910,7 @@
     },
     {
       "date": "Oct 19, 2026",
-      "change": "Two preview options for what happens when you tap a voice option (Add a task, Log a meeting, the home examples). Hint card (preview-hint.html): tapping shows a card with an example sentence to say, plus Start talking and Not now; voice starts only on Start talking. Labelled examples only (preview-examples.html): the home panel becomes \"Try saying…\" and the options become quoted examples that can't be tapped; on a contact, the actions become example sentences; only the mic starts voice.",
+      "change": "Two preview options for what happens when you tap a voice option (Add a task, Log a meeting, the home examples). Hint card (preview-hint.html): tapping shows a card with an example sentence to say, plus Start talking and Not now; voice starts only on Start talking. Labelled examples only (preview-examples.html): the home panel becomes \"Try saying\u2026\" and the options become quoted examples that can't be tapped; on a contact, the actions become example sentences; only the mic starts voice.",
       "area": "Preview"
     },
     {
@@ -2023,7 +2030,7 @@
     },
     {
       "date": "Oct 18, 2026",
-      "change": "Preview only: the home screen's \"Say things like…\" list becomes colored pills that flow one after another, grouped by color: people (blue), pipeline (green), money (amber), giving (purple), and look and learn (grey). Adds giving examples: What has Ruth given?, How much has Ken given this year?, When was Elena's last gift?, What's Ruth's lifetime giving?, and Move James to Cultivation.",
+      "change": "Preview only: the home screen's \"Say things like\u2026\" list becomes colored pills that flow one after another, grouped by color: people (blue), pipeline (green), money (amber), giving (purple), and look and learn (grey). Adds giving examples: What has Ruth given?, How much has Ken given this year?, When was Elena's last gift?, What's Ruth's lifetime giving?, and Move James to Cultivation.",
       "area": "Preview"
     },
     {
@@ -2053,7 +2060,7 @@
     },
     {
       "date": "Oct 18, 2026",
-      "change": "Settings has a Voice log that records the conversation's events on the phone, such as when Grok starts and stops talking, when the app hears the officer speak, and which steps Grok calls. Copy log lets the officer paste it to Claude to diagnose glitches like the cut-off \"Opening…\".",
+      "change": "Settings has a Voice log that records the conversation's events on the phone, such as when Grok starts and stops talking, when the app hears the officer speak, and which steps Grok calls. Copy log lets the officer paste it to Claude to diagnose glitches like the cut-off \"Opening\u2026\".",
       "area": "Voice"
     },
     {
@@ -2063,7 +2070,7 @@
     },
     {
       "date": "Oct 18, 2026",
-      "change": "Grok is no longer cut off mid-sentence (for example \"Opening…\" at the start of the overview). The app now waits for Grok to finish speaking before it replies to a step or updates Grok's instructions. A meeting's Type now starts blank instead of defaulting to In person, so a missing type is flagged at Save.",
+      "change": "Grok is no longer cut off mid-sentence (for example \"Opening\u2026\" at the start of the overview). The app now waits for Grok to finish speaking before it replies to a step or updates Grok's instructions. A meeting's Type now starts blank instead of defaulting to In person, so a missing type is flagged at Save.",
       "area": "Voice"
     },
     {

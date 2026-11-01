@@ -83,7 +83,7 @@ seconds into every call was tried on Oct 26 and did not help, so it was taken ou
 home screen too. Hidden longer than `LOCK_MAX_MS`
 (`RESUME_MS`, 25 minutes, as long as xAI keeps the conversation) the call ends and the Carry on card shows. Tapping OK on the
 iOS dialog ends the mic track, which still ends the call (the phone's doing). Before October 26 the call ended the moment the
-phone locked.
+phone locked. A freshly started mic that nothing was said into can be let go by the phone 20 s later (Nov 1, twice, 20.0 s each time): `micLetGo` (voice.js) starts the sound and mic afresh once more, silently, once per lock (`MIC_FRESH_MS` 30 s, `G.micLetGoN`); a second ending, or one after the officer has spoken, ends the call as before.
 
 ## The reconnect loop
 

@@ -429,7 +429,7 @@ test("Hands-free greeting (Oct 27): the first calls say hands-free is on and how
 });
 // Oct 28: the phone discarded the page while the conversation was paused at a lock; the next page offers Carry on and says why
 test("A page the phone closed while a conversation was paused offers Carry on on the next open, with the reason", async (p) => {
-  await signIn(p);
+  await signIn(p); await p.waitForFunction(() => G.live, null, { timeout: 8000 }); await p.evaluate(() => endCall()); await p.waitForTimeout(300); /* no live call: since Nov 1 the lock copy is kept the moment the page hides, and a reload hides it */
   await p.evaluate(() => localStorage.setItem("resumeKeep", JSON.stringify({ at: Date.now() - 20000, lines: ["Ara: What's the last name?", "Officer: Smith"], draft: "x", where: "", what: "New contact", hands: true, plain: "Your phone closed the app while it was locked." })));
   await p.reload(); await p.waitForTimeout(1500);
   const txt = await p.evaluate(() => document.getElementById("modal").innerText);
@@ -447,6 +447,7 @@ test("A page the phone closed in the middle of a call (no end logged) is noticed
   const kept = await p.evaluate(() => { const r = JSON.parse(localStorage.getItem("resumeKeep") || "null"); return r && { killed: r.killed, same: r.session === G.session, last: r.last, lines: r.lines.length }; });
   ok(kept && kept.killed && kept.same && /breadcrumb check/.test(kept.last) && kept.lines > 0, "the live call isn't kept on the phone with its session and last row: " + JSON.stringify(kept));
   const oldSession = await p.evaluate(() => G.session);
+  await p.evaluate(() => { G.hiddenAt = Date.now(); }); /* the phone killing the page sends no hidden event; a reload does, and since Nov 1 that would keep a lock copy at once */
   await p.reload(); await p.waitForTimeout(1500);
   const txt = await p.evaluate(() => document.getElementById("modal").innerText);
   ok(await p.isVisible("#rsmGo") && /closed the app in the middle of the conversation/.test(txt), "the cut-off call wasn't offered as Carry on: " + txt.slice(0, 200));

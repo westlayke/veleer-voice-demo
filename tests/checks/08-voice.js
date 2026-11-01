@@ -1420,7 +1420,10 @@ test("Carverhill's 11:04 and 11:10 AM calls (Oct 31): Ara's own question isn't t
   await p.evaluate(() => { window.__oldStream = G.stream; Object.defineProperty(document, "visibilityState", { get: () => "visible", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
   await p.waitForTimeout(2500);
   ok(await p.evaluate(() => G.live && G.stream !== window.__oldStream && !G.micEndedAtLock), "the mic wasn't started afresh after the lock: " + (await p.log()).slice(-300));
-  // the mic taken with the app in front (Siri, a phone call) still ends the call, after the short grace
+  // 4. the phone lets go of the fresh mic 20 s after the restart with nothing said into it (Nov 1, 11:21 and 11:30 PM calls): started afresh once more, the call goes on
+  await p.evaluate(() => { window.__oldStream = G.stream; G.lastHeard = null; G.audioRestartAt = Date.now() - 20000; const tr = G.stream.getAudioTracks()[0]; tr.stop(); tr.onended && tr.onended(); }); await p.waitForTimeout(2500);
+  ok(await p.evaluate(() => G.live && G.stream !== window.__oldStream && G.micLetGoN === 1) && /let go of the freshly started mic 2\d\.\d s after the restart/.test(await p.log()), "the mic let go after the restart ended the call: " + (await p.log()).slice(-300));
+  // a second ending (or one after the officer spoke) is the mic taken with the app in front (Siri, a phone call): the call ends, after the short grace
   await p.evaluate(() => { const tr = G.stream.getAudioTracks()[0]; tr.stop(); tr.onended && tr.onended(); }); await p.waitForTimeout(1900);
   ok(await p.evaluate(() => !G.live), "the mic taken with the app in front didn't end the call");
 });

@@ -409,7 +409,7 @@ async function flushAct() {
   Object.entries(bySession).forEach(([session, events]) => {
     const tries = events[0].tries || 0;
     fetch(tokenUrl().replace(/\/$/, "") + "/log", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE },
-      body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, tries, ...e }) => e) }) })
+      body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview-sm/.test(location.pathname) ? "preview-sm" : /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, tries, ...e }) => e) }) })
       .then(r => { if (!r.ok && r.status !== 401) throw new Error(String(r.status)); const sent = new Set(events.map(e => e.id)); actPending(rows => rows.filter(x => !sent.has(x.id))); })
       .catch(() => { if (tries >= 5) return; events.forEach(e => { e.tries = tries + 1; }); ACT.q.unshift(...events); clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, 5000); }); // a batch lost to a bad patch of signal is sent again (Oct 25)
   });
@@ -660,7 +660,19 @@ function micEnded(tr, mine) {
   const atLock = () => !!G.hiddenAt || document.visibilityState === "hidden";
   const asLock = () => { G.micEndedAtLock = true; act("step", "The phone took the mic as it locked: started afresh when the app is back"); };
   if (atLock()) { asLock(); return; }
-  setTimeout(() => { if (!G.live || !mine(tr)) return; if (atLock()) { asLock(); return; } interrupted("mic ended", "Your phone took the microphone away (a call, Siri or the recording dialog)."); }, MIC_LOCK_GRACE_MS);
+  setTimeout(() => { if (!G.live || !mine(tr)) return; if (atLock()) { asLock(); return; } if (micLetGo()) return; interrupted("mic ended", "Your phone took the microphone away (a call, Siri or the recording dialog)."); }, MIC_LOCK_GRACE_MS);
+}
+/* the phone let go of a freshly started mic that nothing was said into (Carverhill's 11:21 and 11:30 PM calls, Nov 1: both times 20.0 s after the app
+   started the sound and mic afresh, with no officer words since; when he spoke within 20 s the mic stayed): it is started afresh once more, silently,
+   once per lock. A second ending, or one after the officer has spoken, is the phone taking the mic and ends the call as before */
+const MIC_FRESH_MS = 30000;
+function micLetGo() {
+  const at = G.audioRestartAt || 0, since = Date.now() - at;
+  if (!at || since > MIC_FRESH_MS || G.micLetGoN || (G.lastHeard && G.lastHeard.at > at)) return false;
+  G.micLetGoN = 1;
+  act("step", `The phone let go of the freshly started mic ${(since / 1000).toFixed(1)} s after the restart, with nothing said into it: started afresh once more`);
+  restartAudio("after the phone let go of the fresh mic").then(ok => { if (!ok && G.live) interrupted("mic ended", "Your phone took the microphone away (a call, Siri or the recording dialog)."); });
+  return true;
 }
 // After a lock: start the sound and mic afresh (see openAudio); if the phone refuses (no running sound in a moment), the old ones stay
 async function restartAudio(why) {
@@ -672,6 +684,7 @@ async function restartAudio(why) {
     if (ctx.state !== "running") throw new Error("sound " + ctx.state);
     try { oldStream && oldStream.getTracks().forEach(t => t.stop()); } catch (e) {} try { oldCtx && oldCtx.close(); } catch (e) {}
     if (typeof linePrep === "function") linePrep();
+    G.audioRestartAt = Date.now();
     act("step", why ? `Sound and mic started afresh ${why}` : "Sound and mic started afresh after the lock, so Ara comes back on the speaker the call started on, not the earpiece");
     return true;
   } catch (e) {
@@ -693,7 +706,7 @@ async function startCall(opening) {
   G.rangesSaidAt = 0;
   G.entityListAt = 0;
   G.soundEver = false;
-  G.audioRetried = false;
+  G.audioRetried = false; G.micLetGoN = 0; G.audioRestartAt = 0;
   dropResume();
   act("step", G.keepHands ? "hands-free kept on after Carry on" : "hands-free on from the start (the default since Oct 25; \"I've parked\" turns it off)");
   G.keepHands = false; /* Carverhill, Oct 25: hands-free is the default for everyone */

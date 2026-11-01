@@ -623,7 +623,7 @@ function lockPause(why) { // close the line while the phone is locked; the conve
 }
 async function lockResume() { // the app is back: reopen the line on the same conversation, no tone, no "line dropped" recording
   if (!G.live || G.ws) return;
-  G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.audioRetried = false; paintCall();
+  G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.audioRetried = false; G.micLetGoN = 0; paintCall();
   if (typeof restartAudio === "function") await restartAudio(); // iOS brings the sound back on the earpiece after a lock: a fresh start puts it on the speaker again (Carverhill, Oct 26)
   if (G.live && typeof keepAwake === "function") keepAwake(); // the wake lock was released at the lock: ask for it again
   if (!G.live || G.ws || !G.lockResume) return;
