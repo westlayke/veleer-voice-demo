@@ -57,7 +57,8 @@ function officerResponse() {
   return /\b(handed (me|us|over)|gave (me|us) (a|the|his|her|their) check|wrote (me |us )?(a|the) check|said yes|agreed|accepted|committed|he's in|she's in|they're in|yes to)\b/.test(t) ? "Accepted" : null;
 }
 // the last few officer lines, newest last, and the line Ara said just before the officer's latest
-const END_WORDS = /\b(good ?bye|bye|hang up|end the call|stop (the call|for now|here|now)|that'?s (all|it)( for (now|today))?|i'?m done|we'?re done|all done|talk (to you )?later|see you|signing off|that will do)\b/; /* the officer's own words about ending the call */
+/* the officer's own words about ending the call; the ambiguous ones only as the whole end of a line ("that's it" also skips an optional field, "I'm done with this contact" is a cancel) */
+const END_WORDS = /\b(good ?bye|bye|hang up|end the (call|conversation)|stop (the call|for now|here|now|talking|listening)|let'?s stop|(i|we) (have to|gotta|got to|need to) (go|run)|take care|catch you later|signing off|that will do|that'?s enough|enough for (now|today))\b|\b(that'?s (all|it)|(i'?m|we'?re|all) (done|good|all set|finished))( for (now|today))?(,? (thanks|thank you))?[.!]?$|\b(talk (to you )?later|see you( later| soon| then)?)[.!]?$/;
 function officerLines(n = 4) { return (G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-n).map(l => l.slice(9).toLowerCase().replace(/[’‘]/g, "'")); }
 function askedBefore(n = 1) { const r = G.recent || [];
   let i = r.length - 1;

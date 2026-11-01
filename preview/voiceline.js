@@ -138,16 +138,18 @@ const idleMs = () => typeof V !== "undefined" && V && ACTIONS[V.action] ? Math.m
 // test at TURN_TEST_MS (slow line: fresh line, which asks "Could you say that again?"; healthy: one reply request with their words, then the
 // usual watch), a fresh line at TURN_GIVE_UP_MS whatever happened. The hang-up is held off while a turn is open. No words from the turn: noise.
 // the officer stopped and no reply has started THINK_MS later: a soft two-note tone, so they know Ara is on it; "Ara's taking a moment." still follows at TICK_MS
-// the app itself carried out the officer's last words (a bare no to the next step, undo, repeat, cancel: G.cmdAt): nothing is owed on that turn
-// (Carverhill's 12:25 PM call, Nov 1: a trailing bit of sound reopened the turn after his no, the watchdog asked Ara to answer "No." alone, and she hung up)
-const turnAnswered = () => !!(G.cmdAt && G.lastHeard && G.cmdAt >= G.lastHeard.at);
+// the app's own scripted line answered the officer's last words (a bare no to the next step, undo, repeat, a form's next question: G.answeredAt, set by
+// forceSay): nothing is owed on that turn (Carverhill's 12:25 PM call, Nov 1: a trailing bit of sound reopened the turn after his no, the watchdog asked
+// Ara to answer "No." alone, and she hung up)
+const turnAnswered = () => !!(G.answeredAt && G.lastHeard && G.answeredAt >= G.lastHeard.at);
 function thinkArm() { clearTimeout(G.thinkT); const at = G.turnOpen; if (!at) return;
   G.thinkT = setTimeout(() => { if (!G.live || G.turnOpen !== at || turnAnswered() || araBusy() || officerSpeaking() || G.forced || G.pendingForce || playingLeft() > 0 || G.idleEnding || !lineUp()) return;
     cue("think"); G.thinkAt = Date.now(); act("step", `No reply ${THINK_MS / 1000} s after the officer stopped: soft thinking tone`); }, THINK_MS); }
 function turnWatch() {
   if (!G.live || !G.turnOpen || G.asked || G.forced || G.pendingForce || araBusy() || G.idleEnding || !lineUp()) return;
   const heard = G.lastHeard && G.lastHeard.at >= G.turnOpen - 1500 ? String(G.lastHeard.text || "") : "", dt = Date.now() - G.turnOpen;
-  if (!heard || turnAnswered()) { if (dt > TURN_TEST_MS || turnAnswered()) G.turnOpen = 0; return; }
+  if (turnAnswered()) { G.turnOpen = 0; return; }
+  if (!heard) { if (dt > TURN_TEST_MS) G.turnOpen = 0; return; }
   if (dt >= TICK_MS && !G.turnStep) { G.turnStep = 1; quietSay("Ara's answer");
     act("step", `No reply started ${TICK_MS / 1000} s after the officer spoke ("${heard.slice(0, 60)}"): the phone says Ara's taking a moment`); }
   else if (dt >= TURN_TEST_MS && G.turnStep === 1) { G.turnStep = 2; const ln = lineN(), at = G.turnOpen;
@@ -687,7 +689,7 @@ function micMuted(tr) {
 // If xAI doesn't play it, Ara is asked to say it instead (fallback), so the officer always hears it.
 function forceSay(text, then, fallback, waited = 0) {
   if (!G.live) { G.pendingForce = null; return; }
-  if (!waited) G.pendingForce = text;
+  if (!waited) { G.pendingForce = text; G.answeredAt = Date.now(); } /* answeredAt: the officer's words up to now are answered by this line (turnAnswered) */
   if ((replyBusy() || playingLeft() > 0 || G.forced || Date.now() - (G.cancelAt || 0) < CANCEL_SETTLE_MS) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
   // the reply just finished already said it (the engine answered the tool result with the question itself): no second copy (OpenAI, Oct 27: "What's the first name?" three times)
   if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text), text)) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
