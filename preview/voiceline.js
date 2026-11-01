@@ -640,10 +640,13 @@ function lockPause(why) { // close the line while the phone is locked; the conve
   if (typeof keepResume === "function") keepResume("Your phone closed the app while it was locked."); /* Oct 28: the page was discarded during a lock and the card came up on a fresh page with no explanation */
   netLog(why ? `Voice line closed while the phone was locked (${why}): it reopens when the app is back` : `Phone locked: voice line closed after ${((Date.now() - G.hiddenAt) / 1000).toFixed(1)} s (nothing is charged while the phone is locked); the conversation is kept for ${RESUME_MS / 60000} minutes`);
 }
+// the quiet clocks (the hang-up question, the quiet line) start again from now: the question came 15 s after the app was back, counted from before the lock (10:10 AM call, Nov 1)
+function clocksFresh(why) { G.lastAct = G.quietAt = Date.now(); vlog(`quiet clocks started again: ${why}`); }
 async function lockResume() { // the app is back: reopen the line on the same conversation, no tone, no "line dropped" recording
   if (!G.live || G.ws) return;
   G.status = "Reconnecting…"; G.lockResume = true; G.lastMsg = Date.now(); G.spokeInGap = false; G.audioRetried = false; G.micLetGoN = 0; paintCall();
   if (typeof restartAudio === "function") await restartAudio(); // iOS brings the sound back on the earpiece after a lock: a fresh start puts it on the speaker again (Carverhill, Oct 26)
+  clocksFresh("the app is back after the lock");
   if (G.live && typeof keepAwake === "function") keepAwake(); // the wake lock was released at the lock: ask for it again
   if (!G.live || G.ws || !G.lockResume) return;
   await openAgain(true);

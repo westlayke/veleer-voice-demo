@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 10:56 AM",
+      "change": "Editing a saved record by voice: a field the officer names with no value sent (\"set a new date\") is blanked and asked for first; edit forms offer no optional details; the read-back says only what changed, with the old value (\"Planned ask date: Nov 21, was Oct 31\"); the amount check on an edited ask only when the amount changed. The Needs attention offer line is one sentence (no \"Ask date passed Oct 31. The planned date... has passed..\"). The quiet clocks (hang-up question) start again when the app is back after a lock.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "His 10:10 AM call (Nov 1): changing Penny Pincher's ask date took eight exchanges (asked about participants, the whole form read back, then the amount checked), the offer line said the alert twice with a double full stop, and the hang-up question came 15 s after the lock. \"Go\" to the plan."
+    },
+    {
       "date": "Nov 1, 9:32 AM",
       "change": "State machine (preview-sm only): when the machine ends a check by itself (the form changed, the line dropped, the call ended, Ara's replies used up), the app's copy ends with it and the reason is logged, so a yes/no watch no longer sits stale after Ara opens the offered form (Pat: 340 such cases in 97 of 100 conversations). The reply a check was armed in doesn't count toward its limit, as in the app. Pat's report now counts checks the machine ended, by reason.",
       "area": "Voice",

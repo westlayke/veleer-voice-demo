@@ -276,7 +276,7 @@ function nextAnswerByAra() { if (V && !V.askedNext && /set it now|set (a|the) ne
 function nextStepLine(c, closed) {
   if (!c) return "What would you like to do next?";
   if (closed) { const it = typeof attentionItems === "function" ? attentionItems()[0] : null;
-    return it ? `That completes the process for ${c.first}. Next on your list: ${it.say}.${NEXT_Q}` : `That completes the process for ${c.first}. What would you like to do next?`; } /* Carverhill, 10:36 AM call Oct 30: Closed Won ended in "what would you like to do next?"; the top Needs attention item is recommended instead */
+    return it ? `That completes the process for ${c.first}. Next on your list: ${it.say}${NEXT_Q}` : `That completes the process for ${c.first}. What would you like to do next?`; } /* Carverhill, 10:36 AM call Oct 30: Closed Won ended in "what would you like to do next?"; the top Needs attention item is recommended instead */
   const o = openOpp(c.id), n = o ? nextStep(o) : null;
   if (o) {
     if (!n) return `What would you like to do next for ${c.first}?`;
@@ -294,7 +294,8 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
     hfAnnounce(); } });
 // Hands-free (driving) mode: Ara saves a finished form after reading it back and hearing the officer's own yes. It lasts until the call ends.
 const CAR = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14v-5l-2-5H7l-2 5z"/><path d="M5 12h14"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>';
-const secondYes = (action) => voiceRule(action).secondYes || ""; // a declared field the form confirms once more before the save (money forms)
+// a declared field the form confirms once more before the save (money forms); on an edit only when that field itself changed (10:10 AM call, Nov 1: a date change got the amount check)
+const secondYes = () => { const k = voiceRule(V.action).secondYes || ""; return k && EDITS.includes(V.action) && !editChanged().some(x => x.f.k === k) ? "" : k; };
 // what Ara says when hands-free goes on or off, then she carries on: "Say only" left her silent mid-form (Oct 24: the officer waited 30 s for the first-name question)
 function hfSwitchLine(on) {
   const q = [...(G.recent || [])].reverse().find(l => !l.startsWith("Officer: ") && !l.startsWith("App: ") && /\?$/.test(l.trim()));
@@ -321,8 +322,16 @@ function setHandsFree(on) {
 function hfReadback() {
   const A = ACTIONS[V.action], R = voiceRule(V.action), d = readDraft(), who = V.target && V.target.contact ? nameOf(V.target.contact) : "";
   if (R.ownWords && who) return ownWordsReadback(V.action, d, who);
-  return `${A.title.replace(/ · /, ", ")}${who ? " for " + who : ""}: ${readbackParts(A, R, d).join(", ") || "nothing filled in yet"}.`;
+  const head = `${A.title.replace(/ · /, ", ")}${who ? " for " + who : ""}: `;
+  // an edit reads back only what changed, each field as the full read-back would say it, with the saved value after it (10:10 AM call, Nov 1: a date change was read back as the whole form)
+  const ch = editChanged(d), part = (x, v) => (readbackParts(A, R, { [x.f.k]: v }, [x.f.k])[0] || "blank").replace(new RegExp(`^${optLabel(x.f)}, `), "");
+  if (ch.length) return `${head}${ch.map(x => `${x.f.label.replace(/ \(.*\)$/, "")}: ${part(x, x.now)}, was ${part(x, x.was)}`).join("; ")}.`;
+  return `${head}${readbackParts(A, R, d).join(", ") || "nothing filled in yet"}.`;
 }
+// an edit form: the fields that differ from the saved record, each with its new and old value
+function editChanged(d = readDraft()) { if (!V || !EDITS.includes(V.action)) return []; const A = ACTIONS[V.action], base = prefill(V.action, {}, V.target);
+  const norm = (f, v) => f.type === "bool" ? String(!!v) : f.type === "money" ? String(toNum(v) || 0) : String(v ?? "").trim();
+  return A.fields.filter(f => !f.fixed && norm(f, d[f.k]) !== norm(f, base[f.k])).map(f => ({ f, now: d[f.k], was: base[f.k] })); }
 // the Cultivation decision is read back as the decision itself, with its meaning (Carverhill, Oct 25 and Oct 28: not "Decision: Move to Cultivation")
 function ownWordsReadback(action, d, who) { const first = who.split(" ")[0];
   if (d.decision === "Defer") return `Defer ${first}'s move to Cultivation${String(d.reason || "").trim() ? ", reason: " + String(d.reason).trim().replace(/[.\s]+$/, "") : ""}${d.reconsiderOn ? ", reconsider on " + dateSaid(d.reconsiderOn).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1") : ""}.`;
@@ -348,6 +357,7 @@ function readbackParts(A, R, d, only) {
 const SAVE_Q = "Yes to save, or no to change something?";
 // one rule for every form: the read-back ends with the save question unless it already ends with a question of its own (10:05 AM call: the Cultivation read-back ended in a statement and the officer waited)
 const saveQ = (rb) => /\?\s*$/.test(rb) ? "" : " " + SAVE_Q;
+const readbackLine = () => { const rb = hfReadback(); return rb + saveQ(rb); }; /* the read-back with its save question */
 const formName = (A) => A.title.toLowerCase().replace(/ · /, ", ").replace(/\?$/, "");
 // the scripted question for the first missing required field (the policy: asked one at a time, a declared pair as one question);
 // a field's own wording by form and key, else by key, else the generic one for its type
@@ -453,15 +463,15 @@ async function hfSave(callId, data, lead, short) { /* short: only the changed fi
   if (data.confirmed === true && !(c && c.key === key) && araReadBack()) { c = G.saveCheck = { key, step: "read", n: (G.heardN || 1) - 1 }; formEvent("FORM_READBACK"); act("step", "Ara read the form back herself, in full, and the officer said yes: taken as the read-back"); }
   if (data.confirmed !== true || !c || c.key !== key) {
     G.saveCheck = { key, step: "read", n: G.heardN || 0 }; formEvent("FORM_READBACK"); paintCall();
-    toolReply(callId, { ok: true, saved: false, read_back: short ? `${lead} ${SAVE_Q}` : `${lead ? lead + " " : ""}${hfReadback()}${saveQ(hfReadback())}`, next: "The app said read_back aloud. After the officer's yes, call save_form again with confirmed true; if they want a change, call the draft tool with just the changed field (the app re-reads that field and asks again)." }); return;
+    toolReply(callId, { ok: true, saved: false, read_back: short ? `${lead} ${SAVE_Q}` : `${lead ? lead + " " : ""}${readbackLine()}`, next: "The app said read_back aloud. After the officer's yes, call save_form again with confirmed true; if they want a change, call the draft tool with just the changed field (the app re-reads that field and asks again)." }); return;
   }
   if (c.askedByApp && c.step === "amount" && !amountAnswered(c)) { guardFired("save_form while the app asks its own amount check"); toolReply(callId, { ok: true, saved: false, already: true, note: "The app took the officer's yes and asked its own amount check; after their next yes it saves. Say nothing; wait for the officer." }, false); return; } /* hfYesHeard is ahead of this call */
   const heard = await hfHeardAfter(c.n);
   if (!V || G.saveCheck !== c) { toolReply(callId, { ok: false, saved: false, error: "The form changed while waiting. Nothing was saved. Read it back again and ask for a yes." }); return; }
   if (!heard) { toolReply(callId, { ok: false, saved: false, error: "Not saved: the officer hasn't answered yet. Wait for them to say yes, then call save_form with confirmed true." }); return; }
   if (!hfYes(heard.text)) { c.n = G.heardN; toolReply(callId, { ok: false, saved: false, error: `Not saved: the officer said "${heard.text}", which isn't a clear yes. In one short sentence, ask whether to save it or what to change. If they then say yes, call save_form with confirmed true again (no new read-back needed).` }); return; }
-  if (secondYes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; paintCall();
-    toolReply(callId, { ok: true, saved: false, read_back: `Just to be sure, the amount is ${money(readDraft()[secondYes(V.action)])}. Is that right?`, next: "Money gets a second check; the app said read_back aloud. After the officer's yes, call save_form again with confirmed true." }); return; }
+  const k2 = secondYes(); if (k2 && c.step === "read") { c.step = "amount"; c.n = G.heardN; paintCall();
+    toolReply(callId, { ok: true, saved: false, read_back: `Just to be sure, the amount is ${money(readDraft()[k2])}. Is that right?`, next: "Money gets a second check; the app said read_back aloud. After the officer's yes, call save_form again with confirmed true." }); return; }
   const r = hfCommit();
   if (!r.ok) { toolReply(callId, { ok: false, saved: false, error: `Not saved. ${r.err} Ask for what's missing in one short question, update the draft, then read it back again.` }); return; }
   if (r.force) toolReply(callId, { ok: true, saved: true, said: "The app said the save and the next step itself; wait for the officer's answer.", ask_exactly: r.force });
@@ -497,8 +507,8 @@ function hfYesHeard(text) {
   if (c.step === "amount" && c.askedByApp && !amountAnswered(c)) { act("step", `"${String(text).slice(0, 40)}" not taken as the amount yes: it came before the amount check was said`); return false; }
   G.hfYesAt = Date.now(); const title = ACTIONS[V.action].title;
   stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } /* whatever Ara started to say about the yes; her save_form still gets its answer (hfSave: already saved) */
-  if (secondYes(V.action) && c.step === "read") { c.step = "amount"; c.n = G.heardN; c.askedByApp = true; c.askedAt = Date.now(); paintCall(); act("step", `the officer's yes to the ${title} read-back: the app checks the amount itself`);
-    forceSay(`Just to be sure, the amount is ${money(readDraft()[secondYes(V.action)])}. Is that right?`); return true; }
+  const k2 = secondYes(); if (k2 && c.step === "read") { c.step = "amount"; c.n = G.heardN; c.askedByApp = true; c.askedAt = Date.now(); paintCall(); act("step", `the officer's yes to the ${title} read-back: the app checks the amount itself`);
+    forceSay(`Just to be sure, the amount is ${money(readDraft()[k2])}. Is that right?`); return true; }
   const r = hfCommit();
   if (!r.ok) { act("step", `the officer's yes to the ${title} read-back, but it can't be saved: ${r.err}`); guide(`Not saved. ${r.err} Ask for what's missing in one short question, update the draft, then read it back again.`); return true; } /* the same guidance save_form gets; never spoken as is */
   G.savedByWords = Date.now(); G.savedByWordsLine = r.force || ""; /* the spoken line only; r.say is guidance for Ara */ act("step", `the officer's yes to the read-back saved the ${title} form itself, from their words`);
@@ -530,7 +540,7 @@ function hfCommit() {
 function formPosition() {
   if (!V || !ACTIONS[V.action]) return null;
   const A = ACTIONS[V.action], d = readDraft(), key = V.action + JSON.stringify(d), label = (k) => ((A.fields || []).find(f => f.k === k) || {}).label || k;
-  if (G.hands && G.saveCheck && G.saveCheck.key === key) return { where: `The "${A.title}" form has been read back in full and is waiting for the officer's yes to save it; the app asks "${SAVE_Q}" again itself.`, ask: `${hfReadback()}${saveQ(hfReadback())}` };
+  if (G.hands && G.saveCheck && G.saveCheck.key === key) return { where: `The "${A.title}" form has been read back in full and is waiting for the officer's yes to save it; the app asks "${SAVE_Q}" again itself.`, ask: readbackLine() };
   if (V.opt && V.opt.cur) { const st = optSteps().find(x => x.k === V.opt.cur); if (st) return { where: `The optional questions for the "${A.title}" form are at "${label(st.k)}" (the earlier ones are done); the app asks it again itself.`, ask: optQuestion(st, optWho(), V.opt.only === st.k) }; }
   if (V.choice === "saveOrOpt") return { where: `Every required field of the "${A.title}" form is in; the app asked whether to save it or add the optional details first, and asks again itself.`, ask: `That's everything the ${formName(A)} form needs. Save it, or add the optional details first?` };
   if (voiceRule(V.action).alwaysAsk === "substantive" && V.askedSubst && !V.fromVoice.has("substantive")) return { where: "The app asked whether the interaction was substantive and is waiting for the answer; it asks again itself.", ask: SUBST_Q };
@@ -547,7 +557,7 @@ function formPosition() {
   if (!V.askedOptional && !formIs("optional") && optSteps().length > 1) return { where: `Every required field of the "${A.title}" form is in; the app asks whether to save it or add the optional details first, itself.`, ask: `That's everything the ${formName(A)} form needs for ${optWho()}. Save it, or add the optional details first?`, arm: () => { V.askedOptional = true;
       V.opt = { done: [] }; formEvent("FORM_OPTIONAL");
       V.choice = "saveOrOpt"; } };
-  if (G.hands && !voiceRule(V.action).noVoiceSave) return { where: `Every required field of the "${A.title}" form is in; the app reads it back itself and waits for the officer's yes to save it.`, ask: `${hfReadback()}${saveQ(hfReadback())}`, arm: () => { G.saveCheck = { key, step: "read", n: G.heardN || 0 }; formEvent("FORM_READBACK"); paintCall(); } };
+  if (G.hands && !voiceRule(V.action).noVoiceSave) return { where: `Every required field of the "${A.title}" form is in; the app reads it back itself and waits for the officer's yes to save it.`, ask: readbackLine(), arm: () => { G.saveCheck = { key, step: "read", n: G.heardN || 0 }; formEvent("FORM_READBACK"); paintCall(); } };
   return { where: `Every required field of the "${A.title}" form is in; the app says so itself and asks the officer to check the draft and tap "${A.saveLabel}".`, ask: `Everything required is in on the ${formName(A)} form. Check the draft and tap "${A.saveLabel}", or tell me what to change.` };
 }
 // where we are, said before a pending question when the line comes back (Carverhill, 1:14 PM call Oct 29: "she needs to repeat what we were working on")
@@ -579,7 +589,7 @@ function fieldsLeft() {
 function hfSettlePending() {
   const c = G.saveCheck; if (!V || !c || !G.hands || c.key !== V.action + JSON.stringify(readDraft())) return null;
   const title = ACTIONS[V.action].title, heard = (G.heardN || 0) > c.n ? G.lastHeard : null;
-  if (!heard || !hfYes(heard.text) || (secondYes(V.action) && c.step === "read")) return { saved: false, title };
+  if (!heard || !hfYes(heard.text) || (secondYes() && c.step === "read")) return { saved: false, title };
   act("step", `The officer's yes to the read-back saved the ${title} form before the next one opened`);
   const r = hfCommit(); return { saved: r.ok, title, err: r.err, say: r.say, line: r.saved };
 }

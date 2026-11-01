@@ -396,9 +396,11 @@ function draftTool(callId, name, data) {
   else { V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice: new Set(said) }; formEvent("FORM_OPEN"); }
   renderOverlay();
   const A = ACTIONS[tool.action], R = voiceRule(tool.action), d = V.data, empty = (v) => v === null || v === undefined || String(v).trim() === "";
-  // an edit form: a required value the voice model tried to change but the officer never said is blanked, so the app asks for it instead of reading the old one back (12:09 AM call, Nov 1: "Let's set a new date" became today)
-  if (/^edit/.test(tool.action) && droppedList.length) { const dk = droppedList.map(x => x.replace(/ \(.*$/, ""));
-    A.fields.filter(f => f.req && !f.fixed && dk.some(x => f.label.toLowerCase().startsWith(x) || (typeof SHORT_LABEL !== "undefined" && SHORT_LABEL[f.k] === x))).forEach(f => { d[f.k] = ""; V.fromVoice.delete(f.k); vlog(`${name}: ${f.k} blanked on the edit form: the officer asked to change it and gave no value yet`); }); renderOverlay(); }
+  // an edit form: a required value the voice model tried to change but the officer never said is blanked, so the app asks for it instead of reading the old one back (12:09 AM call, Nov 1: "Let's set a new date" became today);
+  // so is a required field the officer's last words named when the call carried no value at all (10:10 AM call, Nov 1: "Yes, set a new date" came with the name only, and the old date was read back); a call with a value in it is the change itself
+  if (EDITS.includes(tool.action)) { const dk = droppedList.map(x => x.replace(/ \(.*$/, "")), named = said.length ? [] : officerLines(1);
+    const dropped = (f) => dk.some(x => f.label.toLowerCase().startsWith(x) || SHORT_LABEL[f.k] === x), toChange = (f) => f.req && !f.fixed && !empty(d[f.k]) && (dropped(f) || fieldNamed(f, named, A.title));
+    A.fields.filter(toChange).forEach(f => { d[f.k] = ""; V.fromVoice.delete(f.k); act("step", `The ${optLabel(f)} is blanked on the ${A.title} form: the officer asked to change it and gave no value yet`); }); renderOverlay(); }
   const condReq = new Set(R.requiredWhen ? R.requiredWhen(d) : []); /* required under a condition the form declares (a reason when declined or deferred) */
   // a pick-list field Grok left out is filled by the app from the officer's answer to the question just asked (5:59 PM call, Oct 29: "In person" said three times, never sent; the question is the evidence)
   if (typeof optionAnswered === "function") { const lines = officerLines(1), asked = askedBefore(1);
@@ -442,7 +444,7 @@ function draftTool(callId, name, data) {
   // only the follow-up task is left on an awaiting ask: the app asks it in its own words, with the suggested wording (Carverhill, Oct 28)
   if (awaitingAsk(tool.action, d) && missing.length === 1 && /follow-up task/.test(missing[0])) { const s = followUpSuggestion(target);
     toolReply(callId, { ok: true, button: A.saveLabel, field: "nextStep", ask_exactly: FOLLOW_Q(target), next: `If the officer says yes, call this tool with nextStep "${s.text}" and nextDue ${s.due}; if they give their own words or date, use those.${droppedNote}${movedNote}` }); return; }
-  if (!missing.length && !V.askedOptional && !formIs("optional") && !reread && optSteps(tool.action).length) { offerMore(callId); return; } /* every form: the optional details offered once (the policy) */
+  if (!missing.length && !V.askedOptional && !formIs("optional") && !reread && optSteps(tool.action).length) { offerMore(callId); return; } /* every form with optional steps: the details offered once (the policy); edit forms declare none (core.js) */
   // hands-free: a finished draft is read back by the app straight away, instead of waiting for Ara to call save_form (Oct 25: she said "Tap Confirm" instead)
   if (!missing.length && G.hands && !R.noVoiceSave) { hfSave(callId, { confirmed: false }, reread ? reread : undefined, reread ? true : false); return; }
   const needed = missing.length ? droppedNeeded(missing) : [];

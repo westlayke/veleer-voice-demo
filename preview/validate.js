@@ -56,11 +56,15 @@ const hfYes = (text) => { const t = String(text).toLowerCase().replace(/[’‘]
 const YES_WORDS = /\b(yes|yeah|yep|sure|ok|okay|fine|allowed|permitted|go ahead|of course|absolutely)\b/, NO_WORDS = /^(no|nope|nah|not)\b|\b(don't|do not|not ok|not okay|shouldn't|can't)\b/;
 // a reply that names a field of the open form ("The amount", "the date") is the officer saying what to change, never a yes (5:08 PM call, Oct 31:
 // "The amount" after "No, to change something" saved a $3 ask)
+const FIELD_STOP = /^(planned|with|your|their|this|that|from)$/;
+const fieldWords = (f, skip = "") => { const out = new Set(String(skip).toLowerCase().split(/[^a-z]+/)); return String(f.label || "").toLowerCase().replace(/\(.*\)/g, "").split(/[^a-z]+/).filter(w => w.length > 3 && !FIELD_STOP.test(w) && !out.has(w)); };
 function namesField(text) {
   if (typeof V === "undefined" || !V || !ACTIONS[V.action]) return false; const t = String(text).toLowerCase();
-  const words = new Set(ACTIONS[V.action].fields.flatMap(f => String(f.label || "").toLowerCase().replace(/\(.*\)/g, "").split(/[^a-z]+/)).filter(w => w.length > 3 && !/^(planned|with|your|their|this|that|from)$/.test(w)));
+  const words = new Set(ACTIONS[V.action].fields.flatMap(f => fieldWords(f)));
   return t.split(/[^a-z]+/).some(w => words.has(w));
 }
+// the officer's words name this one field ("set a new date" names the planned ask date); the form's own title words don't count ("edit the task" is not the Task field)
+function fieldNamed(f, lines, title = "") { const ws = fieldWords(f, title); if (!ws.length || !lines.length) return false; const said = new Set(lines.join(" ").toLowerCase().split(/[^a-z]+/)); return ws.every(w => said.has(w)); } /* every word: "last name" never names First name */
 // ---- words that name a list value ----
 // "C-3" names an entity: its 3 is not three dollars or the 3rd (5:08 PM call, Oct 31: "C-3" put $3 and a date on a planned ask).
 // Every list value with a digit in its name ("C3", "C4") is taken out of the words, in any spelling ("c 3", "c-3", "c3"), before amounts and dates are read.

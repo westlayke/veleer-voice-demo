@@ -756,7 +756,7 @@ test("Carverhill's 10:36 AM call (Oct 30): after a drop with no form open Ara sa
   await p.evaluate(() => { window.__reconnectBy = ""; });
   // 6. Closed Won: the top Needs attention item is recommended, with the yes-or-no question, instead of "what would you like to do next?"
   const cw = await p.evaluate(() => ({ line: nextStepLine(S.contacts[0], true), top: (attentionItems()[0] || {}).say || "", first: S.contacts[0].first }));
-  ok(cw.top ? cw.line === `That completes the process for ${cw.first}. Next on your list: ${cw.top}. Do you want to do that now, yes or no?` : /What would you like to do next\?$/.test(cw.line), "Closed Won line: " + JSON.stringify(cw));
+  ok(cw.top ? cw.line === `That completes the process for ${cw.first}. Next on your list: ${cw.top} Do you want to do that now, yes or no?` : /What would you like to do next\?$/.test(cw.line), "Closed Won line: " + JSON.stringify(cw));
   // 8. the line drops right after the save line, which is still Ara's last line: she is asked to say it herself (the drop-after-save runs, Oct 30: every one took the app's path)
   await p.evaluate(() => { G.lastSaved.at = Date.now(); G.lastBot = `${G.savedLine}. ${G.lastSaved.nextLine}`; G.lastBotAt = Date.now() - 2000; G.lastHeard = { text: "yes", at: Date.now() - 30000 }; G.staleRbAt = 0; });
   n0 = (await asks()).length; f0 = (await forcedAll()).length; await p.evaluate(() => { G.forced = null; G.pendingForce = null; clearTimeout(G.forceTimer); __ws.onclose({ code: 1006 }); }); await p.waitForTimeout(1800);
@@ -1114,9 +1114,55 @@ test("Carverhill's 12:09 AM call (Nov 1): \"Let's set a new date\" with Ara send
   ok(/planned ask date/i.test(r.ask_exactly || r.asked || "") && /Left out of the form.*planned ask date/i.test(r.next || ""), "the app didn't ask for the date: " + JSON.stringify(r));
   await said(p, "November 21st."); r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez", plannedDate: "2026-11-21" });
   ok(await p.evaluate(() => V.data.plannedDate === "2026-11-21"), "the said date wasn't taken: " + JSON.stringify(r));
-  /* the entity on the form from an earlier answer stays and is not reported as left out when a later tool call repeats it */
-  await said(p, "Twelve thousand."); r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez", plannedDate: "2026-11-21", fund: "New Hampshire C4", amount: 12000 });
-  ok(!/Left out[^.]*entity/.test(await p.log()) && await p.evaluate(() => /New Hampshire/.test(V.data.fund)), "the entity already on the form was reported left out: " + (await p.log()).slice(-300));
+  /* the entity on the form from an earlier answer stays and is not reported as left out when a later tool call repeats it (since the 10:10 AM fix the finished edit is read back at once, so the officer's no keeps it open) */
+  ok(/^Edit planned ask for Elena Vasquez: Planned ask date: Nov 21, was /.test(r.read_back || ""), "the finished edit wasn't read back as the change: " + JSON.stringify(r));
+  await said(p, "No, the amount is twelve thousand."); r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez", plannedDate: "2026-11-21", fund: "New Hampshire C4", amount: 12000 });
+  ok(!/Left out[^.]*entity/.test(await p.log()) && await p.evaluate(() => /New Hampshire/.test(V.data.fund)), "the entity already on the form was reported left out: " + (await p.log()).slice(-600));
+  ok(/Amount: \$12,000, was \$40,000\. Yes to save/.test(r.read_back || ""), "the amount change wasn't read back with the date change: " + JSON.stringify(r));
+});
+
+
+test("Carverhill's 10:10 AM call (Nov 1): \"Yes, set a new date\" on a planned ask asks for the date only, reads back just the change, saves on one yes; the amount check only when the amount changed; one-sentence overdue line; quiet clock after a mic restart", async (p) => {
+  await signIn(p); await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  const forcedAll = () => p.evaluate(() => __sent.filter(s => /force_message/.test(s)).map(s => JSON.parse(s).item.content[0].text));
+  // Elena's planned ask is overdue: the Needs attention line is one sentence, and the next-step line after a Closed Won has no double full stop
+  const was = await p.evaluate(() => { const o = S.opps.find(x => /Vasquez/.test(x.name)); o.asks[0].plannedDate = addDays(todayISO(), -5); return fmtDate(o.asks[0].plannedDate); });
+  const top = await p.evaluate(() => ({ say: attentionItems().find(x => x.kind === "opp" && /Vasquez/.test(x.name)).say, line: nextStepLine(S.contacts.find(c => c.first === "Elena"), true) }));
+  ok(top.say === `Elena Vasquez's $40,000 planned ask was due ${was}: make the ask or set a new date.`, "the overdue-ask line isn't one sentence: " + top.say);
+  ok(!/\.\./.test(top.line) && /set a new date\. Do you want to do that now, yes or no\?$/.test(top.line) && !/Ask date passed/.test(top.line), "the next-step line doubles up or has a double full stop: " + top.line);
+  // "Yes, set a new date": Ara sends the name only; the app blanks the date and asks for it, with no optional-details offer
+  await p.evaluate((line) => { recent("Ara", line); }, top.line); await said(p, "Yes, set a new date.");
+  let r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez" });
+  ok(await p.evaluate(() => V && V.action === "editPlan" && V.data.plannedDate === ""), "the old planned ask date wasn't blanked: " + JSON.stringify(r));
+  ok(/planned ask date/i.test(r.ask_exactly || "") && !/participant|optional/i.test(JSON.stringify(r)), "the app didn't ask for the date alone: " + JSON.stringify(r));
+  ok(/planned ask date is blanked on the Edit planned ask form/.test(await p.log()), "the blanking wasn't logged: " + (await p.log()).slice(-300));
+  // the date said: the read-back is the change only, then a yes saves it with no amount check
+  await said(p, "November 21st."); r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez", plannedDate: "2026-11-21" });
+  ok(r.saved === false && r.read_back === `Edit planned ask for Elena Vasquez: Planned ask date: Nov 21, was ${was}. Yes to save, or no to change something?`, "the read-back isn't the change only: " + JSON.stringify(r));
+  await said(p, "Yes."); await p.waitForTimeout(600);
+  let st = await state(p), o = st.opps.find(x => /Vasquez/.test(x.name));
+  ok(o.asks[0].plannedDate === "2026-11-21" && !(await forcedAll()).some(t => /Just to be sure, the amount/.test(t)), "the date change didn't save on one yes, or the amount was checked: " + JSON.stringify([o.asks[0].plannedDate, (await forcedAll()).slice(-2)]));
+  r = await ara(p, "save_form", { confirmed: true }); ok(r.saved === true && r.already, "Ara's late save_form wasn't answered as already saved: " + JSON.stringify(r));
+  ok(st.history.some(h => /Planned ask edited .*Planned ask date changed from/.test(h.text)), "the edit isn't in History");
+  // an amount change: read back as the change, then the amount check once, then saved
+  await p.waitForTimeout(2100); await said(p, "Change the amount of Elena's planned ask to forty-five thousand.");
+  r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez", amount: 45000 });
+  ok(r.saved === false && r.read_back === "Edit planned ask for Elena Vasquez: Amount: $45,000, was $40,000. Yes to save, or no to change something?", "the amount change wasn't read back as the change only: " + JSON.stringify(r));
+  await said(p, "Yes."); await p.waitForTimeout(600);
+  ok(/^Just to be sure, the amount is \$45,000\. Is that right\?$/.test((await forcedAll()).at(-1) || ""), "the amount check didn't follow the yes: " + JSON.stringify((await forcedAll()).slice(-2)));
+  await p.waitForTimeout(2600); await p.evaluate(() => { G.forceStartAt = Date.now(); }); await p.waitForTimeout(900); await said(p, "Yes."); await p.waitForTimeout(400); /* the check plays, then the yes (as the 9:36 PM check) */
+  st = await state(p); o = st.opps.find(x => /Vasquez/.test(x.name));
+  ok(o.asks[0].amount === 45000 && o.asks[0].plannedDate === "2026-11-21", "the amount change wasn't saved after the second yes: " + JSON.stringify(o.asks[0]));
+  // a second change asked on the open form with no value sent: that field is blanked and asked for too
+  await p.waitForTimeout(2100); await said(p, "Change the date of Elena's planned ask."); r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez" });
+  ok(/planned ask date/i.test(r.ask_exactly || ""), "the date wasn't asked for on the reopened edit: " + JSON.stringify(r));
+  await said(p, "No, the amount."); r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez" });
+  ok(await p.evaluate(() => V && V.action === "editPlan" && V.data.amount === "" && V.data.plannedDate === ""), "the amount named on the open edit form with no value sent wasn't blanked: " + JSON.stringify(r));
+  await said(p, "Change Elena's last name to Vasquez-Smith."); await ara(p, "cancel_form", {}); await p.waitForTimeout(300); r = await ara(p, "show_contact_edit_draft", { contact_name: "Elena Vasquez", last: "Vasquez-Smith" });
+  ok(await p.evaluate(() => V && V.action === "editContact" && V.data.first === "Elena" && V.data.last === "Vasquez-Smith"), "\"last name\" blanked the first name: " + JSON.stringify(await p.evaluate(() => [V && V.action, V && V.data.first, V && V.data.last])));
+  // the hang-up and quiet clocks start again when the app is back after a lock (the question came 15 s after the mic restart, counted from before the lock)
+  const clock = await p.evaluate(() => { G.lastAct = Date.now() - 60000; G.quietAt = 0; clocksFresh("in the check"); return { lastAct: Date.now() - G.lastAct, quietAt: Date.now() - G.quietAt, inResume: /clocksFresh\("the app is back after the lock"\)/.test(String(lockResume)) }; });
+  ok(clock.inResume && clock.lastAct < 1500 && clock.quietAt < 1500, "the quiet clocks don't start again when the app is back: " + JSON.stringify(clock));
 });
 
 };

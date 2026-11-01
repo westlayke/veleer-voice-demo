@@ -163,7 +163,8 @@ const VOICE_RULES = {
   cultivate: { optional: [], requiredWhen: (d) => d.decision === "Defer" ? ["reason", "reconsiderOn"] : [], ownWords: true },
   opportunity: { optional: ["fund", "campaign", "potential", "notes"] },
   plan: { secondYes: "amount", optional: ["askType"] }, /* the amount checked once more after the yes, as gifts and pledges (Carverhill, Oct 31 5:23 PM) */
-  editPlan: { secondYes: "amount" },
+  editPlan: { secondYes: "amount", optional: [] }, /* an edit changes what the officer named: no optional details offered (10:10 AM call, Nov 1) */
+  editTask: { optional: [] },
   task: { optional: [] },
   pledge: { secondYes: "amount", optional: ["installments", "frequency", "firstAmount"] },
   gift: { secondYes: "amount", optional: [] },

@@ -275,6 +275,16 @@ function alertTodo(o, al) {
   if (/^Ask planned/.test(al.text)) return `Your ${amt}ask to ${first} is coming up. Get ready.`;
   return "";
 }
+// the same alert in one spoken sentence that states the step (the next-step line asks its own yes-or-no question after it), for the next-step line and Needs attention read out (10:10 AM call, Nov 1: "Ask date passed Oct 31. The planned date for your $10,000 ask has passed.." said it twice, with a double full stop)
+function alertSay(o, al) {
+  const a = latestAsk(o), c = contactById(o.contactId), who = c ? nameOf(c) : o.name, amt = a ? money(a.amount) + " " : "";
+  if (/^Ready for Cultivation/.test(al.text)) return `${who} meets every Qualification step: move them to Cultivation.`;
+  if (/^Pledge to record/.test(al.text)) return `${who} agreed to give${a ? " " + money(a.amount) : ""}: record the pledge.`;
+  if (/^Awaiting response/.test(al.text)) { const d = al.text.match(/\d+/); return `No reply from ${who} to your ${amt}ask for ${d ? d[0] : "some"} days: follow up.`; }
+  if (/^Ask date passed/.test(al.text)) return `${who}'s ${amt}planned ask was due ${fmtDate(a.plannedDate)}: make the ask or set a new date.`;
+  if (/^Ask planned/.test(al.text)) return `Your ${amt}ask to ${who} is planned for ${fmtDate(a.plannedDate)}.`;
+  return `${o.name}: ${al.text.replace(/\.$/, "")}.`;
+}
 // a task's alert: the same pill on Home (Needs attention), the Tasks screen and the record screens
 const taskAlert = (t) => !t.done && t.due && t.due < todayISO() ? { tone: "warn", text: "Overdue" } : null;
 const alertPill = (al) => al ? `<span class="alert ${al.tone}">${esc(al.text)}</span>` : "";
@@ -284,16 +294,16 @@ function attentionItems() {
   const rank = (al) => !al ? 3 : late(al) ? 0 : al.tone === "warn" ? 1 : al.tone === "ok" ? 2 : 3;
   myOpen().forEach(o => {
     const al = oppAlert(o);
-    if (al && al.act) items.push({ kind: "opp", overdue: late(al), rank: rank(al), name: o.name, say: `${o.name}: ${al.text}. ${alertTodo(o, al)}`,
+    if (al && al.act) items.push({ kind: "opp", overdue: late(al), rank: rank(al), name: o.name, say: alertSay(o, al),
       html: `<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">${CHEV}</span></div>` });
   });
-  S.contacts.filter(oppReady).forEach(c => items.push({ kind: "contact", overdue: false, rank: 2, name: `${c.last}, ${c.first}`, say: `${nameOf(c)} is ready for an opportunity`,
+  S.contacts.filter(oppReady).forEach(c => items.push({ kind: "contact", overdue: false, rank: 2, name: `${c.last}, ${c.first}`, say: `${nameOf(c)} is ready for an opportunity.`,
     html: `<div class="row tap" data-contact="${c.id}"><div class="t"><span class="alert ok">Ready for opportunity</span><div class="na-do">${esc(c.first)} meets every requirement. Create an opportunity?</div><div class="s">${esc(nameOf(c))} · capacity ${c.capacity}</div></div><span class="chev">${CHEV}</span></div>` }));
   S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).forEach(t => { const al = taskAlert(t);
-    items.push({ kind: "task", overdue: !!al, rank: al ? 0 : 3, due: t.due, name: t.text, say: `Task "${t.text}" for ${nameOf(contactById(t.contactId))}, due ${fmtDate(t.due)}${al ? " (overdue)" : ""}`,
+    items.push({ kind: "task", overdue: !!al, rank: al ? 0 : 3, due: t.due, name: t.text, say: `Task "${t.text}" for ${nameOf(contactById(t.contactId))}, due ${fmtDate(t.due)}${al ? " (overdue)" : ""}.`,
       html: `<div class="row tap" ${askCheckTask(t) ? `data-form="response" data-cid="${t.contactId}" data-item="${t.oppId}"` : `data-go="tasks"`}><div class="t">${alertPill(al)}<div class="${al ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">${CHEV}</span></div>` }); });
   const hf = hfUnchecked();
-  if (hf.length) items.push({ kind: "hf", overdue: false, rank: 1, name: "hands-free", say: `${hf.length} hands-free save${hf.length > 1 ? "s" : ""} to check`,
+  if (hf.length) items.push({ kind: "hf", overdue: false, rank: 1, name: "hands-free", say: `${hf.length} hands-free save${hf.length > 1 ? "s" : ""} to check.`,
     html: `<div class="row tap" data-act2="hfcheck"><div class="t"><span class="alert warn">Hands-free</span><div class="na-do">Check ${hf.length} hands-free save${hf.length > 1 ? "s" : ""}</div><div class="s">Saved by voice after you said yes. Make sure they're right.</div></div><span class="chev">${CHEV}</span></div>` });
   // most urgent first: overdue, then waiting too long (amber), then ready to move (green); tasks by due date
   return items.sort((a, b) => a.rank - b.rank || (a.due || "").localeCompare(b.due || "") || a.name.localeCompare(b.name));
