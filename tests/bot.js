@@ -24,11 +24,11 @@ const FAKES = () => {
   window.WebSocket = class { constructor(u, protos) { window.__wsUrls = (window.__wsUrls || []).concat(String(u)); window.__wsProtos = protos || []; window.__wsProtoList = (window.__wsProtoList || []).concat([protos || []]); window.__ws = this; this.readyState = 1; setTimeout(() => this.onopen && this.onopen(), 30); } send(d) { window.__sent.push(d); try { const e = JSON.parse(d); if (e.type === "session.update" && !window.__noReceipt) setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "session.updated" }) }), 40); /* the service confirms every update, in order (the state receipt) */ if (e.item && e.item.type === "force_message" && !window.__noAutoForce) { // xAI plays a scripted line as a response of its own
           setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.created" }) }), 20); setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ type: "response.done", response: { status: "completed" } }) }), 60); } } catch (x) {} } close() { this.readyState = 3; } };
   window.__logs = [];
-  /* pokes that move the old flags AND the state machine on preview-sm (phase 2: the app reads the machine there): the line down since `at` (0 = up), a reply open or not */
-  window.__down = (at) => { G.downAt = at; if (window.__sm) { if (at) { __sm.send("LINE_DROP"); __sm.send("LINE_DOWN"); __sm.facts.downAt = at; } else __sm.send("LINE_UP"); } };
-  window.__busy = (on) => { G.responding = on; if (window.__sm) __sm.send(on ? "ARA_STARTED" : "ARA_DONE"); };
-  window.__speech = (on) => { G.speechOn = on; if (window.__sm) __sm.send(on ? "SPEECH_START" : "SPEECH_STOP"); }; /* phase 3: the officer talking or not */
-  window.__form = (type) => { if (window.__sm) __sm.send(type, { form: typeof V !== "undefined" && V ? V.action : "" }); }; /* phase 3: a form event after a check sets the form's flags by hand */
+  /* pokes that move the state machine by hand: the line down since `at` (0 = up), a reply open or not, the officer talking or not, a form event */
+  window.__down = (at) => { if (at) { __sm.send("LINE_DROP"); __sm.send("LINE_DOWN"); __sm.facts.downAt = at; } else __sm.send("LINE_UP"); }; /* downAt is written straight: the machine's entry action set it to now */
+  window.__busy = (on) => { __sm.send(on ? "ARA_STARTED" : "ARA_DONE"); };
+  window.__speech = (on) => { __sm.send(on ? "SPEECH_START" : "SPEECH_STOP"); };
+  window.__form = (type) => { __sm.send(type, { form: typeof V !== "undefined" && V ? V.action : "" }); };
   const f = window.fetch; window.fetch = (u, o) => { if (/workers\.dev\/log/.test(String(u))) { if (o && o.body) window.__logs.push(JSON.parse(o.body)); return Promise.resolve(new Response('{"logging":true}', { status: 200 })); }
     return /workers\.dev/.test(String(u)) ? Promise.resolve(new Response(JSON.stringify({ value: "test-pass-" + (window.__passN = (window.__passN || 0) + 1) }), { status: 200 })) : f(u, o); }; /* each pass is its own: a spent one can be told from a fresh one */
 };
@@ -87,7 +87,7 @@ for (const f of fs.readdirSync(path.join(__dirname, "checks")).filter(f => f.end
   fs.mkdirSync(OUT, { recursive: true });
   const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD || ""), part = shard ? Number(shard[1]) : 1, parts = shard ? Number(shard[2]) : 1;
   if (shard && !(part >= 1 && part <= parts)) { console.log("SHARD must be k/n with 1 <= k <= n"); process.exit(2); }
-  const run = tests.filter(t => PAGE === "preview-flow.html" || PAGE === "preview-sm.html" || !t.opts.page || t.opts.always).filter(t => !process.env.ONLY || process.env.ONLY.split(",").some(w => t.name.includes(w.trim()))).filter((t, i) => i % parts === part - 1);
+  const run = tests.filter(t => PAGE === "preview-flow.html" || !t.opts.page || t.opts.always).filter(t => !process.env.ONLY || process.env.ONLY.split(",").some(w => t.name.includes(w.trim()))).filter((t, i) => i % parts === part - 1);
   // checks run side by side (JOBS at a time, default 6) in separate browser windows; results print in the usual order
   let failed = 0; const lines = new Array(run.length); let next = 0, printed = 0; const done = new Array(run.length);
   const flush = () => { while (printed < run.length && done[printed]) console.log(done[printed++]); };
@@ -95,7 +95,7 @@ for (const f of fs.readdirSync(path.join(__dirname, "checks")).filter(f => f.end
   async function one(i, again) {
     const t = run[i]; if (process.env.TRACE) console.error("start: " + t.name); const p = await fresh(t.opts.page || PAGE), t0 = Date.now();
     try { await t.fn(p); ok(!p.errors.length, "page error: " + p.errors[0]); lines[i] = `✓ ${t.name}${again ? " (passed on its second try, alone)" : ""}`; }
-    catch (e) { if (!again) { fails.push(i); await p.context().close(); return; } failed++; const shot = path.join(OUT, t.name.replace(/[^\w]+/g, "-").slice(0, 60) + ".png"); await p.screenshot({ path: shot }).catch(() => {}); lines[i] = `✗ ${t.name}\n    ${e.message.split("\n")[0]}\n    screenshot: tests/results/${path.basename(shot)}`; }
+    catch (e) { if (!again) { if (process.env.TRACE) console.error("first try failed: " + t.name + "\n    " + e.message.slice(0, 1500)); fails.push(i); await p.context().close(); return; } failed++; const shot = path.join(OUT, t.name.replace(/[^\w]+/g, "-").slice(0, 60) + ".png"); await p.screenshot({ path: shot }).catch(() => {}); lines[i] = `✗ ${t.name}\n    ${e.message.split("\n")[0]}\n    screenshot: tests/results/${path.basename(shot)}`; }
     done[i] = `${lines[i]} (${Date.now() - t0} ms)`; if (!again) flush();
     await p.context().close();
   }

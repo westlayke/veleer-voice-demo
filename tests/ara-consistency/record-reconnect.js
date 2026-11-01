@@ -79,12 +79,12 @@ async function record(browser, base, voices) {
       window.__officer = (text) => {
         send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
         onEvent({ type: "conversation.item.input_audio_transcription.completed", transcript: text });
-        setTimeout(() => { if (!G.qCreate && !G.responding && !G.forced && !G.pendingForce) whenIdle("create"); }, 50);
+        setTimeout(() => { if (!G.qCreate && !araBusy() && !G.forced && !G.pendingForce) whenIdle("create"); }, 50);
       };
       document.querySelectorAll(".scrim").forEach(s => s.remove());
       startCall(null);
     });
-    const busyNow = () => p.evaluate(() => !!(G.responding || G.qCreate || G.qInstr || G.forced || G.pendingForce || playingLeft() > 0 || /^(Connecting|Reconnecting)/.test(G.status) || G.downAt));
+    const busyNow = () => p.evaluate(() => !!(araBusy() || G.qCreate || G.qInstr || G.forced || G.pendingForce || playingLeft() > 0 || /^(Connecting|Reconnecting)/.test(G.status) || downAt()));
     const settle = async () => {
       const t0 = Date.now(); let quietSince = 0;
       while (Date.now() - t0 < TURN_WAIT_MS) {
@@ -107,7 +107,7 @@ async function record(browser, base, voices) {
     const dropWatch = async () => {
       while (!dropped) {
         await sleep(200);
-        const reading = await p.evaluate(() => !!(G.saveCheck && G.audioOn && G.audioSamples > 24000 * 2.5)).catch(() => false);
+        const reading = await p.evaluate(() => !!(G.saveCheck && araSounding() && G.audioSamples > 24000 * 2.5)).catch(() => false);
         if (!reading) continue;
         dropped = true; rec.dropAt = Date.now(); rec.steps.push({ at: rec.dropAt, text: "network cut (the phone went offline, the line closed)" });
         await ctx.setOffline(true);

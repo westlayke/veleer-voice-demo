@@ -315,7 +315,7 @@ const G = { live: false, ws: null, ctx: null, stream: null, node: null, sources:
 // G is the call's memory, one flat object. Its flags fall into groups, and each group goes back to its start in one place:
 // a turn (one exchange with Ara) in resetTurn(), a line (one connection; a drop or a phone lock ends it) in resetLine() (voiceline.js),
 // a call (one conversation) in resetCall() at its end. The other groups (sound, forms and hands-free, clocks, scripted lines) are listed in docs/voice-line.md.
-function resetTurn() { G.responding = G.qInstr = G.qCreate = G.asked = false; G.retried = 0; }
+function resetTurn() { G.qInstr = G.qCreate = G.asked = false; G.retried = 0; }
 const callbar = () => document.getElementById("callbar");
 // Caption: each reply's words, scrolled in step with its audio. Replies queue up, so show the one being heard now.
 function capNow() {
@@ -409,7 +409,7 @@ async function flushAct() {
   Object.entries(bySession).forEach(([session, events]) => {
     const tries = events[0].tries || 0;
     fetch(tokenUrl().replace(/\/$/, "") + "/log", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", "X-Demo-Code": S.settings.demoCode || DEMO_CODE },
-      body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview-sm/.test(location.pathname) ? "preview-sm" : /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, tries, ...e }) => e) }) })
+      body: JSON.stringify({ device: deviceId(), name: String(S.settings.userName || "").trim(), session, page: /preview/.test(location.pathname) ? "preview" : "live", events: events.map(({ session, tries, ...e }) => e) }) })
       .then(r => { if (!r.ok && r.status !== 401) throw new Error(String(r.status)); const sent = new Set(events.map(e => e.id)); actPending(rows => rows.filter(x => !sent.has(x.id))); })
       .catch(() => { if (tries >= 5) return; events.forEach(e => { e.tries = tries + 1; }); ACT.q.unshift(...events); clearTimeout(ACT.timer); ACT.timer = setTimeout(flushAct, 5000); }); // a batch lost to a bad patch of signal is sent again (Oct 25)
   });
@@ -823,14 +823,12 @@ function resetCall() {
   checkEnd("the call ended"); smSend("CALL_END"); G.micEndedAtLock = false; /* the check ends first, so the app's own log line stands */
   G.ws = G.stream = G.ctx = G.node = null;
   G.buf = [];
-  G.audioOn = false;
   resetTurn();
   G.drops = 0;
   G.lastMsg = 0;
   G.retriedAt = 0;
   G.dropNext = false;
   G.speechSince = 0;
-  G.probing = false;
   G.spokeInGap = false;
   G.undoSaid = false;
   G.forced = null;
@@ -964,9 +962,9 @@ const replyCounts = (r) => !!(G.bot && G.bot.trim()) && !G.dropNext && G.respFor
 function onEvent(e) {
   const t = e.type || "";
   if (t === "response.created") smSend("ARA_STARTED"); else if (/audio\.delta$/.test(t)) { if (!araSounding()) smSend("ARA_SOUND"); } else if (t === "response.done") smSend("ARA_DONE", { words: replyCounts(e.response) }) /* words: replyCounts, as the app's own checks judge it */; /* the machine hears every reply, dropped ones too */
-  if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; G.responding = false; flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
+  if (G.dropNext) { if (t === "response.done") { G.dropNext = false; G.bot = ""; flushQueued(); } if (/delta$/.test(t) || t === "response.done") return; } // the cut-off doubled reply: nothing of it is played or logged
   if (/audio\.delta$/.test(t)) G.spokeSince = Date.now();
-  if (t === "input_audio_buffer.speech_started") { const ck = checkNow("nudge") || checkNow("ctxWatch"); if (ck) { act("step", `The officer spoke: the ask for ${ck.kind === "nudge" ? "the tool call" : "where we were"} stands down`); checkEnd("the officer spoke"); } /* a yes/no or a say check waits for the words, not the sound (a cough is not an answer) */ G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; G.speechOn = true; smSend("SPEECH_START");
+  if (t === "input_audio_buffer.speech_started") { const ck = checkNow(); if (ck && checkRule(ck.kind).onSpeech) { act("step", `The officer spoke: the ask for ${ck.kind === "nudge" ? "the tool call" : "where we were"} stands down`); checkEnd("the officer spoke"); } /* a yes/no or a say check waits for the words, not the sound (a cough is not an answer) */ G.heardSinceRetry = true; G.speechSince = 0; G.dropIdle = 0; smSend("SPEECH_START");
     // the officer answered just as the quiet hang-up started (seen Oct 24: Ara said goodbye over "October 24th"): call it off quietly
     if (G.idleAt && Date.now() - G.idleAt < 30000) { G.idleAt = 0;
       clearTimeout(G.idleTimer);
@@ -977,7 +975,7 @@ function onEvent(e) {
       G.goodbye = false;
       vlog("hang-up called off: the officer spoke");
       act("step", G.idleAsked ? "The officer answered the hang-up question: their words decide" : "Quiet hang-up called off: the officer spoke"); } }
-  if (/audio\.delta$/.test(t)) { if (!G.audioOn) { G.audioOn = true; G.audioSamples = 0; vlog("← audio starts"); } G.audioSamples += e.pcm ? e.pcm.length : Math.floor(atob(e.delta || "").length / 2); if (e.item_id && G.respAudio && !G.respAudio.itemId) G.respAudio.itemId = e.item_id; }
+  if (/audio\.delta$/.test(t)) { if (!G.audioSamples) vlog("← audio starts"); G.audioSamples += e.pcm ? e.pcm.length : Math.floor(atob(e.delta || "").length / 2); if (e.item_id && G.respAudio && !G.respAudio.itemId) G.respAudio.itemId = e.item_id; }
   if (t === "session.updated") syncAck(e);
   if (t === "session.created") { vlog(`session created ${Date.now() - (G.t0 || Date.now())} ms after the tap`); netLog(`Session created ${Date.now() - (G.t0 || Date.now())} ms after the tap`); } /* separates the service's connect time from the Worker's when a line is slow */
   if (t === "conversation.item.input_audio_transcription.updated" && e.transcript) { G.heardLive = e.transcript; if (Date.now() - (G.heardLiveAt || 0) > 2000) { G.heardLiveAt = Date.now(); vlog('← officer (so far) "' + String(e.transcript).slice(-120) + '"'); } } /* the officer's words as they speak */
@@ -991,7 +989,7 @@ function onEvent(e) {
     if (t === "response.done" && G.idleEnding && G.goodbye) { clearTimeout(G.idleTimer); const left = G.ctx ? Math.max(0, G.playHead - G.ctx.currentTime) : 0; G.idleTimer = setTimeout(idleHangUp, left * 1000 + 500); }
     if (t === "response.created" || t === "response.done" || /function_call/.test(t)) G.turnOpen = 0; /* a reply or a tool call started, or a reply finished: the officer's turn is answered (turnWatch) */
   if (t === "response.done" && G.lateForced && G.lateForced.resp === G.respSeq) G.lateForced.firstAudio = G.audioSamples || 0;
-    if (t === "response.done") { if (G.tourEnding) { G.tour = false; G.tourEnding = false; } G.audioOn = false; setTimeout(() => { G.audioSamples = 0; }, 0); if (G.echoPeak) vlog(`mic while Grok spoke: peak ${G.echoPeak.toFixed(3)}, ${G.barge || 0} loud frames passed (interrupt level ${BARGE_RMS})`); G.echoPeak = 0; G.barge = 0; }
+    if (t === "response.done") { if (G.tourEnding) { G.tour = false; G.tourEnding = false; } setTimeout(() => { G.audioSamples = 0; }, 0); if (G.echoPeak) vlog(`mic while Grok spoke: peak ${G.echoPeak.toFixed(3)}, ${G.barge || 0} loud frames passed (interrupt level ${BARGE_RMS})`); G.echoPeak = 0; G.barge = 0; }
     vlog("← " + t + (t === "response.done" ? ` ${e.response && e.response.status}${G.audioSamples ? ` (${(G.audioSamples / 24000).toFixed(1)}s of audio)` : ""}${G.bot ? ' "' + G.bot + '"' : ""}` : "") + (/function_call_arguments\.done/.test(t) ? " " + e.name + " " + String(e.arguments || "").slice(0, 80) : "")
       + (t === "error" ? " " + JSON.stringify(e.error || e).slice(0, 200) : "") + (/input_audio_transcription\.completed/.test(t) ? ' "' + (e.transcript || "") + '"' : ""));
   }
@@ -1026,7 +1024,7 @@ function onEvent(e) {
         G.asked = false;
         act("step", "The officer spoke while a reply was still requested: that request is dropped (one question, one answer)"); } } } /* no response.cancel here: nothing is being generated yet and the service answers "Cancellation failed: no active response found" (Oct 28) */ /* Oct 25 review item 10: stacked re-asks gave three "I'm here" in a row */
   else if (t === "input_audio_buffer.speech_stopped") { G.status = "Thinking…";
-    G.speechOn = false; smSend("SPEECH_STOP");
+    smSend("SPEECH_STOP");
     G.heardWait = { n: G.heardN || 0, at: Date.now() };
     if (!araBusy()) { G.turnOpen = Date.now();
       G.turnStep = 0; if (typeof thinkArm === "function") thinkArm(); }
@@ -1050,7 +1048,6 @@ function onEvent(e) {
     G.respTool = false;
     G.respItems = [];
     G.bot = "";
-    G.responding = true;
     G.caps = (G.caps || []).filter(c => c.t1 && G.ctx && c.t1 > G.ctx.currentTime).concat([{ text: "", t0: null, t1: null }]); }
   else if (/audio\.delta$/.test(t) && (e.delta || e.pcm)) { if (G.muteResp === G.respSeq) { /* a cut late copy: its audio is dropped, not played */ } else if (e.pcm) playPcm(e.pcm); else playChunk(e.delta);
     const paused = !G.ctx || G.ctx.state !== "running";
@@ -1062,15 +1059,15 @@ function onEvent(e) {
         act("step", `Ara's voice arrived but the phone played no sound (sound ${G.ctx ? G.ctx.state : "not started"})`); } }
     if (!paused) G.noSoundSaid = false; }
   else if (/audio_transcript\.delta$/.test(t) && e.delta) { G.bot += e.delta; const c = G.caps && G.caps[G.caps.length - 1]; if (c) c.text += e.delta; capTick(); lateForcedCheck(); resendCheck(); }
-  else if (t === "response.done") { G.responding = false; flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
+  else if (t === "response.done") { flushQueued(); setTimeout(() => { if (G.live && !G.sources.length) { G.status = "Listening"; paintCall(); } }, 300); }
   else if (t === "response.function_call_arguments.done") onTool(e.call_id, e.name, e.arguments);
   else if (t === "response.output_item.done" && e.item && e.item.type === "function_call") onTool(e.item.call_id, e.item.name, e.item.arguments);
   else if (t === "conversation.created" && e.conversation && e.conversation.id) { if (G.convId !== e.conversation.id) vlog("conversation " + e.conversation.id); G.convId = e.conversation.id; }
   else if (t === "error" && e.error && e.error.code === "conversation_already_has_active_response" && G.forced && G.forced.viaReply && !G.forced.started) { // OpenAI refused the scripted line's reply request: the line goes again after the running reply, not a plain reply in its place
-    const f = G.forced; G.forced = null; clearTimeout(G.forceTimer); G.createAt = 0; G.responding = true; clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { G.responding = false; flushQueued(); }, 6000);
+    const f = G.forced; G.forced = null; clearTimeout(G.forceTimer); G.createAt = 0; araRunning();
     vlog("scripted line refused (a reply already running): sent again after it"); act("step", "Scripted line refused by the engine (a reply already running): sent again after it"); forceSay(f.text, f.then, f.fallback); }
   else if (t === "error" && e.error && e.error.code === "conversation_already_has_active_response") { // OpenAI: the request goes again once the running reply is done
-    G.asked = false; G.createAt = 0; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; G.responding = true; clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { G.responding = false; flushQueued(); }, 6000);
+    G.asked = false; G.createAt = 0; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; araRunning();
     vlog("reply request refused (one already running): queued"); act("step", "Reply request refused by the engine (one already running): sent again after it"); }
   else if (t === "error" && G.forced && !G.forced.started) { const f = G.forced; G.forced = null; clearTimeout(G.forceTimer); act("step", "Scripted line refused: Ara says it instead"); guide(f.fallback); }
   else if (t === "error") { console.warn("Grok error", e); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) act("step", "Grok error: " + e.error.message.slice(0, 300)); if (e.error && e.error.message && !/Item not found/i.test(e.error.message)) toast("Voice: " + e.error.message); }
@@ -1121,6 +1118,8 @@ function resendCheck() {
 function sentInstructions() { G.sentRules = rulesKey(); G.sentCtx = ctxNow(); return grokInstructions(); }
 const playingRaw = () => G.ctx && G.playHead > G.ctx.currentTime + 0.05 ? G.playHead - G.ctx.currentTime : 0; /* audio scheduled past the clock */
 const playingLeft = () => typeof clockDead === "function" && clockDead() ? 0 : playingRaw(); /* ...that will be heard: none while the clock is dead (heard.js clockWatch) */
+// the service refused a request because a reply is running (one the app never saw start): the queued request waits for it, or for the machine's REFUSED_MS
+function araRunning() { smSend("ARA_REFUSED"); clearTimeout(G.qTimer); G.qTimer = setTimeout(flushQueued, 6000); }
 function flushQueued() {
   clearTimeout(G.qTimer); G.qTimer = null;
   if (!G.qInstr && !G.qCreate) return;
@@ -1166,7 +1165,7 @@ function syncSummary() { const s = G.sync; if (!s || !s.sent) return ""; const m
 // Ara talked but didn't call the tool (Carverhill's 8:58 AM call, Oct 30: "We'll fill in the form together as you talk" with no show_contact_draft, then
 // "Joe Jones it is" with nothing filled; the call went quiet). The app never opens or fills a form for her (split-brain risk, Carverhill): it asks
 // her again for the tool call, at once, up to TOOL_ASKS times; a slow retry gets "Ara's taking a moment" from the usual reply ladder, a fast one nothing.
-const TOOL_ASKS = 3;
+const TOOL_ASKS = CHECK_RULES.nudge.asks;
 const PROMISE_RE = /fill in the form|let'?s (add|create|record|log|start|open|make|set up|get)|i'?ll (open|start|pull up|add|create|record|log|set up|get)|(opening|starting|pulling up|adding|creating|setting up) (the|a|an|your)/i;
 const FORM_REQ_RE = /\bform\b|\b(new|create|add|make|open|start|record|log|schedule|enter)\b.{0,40}\b(contact|task|opportunit|meeting|interaction|pledge|gift|ask|plan|report|payment)/i;
 const NOT_ANSWER_RE = /\?\s*$|^(what|who|when|where|how|why|is|are|do|does|did|can|could|would|should|which|tell me|show|read|repeat|say (that|it) again|cancel|undo|never mind|stop|wait|hold on|go back|i'?ve parked|i'?m parked|hey ara|are you|hello|yes|yeah|yep|no|nope|skip|none|nothing|save|ok|okay|sure|thanks|thank you)\b/i;
@@ -1190,7 +1189,7 @@ function toolCheck(r) {
 function whenIdle(kind) {
   if (kind === "instr") G.qInstr = true; else G.qCreate = true;
   if (!araBusy()) { flushQueued(); return; }
-  clearTimeout(G.qTimer); G.qTimer = setTimeout(() => { G.responding = false; flushQueued(); }, 6000); // in case response.done never arrives
+  clearTimeout(G.qTimer); G.qTimer = setTimeout(flushQueued, 6000); // in case response.done never arrives
 }
 // The app's answer to a tool call. Only data goes back in the tool result; anything about what to say next rides with the reply request
 // (per-response instructions), and a line to be said word for word (a question, a read-back) is spoken by the app's scripted line instead.

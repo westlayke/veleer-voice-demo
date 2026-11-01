@@ -373,12 +373,15 @@ function gcalLink(d, c) {
 }
 const fmtTime = (t) => { if (!t) return ""; const [h, m] = t.split(":").map(Number); return `${(h % 12) || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
 // copy the changed fields onto a saved item; returns "Label changed from A to B" for each change
+// a field's value as it is compared: a flag as true or false, money as a number, anything else as trimmed text (shared by the History log and the voice read-back of an edit)
+const fieldNorm = (type, v) => type === "bool" ? !!v : type === "money" ? (toNum(v) || 0) : v == null ? "" : String(v).trim();
+const fieldChanged = (type, now, was) => fieldNorm(type, now) !== fieldNorm(type, was);
 function editLog(obj, d, map) {
   const out = [];
   Object.entries(map).forEach(([k, [f, label, show]]) => {
-    let v = d[k]; if (typeof obj[f] === "boolean" || k === "substantive") v = !!v; else if (k === "amount") v = toNum(v); else v = v == null ? "" : String(v).trim();
-    const was = typeof obj[f] === "boolean" || k === "substantive" ? !!obj[f] : obj[f] == null ? "" : obj[f];
-    if (v === was || (v === "" && was === "")) return;
+    const type = typeof obj[f] === "boolean" || k === "substantive" ? "bool" : k === "amount" ? "money" : "text";
+    if (!fieldChanged(type, d[k], obj[f])) return;
+    const v = type === "money" ? toNum(d[k]) : fieldNorm(type, d[k]), was = type === "bool" ? !!obj[f] : obj[f] == null ? "" : obj[f];
     const sh = (x) => x === "" || x == null ? "blank" : show ? show(x) : String(x);
     out.push(`${label} changed from ${sh(was)} to ${sh(v)}`); obj[f] = v;
   });

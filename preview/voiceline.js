@@ -4,27 +4,22 @@
 // quiet detection, asking Grok again when it goes silent, and the sounds and spoken line when the service is down.
 // What Ara is told after a reconnect is reconnectLine() below; the doubled-reply guard is in onEvent() in voice.js.
 
-/* ---------- where the line and Ara stand: one reader (state machine phase 2, Nov 1 2026) ----------
-   Every part of the app asks these, never the flags. On the main preview they answer from the flags below; on preview-sm, machine.js
-   replaces them with the machine's answer (the flags are then written but read by nothing), and smSend carries the app's events to it.
+/* ---------- where the line, Ara, the officer, the form and the one check stand: the state machine (preview/machine.js, Nov 1 2026) ----------
+   Every part of the app asks these readers, which machine.js (loaded after the app's files) points at the machine; smSend carries the app's
+   events to it. There are no flags for these states any more (phases 1 to 4 ran the machine beside the flags on a second page, Oct 31 to Nov 1).
    Line: opening (the call's first line), connected, testing (a line test running), reconnecting (a line ended, none open yet), down (the phone
    said so, still trying), ended. Ara: idle, asked (a reply or scripted line requested), generating (a reply open, no sound yet), playing (its
    sound is arriving), draining (the reply is done, its sound still playing). lineN: the line number, up by one each time a line opens. */
-let smSend = () => {};
+let smSend = () => {}, lineState = () => "ended", araState = () => "idle", downAt = () => 0, officerState = () => "silent", formState = () => "none", checkNow = () => null; /* placeholders until machine.js loads (it throws if its library is missing) */
 const lineN = () => G.lineN || 0;
-function lineState() { return !G.live ? "ended" : G.status === "Connecting…" ? "opening" : G.downAt ? "down" : G.lockPaused || /^Reconnecting/.test(G.status) ? "reconnecting" : G.probing ? "testing" : "connected"; }
-function araState() { return G.responding ? (G.audioOn ? "playing" : "generating") : playingLeft() > 0 ? "draining" : G.asked ? "asked" : "idle"; }
-function downAt() { return G.downAt || 0; }
 const lineIs = (...s) => s.includes(lineState()), araIs = (...s) => s.includes(araState());
 const lineUp = () => lineIs("connected", "testing"); /* a line is open and in use */
-const araBusy = () => araIs("generating", "playing"); /* a reply is open: the service is still sending */
+const araBusy = () => araIs("generating", "playing", "busy"); /* a reply is open: the service is still sending (busy: one it refused a request for) */
 const araSounding = () => araIs("playing"); /* its sound is arriving */
-/* phase 3 (Nov 1): the officer and the form. Officer: silent, speaking (the mic hears them), said (their words are in and no reply has started),
-   uncertain (the line dropped mid-sentence). Form: none, asking (open, its fields asked for), optional (the optional questions), readback (read
-   back and waiting for the yes), saved (just saved, its next step offered). V, G.saveCheck and V.opt stay the form's data; these answer where it
-   stands. The app sends the events itself (formEvent at every place the form opens, closes, saves or changes stage; the speech events in onEvent). */
-function officerState() { return G.speechOn ? "speaking" : "silent"; }
-function formState() { return typeof V === "undefined" || !V ? (G.lastSaved && G.lastSaved.at && Date.now() - G.lastSaved.at < 120000 ? "saved" : "none") : G.saveCheck ? "readback" : V.opt ? "optional" : "asking"; }
+/* The officer: silent, speaking (the mic hears them), said (their words are in and no reply has started), uncertain (the line dropped mid-sentence).
+   The form: none, asking (open, its fields asked for), optional (the optional questions), readback (read back and waiting for the yes), saved (just
+   saved, its next step offered). V, G.saveCheck and V.opt stay the form's data; the readers answer where it stands. The app sends the events itself
+   (formEvent at every place the form opens, closes, saves or changes stage; the speech events in onEvent). */
 const officerSpeaking = () => officerState() === "speaking", formIs = (...s) => s.includes(formState());
 const formNow = () => typeof V !== "undefined" && V ? V.action : ""; /* the open form's action, "" for none */
 const formEvent = (type) => smSend(type, { form: formNow() });
@@ -176,8 +171,8 @@ function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWat
   const quiet = since >= idleAskMs() && (Date.now() - (G.loudAt || 0) >= idleAskMs() || since >= NOISE_CAP_MS) && !G.turnOpen; /* the question comes IDLE_ASK_BEFORE_MS before the limit (Oct 30) */ /* never a goodbye while the officer's words are unanswered (turnWatch reconnects instead) */ // sound on the mic counts as talking, but not for more than a minute (road noise)
   formReask(since);
   if (!talking && !quiet) return;
-  G.probing = true; smSend("TEST_START"); const ln = lineN();
-  pingMs(LINE_TEST_MS).then(ms => { G.probing = false; smSend("TEST_END"); if (!G.live || lineN() !== ln || G.idleEnding || !lineUp()) return;
+  smSend("TEST_START"); const ln = lineN();
+  pingMs(LINE_TEST_MS).then(ms => { smSend("TEST_END"); if (!G.live || lineN() !== ln || G.idleEnding || !lineUp()) return;
     const fresh = Date.now() - (G.lastMsg || 0) < LINE_TEST_MS; // the voice service is still sending: the line is alive, however slow the test (seen Oct 24: a 2.7 s test while Grok was answering)
     if (!fresh && (typeof ms !== "number" || (talking && ms > STALL_SLOW_MS))) { G.speechSince = 0; netLog(`Line stalled (${talking ? "officer talking, nothing heard back" : "12 s of quiet"})`, ms); reconnect("the line stalled"); if (talking) G.spokeInGap = true; /* what they said never reached the voice service: the new line asks them to say it again */ return; }
     if (talking) { G.speechSince = 0; return; } // the line is fine: it was background noise
@@ -214,7 +209,7 @@ function idleGoodbye(why) {
   G.idleEnding = true; G.idleAt = Date.now(); G.goodbye = true; G.idleAsked = 0;
   const form = typeof V !== "undefined" && V && ACTIONS[V.action], text = form ? GOODBYE_FORM_TEXT : GOODBYE_TEXT, standIn = form ? HANGUP_FORM_TEXT : HANGUP_TEXT;
   act("step", `Hanging up (${why}): Ara says goodbye first`); vlog("goodbye: " + why);
-  if (G.responding && !G.forced) { send({ type: "response.cancel" }); G.dropNext = true; } /* her own answer to the yes gives way to the goodbye line */
+  if (araBusy() && !G.forced) { send({ type: "response.cancel" }); G.dropNext = true; } /* her own answer to the yes gives way to the goodbye line */
   forceSay(text);
   // her line not started in time: the phone's recording stands in (Oct 28 4:16 PM the forced line never came), then the hang-up
   G.idleTimer = setTimeout(() => { if (!G.live) return;
@@ -334,16 +329,14 @@ const downSince = () => Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now
 // a line has ended (a drop, or the phone locked): the turn on it, its watches and its sound go, and the socket is closed
 /* one check on Ara at a time: a new one ends the others, and a drop ends them all (the reconnect asks where we were afresh). The shadow
    state machine found both (Oct 31 Pat run: a yes-or-no check alive after a drop 32 times, the where-we-were check on top of another 33 times) */
-/* ---------- the one check on Ara (state machine phase 4, Nov 1 2026) ----------
+/* ---------- the one check on Ara (Nov 1 2026) ----------
    A check is the app watching Ara's next reply for what it asked of her: ctxWatch (say where we were after a drop), sayWatch (ask the question
    she was given), ynWatch (follow the officer's yes or no), nudge (call the tool her words promised). One at a time: a new one ends the old.
-   G.check holds the one check and its data (tries, guide, question...); checkNow() is what the app reads. On preview-sm machine.js
-   points them at the machine's check part, which ends a check by itself when the officer speaks, the form changes, the line drops or the call
-   ends, and the four flags (G.ctxWatch, G.sayWatch, G.ynWatch, G.nudge) and oneCheck() are gone. */
-function checkNow(kind) { const c = G.check; return c && (!kind || c.kind === kind) ? c : null; } /* the check waiting now (of this kind), with its data */
-function checkStart(kind, data) { const was = checkNow(); if (was) vlog(`check ${was.kind} ended: ${kind} started`); /* checkNow: the machine's truth on preview-sm, where it may have ended the check already */
-  G.check = Object.assign({ at: Date.now(), tries: 1, form: formNow() }, data || {}, { kind }); smSend("CHECK_START", { kind, data: G.check, form: G.check.form }); return G.check; }
-function checkEnd(why, kind) { const c = G.check; if (!c || (kind && c.kind !== kind)) return; if (why) vlog(`check ${c.kind} ended: ${why}`); G.check = null; smSend("CHECK_END"); }
+   The machine's check part holds the one check and its data (tries, guide, question...); checkNow() reads it; the machine ends a check by itself when the officer speaks (the kinds CHECK_RULES allows), the form changes, the line drops, the call ends or Ara's
+   replies are used up (CHECK_RULES in core.js). */
+function checkStart(kind, data) { const was = checkNow(); if (was) vlog(`check ${was.kind} ended: ${kind} started`);
+  const c = Object.assign({ at: Date.now(), tries: 1, form: formNow() }, data || {}, { kind }); smSend("CHECK_START", { kind, data: c, form: c.form }); return c; }
+function checkEnd(why, kind) { const c = checkNow(); if (!c || (kind && c.kind !== kind)) return; if (why) vlog(`check ${c.kind} ended: ${why}`); smSend("CHECK_END"); }
 function resetLine() {
   checkEnd("the line dropped"); smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; G.cutQ = null; /* a cut question is re-put by the reconnect, not by the sound coming back */
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); stopPlayback();
@@ -357,7 +350,7 @@ async function reconnect(why) {
     cutStatusLine("the last try is announced");
     sayLocal(DOWN_LINES[3], "last", namedText("last")); } /* Carverhill, Oct 29: tell them when it's the last try */ // 2 minutes since the voice service was last heard, however many tries (G.lastHeard: Oct 25 3:42 PM, a new line that didn't open in 10 s counted from the call's start and gave up after one try)
   G.drops++; G.status = "Reconnecting…"; G.createAt = 0; G.turnOpen = 0;
-  if (officerSpeaking()) { G.cutMidSpeech = true; G.speechOn = false; } /* the officer was mid-sentence when the line went: what was heard is a fragment, not their answer (real-line run, Oct 29: "You said: Record the") */
+  if (officerSpeaking()) G.cutMidSpeech = true; /* the officer was mid-sentence when the line went: what was heard is a fragment, not their answer (real-line run, Oct 29: "You said: Record the") */
   resetLine(); paintCall();
   if (typeof watchOff === "function") watchOff("a new line"); /* whatever the app asks on the new line is its first telling there */
   if (G.drops === 1) cue("drop");
@@ -409,7 +402,7 @@ async function openAgain(lock) {
 // "How do we make it so Ara, not the app, plays these messages"): the app asks her for it, checks the reply (the person named, her closing question the
 // pending one, no open "what would you like to do") and asks again up to CONTEXT_ASKS times; then its own scripted line is the floor. The same check
 // covers a late yes after a save. reconnectBy "app" (Settings, or window.__reconnectBy in the harness) keeps the scripted line: both ways measured by Patient Pat.
-const CONTEXT_ASKS = 3, OPEN_Q = /what (would you like|do you want) to do|what'?s next|what next/i; /* "What next?" too (Carverhill's 2:52 PM call, Oct 30) */
+const CONTEXT_ASKS = CHECK_RULES.ctxWatch.asks, OPEN_Q = /what (would you like|do you want) to do|what'?s next|what next/i; /* "What next?" too (Carverhill's 2:52 PM call, Oct 30) */
 const RECONNECT_BY = () => window.__reconnectBy || (typeof S !== "undefined" && S.settings && S.settings.reconnectBy) || "ara";
 function contextWatch(kind, w) { checkStart("ctxWatch", { what: kind, need: { who: w.who || "", q: w.q }, seq: G.respSeq || 0, line: w.line, guide: w.guide }); } /* seq: the reply this was armed in (a tool call's) is not the answer */
 function contextAsk(kind, w) {
@@ -489,7 +482,7 @@ function downSay(kind) { // the dropped line, then the still-trying lines in tur
   return sayLocal(DOWN_LINES[0], "dropped", namedText("dropped"));
 }
 function downStart() {
-  if (lineIs("down")) return; G.downAt = G.lastDropAt = Date.now(); smSend("LINE_DOWN"); G.downN = 0; G.slowSaid = false; G.quietAt = Date.now(); linePrep();
+  if (lineIs("down")) return; G.lastDropAt = Date.now(); smSend("LINE_DOWN"); G.downN = 0; G.slowSaid = false; G.quietAt = Date.now(); linePrep();
   G.downTimer = setTimeout(() => { if (!G.live || !lineIs("down")) return; G.downSaid = true; downSay("dropped"); }, SAY_DOWN_MS); /* then the quiet clock says the still-trying lines, every 5 s of silence */
 }
 // ---------- the quiet clock: while the app waits on anything, the officer never hears more than QUIET_MS of silence (Carverhill, Oct 30: an 11 s gap on his 2:52 PM call) ----------
@@ -536,7 +529,7 @@ function cutStatusLine(why) {
 function downEnd(back) { clearTimeout(G.downTimer); G.downTimer = null;
   const cut = cutStatusLine("the line came back");
   if (downAt()) { vlog(`line back after ${Math.round((Date.now() - downAt()) / 1000)} s`); if (back && !cut && Date.now() - downAt() >= SAY_DOWN_MS) sayLocal("You're back with Ara.", "back", namedText("back")); }
-  G.downAt = 0; G.downSaid = false; G.warnSaid = false; G.lastTry = false; }
+  G.downSaid = false; G.warnSaid = false; G.lastTry = false; }
 // after the retries: a sound and a spoken line from the phone itself, since Grok can't speak
 function voiceUnavailable(why) {
   downEnd();

@@ -2,6 +2,20 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 11:41 AM",
+      "change": "After the officer says no to the next-step offer, the where-we-were line after a drop names what was just saved and the recommended next step and ends with \"What would you like to do?\" instead of asking yes or no again.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "His 11:00 AM call (Nov 1): after his no, two drops offered the same step again and he said no three times; 12:30 PM: the line should repeat what was just done and recommend the next step in the flow."
+    },
+    {
+      "date": "Nov 1, 11:41 AM",
+      "change": "The voice core's state machine is now the app's one truth on the main preview page (the separate state-machine page now opens the main one): the mirror flags and the app's copy of the check are gone, one table of check rules (how many asks, whether the officer's speech ends it, the time limit) is read by the app and the machine, a reply the service refused a request over is a state of its own, and the two-minute next-step window is a machine timer. From the build review: tidier edit log and alert lines.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "Step 3 of the state-machine plan (his \"Go\", Nov 1): one source of truth and fewer flags. Lines under preview/ 5792 to 5746, flags 200 to 190."
+    },
+    {
       "date": "Nov 1, 10:56 AM",
       "change": "Editing a saved record by voice: a field the officer names with no value sent (\"set a new date\") is blanked and asked for first; edit forms offer no optional details; the read-back says only what changed, with the old value (\"Planned ask date: Nov 21, was Oct 31\"); the amount check on an edited ask only when the amount changed. The Needs attention offer line is one sentence (no \"Ask date passed Oct 31. The planned date... has passed..\"). The quiet clocks (hang-up question) start again when the app is back after a lock.",
       "area": "Voice",

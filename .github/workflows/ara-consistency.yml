@@ -50,7 +50,7 @@ on:
         description: "Share of saves followed 2.5-5.5 s later by a drop, so Ara has to say where we were (Carverhill's 10:36 AM call, Oct 30). 0 = none"
         default: "0"
       page:
-        description: "Page Ara talks to: preview-flow.html (the preview) or preview-sm.html (the preview with the shadow state machine)"
+        description: "Page Ara talks to: preview-flow.html (the preview) or index.html (the live page)"
         default: "preview-flow.html"
 jobs:
   plan:

@@ -333,7 +333,7 @@ in voiceline.js stops a phone recording still playing when the line comes back.
 Her audio and the phone's recordings share one clock (10:43 PM). `playPcm` schedules every chunk of hers no earlier than the end of
 a recording still playing plus `LINE_GAP_S` (1 s), so chunks that arrive while a recording plays wait behind it; that is the
 buffer, with no separate store. The other order is the one that overlapped at 10:03:52 PM: her chunks were already on the clock
-when the silence judgement ran. So `silentLine` first checks `playingLeft() > 0 || G.audioOn` and, if her sound is playing or
+when the silence judgement ran. So `silentLine` first checks `playingLeft() > 0 || araSounding()` and, if her sound is playing or
 queued, logs a false alarm and says nothing. The 10:33 PM cut of the recording on her first audio chunk is gone.
 
 ## The yes that saves is the officer's, not Ara's (Oct 29)
@@ -393,7 +393,7 @@ The real-Grok spoken runs (quiet, car noise, and a probe with cellular drops for
 
 ## A turn opens when the speech stops, not on a partial transcript (Oct 29, 3:36 PM)
 
-The confirmation run on the 2:55 PM build still played "Ara's taking a moment" twice, 4 s into a long sentence while the officer was still talking: the service sends `input_audio_transcription.completed` for the first part of a long line before `speech_stopped`, and the transcript branch opened the turn. `G.speechOn` (true from `speech_started` to `speech_stopped`) now blocks that; harnesses that send transcripts without speech events are unchanged.
+The confirmation run on the 2:55 PM build still played "Ara's taking a moment" twice, 4 s into a long sentence while the officer was still talking: the service sends `input_audio_transcription.completed` for the first part of a long line before `speech_stopped`, and the transcript branch opened the turn. `officerSpeaking()` (the machine's officer part, speaking from `speech_started` to `speech_stopped`) now blocks that; harnesses that send transcripts without speech events are unchanged.
 
 ## After a drop the app repeats Ara's whole last line, with the officer's answer or that it was lost (Oct 29, 3:57 PM call)
 

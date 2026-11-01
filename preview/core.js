@@ -26,6 +26,7 @@ function spokenAmount(raw) {
 // "Oct 25 (today)": the model misread a same-day due date as tomorrow (Oct 25 call), so dates are handed back with their day word
 const dayWord = (iso) => { const t = typeof todayISO === "function" ? todayISO() : ""; if (!iso || !t) return ""; const d = Math.round((new Date(iso) - new Date(t)) / 86400000); return d === 0 ? "today" : d === 1 ? "tomorrow" : d === -1 ? "yesterday" : ""; };
 const dateSaid = (iso) => { const w = dayWord(iso); return fmtDate(iso) + (w ? ` (${w})` : ""); };
+const dateSpoken = (iso) => dateSaid(iso).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1"); /* "Nov 1, today": the day word spoken after the date */
 const PLEDGE_FOLLOWUP_DAYS = 10; // demo default; the guide's pledge reminder interval is still open with the customer
 const ASK_CHECK_DAYS = 14; // a setting: an ask still waiting for its answer gets a task to check on it within this many days (Carverhill, Oct 28: 30, then 14 the same day)
 const ASK_CHECK_RE = /^Check on the answer to the /; // the text of that task; a recorded response, pledge or gift marks it done
@@ -172,6 +173,16 @@ const VOICE_RULES = {
   meeting: { noVoiceSave: true, optional: [] }
 };
 const voiceRule = (action) => VOICE_RULES[action] || {};
+/* the one check's rules, read by the app's checks and by the machine: how many worded replies Ara gets before the app stops asking (the machine's own
+   net is one more), whether the officer's voice alone ends it (a yes/no or say check waits for the words: a cough is not an answer), and how long it stands */
+const CHECK_RULES = {
+  ctxWatch: { asks: 3, onSpeech: true },                /* where we were after a drop */
+  sayWatch: { asks: 2, onSpeech: false, maxMs: 20000 }, /* the question Ara was told to ask */
+  ynWatch: { asks: 2, onSpeech: false, maxMs: 20000 },  /* Ara following the officer's yes or no */
+  nudge: { asks: 3, onSpeech: true }                     /* the tool call Ara owes */
+};
+const checkRule = (kind) => CHECK_RULES[kind];
+
 
 /* ---------- giving history (example gifts already received) ---------- */
 const g = (date, amount, fund, method) => ({ date, amount, fund, method });

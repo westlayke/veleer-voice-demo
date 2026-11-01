@@ -24,18 +24,14 @@ function contextSection(ss) {
     `Drops with no form open ${heard.length}: ${Object.entries(heard.reduce((m, h) => { m[h.how] = (m[h.how] || 0) + 1; return m; }, {})).map(([k, v]) => k + " " + v).join(", ") || "none"}. The officer heard a line with the context ${heard.filter(h => h.text && !h.bare).length} times, a bare "what would you like to do?" ${heard.filter(h => h.bare).length} times, nothing ${heard.filter(h => !h.text).length} times; median wait from the line coming back to hearing it ${med == null ? "n/a" : med + " s"}${secs.length ? ", slowest " + secs[secs.length - 1] + " s" : ""}.`, "",
     ...(mode === "app" ? [] : [line("reconnect"), "", line("late-yes"), "", `The app checked Ara's reply ${n(/^Ara said where we were|^Ara's reply .*asked again|^Ara didn't say where we were/)} times: passed ${n(/^Ara said where we were/)}, asked again ${n(/asked again for where we were/)}, fell back to its own line ${n(/the app says it itself/)}, gave up and said nothing ${n(/the app stops asking and says nothing/)}, stood down for the officer ${n(/stands down/)}.`]), ""];
 }
-// the shadow state machine (preview-sm.html, phase 1, Oct 31): each kind of disagreement with the flags, the conversations it came up in, and one example
+// the state machine (preview/machine.js; shadow from Oct 31, the app's one truth since Nov 1): state changes, and the checks it ended by itself
 function smSection(convs) {
   const on = convs.filter(c => c.sm); if (!on.length) return [];
-  const by = tally(on, c => c.sm.counts); on.forEach(c => Object.keys(c.sm.counts || {}).forEach(k => { if (!by[k].ex) by[k].ex = (c.sm.diffs || []).find(d => `${d.part}: machine ${d.machine}, flags ${d.flags}` === k) || null; }));
-  const rows = Object.entries(by).sort((a, b) => b[1].n - a[1].n), total = (rs) => rs.reduce((m, r) => m + r[1].n, 0);
-  return ["## State machine (shadow)", "", `${on.length} conversations ran the shadow machine: ${on.reduce((m, c) => m + (c.sm.transitions || 0), 0)} state changes, ${total(rows)} disagreements with the flags lasting 0.6 s or more.`, "",
-    ...(rows.length ? ["| Disagreement | Times | Conversations | Example (status, form) |", "|---|---|---|---|", ...rows.map(([k, b]) => `| ${k} | ${b.n} | ${b.convs} | ${b.ex ? `${b.ex.status || ""}, ${b.ex.form || "no form"}` : ""} |`)] : ["None."]), "",
-    ...endedRows(on, total)];
+  return ["## State machine", "", `${on.length} conversations: ${on.reduce((m, c) => m + (c.sm.transitions || 0), 0)} state changes.`, "", ...endedRows(on, (rs) => rs.reduce((m, r) => m + r[1].n, 0))];
 }
 // counts per key across conversations: { key: { n, convs } }
 function tally(on, pick) { const by = {}; on.forEach(c => Object.entries(pick(c) || {}).forEach(([k, n]) => { const b = by[k] = by[k] || { n: 0, convs: 0 }; b.n += n; b.convs++; })); return by; }
-// checks the machine ended by itself (phase 4, Nov 1): by kind and reason, with the conversations it happened in
+// checks the machine ended by itself (Nov 1): by kind and reason, with the conversations it happened in
 function endedRows(on, total) {
   const rows = Object.entries(tally(on, c => c.sm.ended)).sort((a, b) => b[1].n - a[1].n); if (!rows.length) return [];
   return [`Checks the machine ended before the app did: ${total(rows)} (the app's copy ended with them; checks the app ended itself are not counted here).`, "", "| Check and reason | Times | Conversations |", "|---|---|---|", ...rows.map(([k, b]) => `| ${k} | ${b.n} | ${b.convs} |`), ""];

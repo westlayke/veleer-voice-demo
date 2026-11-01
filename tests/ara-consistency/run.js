@@ -160,7 +160,7 @@ async function converse(browser, base, flow, n) {
       window.__officer = (text) => {
         send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
         onEvent({ type: "conversation.item.input_audio_transcription.completed", transcript: text }); // what the app sees when speech is transcribed
-        setTimeout(() => { if (!G.qCreate && !G.responding && !G.forced && !G.pendingForce) whenIdle("create"); }, 50);
+        setTimeout(() => { if (!G.qCreate && !araBusy() && !G.forced && !G.pendingForce) whenIdle("create"); }, 50);
       };
       document.querySelectorAll(".scrim").forEach(s => s.remove());
       startCall(null);
@@ -187,9 +187,9 @@ async function converse(browser, base, flow, n) {
       deafUntil = Date.now() + ms + (kind === "lock" ? 400 : 0); if (kind === "lock") { await p.waitForTimeout(ms + 1200); f.backAt = Date.now(); } else setTimeout(() => { f.backAt = Date.now(); }, ms); return f; };
     const settle = async () => { // until Ara has finished her turn and the app has nothing more to say
       const t0 = Date.now(); let quietSince = 0;
-      while ((Date.now() - t0 < TURN_WAIT_MS || offline || Date.now() - t0 < DOWN_WAIT_MS && await p.evaluate(() => /^(Connecting|Reconnecting)/.test(G.status) || !!G.downAt).catch(() => false)) && !stopAll) { // after a drop the officer waits for the line, as a real one would
+      while ((Date.now() - t0 < TURN_WAIT_MS || offline || Date.now() - t0 < DOWN_WAIT_MS && await p.evaluate(() => /^(Connecting|Reconnecting)/.test(G.status) || !!downAt()).catch(() => false)) && !stopAll) { // after a drop the officer waits for the line, as a real one would
         await p.waitForTimeout(250);
-        const busy = await p.evaluate(() => !!(G.responding || G.qCreate || G.qInstr || G.forced || G.pendingForce || playingLeft() > 0 || /^(Connecting|Reconnecting|Thinking)/.test(G.status)));
+        const busy = await p.evaluate(() => !!(araBusy() || G.qCreate || G.qInstr || G.forced || G.pendingForce || playingLeft() > 0 || /^(Connecting|Reconnecting|Thinking)/.test(G.status)));
         if (busy || Date.now() - lastFrame < 1200) { quietSince = 0; continue; }
         if (!quietSince) quietSince = Date.now(); if (Date.now() - quietSince > 900) return true;
       }
@@ -252,7 +252,7 @@ async function converse(browser, base, flow, n) {
     await p.waitForTimeout(300);
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
     conv.steps = await p.evaluate(stepsInPage).catch(() => null);
-    conv.sm = await p.evaluate(() => window.__sm ? { counts: __sm.counts, ended: __sm.ended, transitions: __sm.transitions, diffs: __sm.diffs.slice(-60) } : null).catch(() => null); /* the shadow state machine (preview-sm.html) */
+    conv.sm = await p.evaluate(() => window.__sm ? { ended: __sm.ended, transitions: __sm.transitions } : null).catch(() => null); /* the state machine: its state changes and the checks it ended itself */
     conv.forms = await p.evaluate(() => window.__forms || []);
     conv.drops = await p.evaluate(() => window.__drops || []);
     conv.soundless = (await p.evaluate(() => (window.__soundless || []).map(m => ({ id: m.id, forced: m.forced, text: m.text, at: m.at, doneAt: m.doneAt, late: m.late, delay: m.delay, copyAt: m.copyAt, skipped: m.skipped, audioN: m.audioN })))).filter(m => !m.skipped);

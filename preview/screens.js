@@ -221,16 +221,30 @@ const daysAwaiting = (a) => Math.max(0, Math.round((new Date(todayISO()) - new D
 // the amount line on an opportunity's list row and board card
 const oppAmountText = (o, a) => o.pledge ? (o.pledge.implied ? "Committed " + money(o.pledge.amount) + " · implied" : o.pledge.outright ? "Committed " + money(o.pledge.amount) + " · gift to follow" : "Pledged " + money(o.pledge.amount)) : a ? (a.status === "Planned" ? "Planned ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
 const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone; // opened from the home screen icon
+// an opportunity's alert: the pill (tone, text), whether it needs the officer (act), the to-do line on Home and the spoken line, from one table by kind
+const ALERT_LINES = {
+  ready: { todo: (x) => `${x.first} meets every Qualification step. Move to Cultivation?`, say: (x) => `${x.who} meets every Qualification step: move them to Cultivation.` },
+  pledge: { todo: (x) => `${x.first} agreed to give. Record the pledge.`, say: (x) => `${x.who} agreed to give${x.amt ? " " + x.amt.trim() : ""}: record the pledge.` },
+  awaiting: { todo: (x) => `No reply to your ${x.amt}ask for ${x.days} days. Follow up with ${x.first}?`, say: (x) => `No reply from ${x.who} to your ${x.amt}ask for ${x.days} days: follow up.` },
+  passed: { todo: (x) => `The planned date for your ${x.amt}ask has passed. Make the ask or set a new date.`, say: (x) => `${x.who}'s ${x.amt}planned ask was due ${x.date}: make the ask or set a new date.` },
+  planned: { todo: (x) => `Your ${x.amt}ask to ${x.first} is coming up. Get ready.`, say: (x) => `Your ${x.amt}ask to ${x.who} is planned for ${x.date}.` }
+};
 function oppAlert(o) {
   const a = latestAsk(o), c = contactById(o.contactId);
   if (o.stage === "Closed") return o.closed === "Lost" ? { tone: "warn", text: "Closed Lost" } : { tone: "ok", text: "Closed Won" };
-  if (readyForCultivation(o)) return { tone: "ok", text: "Ready for Cultivation", act: true };
-  if (o.stage === "Ask Made" && agreed(a)) return { tone: "warn", text: "Pledge to record", act: true };
+  if (readyForCultivation(o)) return { tone: "ok", text: "Ready for Cultivation", act: true, kind: "ready" };
+  if (o.stage === "Ask Made" && agreed(a)) return { tone: "warn", text: "Pledge to record", act: true, kind: "pledge" };
   if (o.stage === "Commitment" && o.pledge && o.pledge.outright) return { tone: "ok", text: "Gift to follow" };
-  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = daysAwaiting(a); return { tone: days >= AWAIT_WARN_DAYS ? "warn" : "info", text: `Awaiting response · ${days} day${days === 1 ? "" : "s"}`, act: days >= AWAIT_WARN_DAYS }; }
-  if (o.stage === "Ask Planning" && a) { const days = Math.round((new Date(a.plannedDate) - new Date(todayISO())) / 864e5); return { tone: days <= 7 ? "warn" : "info", text: days < 0 ? `Ask date passed ${fmtDate(a.plannedDate)}` : `Ask planned for ${fmtDate(a.plannedDate)}`, act: days <= 7 }; }
+  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = daysAwaiting(a); return { tone: days >= AWAIT_WARN_DAYS ? "warn" : "info", text: `Awaiting response · ${days} day${days === 1 ? "" : "s"}`, act: days >= AWAIT_WARN_DAYS, kind: "awaiting", days }; }
+  if (o.stage === "Ask Planning" && a) { const days = Math.round((new Date(a.plannedDate) - new Date(todayISO())) / 864e5); return { tone: days <= 7 ? "warn" : "info", text: days < 0 ? `Ask date passed ${fmtDate(a.plannedDate)}` : `Ask planned for ${fmtDate(a.plannedDate)}`, act: days <= 7, kind: days < 0 ? "passed" : "planned" }; }
   return null;
 }
+// the alert's to-do line (Home) or spoken line (the next-step offer, Needs attention read out), from the table
+function alertLine(o, al, which) {
+  if (!al) return ""; const a = latestAsk(o), c = contactById(o.contactId), row = ALERT_LINES[al.kind]; if (!row) return which === "say" ? `${o.name}: ${al.text.replace(/\.$/, "")}.` : "";
+  return row[which]({ first: c ? c.first : "them", who: c ? nameOf(c) : o.name, amt: a ? money(a.amount) + " " : "", days: al.days, date: a ? fmtDate(a.plannedDate) : "" });
+}
+const alertTodo = (o, al) => alertLine(o, al, "todo"), alertSay = (o, al) => alertLine(o, al, "say");
 // what moves an opportunity to its next stage: a checklist on the record, one "Next:" line in the list, and the assistant's summary
 function nextStep(o) {
   if (!o || o.stage === "Closed") return null;
@@ -264,26 +278,6 @@ function nextPanel(o) {
   const mark = { yes: "✓", no: "!", next: "→", wait: "·" };
   return `<section class="panel nextp"><div class="ph"><h2>To reach ${esc(n.to)}</h2></div><ul class="gate inpanel">${n.items.map(x => `<li class="${{ next: "gnext", wait: "gwait" }[x.st] || x.st}"><span class="gk" aria-hidden="true">${mark[x.st]}</span><span>${esc(x.need)}${x.sub ? `<small>${esc(x.sub)}</small>` : ""}</span></li>`).join("")}</ul>
     <span class="flowlink" data-act2="flowat" data-stage="${esc(o.stage)}">How ${esc(o.stage)} works ›</span></section>`;
-}
-// Needs attention: one plain line saying what to do about each alert
-function alertTodo(o, al) {
-  const a = latestAsk(o), c = contactById(o.contactId), first = c ? c.first : "them", amt = a ? money(a.amount) + " " : "";
-  if (/^Ready for Cultivation/.test(al.text)) return `${first} meets every Qualification step. Move to Cultivation?`;
-  if (/^Pledge to record/.test(al.text)) return `${first} agreed to give. Record the pledge.`;
-  if (/^Awaiting response/.test(al.text)) { const d = al.text.match(/\d+/); return `No reply to your ${amt}ask for ${d ? d[0] : "some"} days. Follow up with ${first}?`; }
-  if (/^Ask date passed/.test(al.text)) return `The planned date for your ${amt}ask has passed. Make the ask or set a new date.`;
-  if (/^Ask planned/.test(al.text)) return `Your ${amt}ask to ${first} is coming up. Get ready.`;
-  return "";
-}
-// the same alert in one spoken sentence that states the step (the next-step line asks its own yes-or-no question after it), for the next-step line and Needs attention read out (10:10 AM call, Nov 1: "Ask date passed Oct 31. The planned date for your $10,000 ask has passed.." said it twice, with a double full stop)
-function alertSay(o, al) {
-  const a = latestAsk(o), c = contactById(o.contactId), who = c ? nameOf(c) : o.name, amt = a ? money(a.amount) + " " : "";
-  if (/^Ready for Cultivation/.test(al.text)) return `${who} meets every Qualification step: move them to Cultivation.`;
-  if (/^Pledge to record/.test(al.text)) return `${who} agreed to give${a ? " " + money(a.amount) : ""}: record the pledge.`;
-  if (/^Awaiting response/.test(al.text)) { const d = al.text.match(/\d+/); return `No reply from ${who} to your ${amt}ask for ${d ? d[0] : "some"} days: follow up.`; }
-  if (/^Ask date passed/.test(al.text)) return `${who}'s ${amt}planned ask was due ${fmtDate(a.plannedDate)}: make the ask or set a new date.`;
-  if (/^Ask planned/.test(al.text)) return `Your ${amt}ask to ${who} is planned for ${fmtDate(a.plannedDate)}.`;
-  return `${o.name}: ${al.text.replace(/\.$/, "")}.`;
 }
 // a task's alert: the same pill on Home (Needs attention), the Tasks screen and the record screens
 const taskAlert = (t) => !t.done && t.due && t.due < todayISO() ? { tone: "warn", text: "Overdue" } : null;

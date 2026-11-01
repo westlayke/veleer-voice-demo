@@ -58,7 +58,7 @@ const FAULTS = {
     expect: (log) => /No reply started after \d+ s on a slow line .*fresh line/.test(log) },
   stall: { title: "Stalled line", about: "in a quiet gap after the reply, the officer talks, nothing comes back from the voice service and the line test fails; the app's stall check reconnects",
     /* aimed at the gap, not at the officer's words: while a reply is pending the stall check stands aside for the no-reply watchdog (run 3c) */
-    settle: 200, afterSettle: async (p, h) => { await p.waitForFunction(() => !G.responding && !G.audioOn && !(playingLeft() > 0), null, { timeout: 15000 }).catch(() => {});
+    settle: 200, afterSettle: async (p, h) => { await p.waitForFunction(() => !araBusy() && !(playingLeft() > 0), null, { timeout: 15000 }).catch(() => {});
       await p.evaluate(() => { window.__pingHang = 9000; G.lastMsg = Date.now() - 20000; G.speechSince = Date.now() - 6000; G.loudAt = Date.now(); });
       await p.waitForFunction(() => /^Reconnecting/.test(G.status) || !G.live, null, { timeout: 12000 }).catch(() => {});
       await p.evaluate(() => { window.__pingHang = 0; }); await h.newLine(); },

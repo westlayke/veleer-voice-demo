@@ -204,7 +204,7 @@ function saveAckCheck(text) {
 }
 const savedShort = (action, who, d = {}) => {
   const first = who ? who.split(" ")[0] : "";
-  if (action === "cultivate" && first) return d.decision === "Defer" ? `${first}'s move to Cultivation is deferred${d.reconsiderOn ? " until " + dateSaid(d.reconsiderOn).replace(/ \((today|tomorrow|yesterday)\)$/, "") : ""}.` : `${first} is now in Cultivation.`; /* Carverhill, Oct 28: "Decision recorded for Y" said nothing */
+  if (action === "cultivate" && first) return d.decision === "Defer" ? `${first}'s move to Cultivation is deferred${d.reconsiderOn ? " until " + fmtDate(d.reconsiderOn) : ""}.` : `${first} is now in Cultivation.`; /* Carverhill, Oct 28: "Decision recorded for Y" said nothing */
   return `${ACTIONS[action].saved}${who ? " for " + first : ""}.`; };
 // the next step in the process for a contact, word for word: said after every save and whenever the officer asks what's next
 const NEXT_Q = " Do you want to do that now, yes or no?", NEXT_NO_Q = "What would you like to do?"; /* yes opens the step; a bare no gets NEXT_NO_Q from the app; "no, <step>" goes to that step (Carverhill, Oct 28) */
@@ -214,6 +214,7 @@ function nextStepNo(text) {
   if (!/^(no|nope|not now|not right now|no not now|not yet|no not yet)$/.test(t)) return false;
   const last = ((G.recent || []).filter(l => !l.startsWith("Officer: ")).slice(-1)[0] || "").trim(); if (!last.endsWith(NEXT_Q.trim())) return false;
   if (G.noAt && Date.now() - G.noAt < 3000) return true; G.noAt = Date.now(); /* the transcript lands two or three times */
+  if (G.lastSaved) G.lastSaved.declined = true; /* Carverhill's 11:00 AM call (Nov 1): after his no, two drops re-offered the step; where we were now ends with the open question */
   act("step", "a no to the next step: the app asks what they'd like to do"); stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } G.cmdAt = Date.now();
   forceSay(NEXT_NO_Q); return true;
 }
@@ -233,7 +234,7 @@ function yesNoPending() {
   return null;
 }
 // the guidance for a reply to the officer's yes or no, and the watch that checks the reply follows it (one firmer nudge, never an app re-ask)
-const YN_WATCH_MS = 20000;
+const YN_WATCH_MS = CHECK_RULES.ynWatch.maxMs;
 function answerGuide(heard) {
   const p = yesNoPending(), a = p ? followAnswer(heard) : null; if (!p || !a) return "";
   const guide = `The officer just said "${String(heard).trim()}", answering your question "${p.q}". ${a === "yes" ? p.yes : p.no}`;
@@ -253,21 +254,21 @@ function ynCheck(r) {
   else if (w.what === "next" && w.ans === "no" && !G.respTool && /next step/i.test(bot) && /\?\s*$/.test(bot)) why = "asked about the next step again";
   else if (w.what === "step" && w.ans === "no" && /do that now/i.test(bot)) why = "offered the same step again";
   if (!why) { if (w.tries > 1) act("step", `Ara followed the officer's ${w.ans} after one nudge`); checkEnd("", "ynWatch"); return; }
-  if (w.tries > 1) { act("step", `Ara's reply still ${why} after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't follow a yes-or-no answer after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "ynWatch"); return; }
-  w.tries = 2; w.at = Date.now(); act("step", `Ara's reply ${why} after the officer's ${w.ans} ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't follow a yes-or-no answer", `${why}: "${bot.slice(0, 80)}"`);
+  if (w.tries >= CHECK_RULES.ynWatch.asks) { act("step", `Ara's reply still ${why} after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't follow a yes-or-no answer after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "ynWatch"); return; }
+  w.tries++; w.at = Date.now(); act("step", `Ara's reply ${why} after the officer's ${w.ans} ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't follow a yes-or-no answer", `${why}: "${bot.slice(0, 80)}"`);
   const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") ${why}. Do it now.`; setTimeout(() => { if (G.live && checkNow("ynWatch") === w) askReply(g); }, 0);
 }
 // guidance with a check (Oct 31, the test of the middle path): the app tells Ara what to ask; if her reply doesn't ask it, one nudge, then the app waits
 // for the officer (formReask's 13 s backstop still stands). Cleared when the officer speaks again or after SAY_WATCH_MS.
-const SAY_WATCH_MS = 20000;
+const SAY_WATCH_MS = CHECK_RULES.sayWatch.maxMs;
 function sayWatch(q, guideText) { checkStart("sayWatch", { q, guide: guideText, heardN: G.heardN || 0 }); }
 function sayCheck(r) {
   const w = checkNow("sayWatch"); if (!w || !G.live) return;
   if (Date.now() - w.at > SAY_WATCH_MS || (G.heardN || 0) > w.heardN) { checkEnd("", "sayWatch"); return; }
   if (!replyCounts(r)) return; const bot = G.bot.trim();
   if (wordOverlap(sameWords(lastQuestionOf(bot)), sameWords(w.q)) >= 0.6 && /\?\s*$/.test(bot)) { act("step", `Ara asked the question herself${w.tries > 1 ? " after one nudge" : ""}: "${w.q}"`); checkEnd("", "sayWatch"); return; }
-  if (w.tries > 1) { act("step", `Ara's reply still didn't ask "${w.q}" after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't ask the question after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "sayWatch"); return; }
-  w.tries = 2; w.at = Date.now(); act("step", `Ara's reply didn't ask "${w.q}" ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't ask the question she was given", `"${bot.slice(0, 80)}"`);
+  if (w.tries >= CHECK_RULES.sayWatch.asks) { act("step", `Ara's reply still didn't ask "${w.q}" after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't ask the question after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "sayWatch"); return; }
+  w.tries++; w.at = Date.now(); act("step", `Ara's reply didn't ask "${w.q}" ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't ask the question she was given", `"${bot.slice(0, 80)}"`);
   const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") didn't ask it. Ask it now.`; setTimeout(() => { if (G.live && checkNow("sayWatch") === w) askReply(g); }, 0);
 }
 // the officer's answer to Ara's own next-step question counts the same as the app's (Oct 31: she asked "Do you want to set it now?" from still_needed, and the app,
@@ -330,11 +331,10 @@ function hfReadback() {
 }
 // an edit form: the fields that differ from the saved record, each with its new and old value
 function editChanged(d = readDraft()) { if (!V || !EDITS.includes(V.action)) return []; const A = ACTIONS[V.action], base = prefill(V.action, {}, V.target);
-  const norm = (f, v) => f.type === "bool" ? String(!!v) : f.type === "money" ? String(toNum(v) || 0) : String(v ?? "").trim();
-  return A.fields.filter(f => !f.fixed && norm(f, d[f.k]) !== norm(f, base[f.k])).map(f => ({ f, now: d[f.k], was: base[f.k] })); }
+  return A.fields.filter(f => !f.fixed && fieldChanged(f.type, d[f.k], base[f.k])).map(f => ({ f, now: d[f.k], was: base[f.k] })); }
 // the Cultivation decision is read back as the decision itself, with its meaning (Carverhill, Oct 25 and Oct 28: not "Decision: Move to Cultivation")
 function ownWordsReadback(action, d, who) { const first = who.split(" ")[0];
-  if (d.decision === "Defer") return `Defer ${first}'s move to Cultivation${String(d.reason || "").trim() ? ", reason: " + String(d.reason).trim().replace(/[.\s]+$/, "") : ""}${d.reconsiderOn ? ", reconsider on " + dateSaid(d.reconsiderOn).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1") : ""}.`;
+  if (d.decision === "Defer") return `Defer ${first}'s move to Cultivation${String(d.reason || "").trim() ? ", reason: " + String(d.reason).trim().replace(/[.\s]+$/, "") : ""}${d.reconsiderOn ? ", reconsider on " + dateSpoken(d.reconsiderOn) : ""}.`;
   return `Move ${first} to Cultivation? That means you, as the gift officer, believe they're ready to be pursued for a gift.`; }
 // the policy's shape: only fields with a value; money, dates and choices bare, text as "label, value", long text as "noted", flags by name
 function readbackParts(A, R, d, only) {
@@ -345,7 +345,7 @@ function readbackParts(A, R, d, only) {
     if (f.type === "bool") { if (v && !dflt.includes(f.k)) out.push(f.label); return; }
     if (f.type === "area") { out.push(`${optLabel(f)} noted`); return; } // long text is on the form; reading it out made the read-back about 13 s (Oct 24)
     if (f.type === "money") { out.push(money(v)); return; }
-    if (f.type === "date") { out.push(`${/^Next step due/.test(f.label) ? "due " : /^(Received|Confirmed) on/.test(f.label) ? f.label.replace(/ on$/, "").toLowerCase() + " on " : ""}${dateSaid(v).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1")}`); return; }
+    if (f.type === "date") { out.push(`${/^Next step due/.test(f.label) ? "due " : /^(Received|Confirmed) on/.test(f.label) ? f.label.replace(/ on$/, "").toLowerCase() + " on " : ""}${dateSpoken(v)}`); return; }
     if (f.type === "select") { out.push(f.k === "capacity" ? `rated ${v}` : f.k === "method" ? `by ${String(v).toLowerCase()}` : f.k === "fund" && typeof entitySpoken === "function" ? entitySpoken(v) : String(v)); return; }
     let x = String(v); const w = x.split(/\s+/); if (w.length > 14) x = w.slice(0, 14).join(" ") + "…";
     out.push(/^(first|last|text|title)$/.test(f.k) ? x : `${optLabel(f)}, ${x}`); });
@@ -567,9 +567,10 @@ function formPosition() {
 function whereWeAre() {
   const fp = typeof formPosition === "function" ? formPosition() : null;
   if (fp && fp.ask) return { kind: "form", line: `${formIntro()} ${fp.ask}`.trim(), who: V.target && V.target.contact ? V.target.contact.first : (readDraft().first || ""), q: lastQuestionOf(fp.ask) };
-  if (G.lastSaved && G.lastSaved.nextLine && Date.now() - G.lastSaved.at < 600000) return { kind: "saved", line: `${G.savedLine}. ${G.lastSaved.nextLine}`, who: G.lastSaved.contactId ? (G.lastSaved.who || "").split(" ")[0] : "", q: lastQuestionOf(G.lastSaved.nextLine) };
+  const ls = G.lastSaved, declined = !!(ls && ls.declined), stepOnly = (line) => line.endsWith(NEXT_Q) ? line.slice(0, -NEXT_Q.length) + " " + NEXT_NO_Q : line; /* the officer said no to that next step: it is still named, the yes-or-no question isn't asked again (Carverhill, Nov 1: "repeat what was just done and recommend the next step") */
+  if (ls && ls.nextLine && Date.now() - ls.at < 600000) { const n = declined ? stepOnly(ls.nextLine) : ls.nextLine; return { kind: "saved", line: `${G.savedLine}. ${n}`, who: ls.contactId ? (ls.who || "").split(" ")[0] : "", q: lastQuestionOf(n) }; }
   const f = typeof focusContact === "function" ? focusContact() : null;
-  if (f) { const n = nextStepLine(f); return { kind: "focus", line: `We were on ${f.first}. ${n}`, who: f.first, q: lastQuestionOf(n) }; }
+  if (f) { const n = declined && ls.contactId === f.id ? stepOnly(nextStepLine(f)) : nextStepLine(f); return { kind: "focus", line: `We were on ${f.first}. ${n}`, who: f.first, q: lastQuestionOf(n) }; }
   return { kind: "none", line: `We hadn't started anything yet. ${NEXT_NO_Q}`, who: "", q: NEXT_NO_Q };
 }
 const lastQuestionOf = (s) => { const q = (String(s || "").match(/[^.?!]*\?/g) || []).pop(); return (q || String(s || "")).trim(); };
