@@ -91,6 +91,18 @@ async function ensureTable(db) {
   // each event carries an id from the phone, so a batch sent twice (a reply lost to a bad patch of signal) is stored once (Oct 25)
   try { await db.prepare("ALTER TABLE events ADD COLUMN bid TEXT").run(); } catch (e) {}
   await db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS events_bid ON events (bid)").run();
+  // Nov 1: Cloudflare's daily read cap (5 million rows on the free plan) was 75% used. The purge below and the activity page's
+  // per-phone lookups each read the whole table (about 53,000 rows) without these; with them each is a short index walk.
+  await db.prepare("CREATE INDEX IF NOT EXISTS events_at ON events (at)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS events_device ON events (device, id)").run();
+}
+// Rows older than KEEP_DAYS go once a day (the day marker is kept in KV), not after one log batch in twenty: 85 conversations on
+// Nov 1 sent several hundred batches, so the purge alone scanned the table about thirty times that day.
+async function purgeOld(env) {
+  const day = new Date().toISOString().slice(0, 10), key = "purge:" + day;
+  if (env.LINES) { if (await env.LINES.get(key).catch(() => null)) return; await env.LINES.put(key, "1", { expirationTtl: 3 * 86400 }).catch(() => {}); }
+  else if (Math.random() >= 0.01) return;
+  await env.DB.prepare("DELETE FROM events WHERE at < ?").bind(new Date(Date.now() - KEEP_DAYS * 864e5).toISOString()).run();
 }
 
 async function saveLog(request, env, json) {
@@ -104,7 +116,7 @@ async function saveLog(request, env, json) {
   const ins = env.DB.prepare("INSERT OR IGNORE INTO events (at, device, name, session, page, role, text, city, region, country, bid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
   await env.DB.batch(events.map(e => ins.bind(cut(e.at, 30), cut(b.device, 64), cut(b.name, 80), cut(b.session, 64), cut(b.page, 20),
     cut(e.role, 20), cut(e.text, 4000), cut(cf.city, 80), cut(cf.region, 80), cut(cf.country, 8), e.id ? cut(e.id, 40) : null)));
-  if (Math.random() < 0.05) await env.DB.prepare("DELETE FROM events WHERE at < ?").bind(new Date(Date.now() - KEEP_DAYS * 864e5).toISOString()).run();
+  await purgeOld(env);
   return json({ stored: events.length });
 }
 

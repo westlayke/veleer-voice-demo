@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 6:24 PM",
+      "change": "Key holder (Cloudflare Worker): the activity log table gets two indexes (time, phone) and the clean-out of rows older than 90 days runs once a day instead of after one log batch in twenty. No change on the phone.",
+      "area": "Log",
+      "requestedBy": "Carverhill",
+      "why": "Cloudflare warned that the activity database was at 75% of its daily free read limit (5 million rows): the activity page, the clean-out and log reads each scanned the whole table. Carverhill: \"Yes\" to the proposed fix (6:20 PM)."
+    },
+    {
       "date": "Nov 1, 5:29 PM",
       "change": "Experiment (option 2): when Ara's reply to the officer's yes or no misses what it should do, the app's one nudge now goes as a conversation item first, then the reply request. The real-Ara test harness waits 20 s (was 10 s) for her follow-up after a reply with no question.",
       "area": "Voice",
