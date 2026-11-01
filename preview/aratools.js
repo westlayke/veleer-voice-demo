@@ -355,6 +355,7 @@ function draftTool(callId, name, data) {
   if (tool.action === "ask" && V && V.action === "ask" && V.askedFollow) { const s = followUpSuggestion(target), last = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9);
     if (last && followAnswer(last) === "yes" && (!String(data.nextStep || "").trim() || data.nextStep === s.text)) { followKeep = { nextStep: s.text, nextDue: data.nextDue || s.due }; delete data.nextStep; delete data.nextDue; vlog(`${name}: follow-up task "${s.text}" by ${s.due}: the officer said yes to the app's suggestion`); } }
   // every value must trace to the officer's words, a $0 amount, an invented rating and the interaction report's substantive flag, next step and outcome included (validate.js)
+  if (data.fund) { const f = fundFromSpoken(data.fund); if (f !== data.fund) { vlog(`${name}: entity "${data.fund}" -> ${f}`); data.fund = f; } } /* before the evidence rule, so a spoken name already on the form as the record name counts as already there (12:09 AM call, Nov 1) */
   applyEvidence(tool.action, data, name).forEach(x => (data._dropped = data._dropped || []).push(x));
   if (followKeep) Object.assign(data, followKeep);
   // the voice model doesn't send texting permitted on a new contact (seen Oct 24: eight tries, never sent): take it from the officer's own words
@@ -378,7 +379,6 @@ function draftTool(callId, name, data) {
   const notCaught = (xs) => `I didn't catch ${xs.length > 1 ? "these" : "the"} ${xs.join(", ").replace(/, ([^,]*)$/, " and $1")} from you, so ${xs.length > 1 ? "they're" : "it's"} not on the form.`;
   // the officer named a state: its entities are known, so the app fills in a single one or names exactly the ones there (Oct 25: Ara offered Pennsylvania for New Hampshire)
   let stateNote = "";
-  if (data.fund) { const f = fundFromSpoken(data.fund); if (f !== data.fund) { vlog(`${name}: entity "${data.fund}" -> ${f}`); data.fund = f; } }
   if ((tool.action === "opportunity" || tool.action === "plan") && !data.fund && !(V && V.action === tool.action && V.data && V.data.fund)) {
     const last = ((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "").slice(9).toLowerCase();
     const st = [...new Set(Object.values(ENTITY_STATE).filter(Boolean))].find(s => last.includes(s.toLowerCase()));
@@ -396,6 +396,9 @@ function draftTool(callId, name, data) {
   else { V = { action: tool.action, target, data: prefill(tool.action, data, target), fromVoice: new Set(said) }; formEvent("FORM_OPEN"); }
   renderOverlay();
   const A = ACTIONS[tool.action], R = voiceRule(tool.action), d = V.data, empty = (v) => v === null || v === undefined || String(v).trim() === "";
+  // an edit form: a required value the voice model tried to change but the officer never said is blanked, so the app asks for it instead of reading the old one back (12:09 AM call, Nov 1: "Let's set a new date" became today)
+  if (/^edit/.test(tool.action) && droppedList.length) { const dk = droppedList.map(x => x.replace(/ \(.*$/, ""));
+    A.fields.filter(f => f.req && !f.fixed && dk.some(x => f.label.toLowerCase().startsWith(x) || (typeof SHORT_LABEL !== "undefined" && SHORT_LABEL[f.k] === x))).forEach(f => { d[f.k] = ""; V.fromVoice.delete(f.k); vlog(`${name}: ${f.k} blanked on the edit form: the officer asked to change it and gave no value yet`); }); renderOverlay(); }
   const condReq = new Set(R.requiredWhen ? R.requiredWhen(d) : []); /* required under a condition the form declares (a reason when declined or deferred) */
   // a pick-list field Grok left out is filled by the app from the officer's answer to the question just asked (5:59 PM call, Oct 29: "In person" said three times, never sent; the question is the evidence)
   if (typeof optionAnswered === "function") { const lines = officerLines(1), asked = askedBefore(1);

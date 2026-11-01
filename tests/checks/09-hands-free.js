@@ -1093,4 +1093,18 @@ test("State machine phase 3 (Nov 1): on preview-sm the officer and form parts an
   const diffs = await p.evaluate(() => Object.keys(__sm.counts).filter(k => /^(officer|form):/.test(k)));
   ok(!diffs.length, "the machine and the old flags disagreed on the officer or the form: " + diffs.join("; "));
 }, { page: "preview-sm.html" });
+test("Carverhill's 12:09 AM call (Nov 1): \"Let's set a new date\" with Ara sending today drops the date and asks for it; an entity already on the form is not reported left out", async (p) => {
+  await signIn(p); await p.waitForFunction(() => G.live, null, { timeout: 8000 });
+  await said(p, "Let's look at Elena Vasquez."); await p.evaluate(() => { recent("Ara", "Next on your list: Vasquez, Elena - 2026: Ask date passed. The planned date for your $40,000 ask was Oct 31. Do you want to set a new date now?"); });
+  await said(p, "Let's set a new date.");
+  let r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez", plannedDate: new Date().toISOString().slice(0, 10) });
+  ok(await p.evaluate(() => V && V.action === "editPlan" && V.data.plannedDate !== new Date().toISOString().slice(0, 10)), "today was kept as the new planned ask date although the officer never said it: " + JSON.stringify(r));
+  ok(/planned ask date/i.test(r.ask_exactly || r.asked || "") && /Left out of the form.*planned ask date/i.test(r.next || ""), "the app didn't ask for the date: " + JSON.stringify(r));
+  await said(p, "November 21st."); r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez", plannedDate: "2026-11-21" });
+  ok(await p.evaluate(() => V.data.plannedDate === "2026-11-21"), "the said date wasn't taken: " + JSON.stringify(r));
+  /* the entity on the form from an earlier answer stays and is not reported as left out when a later tool call repeats it */
+  await said(p, "Twelve thousand."); r = await ara(p, "show_ask_plan_edit_draft", { contact_name: "Elena Vasquez", plannedDate: "2026-11-21", fund: "New Hampshire C4", amount: 12000 });
+  ok(!/Left out[^.]*entity/.test(await p.log()) && await p.evaluate(() => /New Hampshire/.test(V.data.fund)), "the entity already on the form was reported left out: " + (await p.log()).slice(-300));
+});
+
 };

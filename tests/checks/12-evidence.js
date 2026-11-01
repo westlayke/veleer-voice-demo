@@ -61,7 +61,7 @@ test("Evidence rule: every pick-list option, flag, amount and date is kept when 
             n++; if (fieldEvidence(action, f, v, {}, ["um, something else entirely"], { asked: q }) === true) fails.push(`${action}.${f.k} = ${v} kept as the answer to "${q}" although the officer named no option`); } }); return; }
       if (f.type === "money") { Object.entries(AMOUNTS).forEach(([v, ps]) => { unsaidIs(Number(v)); ps.forEach(l => saidIs(Number(v), "let's say " + l)); }); n++; if (judge(action, f, 25000, ["twenty thousand"]) !== false) fails.push(`${action}.${f.k} 25000 kept when the officer said twenty thousand`);
         n++; if (judge(action, f, 0, ["zero dollars", "nothing"]) !== false) fails.push(`${action}.${f.k} $0 kept`); n++; if (judge(action, f, "abc", NEUTRAL) !== false) fails.push(`${action}.${f.k} "abc" kept`); return; }
-      if (f.type === "date") { unsaidIs("2026-11-05"); DATES.forEach(l => saidIs("2026-11-05", "do it " + l)); n++; if (judge(action, f, todayISO(), NEUTRAL) !== true) fails.push(`${action}.${f.k} today dropped (today is the default)`); return; }
+      if (f.type === "date") { unsaidIs("2026-11-05"); DATES.forEach(l => saidIs("2026-11-05", "do it " + l)); n++; if (f.k === "date" ? judge(action, f, todayISO(), NEUTRAL) !== true : judge(action, f, todayISO(), NEUTRAL) !== false) fails.push(`${action}.${f.k} today ${f.k === "date" ? "dropped (today is the form's default)" : "kept although the officer never said it (12:09 AM call, Nov 1)"}`); return; }
       if (f.type === "select" || f.type === "bool") { fails.push(`${action}.${f.k} (${f.type}) has no word list and is not skipped: every value would be dropped`); }
     }));
     return { n, fails };

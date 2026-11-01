@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 7:38 AM",
+      "change": "Evidence rule: a date equal to today passes only on a form's own Date or Received on field (the forms that default to today); a planned ask date, a due date or a confirmed date must be said. On an edit form a required value the voice model tried to change but the officer never said is blanked, so the app asks for it instead of reading the old one back. An entity already on the form is no longer reported as left out when a later tool call repeats it by its spoken name.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "His 12:09 AM call (Nov 1): \"Let's set a new date\" for Jimmy Jones became today's date and was read back as Nov 1 before he corrected it; the log also said the entity was left out while the form kept it."
+    },
+    {
       "date": "Nov 1, 1:31 AM",
       "change": "State machine phase 3 on the state-machine preview page only: the officer part (silent, speaking, said, uncertain) and the form part (none, asking, optional, read-back, saved) are now the app's own truth there, sent by the app at every place a form opens, closes, saves or changes stage and at every speech event, and read through officerState()/formState(). The main preview is unchanged. The check part is still shadow.",
       "area": "Voice",

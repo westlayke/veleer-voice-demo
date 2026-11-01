@@ -112,7 +112,7 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
   if (f.type === "bool" && !v) return null; // false is the default, nothing to prove
   if (OPTION_WORDS[f.k]) return listHeard(f.k, v, lines, ctx.asked); // an option the form doesn't offer is left to the form; "in-person" is "in person" (Oct 28, the type dropped twice)
   if (f.type === "money") return amountSaid(v, lines);
-  if (f.type === "date") { const iso = normDate(v); if (iso && iso === todayISO()) return true; const w = listWordsOut(all); return DATE_WORDS.test(w) || /\d/.test(w); }
+  if (f.type === "date") { const iso = normDate(v); if (iso && iso === todayISO() && f.k === "date") return true; /* today is only a form's own default (interaction, ask, gift "Date" and "Received on"); a planned ask date, a due date or a confirmed date must be said (Carverhill's 12:09 AM call, Nov 1: "Let's set a new date" became today) */ const w = listWordsOut(all); return DATE_WORDS.test(w) || /\d/.test(w); }
   if (f.type === "select" || f.type === "bool") return false; // an option with no words of its own: only the officer's own tap sets it
   return null;
 }
@@ -120,7 +120,7 @@ function fieldEvidence(action, f, v, data, lines, ctx = {}) {
 function fieldSaidIn(action, f, lines) {
   if (!f || !lines.length) return false; const all = lines.join(" \n ").toLowerCase();
   if (f.k === "capacity") return ratedIn(lines);
-  if (f.k === "fund") return listMatch("fund", lines[lines.length - 1]).hits.length === 1; /* a state with two entities is a choice still to make (10:05 AM call) */
+  if (f.k === "fund") return listMatch("fund", lines[lines.length - 1]).hits.length === 1 || !!(typeof V !== "undefined" && V && V.data && String(V.data.fund || "").trim()); /* already on the form from an earlier answer (12:09 AM call, Nov 1: reported left out while the form kept it) */ /* a state with two entities is a choice still to make (10:05 AM call) */
   if (f.k === "campaign") return /\bnational|\bnation-?wide\b|\bfederal\b/.test(all) || [...new Set(Object.values(ENTITY_STATE).filter(Boolean))].some(s => all.includes(s.toLowerCase()));
   if (OPTION_WORDS[f.k]) return Object.values(OPTION_WORDS[f.k]).some(re => re.test(all) || re.test(all.replace(/-/g, " ")));
   if (f.type === "money") return /\$|\d|\b(thousand|hundred|million|grand|bucks|dollars)\b/.test(listWordsOut(all));
