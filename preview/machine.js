@@ -88,7 +88,7 @@
   wrap("startCall", () => send("CALL_START"));
   wrap("endCall", () => send("CALL_END"));
   wrap("reconnect", () => send("LINE_DROP"));
-  wrap("linePrep", () => { if (G.live) send("LINE_UP"); }); /* called the moment a line opens (a first line, a reconnect, the reopen after a lock) */
+  wrap("linePrep", () => { if (G.live && G.ws && G.ws.readyState === 1) send("LINE_UP"); }); /* called the moment a line opens; the sound restart at an unlock calls it too, while the line is still down */
   /* a check starts on the form as it stands now, not as the last tick saw it */
   const KIND = { ctxWatch: "where", sayWatch: "ask", ynWatch: "yesno", nudge: "tool" };
   wrap("oneCheck", (keep) => { if (keep) { feedForm(); send("CHECK_START", { kind: KIND[keep] || keep }); } }); /* every check on Ara starts through oneCheck */
