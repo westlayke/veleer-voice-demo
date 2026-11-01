@@ -620,8 +620,33 @@ async function soundRunning(ms) {
   return false;
 }
 // the sound is back after a pause: a line Ara said into the silence is said again (the officer heard none of it)
+/* a question of Ara's whose playback the phone paused (Carverhill's 8:58 PM call, Oct 31: the sound paused 3.5 s near the end of "Do you want to
+   record the ask now, yes or no?" and the app waited 60 s). Once the sound is back and the rest has played, Ara is asked to put the question
+   again in her own words, once, with the usual check; nothing if the officer has spoken since. The app says nothing itself. */
+const CUT_Q_WAIT_MS = 1500;
+function cutLineAt() {
+  const r = G.lastLine; if (!G.live || !r || G.cutQ || G.unheardResp) return;
+  if (playingLeft() < 0.3 || !/\?\s*$/.test(String(r.text || "").trim())) return;
+  G.cutQ = { q: lastQuestionOf(r.text), text: r.text, at: Date.now(), heardN: G.heardN || 0 };
+  act("step", `The phone paused the sound while Ara's question was playing ("${G.cutQ.q.slice(0, 80)}")`);
+}
+function cutQBack() {
+  const c = G.cutQ; if (!c || !G.live) return;
+  const go = () => {
+    if (!G.live || G.cutQ !== c) return;
+    if (playingLeft() > 0.1 || replyBusy()) { setTimeout(go, 300); return; }
+    G.cutQ = null;
+    if (G.ctxWatch || !G.ws || G.ws.readyState !== 1) return; /* the line closed meanwhile: the reconnect says where we were */
+    if ((G.heardN || 0) > c.heardN) { act("step", "The officer spoke after the sound came back: Ara's cut question is not asked again"); return; }
+    const g = `The phone paused the sound while your last question was playing, so the officer missed part of it. Ask it again now, briefly, in your own words, with no apology: "${c.q}"`;
+    act("step", `Sound is back: Ara is asked to put her cut question again ("${c.q.slice(0, 80)}")`);
+    sayWatch(c.q, g); askReply(g);
+  };
+  setTimeout(go, CUT_Q_WAIT_MS);
+}
 function soundBack() {
   const line = G.unheard; G.unheard = null; G.unheardResp = 0;
+  if (!line) cutQBack(); else G.cutQ = null;
   if (!line || !G.live) return;
   act("step", "Sound is back: the line Ara said while it was paused is said again");
   forceSay(line);
@@ -799,6 +824,7 @@ function resetCall() {
   G.lastBotAt = 0;
   G.unheard = null;
   G.unheardResp = 0;
+  G.cutQ = null;
   G.resend = null;
   if (G.silentWait) { clearTimeout(G.silentWait.still);
     clearTimeout(G.silentWait.resend);

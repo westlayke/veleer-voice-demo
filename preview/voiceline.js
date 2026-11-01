@@ -603,7 +603,7 @@ async function lockResume() { // the app is back: reopen the line on the same co
 }
 const hiddenLimit = (ms) => document.visibilityState === "hidden" || G.hiddenAt ? Math.max(ms, LOCK_MAX_MS) : ms; // while the page is hidden, the hidden wait decides (the sound and mic are the phone's doing)
 function soundPaused(ctx, limit = SOUND_BACK_MS) { // limit: how long to wait for the phone (longer right after a tap, see soundRunning)
-  if (G.soundPausedAt) return; G.soundPausedAt = Date.now();
+  if (G.soundPausedAt) return; G.soundPausedAt = Date.now(); if (typeof cutLineAt === "function") cutLineAt();
   const why = `Sound paused by the phone (${ctx.state}; app ${document.visibilityState}${document.hasFocus && !document.hasFocus() ? ", not in focus" : ""})`;
   vlog(why); netLog(why);
   const tick = setInterval(() => {

@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 9:08 PM",
+      "change": "Preview: if the phone pauses the sound while Ara is asking a question (a screen lock, a notification), then once the sound is back Ara is asked to put the question again in her own words, once, and the app checks she did. Nothing is repeated if the officer has already answered. The app says nothing itself.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Go\": in the 8:52 PM call a 3.5-second sound pause cut the end of \"Do you want to record the ask now, yes or no?\" and the app waited 60 seconds until he asked \"Are you there?\""
+    },
+    {
       "date": "Oct 31, 8:52 PM",
       "change": "New test page with a state machine watching the voice call alongside the existing code (phase 1 of the state machine work). It changes nothing the officer hears; it only logs where its picture of the call disagrees with the app's flags, so the test runs can show where the two differ.",
       "area": "Voice (test page only)",

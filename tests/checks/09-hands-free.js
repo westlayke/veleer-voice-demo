@@ -952,4 +952,25 @@ test("Carverhill's 5:34 PM call (Oct 31): a confirmation lost in a reconnect is 
   const r = await ara(p, "save_form", { confirmed: true });
   ok(r.already && !/Open that step now/.test(JSON.stringify(r)) && /was about that form/.test(JSON.stringify(r)), "\"Save it\" after a save was taken as a yes to the next step: " + JSON.stringify(r).slice(0, 400));
 });
+test("Carverhill's 8:58 PM call (Oct 31): a question the phone's sound pause cut is put again by Ara once the sound is back, never by the app, and not if the officer spoke", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const creates = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "response.create" && x.response && x.response.instructions).map(x => x.response.instructions), n);
+  const forced = (n) => p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.item && x.item.type === "force_message").length, n);
+  const cut = (q) => p.evaluate((q) => { G.playHead = G.ctx.currentTime + 0.8; G.lastLine = { text: "Planned ask saved for Hello. " + q, at: Date.now() - 10000, left: 0 };
+    G.responding = false; G.createAt = 0; soundPaused(G.ctx); }, q);
+  // 1. the sound pauses while the question plays and comes back: after the rest has played, Ara is asked to put it again, with the check
+  let n0 = await p.evaluate(() => __sent.length);
+  await cut("Do you want to record the ask now, yes or no?"); await p.waitForTimeout(3500);
+  const c = await creates(n0);
+  ok(c.some(g => /missed part of it/.test(g) && /record the ask now, yes or no\?/.test(g)) && await forced(n0) === 0, "the cut question wasn't handed to Ara (or the app said it): " + JSON.stringify(c).slice(0, 400));
+  ok(await p.evaluate(() => !!G.sayWatch && /record the ask/.test(G.sayWatch.q)), "no check that Ara asked the question again");
+  ok(/Ara is asked to put her cut question again/.test(await p.log()), "the repeat wasn't logged");
+  // 2. the officer answers once the sound is back: nothing is asked again
+  await p.evaluate(() => { G.sayWatch = null; G.cutQ = null; });
+  n0 = await p.evaluate(() => __sent.length);
+  await cut("Do you want to log an interaction now, yes or no?"); await p.waitForTimeout(1200);
+  await p.evaluate(() => { G.heardN = (G.heardN || 0) + 1; }); await p.waitForTimeout(2000);
+  ok(!(await creates(n0)).some(g => /missed part of it/.test(g)), "the question was asked again though the officer had spoken");
+  ok(/not asked again/.test(await p.log()), "the stand-down wasn't logged");
+});
 };
