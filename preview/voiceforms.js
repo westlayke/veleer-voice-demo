@@ -240,6 +240,7 @@ const YN_WATCH_MS = 20000;
 function answerGuide(heard) {
   const p = yesNoPending(), a = p ? followAnswer(heard) : null; if (!p || !a) return "";
   const guide = `The officer just said "${String(heard).trim()}", answering your question "${p.q}". ${a === "yes" ? p.yes : p.no}`;
+  if (p.kind !== "other") oneCheck("ynWatch");
   if (p.kind !== "other") G.ynWatch = { kind: p.kind, ans: a, step: p.step || "", guide, tries: 1, at: Date.now(), heardN: G.heardN || 0 };
   return guide; }
 // the officer answered: arm the check for Ara's own reply (the voice service answers on its own; the app only steps in when that reply misses)
@@ -263,7 +264,7 @@ function ynCheck(r) {
 // guidance with a check (Oct 31, the test of the middle path): the app tells Ara what to ask; if her reply doesn't ask it, one nudge, then the app waits
 // for the officer (formReask's 13 s backstop still stands). Cleared when the officer speaks again or after SAY_WATCH_MS.
 const SAY_WATCH_MS = 20000;
-function sayWatch(q, guideText) { G.sayWatch = { q, guide: guideText, at: Date.now(), heardN: G.heardN || 0, tries: 1 }; }
+function sayWatch(q, guideText) { oneCheck("sayWatch"); G.sayWatch = { q, guide: guideText, at: Date.now(), heardN: G.heardN || 0, tries: 1 }; }
 function sayCheck(r) {
   const w = G.sayWatch; if (!w || !G.live) return;
   if (Date.now() - w.at > SAY_WATCH_MS || (G.heardN || 0) > w.heardN) { G.sayWatch = null; return; }

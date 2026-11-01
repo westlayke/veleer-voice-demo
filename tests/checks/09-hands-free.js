@@ -1006,4 +1006,15 @@ test("Carverhill's 9:36 PM call (Oct 31): a second transcript of the read-back's
   await said(p, "Yes."); await p.waitForTimeout(400);
   ok(await saved(), "the yes after the amount check didn't save");
 });
+test("Shadow machine findings (Oct 31): one check on Ara at a time, and a drop ends every check", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  const live = () => p.evaluate(() => ["ctxWatch", "sayWatch", "ynWatch", "nudge"].filter(k => G[k]).join("+") || "none");
+  await p.evaluate(() => { sayWatch("Which entity?", "Ask exactly: \"Which entity?\""); });
+  ok(await live() === "sayWatch", "the ask check didn't start");
+  await p.evaluate(() => { contextWatch("reconnect", { who: "", q: "Which entity?", line: "Which entity?", guide: "g" }); });
+  ok(await live() === "ctxWatch", "two checks ran at once: " + await live());
+  await p.evaluate(() => { G.ynWatch = { kind: "step", tries: 1, at: Date.now(), heardN: G.heardN || 0 }; G.drops = 0; __ws.onclose({ code: 1006, reason: "" }); });
+  await p.waitForTimeout(150);
+  ok(!(await p.evaluate(() => G.ynWatch || G.sayWatch)), "a check outlived the drop: " + await live());
+});
 };

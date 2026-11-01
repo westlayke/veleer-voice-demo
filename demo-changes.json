@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 9:59 PM",
+      "change": "Preview: the app keeps only one check on Ara at a time (where we were, ask this question, follow this yes or no, call the tool); a new check ends the others, and a dropped line ends them all, so a stale check can no longer fire after a reconnect. The state machine page's machine now waits for the end of speech before counting the officer's words, and notices every way a line comes back.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "\"Yes go ahead with that plan\": the shadow state machine's first runs found a yes-or-no check alive after a drop 32 times and the where-we-were check stacked on another 33 times in 100 conversations; with real Grok it mis-read growing transcripts as finished speech 33 times"
+    },
+    {
       "date": "Oct 31, 9:43 PM",
       "change": "Preview: the app's \"Just to be sure, the amount is...\" check now counts only an answer given after the check has started playing. An echo of the first yes from the voice service can no longer save the form before the check is heard.",
       "area": "Voice",

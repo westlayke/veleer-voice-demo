@@ -1163,7 +1163,7 @@ function toolCheck(r) {
   else if (V && V.fromVoice && !V.opt && heard && !NOT_ANSWER_RE.test(heard) && !hfYes(heard) && !/\?\s*$/.test(G.bot) && heard.split(/\s+/).length <= 40) { const tl = TOOLS.find(x => x.action === V.action); if (!tl) return; kind = "fill the form";
     guide = `The officer answered the open ${ACTIONS[V.action] && ACTIONS[V.action].title ? ACTIONS[V.action].title : "form"} form's question with "${heard.slice(0, 120)}", and your last reply had no tool call, so nothing was filled in. Call ${tl.name} now with what they said (keep the fields already in). Say nothing else; the app asks the next question.`; }
   if (!kind) return;
-  G.nudge = { kind, tries: 1, guide, at: Date.now() }; guardFired("Ara talked but didn't " + kind, `"${G.bot.slice(0, 80)}" after "${heard.slice(0, 60)}"`);
+  oneCheck("nudge"); G.nudge = { kind, tries: 1, guide, at: Date.now() }; guardFired("Ara talked but didn't " + kind, `"${G.bot.slice(0, 80)}" after "${heard.slice(0, 60)}"`);
   act("step", `Ara talked but didn't ${kind} ("${G.bot.slice(0, 80)}"): asked again for the tool call (1 of ${TOOL_ASKS})`); setTimeout(() => { if (G.live && G.nudge) askReply(guide); }, 0);
 }
 function whenIdle(kind) {

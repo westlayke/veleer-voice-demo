@@ -10,7 +10,7 @@
   const { createMachine, createActor, assign } = XState;
   const SM = window.__sm = { diffs: [], counts: {}, transitions: 0, log: [] };
   /* the facts every part can read: the line number (an old line's events are ignored), the event number, the officer's last words, the open form */
-  const facts = SM.facts = { lineN: 0, eventN: 0, lastWords: null, form: "" };
+  const facts = SM.facts = { lineN: 0, eventN: 0, lastWords: null, form: "", speechAt: 0 };
   const DIFF_MS = 600, TICK_MS = 250, RESP_LIMIT = { where: 3, ask: 2, yesno: 2, tool: 4 };
 
   /* ---------- the machine ---------- */
@@ -26,7 +26,8 @@
         down: { on: { LINE_UP: "connected", CALL_END: "ended" } } } },
       officer: { initial: "silent", states: {
         silent: { on: { SPEECH_START: "speaking", WORDS: "said" } },
-        speaking: { on: { SPEECH_STOP: "silent", WORDS: "said", LINE_DROP: "uncertain", CALL_END: "silent" } },
+        /* words can arrive while the officer is still talking (real Grok sends growing transcripts): they stay "speaking" until the speech stops */
+        speaking: { on: { SPEECH_STOP: [{ target: "said", guard: () => facts.lastWords && facts.lastWords.at >= facts.speechAt }, { target: "silent" }], LINE_DROP: "uncertain", CALL_END: "silent" } },
         said: { on: { SPEECH_START: "speaking", ARA_STARTED: "silent", ARA_ASKED: "silent", CALL_END: "silent" } },
         uncertain: { on: { SPEECH_START: "speaking", WORDS: "said", ARA_STARTED: "silent", CALL_END: "silent" } } } },
       ara: { initial: "idle", states: {
@@ -77,7 +78,7 @@
     const t = e && e.type || "";
     if (G.ws && G.ws !== wsSeen) { wsSeen = G.ws; facts.lineN++; }
     const ln = state().line; if (G.live && (ln === "reconnecting" || ln === "down")) send("LINE_UP"); /* a message on the current line means it is up */
-    if (t === "input_audio_buffer.speech_started") send("SPEECH_START");
+    if (t === "input_audio_buffer.speech_started") { facts.speechAt = Date.now(); send("SPEECH_START"); }
     else if (t === "input_audio_buffer.speech_stopped") send("SPEECH_STOP");
     else if (/input_audio_transcription\.completed$/.test(t)) { facts.lastWords = { text: e.transcript || "", at: Date.now() }; send("WORDS"); }
     else if (t === "response.created") send("ARA_STARTED");
@@ -87,9 +88,10 @@
   wrap("startCall", () => send("CALL_START"));
   wrap("endCall", () => send("CALL_END"));
   wrap("reconnect", () => send("LINE_DROP"));
+  wrap("linePrep", () => { if (G.live) send("LINE_UP"); }); /* called the moment a line opens (a first line, a reconnect, the reopen after a lock) */
   /* a check starts on the form as it stands now, not as the last tick saw it */
-  wrap("contextWatch", () => { feedForm(); send("CHECK_START", { kind: "where" }); });
-  wrap("sayWatch", () => { feedForm(); send("CHECK_START", { kind: "ask" }); });
+  const KIND = { ctxWatch: "where", sayWatch: "ask", ynWatch: "yesno", nudge: "tool" };
+  wrap("oneCheck", (keep) => { if (keep) { feedForm(); send("CHECK_START", { kind: KIND[keep] || keep }); } }); /* every check on Ara starts through oneCheck */
   ["draftTool", "grokSaved", "hfReadback", "cancelForm", "optStep"].forEach(n => wrap(n, null, () => feedForm()));
   /* what the app sends: a reply request or a scripted line is Ara being asked */
   const P = window.WebSocket && window.WebSocket.prototype;

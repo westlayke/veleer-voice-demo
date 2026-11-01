@@ -305,8 +305,12 @@ async function netLog(what, known) { const sess = G.session, info = netInfo(), m
 // the server's side of the conversation is gone, so a new line gets the last few lines said and the open form
 const downSince = () => Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now()); // how long since the voice service was last heard: the give-up clock
 // a line has ended (a drop, or the phone locked): the turn on it, its watches and its sound go, and the socket is closed
+/* one check on Ara at a time: a new one ends the others, and a drop ends them all (the reconnect asks where we were afresh). The shadow
+   state machine found both (Oct 31 Pat run: a yes-or-no check alive after a drop 32 times, the where-we-were check on top of another 33 times) */
+const CHECKS = ["ctxWatch", "sayWatch", "ynWatch", "nudge"];
+function oneCheck(keep) { CHECKS.forEach(k => { if (k !== keep && G[k]) { vlog(`check ${k} ended: ${keep ? keep + " started" : "the line dropped"}`); G[k] = null; } }); }
 function resetLine() {
-  resetTurn(); G.retriedAt = 0; G.dropNext = false;
+  resetTurn(); G.retriedAt = 0; G.dropNext = false; oneCheck(null);
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); stopPlayback();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
 }
@@ -372,7 +376,7 @@ async function openAgain(lock) {
 // covers a late yes after a save. reconnectBy "app" (Settings, or window.__reconnectBy in the harness) keeps the scripted line: both ways measured by Patient Pat.
 const CONTEXT_ASKS = 3, OPEN_Q = /what (would you like|do you want) to do|what'?s next|what next/i; /* "What next?" too (Carverhill's 2:52 PM call, Oct 30) */
 const RECONNECT_BY = () => window.__reconnectBy || (typeof S !== "undefined" && S.settings && S.settings.reconnectBy) || "ara";
-function contextWatch(kind, w) { G.ctxWatch = { kind, need: { who: w.who || "", q: w.q }, tries: 1, at: Date.now(), seq: G.respSeq || 0, line: w.line, guide: w.guide, form: V ? V.action : "" }; } /* seq: the reply this was armed in (a tool call's) is not the answer */
+function contextWatch(kind, w) { oneCheck("ctxWatch"); G.ctxWatch = { kind, need: { who: w.who || "", q: w.q }, tries: 1, at: Date.now(), seq: G.respSeq || 0, line: w.line, guide: w.guide, form: V ? V.action : "" }; } /* seq: the reply this was armed in (a tool call's) is not the answer */
 function contextAsk(kind, w) {
   const guide = `The line was down and is back. Say sorry in a few words, then say in one sentence where we were${w.who ? ` (name ${w.who})` : ""}: ${(w.q && w.line.endsWith(w.q) ? w.line.slice(0, -w.q.length) : w.line).trim().replace(/"/g, "'")} ${G.spokeInGap ? " Say too that you missed what they said while the line was down." : ""} Then ask this question word for word: "${w.q}". Never ask what they'd like to do or what's next; nothing else.`;
   contextWatch(kind, Object.assign({ guide }, w)); act("step", `Ara is asked to say where we were herself (${kind}, 1 of ${CONTEXT_ASKS})`); askReply(guide);
