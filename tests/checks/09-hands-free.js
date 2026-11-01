@@ -882,6 +882,11 @@ test("Next step and step offers (Oct 31): a yes or no to Ara's own next-step que
   await araSays("It needs a next step, which becomes a task. Do you want to set it now, yes or no?"); await p.waitForTimeout(100);
   await said(p, "No."); await p.waitForTimeout(100);
   ok(/That is a no: the report goes on without a next step/.test(await p.evaluate(() => answerGuide("No."))), "the no branch isn't in the guidance");
+  // Nov 1 next-step-no run (3 of 5 unsaved): her reply to the no has no tool call: one nudge to call the draft tool again, then none
+  n0 = (await creates()).length; await araSays("No problem."); await p.waitForTimeout(200);
+  c = await creates(); ok(c.length === n0 + 1 && /That is a no: the report goes on without a next step/.test(c[c.length - 1]) && /Your last reply \("No problem\."\) didn't call the draft tool again/.test(c[c.length - 1]), "no nudge when Ara's reply to the no had no tool call: " + JSON.stringify(c.slice(n0)));
+  await araSays("Okay."); await p.waitForTimeout(200);
+  ok((await creates()).length === n0 + 1 && /still didn't call the draft tool again after one nudge/.test(await p.log()), "a second nudge went out, or the miss wasn't logged: " + (await p.log()).slice(-300));
   r = await ara(p, "show_interaction_draft", { contact_name: "Ken Ito" });
   ok(await p.evaluate(() => V && V.nextSkipped) && !(r.still_needed || []).some(x => /next step/i.test(x)) && !/set it now/.test(r.ask_exactly || ""), "the no to Ara's own question wasn't taken: " + JSON.stringify(r));
   await p.fire([{ type: "response.created" }, { type: "response.output_audio_transcript.delta", delta: r.read_back || "" }, { type: "response.done", response: { status: "completed" } }]);

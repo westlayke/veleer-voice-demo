@@ -257,7 +257,7 @@ function ynCheck(r) {
   let why = "";
   if (w.what === "step" && w.ans === "yes" && !G.respTool) why = "didn't open the step";
   else if (w.what === "next" && w.ans === "yes" && !G.respTool && !(/next step/i.test(bot) && /\?\s*$/.test(bot) && !OPEN_Q.test(bot))) why = "didn't ask what the next step is";
-  else if (w.what === "next" && w.ans === "no" && !G.respTool && /next step/i.test(bot) && /\?\s*$/.test(bot)) why = "asked about the next step again";
+  else if (w.what === "next" && w.ans === "no" && !G.respTool) why = /next step/i.test(bot) && /\?\s*$/.test(bot) ? "asked about the next step again" : "didn't call the draft tool again"; /* Nov 1 next-step-no run: "No problem." with no tool call left the report unsaved 3 times in 5 */
   else if (w.what === "step" && w.ans === "no" && /do that now/i.test(bot)) why = "offered the same step again";
   if (!why) { if (w.tries > 1) act("step", `Ara followed the officer's ${w.ans} after one nudge`); checkEnd("", "ynWatch"); return; }
   if (w.tries >= CHECK_RULES.ynWatch.asks) { act("step", `Ara's reply still ${why} after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't follow a yes-or-no answer after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "ynWatch"); return; }
