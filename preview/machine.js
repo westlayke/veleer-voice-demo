@@ -113,7 +113,7 @@
   const SAME = {
     line: (m, f) => m === f || (m === "reconnecting" && f === "down") || (m === "down" && f === "reconnecting"),
     officer: (m, f) => m === f || ((m === "said" || m === "uncertain") && f === "silent"),
-    ara: (m, f) => m === f || (m === "asked" && f === "idle") || (m === "idle" && f === "asked"),
+    ara: (m, f) => m === f || (m === "asked" && (f === "idle" || f === "draining")) || (m === "idle" && f === "asked"), /* a request sent while the last reply's sound still plays */
     form: (m, f) => m === f || (m === "saved" && f === "none") || (m === "none" && f === "saved"),
     check: (m, f) => (m === "none") === (f === "none") && !/\+/.test(f)
   };

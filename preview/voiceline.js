@@ -326,7 +326,7 @@ const downSince = () => Date.now() - (G.lastMsg || G.heardAt || G.t0 || Date.now
 const CHECKS = ["ctxWatch", "sayWatch", "ynWatch", "nudge"];
 function oneCheck(keep) { CHECKS.forEach(k => { if (k !== keep && G[k]) { vlog(`check ${k} ended: ${keep ? keep + " started" : "the line dropped"}`); G[k] = null; } }); }
 function resetLine() {
-  smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; oneCheck(null);
+  smSend("LINE_DROP"); resetTurn(); G.retriedAt = 0; G.dropNext = false; G.cutQ = null; oneCheck(null); /* a cut question is re-put by the reconnect, not by the sound coming back */
   clearTimeout(G.qTimer); clearTimeout(G.askWatch); clearTimeout(G.tickWatch); clearInterval(G.netTick); stopPlayback();
   const old = G.ws; G.ws = null; try { old && old.close(); } catch (e) {} closeTries();
 }

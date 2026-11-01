@@ -638,6 +638,7 @@ function cutQBack() {
     G.cutQ = null;
     if (G.ctxWatch || !G.ws || G.ws.readyState !== 1) return; /* the line closed meanwhile: the reconnect says where we were */
     if ((G.heardN || 0) > c.heardN) { act("step", "The officer spoke after the sound came back: Ara's cut question is not asked again"); return; }
+    if (G.lastBotAt > c.at && sameWords(lastQuestionOf(G.lastBot || "")) === sameWords(c.q)) { act("step", "Ara has said her cut question again since (the reconnect): not asked again"); return; } /* Carverhill's 10:58 PM lock, Oct 31: the note from before the lock outlived the reopen */
     const g = `The phone paused the sound while your last question was playing, so the officer missed part of it. Ask it again now, briefly, in your own words, with no apology: "${c.q}"`;
     act("step", `Sound is back: Ara is asked to put her cut question again ("${c.q.slice(0, 80)}")`);
     sayWatch(c.q, g); askReply(g);

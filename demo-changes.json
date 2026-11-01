@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Oct 31, 11:08 PM",
+      "change": "A cut question is not asked again twice. The note the app keeps when the phone pauses the sound mid-question now clears when the line ends (the reconnect re-puts the question), and stands down when Ara has already said that question again since. The state machine tolerates a reply request sent while the last reply's sound is still playing.",
+      "area": "voice (voice.js cutQBack, voiceline.js resetLine, machine.js)",
+      "requestedBy": "Carverhill",
+      "why": "His 10:55 PM call (Oct 31): after a 25 s lock the line reopened and Ara repeated her question, then 12 s later the app asked her to repeat it again from the note made before the lock."
+    },
+    {
       "date": "Oct 31, 10:42 PM",
       "change": "State machine phase 2 on preview-sm: the line and Ara parts are now the app's truth there. The app sends their events itself (line opened, ended, down, a line test, a reply asked for, started, sounding, done, played out) and every part of the app asks lineState()/araState()/downAt() instead of reading G.responding, G.audioOn, G.probing, G.downAt or the line meaning of G.status (about 75 reads in voiceline.js, voice.js, heard.js and voiceforms.js). On the main preview the same readers answer from the flags, so nothing changes there. Timers that watched for the same line now use the line number. G.stalled (written, never read) removed. The machine's Ara part gained a draining state (reply done, sound still playing). New check \"State machine phase 2 (Nov 1)\" runs on preview-sm.",
       "area": "voice (preview-sm.html, voiceline.js, voice.js, heard.js, voiceforms.js, machine.js)",
