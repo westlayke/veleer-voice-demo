@@ -675,20 +675,22 @@ function micLetGo() {
   return true;
 }
 // After a lock: start the sound and mic afresh (see openAudio); if the phone refuses (no running sound in a moment), the old ones stay
-async function restartAudio(why) {
+async function restartAudio(why, o = {}) {
   const oldCtx = G.ctx, oldStream = G.stream, oldOut = G.out, oldAn = G.outAn, oldNode = G.node;
-  stopPlayback(); G.buf = []; // the sound and mic waits are left alone: their ticks end by themselves once the old context and stream are replaced (zeroing G.micMutedAt here ended a call at the unlock: Oct 26, 10:53 AM)
+  stopPlayback(); G.buf = [];
+  if (o.closeFirst) { try { oldStream && oldStream.getTracks().forEach(t => t.stop()); } catch (e) {} try { oldCtx && oldCtx.close(); } catch (e) {} } /* a dead engine is closed before the fresh one opens (Nov 1: opened beside it, the fresh one had a dead clock too) */ // the sound and mic waits are left alone: their ticks end by themselves once the old context and stream are replaced (zeroing G.micMutedAt here ended a call at the unlock: Oct 26, 10:53 AM)
   try {
     if (!await openAudio()) throw new Error("not opened");
     const ctx = G.ctx; for (let i = 0; i < 15 && ctx.state !== "running"; i++) { try { await ctx.resume(); } catch (e) {} await new Promise(r => setTimeout(r, 100)); }
     if (ctx.state !== "running") throw new Error("sound " + ctx.state);
-    try { oldStream && oldStream.getTracks().forEach(t => t.stop()); } catch (e) {} try { oldCtx && oldCtx.close(); } catch (e) {}
+    if (!o.closeFirst) { try { oldStream && oldStream.getTracks().forEach(t => t.stop()); } catch (e) {} try { oldCtx && oldCtx.close(); } catch (e) {} }
     if (typeof linePrep === "function") linePrep();
     G.audioRestartAt = Date.now();
     act("step", why ? `Sound and mic started afresh ${why}` : "Sound and mic started afresh after the lock, so Ara comes back on the speaker the call started on, not the earpiece");
     return true;
   } catch (e) {
     try { G.ctx && G.ctx !== oldCtx && G.ctx.close(); } catch (x) {} try { G.stream && G.stream !== oldStream && G.stream.getTracks().forEach(t => t.stop()); } catch (x) {}
+    if (o.closeFirst) { act("step", "Couldn't start the sound afresh " + (why || "") + " (" + String(e && e.message || e).slice(0, 60) + "): the dead engine was closed first, so there is no sound to keep"); return false; }
     G.ctx = oldCtx; G.stream = oldStream; G.out = oldOut; G.outAn = oldAn; G.node = oldNode; if (oldCtx && oldCtx.state !== "running") oldCtx.resume().catch(() => {});
     act("step", "Couldn't start the sound afresh " + (why || "after the lock") + " (" + String(e && e.message || e).slice(0, 60) + "): keeping the old sound and mic");
     return false;
@@ -838,7 +840,7 @@ function resetCall() {
   G.unheard = null;
   G.unheardResp = 0;
   G.cutQ = null;
-  G.clockSeen = null; G.clockStuckAt = 0;
+  G.clockSeen = null; G.clockStuckAt = 0; G.clockStuckN = 0; G.clockGaveUp = false;
   G.pauseBackAt = 0; clearTimeout(G.pauseWatch);
   G.resend = null;
   if (G.silentWait) { clearTimeout(G.silentWait.still);
@@ -1114,7 +1116,8 @@ function resendCheck() {
   G.resend = null; act("step", "Late copy cut: the line was already heard with sound after the phone asked for it again"); send({ type: "response.cancel" }); stopResp(G.respSeq); G.dropNext = true;
 }
 function sentInstructions() { G.sentRules = rulesKey(); G.sentCtx = ctxNow(); return grokInstructions(); }
-const playingLeft = () => G.ctx && G.playHead > G.ctx.currentTime + 0.05 ? G.playHead - G.ctx.currentTime : 0;
+const playingRaw = () => G.ctx && G.playHead > G.ctx.currentTime + 0.05 ? G.playHead - G.ctx.currentTime : 0; /* audio scheduled past the clock */
+const playingLeft = () => typeof clockDead === "function" && clockDead() ? 0 : playingRaw(); /* ...that will be heard: none while the clock is dead (heard.js clockWatch) */
 function flushQueued() {
   clearTimeout(G.qTimer); G.qTimer = null;
   if (!G.qInstr && !G.qCreate) return;

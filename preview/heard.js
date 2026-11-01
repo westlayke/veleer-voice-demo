@@ -12,23 +12,32 @@ function outLevel() {
   const d = new Float32Array(a.fftSize); a.getFloatTimeDomainData(d); let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] * d[i];
   return Math.sqrt(s / (d.length / 4));
 }
-function heardTick() { if (!G.live || !G.ctx || !(playingLeft() > 0)) { G.clockSeen = null; return; } clockWatch(); const l = outLevel(); if (l > (G.outPeak || 0)) G.outPeak = l; if (l > OUT_QUIET) G.soundEver = true; }
+function heardTick() { if (!G.live || !G.ctx || !(playingRaw() > 0)) { G.clockSeen = null; return; } clockWatch(); const l = outLevel(); if (l > (G.outPeak || 0)) G.outPeak = l; if (l > OUT_QUIET) G.soundEver = true; }
 /* the phone's sound engine can say it is running while its clock stands still (Carverhill's 10:02 PM call, Oct 31: after a 15 s lock the fresh engine
-   never advanced, 30 s of Ara's audio queued on it, nothing heard). Queued audio with a clock that hasn't moved for CLOCK_STILL_MS: start the sound
-   and mic afresh (once per call), then Ara is asked to say her last line again, in her own words; the app says nothing itself */
-const CLOCK_STILL_MS = 1500;
+   never advanced, 30 s of Ara's audio queued on it, nothing heard). Queued audio with a clock that hasn't moved for CLOCK_STILL_MS: the dead engine is
+   closed and the sound and mic started afresh, up to CLOCK_RESTARTS times a call (his 11:21 PM and 12:02 AM calls, Nov 1: the one fresh engine had a
+   dead clock too, and the call sat on "Speaking" with nothing heard), then Ara says her last line again word for word (asked for it in her own words
+   she answered "Silence." four times out of four). While the clock is dead nothing counts as playing: the screen says Listening and the app's waits
+   for her sound stand down */
+const CLOCK_STILL_MS = 1500, CLOCK_RESTARTS = 3;
+function clockDead() { const s = G.clockSeen; return !!(s && G.ctx && s.ctx === G.ctx && G.ctx.currentTime === s.t && Date.now() - s.at >= CLOCK_STILL_MS); }
 function clockWatch() {
   const now = Date.now(), t = G.ctx.currentTime, seen = G.clockSeen;
   if (!seen || seen.ctx !== G.ctx || t !== seen.t) { G.clockSeen = { ctx: G.ctx, t, at: now }; return; }
-  if (now - seen.at < CLOCK_STILL_MS || G.ctx.state !== "running" || G.clockStuckAt) return;
-  G.clockStuckAt = now; const line = G.lastBot || "";
-  act("step", `The phone's sound clock stood still for ${((now - seen.at) / 1000).toFixed(1)} s with ${playingLeft().toFixed(1)} s of Ara's audio queued (sound ${G.ctx.state}): nothing was heard`);
-  if (typeof audioRetry !== "function" || !audioRetry("after the sound clock stood still")) { act("step", "The sound can't be started afresh again this call"); return; }
-  setTimeout(() => { if (!G.live || !line) return;
-    const q = typeof lastQuestionOf === "function" ? lastQuestionOf(line) : line;
-    const g = `The phone played none of your last reply, so the officer heard nothing. Say it again now, in your own words, with no apology: "${line.slice(0, 300)}"`;
-    act("step", `Sound started afresh: Ara is asked to say her last line again ("${line.slice(0, 80)}")`);
-    if (typeof sayWatch === "function" && /\?\s*$/.test(q)) sayWatch(q, g); askReply(g); }, 1200);
+  if (now - seen.at < CLOCK_STILL_MS || G.ctx.state !== "running" || (G.clockStuckAt && now - G.clockStuckAt < CLOCK_STILL_MS + 2000)) return;
+  const n = G.clockStuckN || 0, line = G.lastBot || "";
+  if (n >= CLOCK_RESTARTS) { if (!G.clockGaveUp) { G.clockGaveUp = true; act("step", `The phone's sound clock stood still again with ${playingRaw().toFixed(1)} s of Ara's audio queued: ${CLOCK_RESTARTS} fresh starts had dead clocks too, so the sound can't be started afresh again this call`); } return; }
+  G.clockStuckAt = now; G.clockStuckN = n + 1;
+  act("step", `The phone's sound clock stood still for ${((now - seen.at) / 1000).toFixed(1)} s with ${playingRaw().toFixed(1)} s of Ara's audio queued (sound ${G.ctx.state}${n ? `; fresh start ${n} of ${CLOCK_RESTARTS} had a dead clock too` : ""}): nothing was heard`);
+  if (typeof restartAudio !== "function") return;
+  act("step", `Starting the sound and mic afresh after the sound clock stood still (${n + 1} of ${CLOCK_RESTARTS}; the dead engine is closed first)`);
+  restartAudio("after the sound clock stood still", { closeFirst: true }).then(ok => {
+    if (!G.live) return;
+    if (!ok) { interrupted("sound couldn't be started afresh after its clock stood still", "Your phone's sound engine stopped and couldn't be started again."); return; }
+    if (!line) return;
+    setTimeout(() => { if (!G.live || !line) return;
+      act("step", `Sound started afresh: Ara says her last line again, word for word ("${line.slice(0, 80)}")`);
+      G.lastBot = ""; /* else the repeat is cut as a doubled reply */ forceSay(line); }, 1200); });
 } /* the phone has produced sound in this call: a typed run never does */
 setInterval(heardTick, 250);
 function heardProblem(r) {

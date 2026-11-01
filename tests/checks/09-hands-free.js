@@ -1016,19 +1016,25 @@ test("Shadow machine findings (Oct 31): one check on Ara at a time, and a drop e
   await p.waitForTimeout(150);
   ok(!(await p.evaluate(() => G.ynWatch || G.sayWatch)), "a check outlived the drop: " + await live());
 });
-test("Carverhill's 10:02 PM call (Oct 31): a sound engine whose clock stands still with Ara's audio queued is started afresh, and Ara says her last line again", async (p) => {
+test("Carverhill's 10:02 PM call (Oct 31) and 12:02 AM call (Nov 1): a sound engine whose clock stands still with Ara's audio queued is closed and started afresh, up to three times, Ara says her last line again word for word, and a dead clock counts as nothing playing", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
   const n0 = await p.evaluate(() => __sent.length);
-  const ctxN = await p.evaluate(() => { window.__ctx0 = G.ctx; G.audioRetried = false; G.lastBot = "Ask recorded for Roger. The next step is to record the gift. Do you want to do that now, yes or no?";
-    Object.defineProperty(G.ctx, "currentTime", { get: () => 5, configurable: true }); G.playHead = 35; return 1; });
-  await p.waitForTimeout(3800);
-  const log = await p.log();
+  const stick = () => p.evaluate(() => { window.__ctx0 = G.ctx; G.lastBot = "Ask recorded for Roger. The next step is to record the gift. Do you want to do that now, yes or no?"; G.status = "Speaking";
+    Object.defineProperty(G.ctx, "currentTime", { get: () => 5, configurable: true }); G.playHead = 35; });
+  await stick();
+  ok(await p.evaluate(() => { G.clockSeen = { ctx: G.ctx, t: 5, at: Date.now() - 2000 }; return clockDead() && playingLeft() === 0 && playingRaw() === 30; }), "a dead clock still counted as playing: " + JSON.stringify(await p.evaluate(() => [clockDead(), playingLeft(), playingRaw()])));
+  await p.waitForTimeout(4200);
+  ok(await p.evaluate(() => G.status !== "Speaking"), "the screen kept Speaking on a dead clock");
+  let log = await p.log();
   ok(/sound clock stood still for \d\.\d s with 30\.0 s of Ara's audio queued/.test(log), "the still clock wasn't noticed: " + log.split("\n").slice(-6).join(" | ").slice(0, 400));
-  ok(/Starting the sound and mic afresh after the sound clock stood still/.test(log) && await p.evaluate(() => G.ctx !== window.__ctx0 && G.playHead === 0), "the sound wasn't started afresh");
-  const c = await p.evaluate((n) => __sent.slice(n).map(s => JSON.parse(s)).filter(x => x.type === "response.create" && x.response && x.response.instructions).map(x => x.response.instructions), n0);
-  ok(c.some(g => /played none of your last reply/.test(g) && /record the gift/.test(g)), "Ara wasn't asked to say her last line again: " + JSON.stringify(c).slice(0, 300));
-  ok(await p.evaluate((n) => !__sent.slice(n).some(s => s.includes("force_message")), n0) && await p.evaluate(() => !!G.sayWatch), "the app said the line itself, or no check on Ara's repeat");
-  ok(ctxN === 1, "");
+  ok(/Starting the sound and mic afresh after the sound clock stood still \(1 of 3; the dead engine is closed first\)/.test(log) && await p.evaluate(() => G.ctx !== window.__ctx0 && G.playHead === 0 && window.__ctx0.state === "closed"), "the sound wasn't started afresh with the dead engine closed first: " + log.split("\n").slice(-4).join(" | ").slice(0, 300));
+  ok(await p.evaluate((n) => __sent.slice(n).some(s => s.includes("force_message") && s.includes("record the gift")), n0) && /says her last line again, word for word/.test(log), "Ara wasn't given her last line to say again word for word: " + log.split("\n").slice(-4).join(" | ").slice(0, 300));
+  ok(await p.evaluate((n) => !__sent.slice(n).some(s => /played none of your last reply/.test(s)), n0), "Ara was still asked for the line in her own words");
+  // the fresh engine's clock is dead too, twice more: each is closed and another started; the fourth time the app gives up on fresh starts
+  for (const k of [2, 3]) { await stick(); await p.waitForTimeout(4300); log = await p.log();
+    ok(new RegExp(`fresh start ${k - 1} of 3 had a dead clock too`).test(log) && new RegExp(`afresh after the sound clock stood still \\(${k} of 3`).test(log) && await p.evaluate(() => G.ctx !== window.__ctx0), `fresh start ${k} didn't happen: ` + log.split("\n").slice(-4).join(" | ").slice(0, 300)); }
+  await stick(); await p.waitForTimeout(4300); log = await p.log();
+  ok(/3 fresh starts had dead clocks too, so the sound can't be started afresh again this call/.test(log) && await p.evaluate(() => G.ctx === window.__ctx0 && G.live), "a fourth dead clock wasn't given up on: " + log.split("\n").slice(-3).join(" | ").slice(0, 300));
 });
 test("State machine phase 2 (Nov 1): on preview-sm the line and Ara parts answer from the app's own events, and agree with the old flags", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);

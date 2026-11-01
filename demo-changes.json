@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 12:18 AM",
+      "change": "A sound engine whose clock stands still after a lock is closed and started afresh up to three times a call (was once, with the dead engine left open), and Ara then says her last line again word for word (asked for it in her own words she said \"Silence.\"). While the clock is dead nothing counts as playing: the screen says Listening and the app stops waiting on sound that can't come.",
+      "area": "Voice",
+      "requestedBy": "Carverhill",
+      "why": "His 12:02 AM call (Nov 1) on the phase 2 page: after a forced lock the fresh engine's clock was dead, the one restart gave a second dead clock, and the screen said Speaking for 30 s while he heard nothing until the call ended as a quiet one."
+    },
+    {
       "date": "Oct 31, 11:56 PM",
       "change": "A freshly started mic the phone lets go of 20 s later (nothing said into it) is started afresh once more, silently, instead of ending the call and showing Carry on; a second ending still ends the call. Calls on the phase 2 page now log as preview-sm.",
       "area": "Voice",

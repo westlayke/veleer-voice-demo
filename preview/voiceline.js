@@ -155,7 +155,7 @@ function idleCheck() { if (typeof keepAlive === "function") keepAlive(); turnWat
   // Oct 27 (Carverhill), back on Oct 28 after the 1.0 reset dropped it: a spoken "Ara's taking a moment." instead of the ping the first time a reply is slow; the ping only repeats after it. While reconnecting the recorded lines speak at 5 s, so no ping
   if (G.live && G.asked && Date.now() - (G.askedAt || 0) >= TICK_MS && Date.now() - (G.tickAt || 0) >= TICK_MS) { G.tickAt = Date.now(); if (!quietSay("a reply")) { cue("wait"); vlog("still working: tick"); } } /* the quiet clock keeps the recordings coming every 5 s after this (Oct 30) */
   // "Speaking" is what the officer hears, not what arrived: once nothing is scheduled to play, the screen goes back to Listening (Oct 25: "I see Speaking but hear nothing")
-  if (G.status === "Speaking" && G.ctx && G.playHead <= G.ctx.currentTime && !G.sources.length) { G.status = "Listening"; paintCall(); }
+  if (G.status === "Speaking" && G.ctx && !(playingLeft() > 0) && (!G.sources.length || clockDead())) { G.status = "Listening"; paintCall(); } /* a dead clock: its queued audio will never be heard (Nov 1) */
   if (!G.live || G.idleEnding || G.soundPausedAt || G.micMutedAt || G.hiddenAt || !lineUp()) return;
   const playing = araBusy() || (G.ctx && G.playHead > G.ctx.currentTime);
   if (playing) { busy(); return; }
