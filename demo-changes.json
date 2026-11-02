@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 9:34 PM",
+      "change": "A slow line test alone no longer reconnects a line that is working. Four seconds after a scripted line with nothing back, the phone tests the line with a small web request; when that request was slow but the voice line had delivered messages since the scripted line went (the service was answering a save call first), the line is now kept and the 8 s fallback stands, instead of an 8 to 9 s reconnect.",
+      "area": "Connection",
+      "requestedBy": "Carverhill",
+      "why": "9:30 PM call, Nov 1: two reconnects right after saves with the line working; \"yes look into it\", then \"Build it\"."
+    },
+    {
       "date": "Nov 1, 9:19 PM",
       "change": "A state said as part of an entity's name is not its campaign. \"North Dakota C4\" in answer to \"Which entity?\" had been taken as the North Dakota campaign too, so the campaign question never came. The app now reads the officer's words for the campaign with entity names removed, in the fill from the answer, the \"just said\" shortcut and the evidence guard alike; \"the Pennsylvania C4, Pennsylvania\" still counts as a campaign answer.",
       "area": "Voice: forms",

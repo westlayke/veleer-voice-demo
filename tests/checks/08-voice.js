@@ -846,6 +846,12 @@ test("Scripted line (Oct 29): nothing back 4 s after it gets \"Ara's taking a mo
   const forced = await p.evaluate((n) => __sent.slice(n).map(s => { try { return JSON.parse(s); } catch (e) { return {}; } }).filter(e => e.item && e.item.type === "force_message").map(e => e.item.content[0].text), n);
   ok(forced.length === 2 && forced[1] === "Sorry, I lost you for a moment. Task added for Ruth. What's next?" && /the app says the scripted line the old line never started/.test(await p.log()), "the fresh line didn't say the scripted line the old one never started: " + JSON.stringify(forced));
   ok(await p.evaluate(() => __said.length >= 1 && __said[0] === "slow: Ara's taking a moment." && __said.slice(1).every(s => QUIET_LINES.some(q => s === ": " + q))), "the phone's line before the fresh line is wrong (the quiet clock may add its lines after it, Oct 30): " + JSON.stringify(await p.evaluate(() => __said)));
+  // a slow web test on a line that answered after the scripted line went (9:30 PM call, Nov 1: the service was answering save_form first): no fresh line, the fallback stands
+  await p.evaluate(() => { clearTimeout(G.forceTimer); clearTimeout(G.forceTick); G.forced = null; G.lateForced = null; G.pendingForce = null; G.slowSaid = false; G.cancelAt = 0; __busy(false); window.__ws2 = __ws; window.__said = []; });
+  await p.evaluate(() => forceSay("Task added for Ruth. What's next?")); await p.waitForTimeout(500);
+  await p.evaluate(() => { __ws.onmessage({ data: JSON.stringify({ type: "conversation.item.added", item: { type: "message" } }) }); }); await p.waitForTimeout(6000);
+  ok(await p.evaluate(() => __ws === __ws2 && G.live), "a slow web test reconnected a voice line that had answered since the scripted line went: " + (await p.log()).slice(-600));
+  ok(/The voice line answered \d+ s ago, after the scripted line went \(test request no answer in 2.5 s\): the line is kept, the fallback stands/.test(await p.log()), "the kept line wasn't logged: " + (await p.log()).slice(-600));
   await p.evaluate(() => { window.fetch = window.__fetch0; window.__noAutoForce = false; });
 });
 test("Scripted line (5:59 PM call, Oct 29): the app fills a pick-list from the answer; a reply with no sound in 6 s counts as not started; Ara's own question stands only within 12 s", async (p) => {

@@ -713,6 +713,9 @@ function forceTick(now) {
     act("step", `Nothing back ${TICK_MS / 1000} s after a scripted line: the phone says Ara's taking a moment and tests the line (${forcedTrace(f)})`);
     pingMs(EARLY_PING_MS).then(ms => { if (!G.live || G.forced !== f || f.started || lineN() !== ln || !lineUp()) return;
       if (typeof ms === "number" && ms <= SLOW_LINE_MS) return; // a healthy line: the voice service is just slow, the 8 s fallback still applies
+      /* the voice line has carried messages since the scripted line went (the service was answering a tool call first): it is up, however slow the web test;
+         the 8 s fallback stands (9:30 PM call, Nov 1: two 8 s reconnects right after saves, each with the line's reply to save_form half a second old) */
+      if (G.lastMsg > f.at) { act("step", `The voice line answered ${Math.round((Date.now() - G.lastMsg) / 1000)} s ago, after the scripted line went (test request ${typeof ms === "number" ? ms + " ms" : ms}): the line is kept, the fallback stands`); return; }
       clearTimeout(G.forceTimer); G.forced = null; G.pendingForce = f.text; /* the fresh line asks the pending question itself (formPosition), so the scripted line isn't lost */
       act("step", `Scripted line not started after ${TICK_MS / 1000} s on a slow line (test request ${typeof ms === "number" ? ms + " ms" : ms}): fresh line`); G.retried = 0; reconnect("the line is too slow"); }); }, now ? 0 : TICK_MS);
 }
