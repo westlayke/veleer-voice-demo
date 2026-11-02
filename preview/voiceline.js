@@ -199,7 +199,7 @@ const idleAskMs = () => idleMs() - IDLE_ASK_BEFORE_MS;
 function idleStart() {
   G.idleEnding = true; G.idleAt = Date.now(); G.idleAsked = Date.now(); G.goodbye = false; vlog(`${idleAskMs() / 1000} seconds quiet: asking whether to hang up`);
   act("step", `Quiet for ${idleAskMs() / 1000} s: Ara asks whether to hang up, yes or no`);
-  forceSay(HANGUP_Q);
+  forceSay(HANGUP_Q, undefined, undefined, 0, true); /* app mechanics, kept whichever way the scripted-lines setting goes */
   G.idleTimer = setTimeout(() => idleGoodbye("no answer in " + IDLE_ASK_BEFORE_MS / 1000 + " s"), IDLE_ASK_BEFORE_MS);
 }
 // the officer's answer to HANGUP_Q (from the transcript): a yes ends the call with the goodbye; anything else was already a call-off (speech_started)
@@ -215,7 +215,7 @@ function idleGoodbye(why) {
   const form = typeof V !== "undefined" && V && ACTIONS[V.action], text = form ? GOODBYE_FORM_TEXT : GOODBYE_TEXT, standIn = form ? HANGUP_FORM_TEXT : HANGUP_TEXT;
   act("step", `Hanging up (${why}): Ara says goodbye first`); vlog("goodbye: " + why);
   if (araBusy() && !G.forced) { send({ type: "response.cancel" }); G.dropNext = true; } /* her own answer to the yes gives way to the goodbye line */
-  forceSay(text);
+  forceSay(text, undefined, undefined, 0, true);
   // her line not started in time: the phone's recording stands in (Oct 28 4:16 PM the forced line never came), then the hang-up
   G.idleTimer = setTimeout(() => { if (!G.live) return;
     if (G.forced && G.forced.text === text && !G.forced.started) { G.forced = null; clearTimeout(G.forceTimer); act("step", "Ara's goodbye didn't play: the phone's recording stands in");
@@ -409,6 +409,9 @@ async function openAgain(lock) {
 // covers a late yes after a save. reconnectBy "app" (Settings, or window.__reconnectBy in the harness) keeps the scripted line: both ways measured by Patient Pat.
 const CONTEXT_ASKS = CHECK_RULES.ctxWatch.asks, OPEN_Q = /what (would you like|do you want) to do|what'?s next|what next/i; /* "What next?" too (Carverhill's 2:52 PM call, Oct 30) */
 const RECONNECT_BY = () => window.__reconnectBy || (typeof S !== "undefined" && S.settings && S.settings.reconnectBy) || "ara";
+// which lines the app scripts (Carverhill, Nov 1, the test of the middle path): "all" as before, or "fewer" = only the read-back, the amount check and the
+// save line; every other line goes to Ara as guidance with the say-check (one nudge). Settings on the preview, or window.__scripted in the harnesses.
+const SCRIPTED = () => window.__scripted || (typeof S !== "undefined" && S.settings && S.settings.scripted) || "all";
 function contextWatch(kind, w) { checkStart("ctxWatch", { what: kind, need: { who: w.who || "", q: w.q }, seq: G.respSeq || 0, line: w.line, guide: w.guide }); } /* seq: the reply this was armed in (a tool call's) is not the answer */
 function contextAsk(kind, w) {
   const guide = `The line was down and is back. Say sorry in a few words, then say in one sentence where we were${w.who ? ` (name ${w.who})` : ""}: ${(w.q && w.line.endsWith(w.q) ? w.line.slice(0, -w.q.length) : w.line).trim().replace(/"/g, "'")} ${G.spokeInGap ? " Say too that you missed what they said while the line was down." : ""} Then ask this question word for word: "${w.q}". Never ask what they'd like to do or what's next; nothing else.`;
@@ -686,16 +689,19 @@ function micMuted(tr) {
 /* ---------- scripted lines: xAI speaks the exact words (force_message), then Ara carries on ---------- */
 // Used where the words matter and Ara used to stop or change them (Oct 24: "Say only ..." left her silent mid-form).
 // If xAI doesn't play it, Ara is asked to say it instead (fallback), so the officer always hears it.
-function forceSay(text, then, fallback, waited = 0) {
+function forceSay(text, then, fallback, waited = 0, keep = false) {
   if (!G.live) { G.pendingForce = null; return; }
+  if (!waited && !keep && SCRIPTED() === "fewer") { /* the middle path: Ara says it, the app checks she did */
+    const g = `Say this now, word for word, with nothing before or after it: "${text}"${then ? " " + then : ""}`;
+    act("step", `Handed to Ara to say herself (scripted lines: read-back and save only): "${text.slice(0, 100)}"`); sayWatch(text, g); guide(g); return; }
   if (!waited) { G.pendingForce = text; G.answeredAt = Date.now(); /* answeredAt: the officer's words up to now are answered by this line (turnAnswered) */
     /* a new scripted line stands the late-copy watch down: the watch goes by words, and the app can ask the same question again on purpose ($18 real-Ara
        run, Nov 1: "When is the planned ask date, and for how much?" asked after the entity answer was cut as a late copy of the resent line; 50 s of silence) */
     if (G.resend) { if (G.resend.viaForce && !G.resend.sent) G.resend.sent = true; else { G.resend = null; vlog("a new scripted line: the late-copy watch stands down"); } } }
-  if ((replyBusy() || playingLeft() > 0 || G.forced || Date.now() - (G.cancelAt || 0) < CANCEL_SETTLE_MS) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
+  if ((replyBusy() || playingLeft() > 0 || G.forced || Date.now() - (G.cancelAt || 0) < CANCEL_SETTLE_MS) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200, keep), 200); return; }
   // the reply just finished already said it (the engine answered the tool result with the question itself): no second copy (OpenAI, Oct 27: "What's the first name?" three times)
   if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text), text)) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
-  G.forced = { at: Date.now(), events: [], text, then, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false, itemId: null, byId: false, ids: {} };
+  G.forced = { at: Date.now(), events: [], text, then, keep, fallback: fallback || `The app's own line didn't play. Say this now, word for word, with nothing before or after it: "${text}"`, started: false, itemId: null, byId: false, ids: {} };
   if (G.pendingForce === text) G.pendingForce = null; /* itemId: the id xAI gives the line when it accepts it; the reply carrying that id on its item and audio is the line (real-Ara run, Oct 30: 30 of 30; an id of our own is not kept) */
   smSend("ARA_ASKED");
   if (PROV().forceItem) send({ type: "conversation.item.create", item: { type: "force_message", role: "assistant", content: [{ type: "output_text", text }], interruptible: true } });

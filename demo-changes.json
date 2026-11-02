@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 11:33 PM",
+      "change": "A switch for the scripted-lines test (the middle path): Settings > Voice assistant > Scripted lines, \"All, as now\" or \"Read-back, amount check and save line only\". With the second choice every other line the app used to say in Ara's voice (the greeting on a mic tap, the hands-free line, the form questions, cancel, undo, back, repeat, the where-we-were line) goes to Ara as guidance to say word for word, with the app's check and one nudge; the read-back, the amount check, the save line, the hang-up question and goodbye, and a repeat of a line already said stay scripted. Nothing changes until the choice is made. Patient Pat and the real-Ara run take the same choice as an input, and their readouts count the lines handed to Ara and what the check saw.",
+      "area": "Voice: scripted lines",
+      "requestedBy": "Carverhill",
+      "why": "\"How do we run a test to test out the impact of taking your middle path on the scripted lines question?\" then \"Yes\" to building the switch and running both arms once 1.1 was live"
+    },
+    {
       "date": "Nov 1, 11:10 PM",
       "change": "Release 1.1 goes live: the Nov 1, 9:34 PM ET preview build becomes the live page (117 changes since release 1.0, listed below). Checked first: 168 of 168 checks on the live page, Patient Pat (100 conversations: 4.2 asks per 10 minutes, 91 reached Closed Won) and a real-Ara run (20 conversations, 19 saved, the one miss a known harness gap). The live copy again leaves out the Hey Ara start-up address.",
       "area": "Release",

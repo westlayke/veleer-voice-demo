@@ -52,6 +52,9 @@ on:
       page:
         description: "Page Ara talks to: preview-flow.html (the preview) or index.html (the live page)"
         default: "preview-flow.html"
+      scripted:
+        description: "The app's scripted lines: all (as now) or fewer (only the read-back, the amount check and the save line; Ara says the rest herself, checked)"
+        default: "all"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -108,6 +111,7 @@ jobs:
           SOUNDLESS: ${{ inputs.soundless }}
           DROP_AFTER_SAVE: ${{ inputs.drop_after_save }}
           PAGE: ${{ inputs.page }}
+          SCRIPTED: ${{ inputs.scripted }}
         run: node tests/ara-consistency/run.js
       - uses: actions/upload-artifact@v4 # spoken runs: the sound clips on their own (one conversation per flow, officer + Ara + noise, with transcripts), to download from the run page and listen to
         if: always() && inputs.spoken == '1'

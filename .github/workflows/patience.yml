@@ -32,6 +32,9 @@ on:
       entity:
         description: "Entity Pat names, by spoken name (e.g. National C4); blank = a different one per conversation; old = the pre-Oct 31 answer"
         default: ""
+      scripted:
+        description: "The app's scripted lines: all (as now) or fewer (only the read-back, the amount check and the save line; Ara says the rest herself, checked)"
+        default: "all"
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -63,6 +66,7 @@ jobs:
           RECONNECT: ${{ inputs.reconnect }}
           DROP_AFTER_SAVE: ${{ inputs.drop_after_save }}
           ENTITY: ${{ inputs.entity }}
+          SCRIPTED: ${{ inputs.scripted }}
           PAGE: ${{ inputs.page }}
         run: MAX_MS=$(( ${MAX_MIN:-30} * 60000 )) node tests/patience/run.js
       - name: Report (in the log, since artifacts can't be fetched from the cloud session; the summary last, so a tail of the log has it)

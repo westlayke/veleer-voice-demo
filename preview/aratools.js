@@ -38,7 +38,7 @@ const TOOL_HANDLERS = {
     if (t.error) { toolReply(callId, { ok: false, error: t.error }); return; }
     const c = t.contact, was = c.capacity;
     if (!r) { askRating(callId, c.first); return; }
-    if (was === r) { toolReply(callId, { ok: true, saved: true, already: true, contact: nameOf(c), rating: capSaid(r), said: "The app said this itself; never ask about the rating again.", ask_exactly: `${c.first} is already rated ${capSaid(r)}. ${nextStepLine(c)}` }); return; } /* Oct 28: a resumed line re-asked a saved rating */
+    if (was === r) { toolReply(callId, { ok: true, saved: true, already: true, contact: nameOf(c), rating: capSaid(r), said: "The app said this itself; never ask about the rating again.", keep: true, ask_exactly: `${c.first} is already rated ${capSaid(r)}. ${nextStepLine(c)}` }); return; } /* Oct 28: a resumed line re-asked a saved rating */
     // a rating the officer never said (Oct 25: "Let's take the next step" became "Rate Joseph A?"): the app asks them instead
     if (!data.confirmed && !officerRated()) { vlog(`${name}: rating ${r} not from the officer; asking`); toolReply(callId, { ok: false, saved: false, error: "The officer hasn't said a rating; the app is asking them which. After the answer, call set_capacity_rating again with that rating.", ask_exactly: rateQ(c.first) }); return; }
     S.sel.contact = c.id; if (S.screen !== "contact") go("contact"); else render();
@@ -46,7 +46,7 @@ const TOOL_HANDLERS = {
     if (!data.confirmed) { toolReply(callId, { ok: true, contact: nameOf(c), now: was ? capSaid(was) : "not rated", will_become: capSaid(r), said: "The app asked the officer this itself. After their yes, call set_capacity_rating again with confirmed true.", ask_exactly: `Set ${c.first}'s capacity to ${capSaid(r)}, yes or no?` });
       return; } /* a selection that saves on its own is confirmed as a yes-or-no decision (Carverhill, Oct 30) */
     c.capacity = r; log(`Capacity rated ${r} (${CAPACITY[r]})`, { contactId: c.id }); save(); render(); toast(`${nameOf(c)}: capacity ${r} · ${CAPACITY[r]}`);
-    toolReply(callId, { ok: true, saved: true, rating: capSaid(r), said: "The app said the save and the next step itself; wait for the officer's answer.", ask_exactly: `${c.first} is rated ${capSaid(r)}. ${nextStepLine(c)}` }); return;
+    toolReply(callId, { ok: true, saved: true, rating: capSaid(r), said: "The app said the save and the next step itself; wait for the officer's answer.", keep: true, ask_exactly: `${c.first} is rated ${capSaid(r)}. ${nextStepLine(c)}` }); return;
   },
   // "What's the next step?" for a contact or opportunity: the app says it, word for word (Carverhill, Oct 28)
   say_next_step(callId, data, name) {

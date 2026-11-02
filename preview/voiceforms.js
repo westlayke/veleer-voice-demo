@@ -194,14 +194,14 @@ function grokSaved(action, r, d = {}) {
   if (G.hfTry) { /* the undo reminder once per conversation (every save repeating it got tiresome, Oct 24): the flag is set in heard.js once the line was heard with sound */
     G.hfTry.force = spoken; G.hfTry.say = `The app saved it: ${ACTIONS[action].saved.toLowerCase()}${who ? " for " + who : ""}.${closed} Say in a few words that it's saved (for example "${savedShort(action, who, d)}")${r && r.note ? `, then state (don't ask) "${r.note}"` : ""}, then carry on.`; return; }
   G.saveAck = { at: Date.now(), action, who, next: `say exactly: "${next}"` };
-  act("step", "The app says the save and the next step itself"); forceSay(spoken);
+  act("step", "The app says the save and the next step itself"); forceSay(spoken, undefined, undefined, 0, true);
 }
 // a late yes after the save with no question on record: Ara says it was already saved and asks the next step herself (checked, retried), or the app does
 function lateYesNote() {
   const next = G.lastSaved.nextLine, q = lastQuestionOf(next);
   if (RECONNECT_BY() === "ara") { const guide = `That form was already saved (${G.savedLine}) and closed; nothing to save. Say in a few words that it was already saved, then ask this question word for word: "${q}". Never ask what's next or what they'd like to do; nothing else.`;
     contextWatch("late-yes", { who: "", q, line: `That was already saved. ${next}`, guide }); return guide; }
-  act("step", "The app says it was already saved and the next step itself"); forceSay(`That was already saved. ${next}`);
+  act("step", "The app says it was already saved and the next step itself"); forceSay(`That was already saved. ${next}`, undefined, undefined, 0, true);
   return `That form was already saved (${G.savedLine}) and closed; the app is saying so itself now, with the next step. Say nothing; wait for the officer.`;
 }
 // "Planned ask saved for Jen." (the item's name once, not "Saved: Planned ask saved")
@@ -281,7 +281,8 @@ function sayCheck(r) {
   const w = checkNow("sayWatch"); if (!w || !G.live) return;
   if ((G.heardN || 0) > w.heardN) { checkEnd("", "sayWatch"); return; }
   if (!replyCounts(r)) return; const bot = G.bot.trim();
-  if (wordOverlap(sameWords(lastQuestionOf(bot)), sameWords(w.q)) >= 0.6 && /\?\s*$/.test(bot)) { act("step", `Ara asked the question herself${w.tries > 1 ? " after one nudge" : ""}: "${w.q}"`); checkEnd("", "sayWatch"); return; }
+  const asksQ = /\?\s*$/.test(w.q), single = asksQ && lastQuestionOf(w.q) === w.q.trim(); /* a single question is judged on the reply's last sentence; a line handed to Ara (the middle path: a statement, or sentences ending in a question) on the whole reply, as a scripted line said in her own words is (saidLine) */
+  if (single ? wordOverlap(sameWords(lastQuestionOf(bot)), sameWords(w.q)) >= 0.6 && /\?\s*$/.test(bot) : saidLine(sameWords(bot), sameWords(w.q), w.q) && (!asksQ || /\?\s*$/.test(bot))) { act("step", `Ara asked the question herself${w.tries > 1 ? " after one nudge" : ""}: "${w.q}"`); checkEnd("", "sayWatch"); return; }
   if (w.tries >= CHECK_RULES.sayWatch.asks) { act("step", `Ara's reply still didn't ask "${w.q}" after one nudge ("${bot.slice(0, 80)}"): waiting for the officer`); guardFired("Ara didn't ask the question after a nudge", `"${bot.slice(0, 80)}"`); checkEnd("", "sayWatch"); return; }
   w.tries++; smSend("CHECK_NUDGED"); act("step", `Ara's reply didn't ask "${w.q}" ("${bot.slice(0, 80)}"): nudged once`); guardFired("Ara didn't ask the question she was given", `"${bot.slice(0, 80)}"`);
   const g = `${w.guide} Your last reply ("${bot.slice(0, 100)}") didn't ask it. Ask it now.`; setTimeout(() => { if (G.live && checkNow("sayWatch") === w) askReply(g); }, 0);
@@ -326,7 +327,8 @@ function hfAnnounce() {
   const askedFor = /\b(contact|opportunity|interaction|meeting|task|ask|pledge|gift|payment|report|log|record|create|add|plan|new)\b/i.test(((G.recent || []).filter(l => l.startsWith("Officer: ")).slice(-1)[0] || "")); // "hands-free, then a new contact": no "what would you like to do?" (Oct 25)
   const text = `${line} ${V && ACTIONS[V.action] ? (q ? (q.replace(/^[^:]+: /, "").trim().match(/[^.!?]*\?$/) || [""])[0].trim() : "") : askedFor ? "" : "What would you like to do?"}`.trim();
   const go = hfSwitchLine(on).replace(/^Say "[^"]*"\.?\s*Then,?\s*/, "");
-  forceSay(text, V && !q ? `The app just said "${text}" in your voice; don't say it again. Now ${go.charAt(0).toLowerCase() + go.slice(1)}` : !V && askedFor ? `The app just said "${text}" in your voice; don't say it again and don't ask what they'd like to do: the officer already said. Carry on with it now (open its form and ask for the first missing field).` : null, hfSwitchLine(on));
+  const said = SCRIPTED() === "fewer" ? "Then" : `The app just said "${text}" in your voice; don't say it again.`; /* the middle path: Ara says the line herself, then carries on */
+  forceSay(text, V && !q ? `${said} ${SCRIPTED() === "fewer" ? "" : "Now "}${go.charAt(0).toLowerCase() + go.slice(1)}` : !V && askedFor ? `${said} ${SCRIPTED() === "fewer" ? "don't" : "And don't"} ask what they'd like to do: the officer already said. Carry on with it now (open its form and ask for the first missing field).` : null, hfSwitchLine(on));
 }
 function setHandsFree(on) {
   G.hands = !!on && G.live; G.saveCheck = null; formBack(); act("step", "hands-free " + (G.hands ? "on" : "off")); vlog("hands-free " + (G.hands ? "on" : "off"));
@@ -434,7 +436,7 @@ async function hfSave(callId, data, lead, short) { /* short: only the changed fi
     if (recentSave) guardFired(Date.now() - G.savedAt < SAVE_ECHO_MS ? "save_form within 8 s of a save" : "save_form after a save, officer silent since");
     toolReply(callId, recentSave && Date.now() - G.savedAt < SAVE_ECHO_MS ? { ok: true, saved: true, already: true, status: `The officer repeated their yes; the form was already saved a moment ago (${G.savedLine}) and your confirmation of it is what they are waiting for. Confirm it once, in your words, with the undo offer and what's next; never say "checking on that save".` }
       : recentSave ? (() => { const line = G.savedByWordsLine || `It's saved. ${NEXT_NO_Q}`;
-        forceSay(line);
+        forceSay(line, undefined, undefined, 0, true);
         // 10:05 AM call: Ara's own "it's saved, what's next" came on top of the app's; kept only while the officer hasn't spoken since the save (they may not
         // have heard it)
         return { ok: true, saved: true, already: true, said: line, note: `That form was already saved (${G.savedLine}); it closed when it saved. The app is saying so itself now, with what's next. Say nothing; wait for the officer. Don't open it again.` }; })() : { ok: false, saved: false, error: "No form is open, so there's nothing to save." }, false);
@@ -489,7 +491,7 @@ async function hfSave(callId, data, lead, short) { /* short: only the changed fi
     toolReply(callId, { ok: true, saved: false, read_back: `Just to be sure, the amount is ${money(readDraft()[k2])}. Is that right?`, next: "Money gets a second check; the app said read_back aloud. After the officer's yes, call save_form again with confirmed true." }); return; }
   const r = hfCommit();
   if (!r.ok) { toolReply(callId, { ok: false, saved: false, error: `Not saved. ${r.err} Ask for what's missing in one short question, update the draft, then read it back again.` }); return; }
-  if (r.force) toolReply(callId, { ok: true, saved: true, said: "The app said the save and the next step itself; wait for the officer's answer.", ask_exactly: r.force });
+  if (r.force) toolReply(callId, { ok: true, saved: true, said: "The app said the save and the next step itself; wait for the officer's answer.", ask_exactly: r.force, keep: true });
   else toolReply(callId, { ok: true, saved: true, say: r.say || `Say in a few words that it's saved, then ask "What's next?"` });
 }
 // Ara read the form back herself (against her rules) and the officer said yes to it: it counts when every filled-in field is in her words
@@ -523,12 +525,12 @@ function hfYesHeard(text) {
   G.hfYesAt = Date.now(); const title = ACTIONS[V.action].title;
   stopPlayback(); if (araBusy()) { send({ type: "response.cancel" }); G.cancelAt = Date.now(); } /* whatever Ara started to say about the yes; her save_form still gets its answer (hfSave: already saved) */
   const k2 = secondYes(); if (k2 && c.step === "read") { c.step = "amount"; c.n = G.heardN; c.askedByApp = true; c.askedAt = Date.now(); paintCall(); act("step", `the officer's yes to the ${title} read-back: the app checks the amount itself`);
-    forceSay(`Just to be sure, the amount is ${money(readDraft()[k2])}. Is that right?`); return true; }
+    forceSay(`Just to be sure, the amount is ${money(readDraft()[k2])}. Is that right?`, undefined, undefined, 0, true); return true; }
   const r = hfCommit();
   if (!r.ok) { act("step", `the officer's yes to the ${title} read-back, but it can't be saved: ${r.err}`); guide(`Not saved. ${r.err} Ask for what's missing in one short question, update the draft, then read it back again.`); return true; } /* the same guidance save_form gets; never spoken as is */
   G.savedByWords = Date.now(); G.savedByWordsLine = r.force || ""; /* the spoken line only; r.say is guidance for Ara */ act("step", `the officer's yes to the read-back saved the ${title} form itself, from their words`);
   staleReadback(); /* 6:23 PM call, Oct 29: the read-back played 12 s after the save, and a fresh line repeated it */
-  if (r.force) forceSay(r.force); else guide(r.say || `Say in a few words that it's saved, then ask "What's next?"`);
+  if (r.force) forceSay(r.force, undefined, undefined, 0, true); else guide(r.say || `Say in a few words that it's saved, then ask "What's next?"`);
   return true;
 }
 // after a save, the read-back that was still waiting to play (a slow line) is dropped, and Ara's late telling of it is cut when it comes

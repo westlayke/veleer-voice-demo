@@ -29,7 +29,7 @@ const server = http.createServer((req, res) => {
 
 // ---------- in the page: the stand-in line with its faults, the silent mic, the key holder ----------
 const FAKES = (cfg) => {
-  window.__sent = []; window.__logs = []; window.__lines = []; window.__events = []; window.__cfg = cfg; window.__reconnectBy = cfg.reconnect || "ara"; /* who says where we were after a drop: Ara (checked by the app) or the app's scripted line */
+  window.__sent = []; window.__logs = []; window.__lines = []; window.__events = []; window.__cfg = cfg; window.__reconnectBy = cfg.reconnect || "ara"; window.__scripted = cfg.scripted || "all"; /* who says where we were after a drop: Ara (checked by the app) or the app's scripted line */
   let s = cfg.seed >>> 0; const rnd = () => { s += 0x6D2B79F5; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; window.__rnd = rnd;
   const R = cfg.rate, P = cfg.rates;
   // the voice service's reply delay: lognormal around Jim's measured median (1.7 s quiet), with a long tail; a "slow" draw adds 10-25 s
@@ -204,7 +204,7 @@ const AGENDA_TOOL = [["show_contact_draft", { first: "Jordan", last: "Pike" }], 
 
 // ---------- one conversation ----------
 async function conversation(browser, base, n) {
-  const seed = SEED * 1000 + n, cfg = { seed, rate: RATE, rates: RATES, reconnect: process.env.RECONNECT || "ara" };
+  const seed = SEED * 1000 + n, cfg = { seed, rate: RATE, rates: RATES, reconnect: process.env.RECONNECT || "ara", scripted: process.env.SCRIPTED || "all" };
   const conv = { n, seed, entity: "", entityAsks: 0, asks: [], faults: [], saves: [], unanswered: [], started: Date.now(), errors: [], turns: 0, hungUp: false, closedWon: false };
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true, permissions: ["microphone"] });
   await ctx.addInitScript(FAKES, cfg); await ctx.addInitScript(STAND_IN); await ctx.addInitScript({ content: `window.__stepTool = (() => { const C = ${JSON.stringify(C)}, T = ${JSON.stringify(T)}; return ${STEP_TOOL.toString()}; })();` }); /* the step a next-step offer names, for the stand-in's yes */

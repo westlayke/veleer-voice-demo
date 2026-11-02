@@ -14,14 +14,17 @@ const stepsInPage = () => {
   const other = ok.filter(c => !/^show_|^optional_fields$|^save_form$/.test(c.name)).length;
   const forced = sent.filter(e => e.item && e.item.type === "force_message").length, readBacks = outs.filter(o => o.read_back).length; /* each read_back reply is followed by one scripted read-back line */
   const steps = forms + optional + readBacksAsked + saves + other;
-  return { steps: { total: steps, forms, optional, readBacksAsked, saves, other }, scripted: { total: forced, readBacks, other: Math.max(0, forced - readBacks) } };
+  const st = rows.filter(a => a.role === "step").map(a => a.text), n = (re) => st.filter(t => re.test(t)).length; /* the middle path: lines handed to Ara instead of scripted, and what the say-check saw */
+  const handed = { total: n(/^Handed to Ara to (say|ask) herself/), first: n(/^Ara asked the question herself: /), nudged: n(/^Ara asked the question herself after one nudge/), never: n(/^Ara's reply still didn't ask/) };
+  return { steps: { total: steps, forms, optional, readBacksAsked, saves, other }, scripted: { total: forced, readBacks, other: Math.max(0, forced - readBacks) }, handed };
 };
 // the report lines, from the per-conversation counts
 function stepsLines(convs) {
-  const t = { total: 0, forms: 0, optional: 0, readBacksAsked: 0, saves: 0, other: 0 }, s = { total: 0, readBacks: 0, other: 0 };
-  convs.forEach(c => { const x = c.steps; if (!x) return; Object.keys(t).forEach(k => { t[k] += x.steps[k] || 0; }); Object.keys(s).forEach(k => { s[k] += x.scripted[k] || 0; }); });
+  const t = { total: 0, forms: 0, optional: 0, readBacksAsked: 0, saves: 0, other: 0 }, s = { total: 0, readBacks: 0, other: 0 }, h = { total: 0, first: 0, nudged: 0, never: 0 };
+  convs.forEach(c => { const x = c.steps; if (!x) return; Object.keys(t).forEach(k => { t[k] += x.steps[k] || 0; }); Object.keys(s).forEach(k => { s[k] += x.scripted[k] || 0; }); Object.keys(h).forEach(k => { h[k] += (x.handed || {})[k] || 0; }); });
   const pct = t.total ? Math.round(1000 * s.other / t.total) / 10 : 0;
   return [`Discrete steps completed: ${t.total} (forms opened or filled ${t.forms}, optional fields ${t.optional}, read-backs requested ${t.readBacksAsked}, saves ${t.saves}, lookups and commands ${t.other}).`,
-    `App scripted lines other than read-backs: ${s.other} (${pct}% of the steps); read-backs spoken ${s.readBacks}; scripted lines in all ${s.total}.`];
+    `App scripted lines other than read-backs: ${s.other} (${pct}% of the steps); read-backs spoken ${s.readBacks}; scripted lines in all ${s.total}.`,
+    `Lines handed to Ara instead of scripted: ${h.total}. Say-checks (handed lines and the questions Ara is always asked to put): said first time ${h.first}, after one nudge ${h.nudged}, not at all ${h.never}.`];
 }
 module.exports = { stepsInPage, stepsLines };

@@ -653,7 +653,7 @@ function soundBack() {
   if (!line) cutQBack(); else G.cutQ = null;
   if (!line || !G.live) return;
   act("step", "Sound is back: the line Ara said while it was paused is said again");
-  forceSay(line);
+  forceSay(line, undefined, undefined, 0, true); /* a repeat of her own line: kept scripted whichever way the setting goes */
 }
 /* the phone took the mic away. At a lock (the page hidden, now or within 1.5 s) that is the lock, not an ending: the mic is started afresh when the
    app is back (Oct 31 11:10 AM call: the mic ended 0.5 s after the page hid and the call ended at once, so he had to tap Carry on) */
@@ -1068,7 +1068,7 @@ function onEvent(e) {
   else if (t === "conversation.created" && e.conversation && e.conversation.id) { if (G.convId !== e.conversation.id) vlog("conversation " + e.conversation.id); G.convId = e.conversation.id; }
   else if (t === "error" && e.error && e.error.code === "conversation_already_has_active_response" && G.forced && G.forced.viaReply && !G.forced.started) { // OpenAI refused the scripted line's reply request: the line goes again after the running reply, not a plain reply in its place
     const f = G.forced; G.forced = null; clearTimeout(G.forceTimer); G.createAt = 0; araRunning();
-    vlog("scripted line refused (a reply already running): sent again after it"); act("step", "Scripted line refused by the engine (a reply already running): sent again after it"); forceSay(f.text, f.then, f.fallback); }
+    vlog("scripted line refused (a reply already running): sent again after it"); act("step", "Scripted line refused by the engine (a reply already running): sent again after it"); forceSay(f.text, f.then, f.fallback, 0, f.keep); }
   else if (t === "error" && e.error && e.error.code === "conversation_already_has_active_response") { // OpenAI: the request goes again once the running reply is done
     G.asked = false; G.createAt = 0; clearTimeout(G.askWatch); clearTimeout(G.tickWatch); G.askWatch = null; G.qCreate = true; if (!G.qGuide && G.askGuide) G.qGuide = G.askGuide; araRunning();
     vlog("reply request refused (one already running): queued"); act("step", "Reply request refused by the engine (one already running): sent again after it"); }
@@ -1200,13 +1200,14 @@ function whenIdle(kind) {
 // not act on). The tool's own error says what to do; this line covers the case where it can't be done at all.
 const ESCAPE = "If you can't do what this asks, tell the officer in one short sentence what's needed or that it can't be done that way, then ask what they'd like to do next. Don't call the same tool again with the same words.";
 function toolReply(callId, out, speak = true) {
-  const { say, status, instructions, ask_exactly, read_back, ...data } = out || {};
+  const { say, status, instructions, ask_exactly, read_back, keep, ...data } = out || {}; /* keep: a line that stays scripted whichever way the scripted-lines setting goes (a save line) */
   if (ask_exactly) data.asked = ask_exactly; if (read_back) data.read_back = read_back;
   if (data.ok === false && !ask_exactly && !read_back && !data.next) data.next = ESCAPE;
   if (data.ok === false) G.toolRefusedSeq = G.respSeq; /* a refused call is not Ara acting: the where-we-were check keeps waiting for her words */
   send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(data) } });
   const line = ask_exactly || read_back;
-  if (line) { forceSay(line); return; } // the scripted line is the turn: no reply request after it
-  const g = [instructions, status, say].filter(Boolean).join(" ");
+  if (line && (read_back || keep || SCRIPTED() !== "fewer")) { forceSay(line, undefined, undefined, 0, !!(read_back || keep)); return; } // the scripted line is the turn: no reply request after it; the read-back stays scripted whichever way
+  if (line) { act("step", `Handed to Ara to ask herself (scripted lines: read-back and save only): "${line}"`); sayWatch(line, `Ask exactly: "${line}"`); } /* the middle path: the question rides with the reply guidance, checked */
+  const g = [instructions, status, say, line ? `Ask exactly: "${line}"` : ""].filter(Boolean).join(" ");
   if (speak) guide(g || "Reply to the officer from the tool result.");
 }

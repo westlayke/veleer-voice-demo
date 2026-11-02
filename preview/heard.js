@@ -43,7 +43,7 @@ function clockWatch() {
     if (!line) return;
     setTimeout(() => { if (!G.live || !line) return;
       act("step", `Sound started afresh: Ara says her last line again, word for word ("${line.slice(0, 80)}")`);
-      G.lastBot = ""; /* else the repeat is cut as a doubled reply */ forceSay(line); }, 1200); });
+      G.lastBot = ""; /* else the repeat is cut as a doubled reply */ forceSay(line, undefined, undefined, 0, true); }, 1200); }); /* a repeat of a line already said: kept scripted whichever way the setting goes */
 }
 setInterval(heardTick, 250);
 function heardProblem(r) {
@@ -90,7 +90,7 @@ function silentLine(rec) {
     if (G.respSeq !== rec.resp || playingLeft() > 0 || araSounding() || same(G.forced && G.forced.text) || same(G.pendingForce)) { act("step", "Ara's line is being said again already: the phone's resend stands down"); return; } /* 10:05 AM call: the app's own copy was already on its way */
     const own = typeof sameWords === "function" ? sameWords(rec.text) === sameWords(G.lastForcedText || "") : rec.text === G.lastForcedText; G.lastBot = ""; /* else the resend is cut as a doubled reply */ /* the transcript's trailing space made every app line "not own" (diagnostic run, Oct 30): the resend went as a reply request the service never answered, and the line reconnected */
     act("step", `No sound for Ara's line in ${Math.round((Date.now() - rec.at) / 1000)} s: asked for it again, once (a late copy of either telling is cut)`); G.resend = { text: rec.text, at: Date.now(), seq: G.respSeq, resp: 0, firstAudio: 0, viaForce: own };
-    if (own) forceSay(rec.text); else askReply(`Your last line reached the officer as text only, with no sound. Say it again now, word for word: "${rec.text}"`); }, SILENT_RESEND_MS);
+    if (own) forceSay(rec.text, undefined, undefined, 0, true); else askReply(`Your last line reached the officer as text only, with no sound. Say it again now, word for word: "${rec.text}"`); }, SILENT_RESEND_MS);
 }
 // the sound arrived after all (a sounded copy of the words-only line): the wait ends, nothing is asked again
 function silentSoundArrived(text) {

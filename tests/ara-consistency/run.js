@@ -127,7 +127,7 @@ async function converse(browser, base, flow, n) {
   try {
     await p.goto(base + (process.env.PAGE || "preview-flow.html")); await p.waitForTimeout(800);
     await p.tap("text=I'd rather type my name"); await p.fill("#wlName", "Dana"); await p.tap("text=Start"); await p.waitForTimeout(600);
-    await p.evaluate(({ prov, spoken, noise, turn, micHp, plan }) => { window.__provider = prov; if (turn) window.__turn = turn; if (micHp) window.__micHp = micHp;
+    await p.evaluate(({ prov, spoken, noise, turn, micHp, plan, scripted }) => { window.__provider = prov; if (turn) window.__turn = turn; if (micHp) window.__micHp = micHp;
       if (spoken) { // the microphone is a stream this script plays the officer's lines into (plus a steady noise), through the app's own capture path
         const mctx = new AudioContext({ sampleRate: 24000 }), dst = mctx.createMediaStreamDestination();
         if (noise > 0) { const n = mctx.createBuffer(1, 24000 * 4, 24000), d = n.getChannelData(0); let last = 0, sq = 0; for (let i = 0; i < d.length; i++) { last = 0.97 * last + 0.03 * (Math.random() * 2 - 1); d[i] = last; sq += last * last; }
@@ -156,7 +156,7 @@ async function converse(browser, base, flow, n) {
           }
           return prevOn.apply(this, arguments); };
       }
-      S.settings.speed = spoken ? 1 : 1.3; S.settings.provider = window.__provider; save(); // typed runs: Ara talks faster (her words are the same) so each conversation costs less line time; spoken runs keep her normal speed, so the clips sound as the officer would hear them (Gemini ignores the setting either way)
+      S.settings.speed = spoken ? 1 : 1.3; S.settings.provider = window.__provider; if (scripted === "fewer") S.settings.scripted = "fewer"; save(); // typed runs: Ara talks faster (her words are the same) so each conversation costs less line time; spoken runs keep her normal speed, so the clips sound as the officer would hear them (Gemini ignores the setting either way)
       window.__officer = (text) => {
         send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
         onEvent({ type: "conversation.item.input_audio_transcription.completed", transcript: text }); // what the app sees when speech is transcribed
@@ -164,7 +164,7 @@ async function converse(browser, base, flow, n) {
       };
       document.querySelectorAll(".scrim").forEach(s => s.remove());
       startCall(null);
-    }, { prov: PROVIDER, spoken: SPOKEN, noise: NOISE, turn: TURN, micHp: MIC_HP, plan: SOUNDLESS ? { rate: SOUNDLESS, draw: Array.from({ length: 60 }, () => rnd()), late: Array.from({ length: 7 }, () => rnd() < 0.5), delay: Array.from({ length: 7 }, () => 4000 + Math.round(rnd() * 16000)) } : null });
+    }, { prov: PROVIDER, spoken: SPOKEN, noise: NOISE, turn: TURN, micHp: MIC_HP, scripted: process.env.SCRIPTED || "all", plan: SOUNDLESS ? { rate: SOUNDLESS, draw: Array.from({ length: 60 }, () => rnd()), late: Array.from({ length: 7 }, () => rnd() < 0.5), delay: Array.from({ length: 7 }, () => 4000 + Math.round(rnd() * 16000)) } : null });
     conv.record = SPOKEN && n <= RECORD; if (!conv.record) await p.evaluate(() => { window.__ara = null; });
     const t0 = Date.now();
     const drop = async (when) => { // a cellular drop: offline, line closed, back after downMs; recovery = the first reply sound after the network is back

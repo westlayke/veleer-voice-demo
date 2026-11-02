@@ -87,6 +87,17 @@ phone locked. A freshly started mic that nothing was said into can be let go by 
 
 A slow line test on its own is not a verdict. Four seconds after a scripted line with nothing back, the phone says "Ara's taking a moment" and tests the line; a slow test (no answer in 2.5 s) opens a fresh line only when the voice line has carried nothing since the scripted line went. A line that has delivered messages since then (the service answering a tool call first, as after every hands-free save) is kept, and the 8 s fallback asks Ara for the line instead (9:30 PM call, Nov 1: two 8 s reconnects right after saves on a working line).
 
+## Which lines the app scripts (Nov 1: the test of the middle path)
+
+`SCRIPTED()` (`voiceline.js`) is "all" or "fewer": Settings > Voice assistant > Scripted lines on the preview, or
+`window.__scripted` in the harnesses (the `scripted` input of Patient Pat and the real-Ara run). On "all" nothing
+changes. On "fewer" `forceSay` keeps only the lines called with `keep` (the read-back, the amount check, the save
+and already-saved lines, the hang-up question and goodbye, and a repeat of a line already said); every other line
+goes to Ara as guidance ("Say this now, word for word...") with the say-check (`sayWatch`/`sayCheck` in
+`voiceforms.js`: one nudge, then the app waits for the officer), and `toolReply` folds an `ask_exactly` question
+into the reply guidance the same way. The say-check judges a single question on the reply's last sentence and a
+handed line on the whole reply (`saidLine`). The harness readouts add "Lines handed to Ara instead of scripted".
+
 ## The reconnect loop
 
 `reconnect(why)` runs the same sequence whatever the signal:

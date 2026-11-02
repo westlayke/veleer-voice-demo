@@ -1248,4 +1248,42 @@ test("Carverhill's 12:53 PM call (Nov 1): Ara asks whether it was substantive (c
   ok(await p.evaluate(() => V && V.data.substantive === false && V.fromVoice.has("substantive")) && /not substantive/.test(r.read_back || ""), "the officer's no after the question wasn't taken, or the read-back didn't follow: " + JSON.stringify(r) + " " + JSON.stringify(await p.evaluate(() => V && V.data)));
   ok(!/One more thing/.test(await p.evaluate(() => __sent.join("|"))) && !(await p.evaluate(() => __sent.some(s => /force_message/.test(s) && /substantive interaction/.test(s)))), "the app said the substantive question itself");
 });
+
+test("Scripted lines: read-back and save only (Nov 1, the middle path): the hands-free line and a field question go to Ara with the say-check; the read-back, the amount check and the save line stay scripted", async (p) => {
+  await p.evaluate(() => { window.__scripted = "fewer"; });
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(400);
+  const sent = () => p.evaluate(() => __sent.join("\n")), forced = async (re) => (await p.evaluate(() => __sent.filter(s => /force_message/.test(s)).join("\n"))).match(re);
+  /* the greeting after a typed name is already Ara's own (a notice); the scripted greeting is the mic tap's */
+  let q;
+  // hands-free on: the line is Ara's to say, and she is told to carry on after it
+  await said(p, "I'm driving"); await p.waitForTimeout(900);
+  q = await p.evaluate(() => { const c = checkNow("sayWatch"); return c ? c.q : ""; });
+  ok(/^Hands-free is on\./.test(q) && !(await forced(/Hands-free/)) && /response\.create[^\n]*word for word, with nothing before or after it: \\"Hands-free is on\./.test(await sent()), "the hands-free line was scripted, or not handed to Ara: " + q + " " + (await sent()).slice(-400));
+  await p.says("Hands-free is on. I'll read back all the information on the form and save it when you say yes. What would you like to do?"); await p.waitForTimeout(150);
+  ok(await p.evaluate(() => !checkNow("sayWatch")), "Ara's hands-free line wasn't counted: " + (await p.log()).slice(-300));
+  // a form's question rides with the reply guidance instead of a scripted line
+  await said(p, "Add a contact, Pat Moss, pat@example.org, mobile 555 010 0150.");
+  let r = await ara(p, "show_contact_draft", { first: "Pat", last: "Moss", email: "pat@example.org", mobile: "(555) 010-0150" });
+  ok(!r.ask_exactly && r.asked && new RegExp('Ask exactly: "' + r.asked.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '"').test(r.status || "") && await p.evaluate(() => !!checkNow("sayWatch")) && /Handed to Ara to ask herself/.test(await p.log()), "the contact's question was scripted, or not handed to Ara with the check: " + JSON.stringify(r));
+  await p.says(r.asked); await p.waitForTimeout(150);
+  await said(p, "Rate them C."); r = await ara(p, "show_contact_draft", { first: "Pat", last: "Moss", email: "pat@example.org", mobile: "(555) 010-0150", capacity: "C" });
+  ok(!r.ask_exactly && /Save it, or add the optional details first\?/.test(r.asked || "") && await p.evaluate(() => !!checkNow("sayWatch")), "the save-or-details question was scripted, or not handed to Ara: " + JSON.stringify(r));
+  await p.says(r.asked); await said(p, "Save it."); r = await ara(p, "save_form", { confirmed: false });
+  ok(/Yes to save, or no to change something\?$/.test(r.read_back || "") && await forced(/New contact: Pat Moss/), "the read-back wasn't scripted: " + JSON.stringify(r));
+  await said(p, "Yes."); await p.waitForTimeout(700);
+  ok((await state(p)).contacts.some(c => c.first === "Pat" && c.last === "Moss") && await forced(/Contact saved for Pat/), "the save line wasn't scripted, or the yes didn't save: " + (await p.log()).slice(-300));
+  // a gift: the read-back and the amount check are scripted, the save line too
+  const who = await p.evaluate(() => { const S = window.__demo.state, o = S.opps.find(o => o.stage !== "Closed"); o.stage = "Ask Made"; const c = S.contacts.find(c => c.id === o.contactId); return c.first + " " + c.last; });
+  await said(p, `Record a gift from ${who}, five thousand dollars by check today.`);
+  r = await ara(p, "show_gift_draft", { contact_name: who, amount: 5000, date: new Date().toISOString().slice(0, 10), method: "Check" });
+  if (!r.read_back) { await said(p, "Save it."); r = await ara(p, "save_form", { confirmed: false }); }
+  ok(/Yes to save, or no to change something\?$/.test(r.read_back || "") && await forced(/Record gift for/), "the gift read-back wasn't scripted: " + JSON.stringify(r));
+  await p.evaluate(() => { G.hfYesAt = 0; }); /* a yes within 8 s of the last one is a repeat; the clock is reset to keep the check short */
+  await said(p, "Yes."); await p.waitForTimeout(400);
+  ok(await forced(/Just to be sure, the amount is \$5,000/), "the amount check wasn't scripted: " + (await p.log()).slice(-300));
+  await p.waitForTimeout(2600); await p.evaluate(() => { G.forceStartAt = Date.now(); G.hfYesAt = 0; }); await p.waitForTimeout(900); /* the check plays, then the officer's yes saves (as in the 9:36 PM check) */
+  await said(p, "Yes."); await p.waitForTimeout(700);
+  ok(await forced(/Gift recorded for/), "the gift's save line wasn't scripted: " + (await p.log()).slice(-300));
+  ok(!(await forced(/Hands-free|Hi |capacity|rating/)), "a line other than the read-back, the amount check and the save line was scripted: " + (await p.evaluate(() => __sent.filter(s => /force_message/.test(s)).map(s => s.slice(0, 120)).join("\n"))));
+});
 };
