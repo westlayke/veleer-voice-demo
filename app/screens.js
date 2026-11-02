@@ -149,7 +149,7 @@ function helpModal() {
     <ol class="hm-steps"><li>Tap <span class="wl-inmic" role="img" aria-label="microphone">${mic(13)}</span> at the bottom of the screen.</li>
       <li>Say what you want, like <b>“Log a meeting with Ruth”</b> or <b>“What are my open tasks?”</b> You can interrupt at any time.</li>
       <li>${esc(botName())} fills in the form on screen. Check it, then tap <b>Save</b>.</li>
-      <li>Tap the mic again to hang up. After ${IDLE_MS / 1000} seconds of quiet (${IDLE_HF_MS / 1000} in hands-free mode), the call ends by itself.</li></ol>
+      <li>Tap the mic again to hang up. After ${(IDLE_MS - IDLE_ASK_BEFORE_MS) / 1000} seconds of quiet ${esc(botName())} asks whether to hang up; say no to carry on. With no answer the call ends at ${IDLE_MS / 1000} seconds (${IDLE_FORM_MS / 1000} with a form open).</li></ol>
     <p class="wl-hint">Tap any option under “Say things like…” to get started with that request.</p>
     <button type="button" class="btn blue" data-helpx="1">Close</button></div></div>`;
 }
@@ -206,13 +206,14 @@ document.addEventListener("click", (e) => { const a = e.target.closest("[data-ac
     if (!v) { const er = document.getElementById("wlErr"); if (er) er.hidden = false; if (el) el.focus(); return; }
     const isNew = v !== (S.settings.userName || "");
     S.settings.userName = v; S.seenWelcome = true; S.settings.seenPrivacy = true; S.settings.seenFormLog = true; S.screen = "home"; save(); welcomeModal(); render(); window.scrollTo(0, 0);
+    if (typeof prepNamedLines === "function") setTimeout(() => prepNamedLines("name entered"), 2500); /* the reconnect lines with this name, while there is signal */
     if (isNew && !G.live) startCall(greetLine(v)); } }); // a newly entered name starts the conversation with the standard greeting
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "wlName") { e.preventDefault(); const b = document.querySelector("[data-act4=welcome-ok]"); if (b) b.click(); } }); // the keyboard Go key starts too
 document.addEventListener("click", (e) => { if (e.target.closest("[data-act5=typename]")) { WELCOME_FULL = true; welcomeModal(); setTimeout(() => { const el = document.getElementById("wlName"); if (el) el.focus(); }, 50); } });
 const botName = () => (S.settings.botName || "").trim() || ((S.settings.voice || "ara")[0].toUpperCase() + (S.settings.voice || "ara").slice(1)); // the assistant's name: set in Settings, else its voice's name
 const CMD_LIST = "Ask me for any task in your own words. While a form is open you can also say: cancel, to close it without saving; start over, to clear it; undo, to take back my last change; go back, for the previous screen; or say that again, to hear me repeat.";
 const CAN_DO = "I can do things related to managing your contacts and opportunities, like reviewing your open tasks, creating a contact, hearing a contact's giving history, reviewing your open opportunities, or review our fundraising process, and much more. What would you like to do today?";
-const greetLine = (name) => `The officer just entered their first name and tapped Start. Say exactly this and nothing more, then wait for their answer: "Hi ${name.split(" ")[0]}, I'm ${botName()}, what would you like to do?" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process".`;
+const greetLine = (name) => `The officer just entered their first name and tapped Start. Say exactly this and nothing more, then wait for their answer: "${helloLine(name)}" If they ask what you can do, say exactly: "${CAN_DO}" If they ask for the process, walk them through it as you would for "Walk me through the process".`;
 
 const myOpen = () => S.opps.filter(o => o.stage !== "Closed");
 const AWAIT_WARN_DAYS = 14; // tenant setting in the guide; demo default
@@ -220,16 +221,30 @@ const daysAwaiting = (a) => Math.max(0, Math.round((new Date(todayISO()) - new D
 // the amount line on an opportunity's list row and board card
 const oppAmountText = (o, a) => o.pledge ? (o.pledge.implied ? "Committed " + money(o.pledge.amount) + " · implied" : o.pledge.outright ? "Committed " + money(o.pledge.amount) + " · gift to follow" : "Pledged " + money(o.pledge.amount)) : a ? (a.status === "Planned" ? "Planned ask " : "Asked ") + money(a.amount) : "Potential " + money(o.potential);
 const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone; // opened from the home screen icon
+// an opportunity's alert: the pill (tone, text), whether it needs the officer (act), the to-do line on Home and the spoken line, from one table by kind
+const ALERT_LINES = {
+  ready: { todo: (x) => `${x.first} meets every Qualification step. Move to Cultivation?`, say: (x) => `${x.who} meets every Qualification step: move them to Cultivation.` },
+  pledge: { todo: (x) => `${x.first} agreed to give. Record the pledge.`, say: (x) => `${x.who} agreed to give${x.amt ? " " + x.amt.trim() : ""}: record the pledge.` },
+  awaiting: { todo: (x) => `No reply to your ${x.amt}ask for ${x.days} days. Follow up with ${x.first}?`, say: (x) => `No reply from ${x.who} to your ${x.amt}ask for ${x.days} days: follow up.` },
+  passed: { todo: (x) => `The planned date for your ${x.amt}ask has passed. Make the ask or set a new date.`, say: (x) => `${x.who}'s ${x.amt}planned ask was due ${x.date}: make the ask or set a new date.` },
+  planned: { todo: (x) => `Your ${x.amt}ask to ${x.first} is coming up. Get ready.`, say: (x) => `Your ${x.amt}ask to ${x.who} is planned for ${x.date}.` }
+};
 function oppAlert(o) {
   const a = latestAsk(o), c = contactById(o.contactId);
   if (o.stage === "Closed") return o.closed === "Lost" ? { tone: "warn", text: "Closed Lost" } : { tone: "ok", text: "Closed Won" };
-  if (readyForCultivation(o)) return { tone: "ok", text: "Ready for Cultivation", act: true };
-  if (o.stage === "Ask Made" && agreed(a)) return { tone: "warn", text: "Pledge to record", act: true };
+  if (readyForCultivation(o)) return { tone: "ok", text: "Ready for Cultivation", act: true, kind: "ready" };
+  if (o.stage === "Ask Made" && agreed(a)) return { tone: "warn", text: "Pledge to record", act: true, kind: "pledge" };
   if (o.stage === "Commitment" && o.pledge && o.pledge.outright) return { tone: "ok", text: "Gift to follow" };
-  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = daysAwaiting(a); return { tone: days >= AWAIT_WARN_DAYS ? "warn" : "info", text: `Awaiting response · ${days} day${days === 1 ? "" : "s"}`, act: days >= AWAIT_WARN_DAYS }; }
-  if (o.stage === "Ask Planning" && a) { const days = Math.round((new Date(a.plannedDate) - new Date(todayISO())) / 864e5); return { tone: days <= 7 ? "warn" : "info", text: days < 0 ? `Ask date passed ${fmtDate(a.plannedDate)}` : `Ask planned for ${fmtDate(a.plannedDate)}`, act: days <= 7 }; }
+  if (o.stage === "Ask Made" && a && a.status === "Made") { const days = daysAwaiting(a); return { tone: days >= AWAIT_WARN_DAYS ? "warn" : "info", text: `Awaiting response · ${days} day${days === 1 ? "" : "s"}`, act: days >= AWAIT_WARN_DAYS, kind: "awaiting", days }; }
+  if (o.stage === "Ask Planning" && a) { const days = Math.round((new Date(a.plannedDate) - new Date(todayISO())) / 864e5); return { tone: days <= 7 ? "warn" : "info", text: days < 0 ? `Ask date passed ${fmtDate(a.plannedDate)}` : `Ask planned for ${fmtDate(a.plannedDate)}`, act: days <= 7, kind: days < 0 ? "passed" : "planned" }; }
   return null;
 }
+// the alert's to-do line (Home) or spoken line (the next-step offer, Needs attention read out), from the table
+function alertLine(o, al, which) {
+  if (!al) return ""; const a = latestAsk(o), c = contactById(o.contactId), row = ALERT_LINES[al.kind]; if (!row) return which === "say" ? `${o.name}: ${al.text.replace(/\.$/, "")}.` : "";
+  return row[which]({ first: c ? c.first : "them", who: c ? nameOf(c) : o.name, amt: a ? money(a.amount) + " " : "", days: al.days, date: a ? fmtDate(a.plannedDate) : "" });
+}
+const alertTodo = (o, al) => alertLine(o, al, "todo"), alertSay = (o, al) => alertLine(o, al, "say");
 // what moves an opportunity to its next stage: a checklist on the record, one "Next:" line in the list, and the assistant's summary
 function nextStep(o) {
   if (!o || o.stage === "Closed") return null;
@@ -250,7 +265,7 @@ function nextStep(o) {
   if (o.stage === "Ask Made" && a) {
     if (agreed(a)) return { to: "Commitment", items: [{ st: "next", need: "Record the pledge", sub: `${first} said yes to ${money(a.amount)}. Record the pledge once it's confirmed by email, phone or in person, or Record gift if the money arrives first.` }], line: "record the pledge" };
     const n = Math.max(0, -days(a.askedOn || today)), late = n >= AWAIT_WARN_DAYS;
-    return { to: "Commitment", warn: late, items: [{ st: "yes", need: `Ask made: ${money(a.amount)}`, sub: a.askedOn ? `On ${fmtDate(a.askedOn)}` : "" }, { st: late ? "no" : "next", need: `Record ${first}'s answer`, sub: `Waiting ${n} day${n === 1 ? "" : "s"}${late ? ". Time to follow up." : "."} Then record ${a.askType === "Outright" ? "the answer: a yes moves it to Commitment," : "the pledge, or Record gift if the money arrives first,"} or a counter or decline.` }], line: `record ${first}'s answer (${n} day${n === 1 ? "" : "s"})` };
+    return { to: "Commitment", warn: late, items: [{ st: "yes", need: `Ask made: ${money(a.amount)}`, sub: a.askedOn ? `On ${fmtDate(a.askedOn)}` : "" }, { st: late ? "no" : "next", need: `Record ${first}'s answer`, sub: `Waiting ${n} day${n === 1 ? "" : "s"}${late ? ". Time to follow up." : "."} Then record ${a.askType === "Outright" ? "the answer: a yes moves it to Commitment," : "the pledge, or Record gift if the money arrives first,"} or a counter or decline.` }], line: `record ${first}'s answer` };
   }
   if (o.stage === "Commitment" && o.pledge && o.pledge.outright) { const due = o.pledge.firstDue, late = due && due < today;
     return { to: "Closed Won", warn: late, items: [{ st: "yes", need: `Outright gift agreed: ${money(o.pledge.amount)}`, sub: `At the ask on ${fmtDate(o.pledge.confirmedDate)}` }, { st: late ? "no" : "next", need: "Record the gift", sub: `Follow up by ${fmtDate(due)}${late ? ", now overdue" : ""}. Record gift when it arrives; it closes the opportunity as Closed Won.` }], line: `record the gift (${money(o.pledge.amount)} agreed)` }; }
@@ -264,16 +279,6 @@ function nextPanel(o) {
   return `<section class="panel nextp"><div class="ph"><h2>To reach ${esc(n.to)}</h2></div><ul class="gate inpanel">${n.items.map(x => `<li class="${{ next: "gnext", wait: "gwait" }[x.st] || x.st}"><span class="gk" aria-hidden="true">${mark[x.st]}</span><span>${esc(x.need)}${x.sub ? `<small>${esc(x.sub)}</small>` : ""}</span></li>`).join("")}</ul>
     <span class="flowlink" data-act2="flowat" data-stage="${esc(o.stage)}">How ${esc(o.stage)} works ›</span></section>`;
 }
-// Needs attention: one plain line saying what to do about each alert
-function alertTodo(o, al) {
-  const a = latestAsk(o), c = contactById(o.contactId), first = c ? c.first : "them", amt = a ? money(a.amount) + " " : "";
-  if (/^Ready for Cultivation/.test(al.text)) return `${first} meets every Qualification step. Move to Cultivation?`;
-  if (/^Pledge to record/.test(al.text)) return `${first} agreed to give. Record the pledge.`;
-  if (/^Awaiting response/.test(al.text)) { const d = al.text.match(/\d+/); return `No reply to your ${amt}ask for ${d ? d[0] : "some"} days. Follow up with ${first}?`; }
-  if (/^Ask date passed/.test(al.text)) return `The planned date for your ${amt}ask has passed. Make the ask or set a new date.`;
-  if (/^Ask planned/.test(al.text)) return `Your ${amt}ask to ${first} is coming up. Get ready.`;
-  return "";
-}
 // a task's alert: the same pill on Home (Needs attention), the Tasks screen and the record screens
 const taskAlert = (t) => !t.done && t.due && t.due < todayISO() ? { tone: "warn", text: "Overdue" } : null;
 const alertPill = (al) => al ? `<span class="alert ${al.tone}">${esc(al.text)}</span>` : "";
@@ -283,16 +288,16 @@ function attentionItems() {
   const rank = (al) => !al ? 3 : late(al) ? 0 : al.tone === "warn" ? 1 : al.tone === "ok" ? 2 : 3;
   myOpen().forEach(o => {
     const al = oppAlert(o);
-    if (al && al.act) items.push({ kind: "opp", overdue: late(al), rank: rank(al), name: o.name, say: `${o.name}: ${al.text}. ${alertTodo(o, al)}`,
+    if (al && al.act) items.push({ kind: "opp", overdue: late(al), rank: rank(al), name: o.name, say: alertSay(o, al),
       html: `<div class="row tap" data-opp="${o.id}"><div class="t">${alertPill(al)}<div class="na-do">${esc(alertTodo(o, al))}</div><div class="s">${esc(o.name)}</div></div><span class="chev">${CHEV}</span></div>` });
   });
-  S.contacts.filter(oppReady).forEach(c => items.push({ kind: "contact", overdue: false, rank: 2, name: `${c.last}, ${c.first}`, say: `${nameOf(c)} is ready for an opportunity`,
+  S.contacts.filter(oppReady).forEach(c => items.push({ kind: "contact", overdue: false, rank: 2, name: `${c.last}, ${c.first}`, say: `${nameOf(c)} is ready for an opportunity.`,
     html: `<div class="row tap" data-contact="${c.id}"><div class="t"><span class="alert ok">Ready for opportunity</span><div class="na-do">${esc(c.first)} meets every requirement. Create an opportunity?</div><div class="s">${esc(nameOf(c))} · capacity ${c.capacity}</div></div><span class="chev">${CHEV}</span></div>` }));
   S.tasks.filter(t => !t.done && t.due && t.due <= addDays(todayISO(), 7)).forEach(t => { const al = taskAlert(t);
-    items.push({ kind: "task", overdue: !!al, rank: al ? 0 : 3, due: t.due, name: t.text, say: `Task "${t.text}" for ${nameOf(contactById(t.contactId))}, due ${fmtDate(t.due)}${al ? " (overdue)" : ""}`,
-      html: `<div class="row tap" data-go="tasks"><div class="t">${alertPill(al)}<div class="${al ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">${CHEV}</span></div>` }); });
+    items.push({ kind: "task", overdue: !!al, rank: al ? 0 : 3, due: t.due, name: t.text, say: `Task "${t.text}" for ${nameOf(contactById(t.contactId))}, due ${fmtDate(t.due)}${al ? " (overdue)" : ""}.`,
+      html: `<div class="row tap" ${askCheckTask(t) ? `data-form="response" data-cid="${t.contactId}" data-item="${t.oppId}"` : `data-go="tasks"`}><div class="t">${alertPill(al)}<div class="${al ? "na-do" : ""}">${esc(t.text)}</div><div class="s">Due ${fmtDate(t.due)} · ${esc(nameOf(contactById(t.contactId)))}</div></div><span class="chev">${CHEV}</span></div>` }); });
   const hf = hfUnchecked();
-  if (hf.length) items.push({ kind: "hf", overdue: false, rank: 1, name: "hands-free", say: `${hf.length} hands-free save${hf.length > 1 ? "s" : ""} to check`,
+  if (hf.length) items.push({ kind: "hf", overdue: false, rank: 1, name: "hands-free", say: `${hf.length} hands-free save${hf.length > 1 ? "s" : ""} to check.`,
     html: `<div class="row tap" data-act2="hfcheck"><div class="t"><span class="alert warn">Hands-free</span><div class="na-do">Check ${hf.length} hands-free save${hf.length > 1 ? "s" : ""}</div><div class="s">Saved by voice after you said yes. Make sure they're right.</div></div><span class="chev">${CHEV}</span></div>` });
   // most urgent first: overdue, then waiting too long (amber), then ready to move (green); tasks by due date
   return items.sort((a, b) => a.rank - b.rank || (a.due || "").localeCompare(b.due || "") || a.name.localeCompare(b.name));
@@ -366,7 +371,8 @@ function contactsScreen() {
   const fk = F[S.cFilter] ? S.cFilter : "all", rows = all.filter(F[fk][1]);
   const chips = `<div class="cfilt" role="tablist" aria-label="Show">${Object.entries(F).map(([k, f]) => `<button type="button" role="tab" aria-selected="${k === fk}" class="${k === fk ? "on" : ""}" data-act2="cfilt" data-v="${k}">${f[0]}${k === "all" ? "" : ` <b>${all.filter(f[1]).length}</b>`}</button>`).join("")}</div>`;
   return topbar("Contacts") + `<main><input id="cSearch" class="search" type="search" placeholder="Search contacts" autocomplete="off">${chips}<section class="panel"><div class="ph"><h2>${F[fk][2]}</h2><span class="meta">${rows.length}</span></div>${rows.length ? "" : `<div class="empty">${fk === "ready" ? "Nobody is ready yet. Contacts need a capacity rating and no open opportunity." : "Everyone is rated."}</div>`}
-  ${rows.map(c => { const o = openOpp(c.id); return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}${oppPill(c)}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">${CHEV}</span></div>`; }).join("")}
+  ${rows.map(c => { const o = openOpp(c.id);
+    return `<div class="row tap" data-contact="${c.id}" data-name="${esc((nameOf(c) + " " + c.email + " " + (c.mobile || "")).toLowerCase())}"><div class="t"><span class="lnk">${esc(c.last)}, ${esc(c.first)}</span>${c.added === todayISO() ? ' <span class="alert info">New</span>' : ""}${oppPill(c)}<div class="s">${esc(c.status)}${c.capacity ? " · capacity " + c.capacity : ""}${o ? " · " + esc(o.stage) : ""}</div></div><span class="chev">${CHEV}</span></div>`; }).join("")}
   </section><button class="btn out" data-form="contact">Add a contact</button></main>`;
 }
 function historyPanel(filter) {
@@ -431,7 +437,7 @@ function callDoneModal() {
     delete S.pendingCall; save(); h.innerHTML = "";
     S.sel.contact = c.id; go("contact");
     const t = resolveTarget("interaction", who);
-    V = { action: "interaction", target: t, data: prefill("interaction", { meetingType: "Phone call", date: todayISO() }, t), fromVoice: new Set() }; renderOverlay();
+    V = { action: "interaction", target: t, data: prefill("interaction", { meetingType: "Phone call", date: todayISO() }, t), fromVoice: new Set() }; formEvent("FORM_OPEN"); renderOverlay();
     startCall(`The officer just finished a phone call with ${who}. The Interaction report is already on screen with Phone call and today's date. Ask how the call went, then fill in the report by calling show_interaction_draft for ${who} after each answer.`);
   };
   document.getElementById("cdX").onclick = () => { delete S.pendingCall; save(); h.innerHTML = ""; toast(`You can log it later from ${c.first}'s record.`); };
@@ -482,9 +488,11 @@ function contactScreen() {
 }
 const STAGE_BTN = { Qualification: "Log interaction", Cultivation: "+ Add planned ask", "Ask Planning": "Record the ask", "Ask Made": "Record pledge", Commitment: "Record gift" };
 const STAGE_SAY = { Qualification: "Log a meeting", Cultivation: "Plan an ask", "Ask Planning": "Record the ask", "Ask Made": "Record a pledge", Commitment: "Record a gift" };
+const awaitingAnswer = (o, a) => o.stage === "Ask Made" && !!a && a.status === "Made"; // the ask is out and the investor hasn't answered
 const stageName = (o) => o.stage === "Closed" ? "Closed " + (o.closed || "Won") : o.stage;
 // the stage's main button: an outright ask that's out waits for a gift, not a pledge
 function stageAction(o, a) {
+  if (awaitingAnswer(o, a)) return { outright: false, label: "Record the response", sayIt: "Record the response" }; // the answer comes first (Oct 28); Record gift stays beside it
   const outright = o.stage === "Ask Made" && a && a.askType === "Outright";
   return { outright, label: outright ? "Record gift" : STAGE_BTN[o.stage], sayIt: outright ? "Record a gift" : STAGE_SAY[o.stage] };
 }
@@ -513,7 +521,7 @@ function trackHTML(idx, closed) {
   return `<div class="track">${JOURNEY.map((s, i) => `<div class="${i < idx ? "done" : i === idx ? "on" : ""}">${s === "Closed" && closed ? (closed === "Lost" ? "Lost" : "Won") : s.replace("Qualification", "Qualif.").replace("Cultivation", "Cultiv.").replace("Ask Planning", "Plan ask").replace("Commitment", "Commit")}</div>`).join("")}</div>`;
 }
 // after a save: what happened and the next form, one tap away (the screens' version of "take me to the next step")
-const WN_ACTIONS = ["contact", "interaction", "opportunity", "plan", "ask", "pledge", "gift", "payment", "cultivate"];
+const WN_ACTIONS = ["contact", "interaction", "opportunity", "plan", "ask", "response", "pledge", "gift", "payment", "cultivate"];
 function setWhatNext(action, result, t) {
   G.whatNext = WN_ACTIONS.includes(action) ? { saved: ACTIONS[action].saved, screen: S.screen } : null;
 }
@@ -550,7 +558,7 @@ function oppScreen() {
   : o.pledge && o.pledge.outright ? `<section class="panel"><div class="ph"><h2>Commitment</h2></div><dl class="kv"><dt>Type</dt><dd>Outright gift agreed at the ask</dd><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Entity</dt><dd>${esc(o.pledge.fund)}</dd><dt>Agreed</dt><dd>${fmtDate(o.pledge.confirmedDate)}</dd>${(o.pledge.payments || []).length ? `<dt>Received</dt><dd>${o.pledge.payments.map(x => `${money(x.amount)} on ${fmtDate(x.date)} (${esc(String(x.method).toLowerCase())})`).join("<br>")}</dd>` : ""}<dt>Status</dt><dd>${(o.pledge.payments || []).length ? esc(o.pledge.status) : "Waiting for the gift"}</dd></dl></section>`
   : o.pledge ? `<section class="panel"><div class="ph"><h2>Pledge</h2></div><dl class="kv"><dt>Type</dt><dd>Pledge, confirmed by the investor</dd><dt>Amount</dt><dd>${money(o.pledge.amount)}</dd><dt>Schedule</dt><dd>${o.pledge.installments} ${esc(String(o.pledge.frequency || "").toLowerCase())} payment${o.pledge.installments > 1 ? "s" : ""}</dd><dt>First payment</dt><dd>${money(o.pledge.firstAmount)} due ${fmtDate(o.pledge.firstDue)}</dd><dt>Confirmed</dt><dd>${esc(o.pledge.confirmedBy)}, ${fmtDate(o.pledge.confirmedDate)}</dd><dt>Corrections</dt><dd>Only the Chief Gift Officer or an administrator</dd>${o.pledge.payments ? `<dt>Received</dt><dd>${o.pledge.payments.map(x => `${money(x.amount)} on ${fmtDate(x.date)} (${esc(String(x.method).toLowerCase())})`).join("<br>")}</dd><dt>Status</dt><dd>${esc(o.pledge.status)}</dd>` : ""}</dl></section>` : ""}
   ${o.gift ? `<section class="panel"><div class="ph"><h2>Gift</h2></div><dl class="kv"><dt>Amount</dt><dd>${money(o.gift.amount)}</dd><dt>Entity</dt><dd>${esc(o.gift.fund)}</dd><dt>Received</dt><dd>${fmtDate(o.gift.date)} · ${esc(o.gift.method)}</dd></dl></section>` : ""}
-  ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${x.status === "Planned" ? '<span class="alert info">Planned</span> ' : ""}${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : x.status === "Made" ? "awaiting response" : esc(x.status)}${x.reason ? ": " + esc(x.reason) : ""}</div></div>${x.status === "Planned" && x === latestAsk(o) && o.stage !== "Closed" ? `<button type="button" class="rowedit" data-form="editPlan" data-cid="${o.contactId}" aria-label="Edit the planned ask">Edit</button>` : ""}</div>`).join("")}</section>` : ""}
+  ${o.asks.length ? `<section class="panel"><div class="ph"><h2>Asks</h2></div>${o.asks.map(x => `<div class="row"><div class="t">${x.status === "Planned" ? '<span class="alert info">Planned</span> ' : ""}${money(x.amount)} · ${esc(x.askType)} · ${esc(x.fund)}<div class="s">${esc(x.campaign)} · ${x.status === "Planned" ? "planned for " + fmtDate(x.plannedDate) : x.status === "Made" ? "awaiting response" : esc(x.status)}${x.reason ? ": " + esc(x.reason) : ""}</div></div>${x.status === "Planned" && x === latestAsk(o) && o.stage !== "Closed" ? `<button type="button" class="rowedit" data-form="editPlan" data-cid="${o.contactId}" aria-label="Edit the planned ask">Edit</button>` : x.status === "Made" && x === latestAsk(o) && awaitingAnswer(o, x) ? `<button type="button" class="rowedit" data-form="response" data-cid="${o.contactId}" aria-label="Record the response">Record the response</button>` : ""}</div>`).join("")}</section>` : ""}
   ${interactionsPanel(S.interactions.filter(i => i.oppId === o.id || (i.contactId === o.contactId && !i.oppId)))}
   ${tasksPanel(S.tasks.filter(t => t.oppId === o.id), "Tasks on this opportunity")}
   ${historyPanel(x => x.oppId === o.id)}
@@ -603,7 +611,7 @@ function boardScreen(split) {
 }
 const taskWhere = (t) => { const o = t.oppId && oppById(t.oppId); return o ? o.name : nameOf(contactById(t.contactId)); };
 /* ---------- task statuses: To do, In progress, Waiting, Done (SpiceCRM: Not Started, In Progress, Pending Input, Completed) ---------- */
-const TSTAT = { todo: "To do", doing: "In progress", waiting: "Waiting", done: "Done" };
+const TSTAT = TASK_STATUS; /* lists.js */
 const taskStatus = (t) => t.done ? "done" : (t.status || "todo");
 function setTaskStatus(t, st, until) {
   const before = { done: t.done, status: t.status, due: t.due, doneOn: t.doneOn };
@@ -612,11 +620,18 @@ function setTaskStatus(t, st, until) {
   save(); render(); return () => { Object.assign(t, before); save(); render(); };
 }
 const checkSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+// A task that opens a field on a record shows the field and its value now as a chip (Carverhill, Oct 28); the task text is plain and tappable too
+const FORM_IC = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="2" width="9" height="12" rx="1.5"/><path d="M4.5 6h4M4.5 9h2.5"/><path d="M12.8 7.2l1.6 1.6L10 13.2H8.4v-1.6z"/></svg>';
+const PEN = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M11.5 2.5l2 2L6 12H4v-2z"/><path d="M2 14h12"/></svg>';
+function fieldChip(t) {
+  const o = oppById(t.oppId), a = o && latestAsk(o), v = !a || a.status === "Made" ? "Awaiting" : a.status;
+  return `<button type="button" class="fchip" data-form="response" data-cid="${t.contactId}" data-item="${t.oppId}" aria-label="Response: ${esc(v)}. Record the response">${FORM_IC}Response: <b>${esc(v)}</b> ${CHEV}</button>`;
+}
 function taskRow(t, showWhere) {
   const st = taskStatus(t), al = taskAlert(t);
   return `<div class="trow${st === "done" ? " isdone" : ""}" data-tid="${t.id}" data-name="${esc((t.text + " " + nameOf(contactById(t.contactId)) + " " + taskWhere(t)).toLowerCase())}"><div class="tacts"><button type="button" class="ta-wait" data-tk-wait="${t.id}">Waiting</button><button type="button" class="ta-done" data-tk-done="${t.id}">Done</button></div>
     <div class="row tmain"><button type="button" class="tcheck${st === "done" ? " on" : ""}" data-tk-done="${t.id}" aria-label="${st === "done" ? "Mark not done" : "Mark done"}">${st === "done" ? checkSvg : ""}</button>
-    <div class="t">${alertPill(al)}<div class="ttext${al ? " na-do" : ""}">${esc(t.text)}</div><div class="s">${st === "done" ? "Done" + (t.doneOn ? " " + fmtDate(t.doneOn) : "") : st === "waiting" ? (t.due ? "Check back " + fmtDate(t.due) : "Waiting") : t.due ? "Due " + fmtDate(t.due) : "No due date"}${showWhere ? " · " + esc(taskWhere(t)) : t.oppId ? " · on the opportunity" : ""}${st === "done" ? "" : ` · <button type="button" class="rowedit inl" data-form="editTask" data-cid="${t.contactId}" data-item="${t.id}" aria-label="Edit task">Edit</button>`}</div></div>
+    <div class="t">${alertPill(al)}<div class="ttext${al ? " na-do" : ""}">${askCheckTask(t) ? `<span class="ftext" data-form="response" data-cid="${t.contactId}" data-item="${t.oppId}" role="button" tabindex="0">${esc(t.text)}</span>` : esc(t.text)}</div>${askCheckTask(t) ? fieldChip(t) : ""}<div class="s">${st === "done" ? "Done" + (t.doneOn ? " " + fmtDate(t.doneOn) : "") : st === "waiting" ? (t.due ? "Check back " + fmtDate(t.due) : "Waiting") : t.due ? "Due " + fmtDate(t.due) : "No due date"}${showWhere ? " · " + esc(taskWhere(t)) : t.oppId ? " · on the opportunity" : ""}${st === "done" ? "" : ` · <button type="button" class="rowedit inl pen" data-form="editTask" data-cid="${t.contactId}" data-item="${t.id}" aria-label="Edit task" title="Edit task">${PEN}</button>`}</div></div>
     <button type="button" class="tstat s-${st}" data-tk-stat="${t.id}" aria-label="Status: ${TSTAT[st]}. Change">${TSTAT[st]}<svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div></div>`;
 }
 // Create opportunity tapped for a contact who isn't ready: list what must be true, ticked or not, and what's left to do

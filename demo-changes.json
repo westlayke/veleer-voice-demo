@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 11:10 PM",
+      "change": "Release 1.1 goes live: the Nov 1, 9:34 PM ET preview build becomes the live page (117 changes since release 1.0, listed below). Checked first: 168 of 168 checks on the live page, Patient Pat (100 conversations: 4.2 asks per 10 minutes, 91 reached Closed Won) and a real-Ara run (20 conversations, 19 saved, the one miss a known harness gap). The live copy again leaves out the Hey Ara start-up address.",
+      "area": "Release",
+      "requestedBy": "Carverhill",
+      "why": "\"Run the pat and ara tests, and if they pass, put 1.1 live / on production\""
+    },
+    {
       "date": "Nov 1, 9:34 PM",
       "change": "A slow line test alone no longer reconnects a line that is working. Four seconds after a scripted line with nothing back, the phone tests the line with a small web request; when that request was slow but the voice line had delivered messages since the scripted line went (the service was answering a save call first), the line is now kept and the 8 s fallback stands, instead of an 8 to 9 s reconnect.",
       "area": "Connection",

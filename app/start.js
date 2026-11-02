@@ -27,8 +27,8 @@ const spookySeason = () => new Date().getMonth() === 9;
 const spookyOn = () => spookySeason() && !S.settings.noSpooky;
 // phones with Reduce Motion on still get the visitors and their sounds, but they fade in and out in one spot instead of moving across (Tiffany saw none, Oct 24)
 const calmMotion = () => !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
-// spooky mode ("spooky mode" to the assistant, or Settings): night look, haunted-house host, spooky sounds on big moments, more visitors; ends by itself on Nov 1
-const spookyMode = () => spookySeason() && !!S.settings.spooky;
+// spooky mode ("spooky mode" to the assistant, or Settings): night look, haunted-house host, spooky sounds on big moments, more visitors; any time of year since Nov 1 (Carverhill), like Christmas mode
+const spookyMode = () => !!S.settings.spooky;
 /* ---------- Christmas (December; Christmas mode any time): snow, gifts, elves and reindeer come by; Christmas mode adds Santa's sleigh, a tree,
    an evergreen look with a wreath and a nativity scene on Home, Ara as a warm Christmas host, sleigh bells and Santa's "ho ho ho"; ends by itself on Jan 1 ---------- */
 const ON_PREVIEW = VERSION_FILE === "preview-version.json";
@@ -164,9 +164,13 @@ function spookyOnce(kind) {
   } else if (kind === "skeleton") { // strolls in from the right along the bottom to mid screen, stops, tips his skull and waves while his recording plays (5.5 s), then strolls off left (Oct 26)
     el.innerHTML = SKELETON; const stopX = Math.round(w / 2 - 36); /* centred: the figure is 72 px wide */
     const step = (x, i) => ({ transform: `translate(${x}px, ${i % 2 ? -5 : 0}px)` });
-    el.animate([step(w + 20, 0), step(w * 0.9, 1), step(w * 0.8, 2), step(w * 0.7, 3), { ...step(stopX, 4), offset: 0.22 }, { transform: `translate(${stopX}px, 0)`, offset: 0.74 },
+    const drop = Math.random() < 0.5; /* half the time he drops from the top of the screen instead, lands with a bounce, then does his gesture and laugh (Carverhill, Oct 29) */
+    if (drop) { const x = Math.round(w * (0.2 + Math.random() * 0.6)) - 36, top = -(h + 40); el.dataset.drop = "1";
+      el.animate([{ transform: `translate(${x}px, ${top}px)`, easing: "ease-in" }, { transform: `translate(${x}px, 0)`, offset: 0.18, easing: "ease-out" }, { transform: `translate(${x}px, -16px)`, offset: 0.22, easing: "ease-in" }, { transform: `translate(${x}px, 0)`, offset: 0.26 }, { transform: `translate(${x}px, 0)`, offset: 0.74 },
+        { ...step(x * 0.6, 5), offset: 0.82 }, { ...step(x * 0.3, 6), offset: 0.89 }, { ...step(x * 0.1, 7), offset: 0.95 }, step(-90, 8)], { duration: 12000, easing: "linear" }).onfinish = done; }
+    else el.animate([step(w + 20, 0), step(w * 0.9, 1), step(w * 0.8, 2), step(w * 0.7, 3), { ...step(stopX, 4), offset: 0.22 }, { transform: `translate(${stopX}px, 0)`, offset: 0.74 },
       { ...step(w * 0.35, 5), offset: 0.82 }, { ...step(w * 0.2, 6), offset: 0.89 }, { ...step(w * 0.05, 7), offset: 0.95 }, step(-90, 8)], { duration: 12000, easing: "linear" }).onfinish = done;
-    setTimeout(() => { if (el.isConnected) { el.classList.add("sk-waving"); spookySound(++spkSkel % 5 ? "laugh" : "skeleton"); } }, 2900); /* he has stopped: the skull nods (css sk-skull) and a recording plays while he waves: the laugh 4 times in 5, the full line every fifth visit */
+    setTimeout(() => { if (el.isConnected) { el.classList.add("sk-waving"); spookySound(++spkSkel % 5 ? "laugh" : "skeleton"); } }, drop ? 3200 : 2900); /* he has stopped: the skull nods (css sk-skull) and a recording plays while he waves: the laugh 4 times in 5, the full line every fifth visit */
   } else if (kind === "snow") { // a flurry of snowflakes drifting down
     el.style.cssText = "left:0;top:0;width:100%;height:100%"; const calm = calmMotion();
     for (let i = 0; i < 16; i++) { const f = document.createElement("i"), x = Math.round(Math.random() * (w - 24)), sz = 14 + Math.round(Math.random() * 14), dur = 6000 + Math.random() * 3000;
@@ -222,8 +226,8 @@ setTimeout(owlHint, 1500);
 // spooky mode's big moments: a creaking door as a form opens, thunder on Save, the organ sting and a cackle on Closed Won
 // Christmas mode's: sleigh bells as a form opens, a chime on Save, "Joy to the World" then "ho ho ho" on Closed Won
 function spookyCue(kind) { if (spookyMode()) spookySound(kind); else if (xmasMode()) spookySound({ creak: "jingle", thunder: "chime", won: "carol" }[kind] || kind); }
-render(); save(); welcomeModal(); callLink(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
+render(); save(); welcomeModal(); formLogNotice(); checkUpdate(); setTimeout(prefetchToken, 300);
 // Each visit (app opened, or back after 30 minutes away) goes in the activity log, so the owner can count devices.
 function logOpen() { if (!G.visit || Date.now() - G.visit.last > 30 * 60000) act("open", "Opened the app (build " + BUILD + ")" + (calmMotion() ? " (Reduce Motion is on)" : "")); }
-logOpen(); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
+if (typeof actRestore === "function") actRestore(); logOpen(); if (typeof restoreResume === "function" && S.settings.userName) setTimeout(restoreResume, 600); if (typeof prepNamedLines === "function" && S.settings.userName) setTimeout(() => prepNamedLines("app opened"), 3000); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") logOpen(); });
 window.__demo = { get state() { return S; }, resolveTarget, hfYes, spookyOnce, setSpooky, setXmas, owlHint, spkUnlock, get spkCtx() { return spkCtx; }, get spkPlayed() { return spkPlayed; } };

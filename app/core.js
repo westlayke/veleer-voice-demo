@@ -7,14 +7,6 @@ function applyName() {
   OFFICER_INITIALS = OFFICER.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "DR";
 }
 const STAGES = ["Qualification", "Cultivation", "Ask Planning", "Ask Made", "Commitment", "Closed"];
-// entities (the guide renamed Fund to Entity) and the state campaign each one can take besides National (Carverhill, Oct 20)
-const ENTITY_STATE = { "Citizens Alliance C3": "", "C.A. of America Action C4": "", "C.A. Fed PAC": "", "C.A. Idaho C4": "Idaho", "C.A. Idaho PAC": "Idaho",
-  "C.A. North Dakota C4": "North Dakota", "C.A. North Dakota State PAC": "North Dakota", "C.A. North Dakota Fed PAC": "North Dakota", "C.A. New Hampshire C4": "New Hampshire",
-  "C.A. Pennsylvania C4": "Pennsylvania", "C.A. Pennsylvania State PAC": "Pennsylvania" };
-const FUNDS = Object.keys(ENTITY_STATE);
-const CAMPAIGNS = ["National", "Idaho", "North Dakota", "New Hampshire", "Pennsylvania"];
-const oppNeedsCampaign = (action, d) => (action === "opportunity" || action === "editOpportunity") && d && d.fund && !d.campaign && campaignsFor(d.fund).length > 1;
-const campaignsFor = (f) => ENTITY_STATE[f] === undefined ? CAMPAIGNS : ["National", ...(ENTITY_STATE[f] ? [ENTITY_STATE[f]] : [])];
 // a spoken amount -> a number: "one hundred thousand dollars", "250k", "$1.5 million", "a hundred and fifty thousand" (Oct 24: Ara couldn't record "one hundred thousand")
 const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
@@ -31,29 +23,16 @@ function spokenAmount(raw) {
   }
   const n = total + cur; return any && n > 1 ? n : null;
 }
-// a spoken entity -> one entity, or the few it could be: "the C-3", "Citizens Alliance C 3", "North Dakota Fed PAC" (Oct 24: "C-3" wasn't understood)
-const entityWords = (t) => String(t || "").toLowerCase().replace(/c\.a\.|\bca\b/g, "citizens alliance").replace(/\bc\s*-?\s*([34])\b/g, "c$1").replace(/[^a-z0-9 ]/g, " ")
-  .split(/\s+/).filter(w => w && !/^[a-z]$/.test(w) && !["the", "a", "an", "is", "it", "its", "it's", "one", "that", "this", "to", "for", "of", "let's", "lets", "go", "with", "please", "entity", "entities", "ones", "i", "think", "say", "make", "yes", "yeah"].includes(w));
-function matchEntity(t) {
-  const ws = entityWords(t); if (!ws.length) return { hits: [] };
-  const hits = FUNDS.filter(f => { const fw = entityWords(f); return ws.every(w => fw.includes(w)); });
-  const exact = hits.filter(f => entityWords(f).length === ws.length); // "C.A. Fed PAC" is that one, not also the North Dakota Fed PAC
-  return { hits: exact.length === 1 ? exact : hits };
-}
-const ENTITY_RULE = FUNDS.map(f => `${f}: ${campaignsFor(f).join(" or ")}`).join("; ");
-// by state, so Ara never invents one (seen Oct 24: "C.A. Pennsylvania Fed PAC", which doesn't exist)
 // "Oct 25 (today)": the model misread a same-day due date as tomorrow (Oct 25 call), so dates are handed back with their day word
 const dayWord = (iso) => { const t = typeof todayISO === "function" ? todayISO() : ""; if (!iso || !t) return ""; const d = Math.round((new Date(iso) - new Date(t)) / 86400000); return d === 0 ? "today" : d === 1 ? "tomorrow" : d === -1 ? "yesterday" : ""; };
 const dateSaid = (iso) => { const w = dayWord(iso); return fmtDate(iso) + (w ? ` (${w})` : ""); };
-const ENTITIES_BY_STATE = () => { const by = {}; FUNDS.forEach(f => { const st = ENTITY_STATE[f] || "National"; (by[st] = by[st] || []).push(f); }); return Object.entries(by).map(([st, fs]) => `${st}: ${fs.join(", ")}`).join("; "); };
-const CAPACITY = { A: "$250k and up", B: "$100k to $250k", C: "$25k to $100k", D: "$5k to $25k", E: "Under $5k" };
-const CAPACITY_LIST = Object.entries(CAPACITY).map(([k, v]) => k + " = " + v).join(", "); // "A = $250k and up, B = ..." for Ara
-const OUTCOMES = ["Interested, continue cultivation", "Ask made", "Ask accepted", "Not now, revisit", "Not interested", "Referred elsewhere"];
-const NO_NEXT_STEP = ["Not interested", "Referred elsewhere"];
-const RESPONSES = ["Awaiting", "Accepted", "Countered", "Declined"];
-const PAY_METHODS = ["Check", "Credit card", "Bank transfer", "Wire", "Stock", "Other"];
+/* the next-step question, as the app words it or as Ara words it herself ("Do you want to set that now, and if so, what is it and when is it due?", next-step-no run, Nov 1) */
+const NEXT_ASKED_RE = /set (it|that|one) now|set (a|the) next step|next step.*yes or no|what is it and when is it due/i; /* never "What's the next step, and when is it due?" itself: that is the detail question after a yes */
+const dateSpoken = (iso) => dateSaid(iso).replace(/ \((today|tomorrow|yesterday)\)$/, ", $1"); /* "Nov 1, today": the day word spoken after the date */
 const PLEDGE_FOLLOWUP_DAYS = 10; // demo default; the guide's pledge reminder interval is still open with the customer
-const MEET_TYPES = ["In person", "Phone call", "Video call", "Event", "Email"];
+const ASK_CHECK_DAYS = 14; // a setting: an ask still waiting for its answer gets a task to check on it within this many days (Carverhill, Oct 28: 30, then 14 the same day)
+const ASK_CHECK_RE = /^Check on the answer to the /; // the text of that task; a recorded response, pledge or gift marks it done
+const askCheckTask = (t) => !!t && !t.done && (t.askCheck || ASK_CHECK_RE.test(t.text || "")) && !!t.oppId;
 const MIC = '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
 const mic = (s) => MIC.replace(/SZ/g, s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -69,7 +48,6 @@ const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d
 const YEAR = new Date().getFullYear();
 
 /* ---------- actions: what the officer can do by voice, in any order ---------- */
-const DURATIONS = ["30 minutes", "45 minutes", "1 hour", "90 minutes", "2 hours"];
 // fields that several forms share, defined once
 const F_WHEN = () => [{ k: "date", label: "Date", type: "date", req: true }, { k: "meetingType", label: "Type", type: "select", opts: ["", ...MEET_TYPES], req: true }];
 const F_NEXT = () => [{ k: "nextStep", label: "Next step (creates one Task)" }, { k: "nextDue", label: "Next step due", type: "date" }];
@@ -102,7 +80,7 @@ const ACTIONS = {
       { k: "forName", label: "Contact", fixed: true },
       { k: "title", label: "Title", req: true },
       { k: "date", label: "Date", type: "date", req: true }, { k: "time", label: "Start time", type: "time", req: true },
-      { k: "duration", label: "Length", type: "select", opts: DURATIONS }, { k: "meetingType", label: "Type", type: "select", opts: ["In person", "Phone call", "Video call"] },
+      { k: "duration", label: "Length", type: "select", opts: DURATIONS }, { k: "meetingType", label: "Type", type: "select", opts: MEETING_FORM_TYPES },
       { k: "location", label: "Where" }, { k: "notes", label: "Notes", type: "area" } ],
     left: "Opens Google Calendar with this meeting filled in. Tap Save there, then come back." },
   task: { title: "New task", saved: "Task added", saveLabel: "Save task",
@@ -121,7 +99,7 @@ const ACTIONS = {
       { k: "forName", label: "Opportunity", fixed: true },
       { k: "fund", label: "Entity", type: "select", opts: ["", ...FUNDS], req: true }, { k: "campaign", label: "Campaign", type: "select", opts: (d) => { const c = campaignsFor(d.fund); return c.length > 1 ? ["", ...c] : c; }, req: true },
       { k: "plannedDate", label: "Planned ask date", type: "date", req: true }, { k: "amount", label: "Amount", type: "money", req: true },
-      { k: "askType", label: "Ask type", type: "select", opts: ["Outright", "Pledge", "Planned gift"] },
+      { k: "askType", label: "Ask type", type: "select", opts: ASK_TYPES },
       { k: "officer", label: "Gift officer", fixed: true }, { k: "participants", label: "Participants in the ask" } ],
     pairs: [["plannedDate", "amount"]] },
   ask: { title: "Interaction report · the ask", saved: "Ask recorded", saveLabel: "Save",
@@ -134,19 +112,28 @@ const ACTIONS = {
       ...F_NEXT() ],
     pairs: [["date", "meetingType"], ["amount", "fund"]],
     left: "An ask meeting is substantive, so it needs a next step and its due date unless the investor declined. A declined ask closes the opportunity as Closed Lost and needs a reason. A yes to an outright ask moves it to Commitment, waiting for the gift; a pledge ask waits in Ask Made until Record pledge adds the schedule." },
+  // the investor's answer to an ask that is out, when it comes in later by email, phone or in person (Carverhill, Oct 28)
+  response: { title: "Record the response", saved: "Response recorded", saveLabel: "Save response",
+    fields: [
+      { k: "forName", label: "Opportunity", fixed: true },
+      { k: "response", label: "Response", type: "select", opts: ["", ...ANSWERS], req: true },
+      { k: "agreedAmount", label: "Agreed or counter amount (verbal)", type: "money" }, { k: "lostReason", label: "Reason (if declined)" },
+      { k: "date", label: "Date heard", type: "date", req: true },
+      ...F_NEXT() ],
+    left: "The investor's answer to the ask that is out. A yes to an outright ask moves the opportunity to Commitment, waiting for the gift; a yes to a pledge ask waits for Record pledge; a counter creates the follow-on ask; a decline closes it as Closed Lost, with a reason. Saving marks the Check on the answer task done." },
   pledge: { title: "Record pledge", saved: "Pledge recorded", saveLabel: "Record pledge",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
       { k: "amount", label: "Pledge amount", type: "money", req: true }, { k: "fund", label: "Entity", type: "select", opts: ["", ...FUNDS], req: true },
-      { k: "confirmedBy", label: "Confirmed by", type: "select", opts: ["Email", "Phone", "In person"], req: true }, { k: "confirmedDate", label: "Confirmed on", type: "date", req: true },
-      { k: "installments", label: "Payments", type: "money", num: true }, { k: "frequency", label: "Frequency", type: "select", opts: ["Annual", "Quarterly", "Monthly", "One payment"] },
+      { k: "confirmedBy", label: "Confirmed by", type: "select", opts: CONFIRMED_BY, req: true }, { k: "confirmedDate", label: "Confirmed on", type: "date", req: true },
+      { k: "installments", label: "Payments", type: "money", num: true }, { k: "frequency", label: "Frequency", type: "select", opts: FREQUENCIES },
       { k: "firstAmount", label: "First payment", type: "money" }, { k: "firstDue", label: "First payment due", type: "date", req: true } ],
     pairs: [["confirmedBy", "confirmedDate"], ["installments", "frequency"], ["firstAmount", "firstDue"]],
     left: "No pledge card is needed. The pledge is confirmed by email, phone or in person." },
   cultivate: { title: "Move to Cultivation?", saved: "Decision recorded", saveLabel: "Confirm",
     fields: [
       { k: "forName", label: "Opportunity", fixed: true },
-      { k: "decision", label: "Decision", type: "select", opts: ["Move to Cultivation", "Defer"], req: true },
+      { k: "decision", label: "Decision", type: "select", opts: DECISIONS, req: true },
       { k: "reason", label: "Reason (needed to defer)", type: "area" }, { k: "reconsiderOn", label: "Reconsider on", type: "date" } ],
     left: "All three criteria are met: accepted, rated and talked to. Defer keeps it in Qualification; the prompt comes back on the Reconsider on date or after the next substantive interaction." },
   gift: { title: "Record gift", saved: "Gift recorded", saveLabel: "Record gift",
@@ -165,6 +152,39 @@ const ACTIONS = {
     pairs: [["date", "method"]],
     left: "This gift is applied to the commitment: the outright gift agreed at the ask, or the pledge. The first gift closes the opportunity as Closed Won; later installments are tracked on the pledge." }
 };
+
+// optional: the optional fields asked one at a time, in this order (absent = every optional field); groups: fields asked as one question
+// Voice form policy (Carverhill, Oct 28: one generic way to fill every form by voice; what differs between forms is declared here,
+// and voiceforms.js applies it the same way to every form). A rule not in this table is not a rule the voice engine knows about.
+const VOICE_RULES = {
+  contact: { needsOneOf: ["email", "mobile"], askFirst: "capacity", optional: ["capacity", "howMet", "permText", "permSource", "flags"], groups: { flags: ["ally", "dnc"] }, defaultOn: ["permEmail", "permCalls"] },
+  editContact: { needsOneOf: ["email", "mobile"], optional: [], groups: { flags: ["ally", "dnc"] }, defaultOn: ["permEmail", "permCalls"] },
+  interaction: { alwaysAsk: "substantive", optional: [], nextStepWhen: (d, t) => needsNextStep("interaction", d, t) }, /* outcome and the rating stay on the screen: the report is long enough */
+  editInteraction: { optional: [], nextStepWhen: (d, t) => needsNextStep("editInteraction", d, t) },
+  ask: { optional: [], nextStepWhen: (d) => !!d.response && d.response !== "Declined", followUpWhen: (d) => d.response === "Awaiting", requiredWhen: (d) => d.response === "Declined" ? ["lostReason"] : [] },
+  response: { optional: [], nextStepWhen: (d) => !!d.response && d.response !== "Declined", followUpWhen: (d) => d.response === "Awaiting", requiredWhen: (d) => d.response === "Declined" ? ["lostReason"] : [] },
+  cultivate: { optional: [], requiredWhen: (d) => d.decision === "Defer" ? ["reason", "reconsiderOn"] : [], ownWords: true },
+  opportunity: { optional: ["fund", "campaign", "potential", "notes"] },
+  plan: { secondYes: "amount", optional: ["askType"] }, /* the amount checked once more after the yes, as gifts and pledges (Carverhill, Oct 31 5:23 PM) */
+  editPlan: { secondYes: "amount", optional: [] }, /* an edit changes what the officer named: no optional details offered (10:10 AM call, Nov 1) */
+  editTask: { optional: [] },
+  task: { optional: [] },
+  pledge: { secondYes: "amount", optional: ["installments", "frequency", "firstAmount"] },
+  gift: { secondYes: "amount", optional: [] },
+  payment: { prefilled: ["amount"], optional: [], routedFrom: "gift" }, /* Record gift on a Commitment opportunity opens this form (drafts.js resolveTarget) */
+  meeting: { noVoiceSave: true, optional: [] }
+};
+const voiceRule = (action) => VOICE_RULES[action] || {};
+/* the one check's rules, read by the app's checks and by the machine: how many worded replies Ara gets before the app stops asking (the machine's own
+   net is one more), whether the officer's voice alone ends it (a yes/no or say check waits for the words: a cough is not an answer), and how long it stands */
+const CHECK_RULES = {
+  ctxWatch: { asks: 3, onSpeech: true },                /* where we were after a drop */
+  sayWatch: { asks: 2, onSpeech: false, maxMs: 20000 }, /* the question Ara was told to ask; maxMs: the machine ends the check after this, the clock restarted by a nudge */
+  ynWatch: { asks: 2, onSpeech: false, maxMs: 20000 },  /* Ara following the officer's yes or no */
+  nudge: { asks: 3, onSpeech: true }                     /* the tool call Ara owes */
+};
+const checkRule = (kind) => CHECK_RULES[kind];
+
 
 /* ---------- giving history (example gifts already received) ---------- */
 const g = (date, amount, fund, method) => ({ date, amount, fund, method });
@@ -195,7 +215,7 @@ function seedActivity(st) {
   I(pr, 23, "Video call", "Talked through the Pennsylvania field plan. Asked for the budget summary.", true);
   I(el, 59, "In person", "First meeting after Luis Ortega's handover. Toured the New Hampshire office.", true);
   const K = (c, text, due, onOpp, example) => c && st.tasks.push({ id: uid(), contactId: c.id, oppId: onOpp && opp(c) ? opp(c).id : null, text, due, done: false, example: true });
-  K(ke, "Follow up on Ken's pledge decision", addDays(T, -4), true);
+  K(ke, "Check on the answer to the $30,000 ask", addDays(T, -4), true); // the task every awaiting ask gets (Oct 28); Ken's is overdue in the example data
   K(el, "Ask reminder: Vasquez, Elena - 2026", addDays(T, 11), true);
   K(ru, "Send Ruth the Pennsylvania update", addDays(T, 6), false);
   st.meetings = st.meetings || [];
@@ -261,6 +281,13 @@ const MIGRATIONS = [
   // 6: earlier versions used the responses Yes / Counter-offer / Considering / No
   (S) => { const ST = { Asked: "Made", Pledged: "Accepted" }, RS = { Yes: "Accepted", "Counter-offer": "Countered", Considering: "Awaiting", No: "Declined" };
     S.opps.forEach(o => (o.asks || []).forEach(a => { if (ST[a.status]) a.status = ST[a.status]; if (RS[a.response]) a.response = RS[a.response]; })); },
+  // 7: every ask still awaiting its answer gets the Check on the answer task (Oct 28); the example task for Ken's ask takes the standard wording
+  (S) => { S.opps.filter(o => o.stage === "Ask Made").forEach(o => { const a = (o.asks || [])[0]; if (!a || a.status !== "Made") return;
+    const old = S.tasks.find(t => t.oppId === o.id && !t.done && /pledge decision/.test(t.text || ""));
+    if (old) old.text = `Check on the answer to the ${money(a.amount)} ask`;
+    else if (!S.tasks.some(t => t.oppId === o.id && askCheckTask(t))) S.tasks.unshift({ id: uid(), contactId: o.contactId, oppId: o.id, text: `Check on the answer to the ${money(a.amount)} ask`, due: addDays(a.askedOn || todayISO(), ASK_CHECK_DAYS), done: false, auto: true }); }); },
+  // 8 (Oct 28): check-on-the-answer tasks made under the 30-day rule move to 14 days after the ask
+  (S) => { (S.tasks || []).forEach(t => { if (!askCheckTask(t) || t.done) return; const o = (S.opps || []).find(x => x.id === t.oppId), a = o && latestAsk(o); if (!a || !a.askedOn) return; const due = addDays(a.askedOn, ASK_CHECK_DAYS); if (t.due > due) t.due = due; }); },
 ];
 const DATA_VERSION = MIGRATIONS.length;
 // phones saved before versioning have no number and run every step once (each step is safe to repeat)

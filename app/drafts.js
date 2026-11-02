@@ -55,6 +55,10 @@ const EDIT_KEYS = ["first", "last", "email", "mobile", "permEmail", "permCalls",
 // flags this officer may not turn off (the demo officer is a gift officer, not the Chief Gift Officer)
 const lockedOff = (c, k) => k === "dnc" ? !!c.dnc : k === "ally" ? !!c.ally && (c.allySetBy || "") !== OFFICER : false;
 // Returns { contact, opp } or { error } for Grok to relay.
+// the name evidence guard (Oct 29 real-line runs: after a drop cut "Record the ask for Elena", Grok guessed "That sounds like Ken Ito" and the form took it):
+// a contact Ara names counts only when the officer has named them, or they're open on screen, the form's target, or the last save
+const unnamed = (c) => !!c && G.live && typeof nameHeard === "function" && officerLines(1).length > 0 && !nameHeard(c);
+const unnamedError = (c) => `The officer hasn't named ${nameOf(c)} in this conversation, so don't assume it's them. Ask exactly: "Which investor is this for?" and wait for the name.`;
 function resolveTarget(action, spoken, sel = {}) {
   if (action === "contact") return {};
   let list = spoken ? findContacts(spoken) : [];
@@ -62,19 +66,24 @@ function resolveTarget(action, spoken, sel = {}) {
   if (!list.length) return { error: spoken ? `No contact named "${spoken}". Known contacts: ${S.contacts.map(nameOf).join(", ")}. Ask who they mean, or offer to add them as a new contact.` : "Ask which contact this is for." };
   if (list.length > 1) return { error: `More than one contact matches: ${list.map(nameOf).join(", ")}. Ask which one.` };
   const contact = list[0];
+  if (spoken && !sel.noNameGuard && unnamed(contact)) return { error: unnamedError(contact) }; /* Oct 29 real-line runs: after a drop cut "Record the ask for Elena", Grok guessed "That sounds like Ken Ito" and the form took it */
   if (action === "editContact") return { contact };
   if (EDITS.includes(action)) return editItem(action, contact, sel);
   if (action === "opportunity") { const ch = oppChecks(contact), miss = ch.filter(x => !x.ok);
     return miss.length ? { gate: contact, error: `An opportunity can be created for ${nameOf(contact)} only when all of these are true: ${ch.map(x => `${x.need.replace(/^They/, nameOf(contact).split(" ")[0])} (${x.ok ? "done" : "not yet"}: ${x.now})`).join("; ")}. Still to do: ${miss.map(x => x.todo).join(" ")} Explain this briefly: what is already true and what still needs doing.${!contact.capacity && !contact.dnc && !contact.ally ? " Then offer to set their capacity rating now (set_capacity_rating)." : ""}` } : { contact }; }
   if (contact.dnc && ["meeting", "plan", "ask", "opportunity"].includes(action)) return { error: `${nameOf(contact)} is marked Do Not Contact, so no outreach can be planned. Only a Chief Gift Officer can clear it.` };
   if (contact.ally && ["opportunity", "plan", "ask", "pledge", "gift"].includes(action)) return { error: `${nameOf(contact)} is an Ally - Do Not Solicit, so they can't be asked for a gift. The officer who set the flag or the Chief Gift Officer can turn it off.` };
+  if (action === "response") { const o = openOpp(contact.id), a = latestAsk(o); // the answer to the ask that is out
+    if (!o) return { error: `${nameOf(contact)} has no open opportunity, so there's no ask waiting for an answer.` };
+    if (o.stage !== "Ask Made" || !a || a.status !== "Made") return { error: o.stage === "Ask Made" ? `${o.name} already has its answer: ${a ? a.status : "none"}. Offer to record the pledge or a gift.` : o.stage === "Ask Planning" ? `${o.name} hasn't been asked yet; the ask is planned for ${fmtDate(latestAsk(o).plannedDate)}. When it's made, record the ask with its response.` : `${o.name} is in ${o.stage}, with no ask waiting for an answer.` };
+    return { contact, opp: o, item: a }; }
   if (action === "interaction") return { contact, opp: openOpp(contact.id) || null };
   if (action === "task" || action === "meeting") return { contact, opp: openOpp(contact.id) || null };
   const opp = openOpp(contact.id);
   if (!opp) return { error: `${nameOf(contact)} has no open opportunity yet. Offer to create one first.` };
   const qual = `${opp.name} is still in Qualification. An ask can be planned only once it is in Cultivation, which needs a capacity rating, a substantive interaction and the officer's confirmation${cultMissing(contact).length ? "; it still needs " + cultMissing(contact).join(" and ") : "; the criteria are met, so offer to move it to Cultivation"}.`;
   if (action === "cultivate") {
-    if (opp.stage !== "Qualification") return { error: `${opp.name} is already in ${opp.stage}.` };
+    if (opp.stage !== "Qualification") return { error: `${opp.name} is already in ${opp.stage}. Say so and offer what comes next there.` };
     const m = cultMissing(contact); if (m.length) return { error: `${opp.name} can't move to Cultivation yet: it still needs ${m.join(" and ")}. Offer to log a meeting.` };
   }
   if ((action === "plan" || action === "ask") && opp.stage === "Qualification") return { error: qual };
@@ -92,6 +101,35 @@ function resolveTarget(action, spoken, sel = {}) {
 function focusField(el) { if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); try { el.focus({ preventScroll: true }); } catch (x) {} } }
 // a recorded pledge or gift settles the contact's "Follow up on agreed pledge" tasks
 const doneAgreedPledgeTasks = (c) => S.tasks.forEach(k => { if (k.contactId === c.id && /^Follow up on agreed pledge/.test(k.text)) k.done = true; });
+// the answer, a pledge or a gift settles the opportunity's "Check on the answer to the ask" task (Oct 28)
+const doneAskCheckTasks = (o) => S.tasks.forEach(k => { if (k.oppId === o.id && askCheckTask(k)) { k.done = true; k.status = "done"; k.doneOn = todayISO(); } });
+// what the investor's answer does to the ask, the opportunity and the tasks: shared by Record the ask and Record the response (Oct 28).
+// Awaiting creates the Check on the answer task, due in ASK_CHECK_DAYS, and the note says so (stated to the officer, not asked); any answer marks it done.
+function askOutcome(o, c, a, d, lead) {
+  const ids = { contactId: c.id, oppId: o.id }, r = d.response || "Awaiting";
+  a.response = r;
+  if (r === "Accepted") { a.status = "Accepted"; if (d.agreedAmount) a.amount = d.agreedAmount; }
+  if (r === "Countered") { a.status = "Countered"; o.asks.unshift({ fund: a.fund, campaign: a.campaign, amount: d.agreedAmount || a.amount, askType: a.askType, status: "Agreed, pledge to follow", plannedDate: d.date, askedOn: d.date }); }
+  if (r === "Declined") { a.status = "Declined"; a.reason = d.lostReason; }
+  if (r === "Declined") { o.stage = "Closed"; o.closed = "Lost"; o.lostReason = d.lostReason; o.closedOn = d.date; log(`${lead}: Declined. Closed Lost: ${d.lostReason}`, ids); }
+  else { const moved = o.stage !== "Ask Made"; o.stage = "Ask Made"; log(`${lead}: ${r}${d.agreedAmount ? ", " + money(d.agreedAmount) : ""}${moved ? ". Moved to Ask Made" : ""}`, ids); }
+  const yes = (r === "Accepted" || r === "Countered") ? latestAsk(o) : null, outright = yes && (yes.askType || "Outright") === "Outright";
+  // a yes to an outright ask is the commitment: straight to Commitment, waiting for the gift (a pledge ask still waits for Record pledge with its schedule)
+  if (outright) { const due = addDays(d.date || todayISO(), PLEDGE_FOLLOWUP_DAYS); yes.status = "Accepted";
+    o.pledge = { outright: true, amount: yes.amount, fund: yes.fund, confirmedBy: "Ask accepted", confirmedDate: d.date, installments: 1, frequency: "One payment", firstAmount: yes.amount, firstDue: due, payments: [], status: "Current" };
+    o.stage = "Commitment"; c.status = "Investor";
+    log(`Outright gift of ${money(yes.amount)} agreed at the ask. Moved to Commitment`, ids); }
+  if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: d.nextStep, due: d.nextDue, done: false, askCheck: r === "Awaiting" });
+  if (yes) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: `Follow up on agreed ${outright ? "gift" : "pledge"}: ${money(yes.amount)}`, due: addDays(d.date || todayISO(), PLEDGE_FOLLOWUP_DAYS), done: false, auto: true });
+  let note = "";
+  if (r === "Awaiting") { const due = addDays(d.date || todayISO(), ASK_CHECK_DAYS);
+    if (d.nextStep) { log(`Task added: ${d.nextStep} by ${fmtDate(d.nextDue)} (the follow-up on this ask)`, ids); note = `The task "${d.nextStep}" by ${fmtDate(d.nextDue)} is the follow-up on this ask.`; }
+    else { const had = S.tasks.find(k => k.oppId === o.id && askCheckTask(k));
+      if (had) note = `The task "${had.text}" by ${fmtDate(had.due)} is the follow-up on this ask.`;
+      else { S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: `Check on the answer to the ${money(a.amount)} ask`, due, done: false, auto: true }); log(`Task added: check on the answer to the ${money(a.amount)} ask by ${fmtDate(due)}`, ids); note = `A task to check on ${c.first}'s answer by ${fmtDate(due)} was added.`; } } }
+  else { const had = S.tasks.filter(k => k.oppId === o.id && askCheckTask(k)).length; doneAskCheckTasks(o); if (had) note = "The task to check on the answer is marked done."; }
+  return note;
+}
 let V = null; // { action, data, fromVoice, target }
 function prefill(action, d, t) {
   const out = Object.assign({}, d);
@@ -101,8 +139,9 @@ function prefill(action, d, t) {
   if (["plan", "ask", "pledge", "cultivate", "gift", "payment"].includes(action)) out.forName = o ? o.name : "";
   if (action === "cultivate" && !out.decision) out.decision = "Move to Cultivation";
   if (action === "gift") { if (!out.fund) out.fund = (a && a.fund) || o.fund || ""; if (out.amount == null && a) out.amount = a.amount; if (!out.date) out.date = todayISO(); }
-  if (action === "payment") { if (out.amount == null && o.pledge) out.amount = o.pledge.firstAmount; if (!out.date) out.date = todayISO(); }
-  if (action === "interaction" || action === "ask") { if (!out.date) out.date = todayISO(); }
+  if (action === "payment") { if (out.amount == null && o.pledge) out.amount = o.pledge.firstAmount || o.pledge.amount; if (!out.date) out.date = todayISO(); } /* prefilled (VOICE_RULES): the agreed amount, never asked (Oct 28 4:41 PM call: it was dropped and asked again) */
+  if (action === "interaction" || action === "ask" || action === "response") { if (!out.date) out.date = todayISO(); }
+  if (action === "response") out.forName = o ? o.name : "";
   if (action === "opportunity") { out.name = `${c.last}, ${c.first} - ${YEAR}`; out.officer = OFFICER; }
   if (action === "plan") { out.officer = OFFICER; if (!out.fund && o.fund) out.fund = o.fund; if (!out.campaign && o.campaign && out.fund === o.fund) out.campaign = o.campaign; }
   if (action === "ask") { if (out.amount == null && a) out.amount = a.amount; if (!out.fund) out.fund = (a && a.fund) || o.fund || ""; }
@@ -195,7 +234,10 @@ function openForm(action, cid, item) {
   if (target.gate) { oppGate(target.gate); return; }
   if (target.error) { toast(plainErr(target.error)); return; }
   if (target.route) action = target.route;
-  V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true }; renderOverlay(); spookyCue("creak");
+  let backTo = null; // Oct 28 (Carverhill): a form opened from the Tasks list goes back there on cancel; a save stays on the record
+  if (action === "response" && target.opp && !(S.screen === "opp" && S.sel.opp === target.opp.id)) { backTo = S.screen === "tasks" ? "tasks" : null; S.sel.opp = target.opp.id; S.screen = "opp"; save(); render(); } // the task's link lands on the opportunity, with the form over it
+  V = { action, target, data: prefill(action, {}, target), fromVoice: new Set(), typed: true, backTo }; formEvent("FORM_OPEN"); renderOverlay(); spookyCue("creak");
+  if (action === "response") focusField(document.getElementById("f_response")); // straight to the field the officer came for
   if (G.live) guide(`The officer opened the ${ACTIONS[action].title} form${target.contact ? " for " + nameOf(target.contact) : ""} by tapping. In a few words, say you see it and that they can tell you the details (you fill it in with ${toolFor(action)}).`);
 }
 const toolFor = (action) => (TOOLS.find(t => t.action === (action === "payment" ? "gift" : action)) || {}).name || "the draft tool";
@@ -207,11 +249,11 @@ function voiceFill() {
   startCall(`The officer opened the ${A.title} form${c ? " for " + nameOf(c) : ""} on screen and tapped Fill this in by voice. ${draftSummary()} Help them finish it: ask only for what is still needed, one short question at a time, and call ${toolFor(V.action)}${c ? ` with contact_name "${nameOf(c)}"` : ""} as you go. Don't ask about anything already filled in.`);
 }
 // Home options typed instead of spoken: pick who it's for, then the form opens
-const FORM_FOR = { "Add a contact": "contact", "Let's add a contact": "contact", "Log a meeting": "interaction", "Plan an ask": "plan", "Record an ask": "ask", "Record the ask": "ask", "Record a pledge": "pledge", "Record a gift": "gift", "Record a payment": "gift", "Add a task": "task", "Schedule a meeting": "meeting" };
+const FORM_FOR = { "Add a contact": "contact", "Let's add a contact": "contact", "Log a meeting": "interaction", "Plan an ask": "plan", "Record an ask": "ask", "Record the ask": "ask", "Record the response": "response", "Record a pledge": "pledge", "Record a gift": "gift", "Record a payment": "gift", "Add a task": "task", "Schedule a meeting": "meeting" };
 function pickFor(action) {
   if (action === "contact") { openForm("contact"); return; }
   const ok = S.contacts.map(c => ({ c, t: resolveTarget(action, nameOf(c)) })).filter(x => !x.t.error || (action === "opportunity" && !openOpp(x.c.id))); // not ready yet: tapping shows what's missing
-  const h = document.getElementById("modal"), A = ACTIONS[action], oppFirst = ["plan", "ask", "pledge", "gift", "payment"].includes(action);
+  const h = document.getElementById("modal"), A = ACTIONS[action], oppFirst = ["plan", "ask", "response", "pledge", "gift", "payment"].includes(action);
   // A to Z by last name, then first name (the small label still says why each opportunity is listed)
   ok.sort((a, b) => (a.c.last || "").localeCompare(b.c.last || "") || (a.c.first || "").localeCompare(b.c.first || ""));
   const why = (o) => { if (action === "gift") return o.stage === "Commitment" ? (o.pledge && o.pledge.outright ? "Commitment · agreed outright gift" : "Commitment · applied to the pledge") : "Ask Made · implied commitment";
@@ -255,7 +297,7 @@ function renderOverlay() {
 }
 document.getElementById("overlay").addEventListener("click", (e) => {
   const a = e.target.closest("[data-act]"); if (!a) return;
-  if (a.dataset.act === "close") { V = null; renderOverlay(); }
+  if (a.dataset.act === "close") { const back = V && V.backTo; V = null; formEvent("FORM_CLOSED"); renderOverlay(); if (back) go(back); }
   else if (a.dataset.act === "voicefill") voiceFill();
   else if (a.dataset.act === "save") saveDraft();
 });
@@ -269,7 +311,7 @@ function hfNotice(text) { if (G.hfTry) G.hfTry.msg = text; else guide(text); }
 function saveDraft() {
   const d = readDraft(), A = ACTIONS[V.action];
   const miss = A.fields.filter(f => f.req && fieldBlank(f, d[f.k]));
-  if (!miss.length && (needsNextStep(V.action, d, V.target) || (V.action === "ask" && d.response !== "Declined"))) {
+  if (!miss.length && !V.nextSkipped && (needsNextStep(V.action, d, V.target) || (V.action === "ask" && d.response !== "Declined"))) { /* the officer said no to setting a next step now (Oct 30 rule): it saves without one (Oct 31 real-Ara run: the no looped on the read-back 7 times) */
     const need = [!String(d.nextStep || "").trim() && "Next step", !d.nextDue && "Next step due"].filter(Boolean);
     if (need.length) {
       const msg = `Add the ${need.join(" and ").toLowerCase()} before saving. A substantive interaction needs a next step and its due date.`;
@@ -310,9 +352,9 @@ function saveDraft() {
   try { act("form", formLog(A, d, V.fromVoice, V.typed)); } catch (e) {}
   const result = APPLY[action](d, t);
   G.lastSave = { undo, at: Date.now(), action, hf: !!G.hfTry }; // a hands-free save can be taken back by saying "undo"
-  save(); V = null; renderOverlay(); render(); window.scrollTo(0, 0);
+  save(); V = null; formEvent("FORM_SAVED"); renderOverlay(); render(); window.scrollTo(0, 0);
   setWhatNext(action, result, t); if (G.whatNext) render();
-  toast(A.saved, () => { S = JSON.parse(undo); G.whatNext = null; save(); render(); });
+  toast(A.saved + (result && result.note ? ". " + result.note : ""), () => { S = JSON.parse(undo); G.whatNext = null; save(); render(); });
   if (action === "payment" || action === "gift") celebrate(); // the money came in: a pledge payment or an outright gift
   else spookyCue("thunder");
   grokSaved(action, result, d);
@@ -331,12 +373,15 @@ function gcalLink(d, c) {
 }
 const fmtTime = (t) => { if (!t) return ""; const [h, m] = t.split(":").map(Number); return `${(h % 12) || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
 // copy the changed fields onto a saved item; returns "Label changed from A to B" for each change
+// a field's value as it is compared: a flag as true or false, money as a number, anything else as trimmed text (shared by the History log and the voice read-back of an edit)
+const fieldNorm = (type, v) => type === "bool" ? !!v : type === "money" ? (toNum(v) || 0) : v == null ? "" : String(v).trim();
+const fieldChanged = (type, now, was) => fieldNorm(type, now) !== fieldNorm(type, was);
 function editLog(obj, d, map) {
   const out = [];
   Object.entries(map).forEach(([k, [f, label, show]]) => {
-    let v = d[k]; if (typeof obj[f] === "boolean" || k === "substantive") v = !!v; else if (k === "amount") v = toNum(v); else v = v == null ? "" : String(v).trim();
-    const was = typeof obj[f] === "boolean" || k === "substantive" ? !!obj[f] : obj[f] == null ? "" : obj[f];
-    if (v === was || (v === "" && was === "")) return;
+    const type = typeof obj[f] === "boolean" || k === "substantive" ? "bool" : k === "amount" ? "money" : "text";
+    if (!fieldChanged(type, d[k], obj[f])) return;
+    const v = type === "money" ? toNum(d[k]) : fieldNorm(type, d[k]), was = type === "bool" ? !!obj[f] : obj[f] == null ? "" : obj[f];
     const sh = (x) => x === "" || x == null ? "blank" : show ? show(x) : String(x);
     out.push(`${label} changed from ${sh(was)} to ${sh(v)}`); obj[f] = v;
   });
@@ -430,22 +475,15 @@ const APPLY = {
     S.tasks.forEach(k => { if (k.contactId === c.id && /^Make the ask/.test(k.text)) k.done = true; });
     let a = latestAsk(o);
     if (!a || !["Planned", "Made"].includes(a.status)) { a = { fund: d.fund, campaign: "National", amount: d.amount, askType: "Outright", plannedDate: d.date }; o.asks.unshift(a); }
-    Object.assign(a, { amount: d.amount, fund: d.fund, status: "Made", askedOn: a.askedOn || d.date, response: d.response });
-    if (d.response === "Accepted") { a.status = "Accepted"; if (d.agreedAmount) a.amount = d.agreedAmount; }
-    if (d.response === "Countered") { a.status = "Countered"; o.asks.unshift({ fund: a.fund, campaign: a.campaign, amount: d.agreedAmount || a.amount, askType: a.askType, status: "Agreed, pledge to follow", plannedDate: d.date, askedOn: d.date }); }
-    if (d.response === "Declined") { a.status = "Declined"; a.reason = d.lostReason; }
-    const ids = { contactId: c.id, oppId: o.id };
-    if (d.response === "Declined") { o.stage = "Closed"; o.closed = "Lost"; o.lostReason = d.lostReason; o.closedOn = d.date; log(`Ask recorded: Declined. Closed Lost: ${d.lostReason}`, ids); }
-    else { o.stage = "Ask Made"; log(`Ask recorded: ${d.response}${d.agreedAmount ? ", " + money(d.agreedAmount) : ""}. Moved to Ask Made`, ids); }
-    const yes = (d.response === "Accepted" || d.response === "Countered") ? latestAsk(o) : null, outright = yes && (yes.askType || "Outright") === "Outright";
-    // a yes to an outright ask is the commitment: straight to Commitment, waiting for the gift (a pledge ask still waits for Record pledge with its schedule)
-    if (outright) { const due = addDays(d.date || todayISO(), PLEDGE_FOLLOWUP_DAYS); yes.status = "Accepted";
-      o.pledge = { outright: true, amount: yes.amount, fund: yes.fund, confirmedBy: "Ask accepted", confirmedDate: d.date, installments: 1, frequency: "One payment", firstAmount: yes.amount, firstDue: due, payments: [], status: "Current" };
-      o.stage = "Commitment"; c.status = "Investor";
-      log(`Outright gift of ${money(yes.amount)} agreed at the ask. Moved to Commitment`, ids); }
-    if (d.nextStep) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: d.nextStep, due: d.nextDue, done: false });
-    if (yes) S.tasks.unshift({ id: uid(), contactId: c.id, oppId: o.id, text: `Follow up on agreed ${outright ? "gift" : "pledge"}: ${money(yes.amount)}`, due: addDays(d.date || todayISO(), PLEDGE_FOLLOWUP_DAYS), done: false, auto: true });
-    S.sel.opp = o.id; S.screen = "opp"; return t;
+    Object.assign(a, { amount: d.amount, fund: d.fund, status: "Made", askedOn: a.askedOn || d.date });
+    const note = askOutcome(o, c, a, d, "Ask recorded");
+    S.sel.opp = o.id; S.screen = "opp"; return Object.assign({ note }, t);
+  },
+  // the investor's answer, when it comes in after the ask meeting (Oct 28): the same outcome logic as recording the ask
+  response(d, t) {
+    const o = t.opp, c = t.contact, a = t.item || latestAsk(o);
+    const note = askOutcome(o, c, a, d, "Response recorded");
+    S.sel.opp = o.id; S.screen = "opp"; return Object.assign({ note }, t);
   },
   pledge(d, t) {
     const o = t.opp, c = t.contact;
@@ -455,6 +493,7 @@ const APPLY = {
     a.status = "Accepted";
     o.stage = "Commitment"; c.status = "Investor";
     doneAgreedPledgeTasks(c);
+    doneAskCheckTasks(o);
     log(`Pledge recorded: ${money(d.amount)}, confirmed by ${String(d.confirmedBy).toLowerCase()} on ${fmtDate(d.confirmedDate)}. Moved to Commitment`, { contactId: c.id, oppId: o.id });
     S.sel.opp = o.id; S.screen = "opp"; return t;
   },
@@ -464,6 +503,7 @@ const APPLY = {
     o.pledge = { implied: true, amount: d.amount, fund: d.fund, confirmedBy: "Gift received", confirmedDate: d.date, installments: 1, frequency: "One payment", firstAmount: d.amount, firstDue: d.date,
       payments: [{ amount: d.amount, date: d.date, method: d.method }], status: "Paid in full" };
     S.tasks.forEach(k => { if (k.oppId === o.id && /pledge/i.test(k.text)) k.done = true; }); // the money settles any pledge follow-up
+    doneAskCheckTasks(o); // and the check on the answer: the money is the answer
     (c.gifts = c.gifts || []).push({ date: d.date, amount: d.amount, fund: d.fund, method: d.method, pledge: true });
     let a = latestAsk(o);
     if (!a) { a = { fund: d.fund, campaign: "National", amount: d.amount, askType: "Outright", plannedDate: d.date }; o.asks.unshift(a); }
@@ -478,6 +518,7 @@ const APPLY = {
     const o = t.opp, c = t.contact, p = o.pledge;
     p.payments = (p.payments || []).concat([{ amount: d.amount, date: d.date, method: d.method }]);
     S.tasks.forEach(k => { if (k.oppId === o.id && /^Follow up on agreed (pledge|gift)/.test(k.text)) k.done = true; });
+    doneAskCheckTasks(o);
     (c.gifts = c.gifts || []).push({ date: d.date, amount: d.amount, fund: p.fund, method: d.method, pledge: true });
     const paid = p.payments.reduce((n, x) => n + (x.amount || 0), 0);
     p.status = paid >= p.amount ? "Paid in full" : "Current";
@@ -502,7 +543,9 @@ function celebrate() {
   const spooky = spookyMode(), xmas = xmasMode(), colors = xmas ? ["#c62f3b", "#2f8a4a", "#e8c15a", "#a9b8c8", "#1f6b39"] : spooky ? ["#f07b2a", "#8a4fd1", "#2b2233", "#e8b923", "#6fcf5a"] : ["#1f5fbf", "#e8b923", "#d94848", "#2e9d6a", "#8a4fd1", "#f07b2a"], rnd = (a, b) => a + Math.random() * (b - a);
   let h = "";
   for (let i = 0; i < 90; i++) { const w = Math.round(rnd(6, 11)); h += `<i class="cf" style="left:${rnd(0, 100).toFixed(1)}%;width:${w}px;height:${Math.round(w * 0.45)}px;background:${colors[i % colors.length]};animation-delay:${rnd(0, 0.8).toFixed(2)}s;animation-duration:${rnd(2.4, 4).toFixed(2)}s;--r:${Math.round(rnd(-540, 540))}deg;--dx:${Math.round(rnd(-70, 70))}px"></i>`; }
-  if (xmas) { spookyCue("won"); spookyOnce("sleigh"); for (let i = 0; i < 9; i++) h += `<b class="bat" style="left:${(3 + i * 10.5 + rnd(0, 4)).toFixed(1)}%;animation-delay:${rnd(0, 1).toFixed(2)}s;animation-duration:${rnd(3.2, 4.6).toFixed(2)}s;--dx:${Math.round(rnd(-60, 60))}px">${["🎁", "⭐", "❄️"][i % 3]}</b>`; } // Christmas mode: gifts, stars and snowflakes rise, Santa's sleigh flies over, "Joy to the World" then "ho ho ho"
+  if (xmas) { spookyCue("won");
+    spookyOnce("sleigh");
+    for (let i = 0; i < 9; i++) h += `<b class="bat" style="left:${(3 + i * 10.5 + rnd(0, 4)).toFixed(1)}%;animation-delay:${rnd(0, 1).toFixed(2)}s;animation-duration:${rnd(3.2, 4.6).toFixed(2)}s;--dx:${Math.round(rnd(-60, 60))}px">${["🎁", "⭐", "❄️"][i % 3]}</b>`; } // Christmas mode: gifts, stars and snowflakes rise, Santa's sleigh flies over, "Joy to the World" then "ho ho ho"
   else if (spooky) { spookyCue("won"); for (let i = 0; i < 9; i++) h += `<b class="bat" style="left:${(3 + i * 10.5 + rnd(0, 4)).toFixed(1)}%;animation-delay:${rnd(0, 1).toFixed(2)}s;animation-duration:${rnd(3.2, 4.6).toFixed(2)}s;--dx:${Math.round(rnd(-60, 60))}px">🦇</b>`; } // spooky mode: bats instead of balloons, and an organ sting with a cackle
   else for (let i = 0; i < 9; i++) h += `<b class="bl" style="left:${(3 + i * 10.5 + rnd(0, 4)).toFixed(1)}%;--c:${colors[i % colors.length]};animation-delay:${rnd(0, 1).toFixed(2)}s;animation-duration:${rnd(3.6, 5).toFixed(2)}s;--dx:${Math.round(rnd(-60, 60))}px"></b>`;
   const box = document.createElement("div"); box.className = "party"; box.setAttribute("aria-hidden", "true"); box.innerHTML = h;
