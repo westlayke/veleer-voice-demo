@@ -368,6 +368,13 @@ test("Carverhill's 12:45 PM call (Oct 30): a tool call's reply is never taken fo
   ok(/No sound for Ara's line in \d+ s: asked for it again, once/.test(await p.log()) && await p.evaluate((t4) => __sent.filter(s => /force_message/.test(s) && s.includes(t4.slice(0, 50))).length === 2 && !__sent.some(s => /Say it again now, word for word/.test(s)), t4), "the app's own soundless line wasn't resent as a scripted line: " + (await p.log()).slice(-300));
   await p.fire([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t4 + " " }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(300);
   ok(await p.evaluate(() => !G.forced), "the resent scripted line didn't play");
+  // 5. the app asks the same question again on purpose after a resend ($18 real-Ara run, Nov 1): the new line stands the watch down and is not cut as a late copy
+  await p.evaluate((t4) => { __sent.length = 0; G.forced = null; G.pendingForce = null; G.lateForced = null; G.resend = { text: t4, at: Date.now(), seq: G.respSeq - 1, resp: 5, firstAudio: 30000 }; forceSay(t4); }, t4);
+  await p.waitForFunction(() => G.forced && __sent.some(s => /force_message/.test(s)), null, { timeout: 9000 }); await p.waitForTimeout(50);
+  ok(await p.evaluate(() => !G.resend) && /a new scripted line: the late-copy watch stands down/.test(await p.evaluate(() => (window.__vlog || []).join("\n"))) || await p.evaluate(() => !G.resend), "a new scripted line didn't stand the late-copy watch down");
+  const n5 = await p.evaluate(() => __sent.filter(s => /response\.cancel/.test(s)).length);
+  await p.fire([{ type: "response.created" }, audio, { type: "response.output_audio_transcript.delta", delta: t4 + " " }]); await p.evaluate(() => { G.audioSamples = 30000; G.outPeak = 0.2; }); await p.fire([{ type: "response.done", response: { status: "completed" } }]); await p.waitForTimeout(200);
+  ok(await p.evaluate((n5) => __sent.filter(s => /response\.cancel/.test(s)).length === n5 && !G.dropNext, n5) && !/Late copy cut/.test((await p.log()).slice(-400)), "the repeated question was cut as a late copy: " + (await p.log()).slice(-300));
 });
 test("Said means heard (Oct 30): the A to E ranges count as read only once heard with sound; a late copy of an earlier answer doesn't stand the resend down", async (p) => {
   await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);

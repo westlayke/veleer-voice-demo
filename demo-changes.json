@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 8:14 PM",
+      "change": "A new scripted line stands the late-copy watch down. After the phone asks Ara to say a soundless line again, a later copy of those words is cut; when the app itself asked the same question again on purpose (\"When is the planned ask date, and for how much?\" after a cut entity answer), the new question was cut too and the call fell silent for 50 s. Now any new scripted line ends the watch, except the resend itself.",
+      "area": "Voice: scripted lines",
+      "requestedBy": "Carverhill",
+      "why": "Two of the seven misses in the $18 real Ara run (plan-ask, plan-then-record) were this cut; \"Yes let's do the small fix you propose\"."
+    },
+    {
       "date": "Nov 1, 7:04 PM",
       "change": "Add planned ask: when the entity is already on the form (from the opportunity) the campaign question names it first: \"The entity is North Dakota State PAC. Which campaign: National, or North Dakota?\". When the officer has just said the entity, the question stays short.",
       "area": "Voice: forms",

@@ -688,7 +688,10 @@ function micMuted(tr) {
 // If xAI doesn't play it, Ara is asked to say it instead (fallback), so the officer always hears it.
 function forceSay(text, then, fallback, waited = 0) {
   if (!G.live) { G.pendingForce = null; return; }
-  if (!waited) { G.pendingForce = text; G.answeredAt = Date.now(); } /* answeredAt: the officer's words up to now are answered by this line (turnAnswered) */
+  if (!waited) { G.pendingForce = text; G.answeredAt = Date.now(); /* answeredAt: the officer's words up to now are answered by this line (turnAnswered) */
+    /* a new scripted line stands the late-copy watch down: the watch goes by words, and the app can ask the same question again on purpose ($18 real-Ara
+       run, Nov 1: "When is the planned ask date, and for how much?" asked after the entity answer was cut as a late copy of the resent line; 50 s of silence) */
+    if (G.resend) { if (G.resend.viaForce && !G.resend.sent) G.resend.sent = true; else { G.resend = null; vlog("a new scripted line: the late-copy watch stands down"); } } }
   if ((replyBusy() || playingLeft() > 0 || G.forced || Date.now() - (G.cancelAt || 0) < CANCEL_SETTLE_MS) && waited < 8000) { setTimeout(() => forceSay(text, then, fallback, waited + 200), 200); return; }
   // the reply just finished already said it (the engine answered the tool result with the question itself): no second copy (OpenAI, Oct 27: "What's the first name?" three times)
   if (!PROV().forceItem && G.lastBot && Date.now() - G.lastBotAt < 4000 && saidLine(sameWords(G.lastBot), sameWords(text), text)) { if (G.pendingForce === text) G.pendingForce = null; G.lastForcedText = text; vlog("scripted line already said: " + text); act("step", `${PROV().name} had just said the scripted line in its own words: not sent again`); if (then) setTimeout(() => guide(then), 0); return; }
