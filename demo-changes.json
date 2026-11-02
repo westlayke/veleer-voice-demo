@@ -2,6 +2,13 @@
   "note": "Changes to the Citizens VCRM demo, newest first, from the demo's change log. Dates are when each change was made on the preview; most went live the same day.",
   "changes": [
     {
+      "date": "Nov 1, 9:19 PM",
+      "change": "A state said as part of an entity's name is not its campaign. \"North Dakota C4\" in answer to \"Which entity?\" had been taken as the North Dakota campaign too, so the campaign question never came. The app now reads the officer's words for the campaign with entity names removed, in the fill from the answer, the \"just said\" shortcut and the evidence guard alike; \"the Pennsylvania C4, Pennsylvania\" still counts as a campaign answer.",
+      "area": "Voice: forms",
+      "requestedBy": "Carverhill",
+      "why": "9:30 PM call, Nov 1: \"it forgot to ask me for a campaign\"; \"Build it\"."
+    },
+    {
       "date": "Nov 1, 8:14 PM",
       "change": "A new scripted line stands the late-copy watch down. After the phone asks Ara to say a soundless line again, a later copy of those words is cut; when the app itself asked the same question again on purpose (\"When is the planned ask date, and for how much?\" after a cut entity answer), the new question was cut too and the call fell silent for 50 s. Now any new scripted line ends the watch, except the resend itself.",
       "area": "Voice: scripted lines",

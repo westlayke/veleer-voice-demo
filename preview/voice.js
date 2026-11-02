@@ -66,7 +66,7 @@ function askedBefore(n = 1) { const r = G.recent || [];
   if (i < 1) return "";
   const ara = [];
   for (let j = i - 1; j >= 0 && ara.length < n; j--) { if (r[j].startsWith("Officer: ")) break;
-    ara.unshift(r[j]); }
+    ara.unshift(r[j].replace(/^[^:]+: /, "")); } /* without the speaker ("Ara: Type: In person" made the first listed option "ara type in person") */
   return ara.join(" ").toLowerCase(); } // the last n things Ara said before the officer's latest line (Oct 25: "...move to Cultivation." then "Want to do that now?" came as two lines)
 // which words in the officer's own lines ask for each form (a new form opens only on their word, Oct 25: Ara opened the ask-result form unasked after a save)
 const FORM_WORDS = {

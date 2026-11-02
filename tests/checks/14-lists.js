@@ -120,4 +120,19 @@ test("Pat's Pennsylvania C4 loop (Oct 31): once the entity is on the Record the 
   await araSays("Sorry, I lost you for a moment. What would you like to do?"); await p.waitForTimeout(200);
   ok(/The form changed: the ask for where we were stands down/.test(await p.log()) && await p.evaluate(() => !checkNow("ctxWatch")), "the check didn't stand down for another form: " + (await p.log()).slice(-300));
 });
+test("Carverhill's 9:30 PM call (Nov 1): a state entity answered to the entity question is not the campaign; the campaign question follows", async (p) => {
+  await signIn(p); await p.waitForFunction(() => window.__ws && G.status === "Listening", null, { timeout: 8000 }); await p.waitForTimeout(300);
+  await p.evaluate(() => { const c = S.contacts.find(x => x.first === "Ruth"); S.opps.filter(o => o.contactId === c.id).forEach(o => { o.fund = ""; o.campaign = ""; }); });
+  await said(p, "Add a planned ask for Ruth.");
+  let r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy" });
+  ok(/Which entity\?$/.test(r.ask_exactly || ""), "the entity question wasn't asked: " + JSON.stringify(r).slice(0, 300));
+  await p.waitForFunction(() => !G.forced, null, { timeout: 5000 }); await said(p, "North Dakota C4.");
+  r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", fund: "North Dakota C4" });
+  ok((await p.evaluate(() => V.data.fund)) === "C.A. North Dakota C4" && !(await p.evaluate(() => V.data.campaign)), "the campaign was filled from the entity answer: " + JSON.stringify(await p.evaluate(() => V.data)).slice(0, 200));
+  ok(!/The app filled the campaign/.test(await p.log()), "the app filled the campaign from the entity answer");
+  ok(r.ask_exactly === "Which campaign: National, or North Dakota?", "the campaign question didn't follow (short form: the officer just said the entity): " + JSON.stringify({ ask: r.ask_exactly, status: (r.status || "").slice(-400) }));
+  await p.waitForFunction(() => !G.forced, null, { timeout: 5000 }); await said(p, "North Dakota.");
+  r = await ara(p, "show_ask_plan_draft", { contact_name: "Ruth Abernathy", plannedDate: "2026-11-03" });
+  ok((await p.evaluate(() => V.data.campaign)) === "North Dakota" && /The app filled the campaign from the officer's answer/.test(await p.log()), "the campaign answer to the campaign question wasn't taken: " + (await p.log()).slice(-300));
+});
 };

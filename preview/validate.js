@@ -37,7 +37,8 @@ function optionAnswered(label, lines, asked) {
   const first = l.split(/\s+/)[0]; if (last.includes(l) || (first.length >= 4 && new RegExp("\\b" + first + "\\b").test(last))) return true;
   const ORD = { first: 0, "1st": 0, one: 0, second: 1, "2nd": 1, two: 1, third: 2, "3rd": 2, three: 2, fourth: 3, "4th": 3, four: 3, fifth: 4, "5th": 4, five: 4, last: -1 }; // "the second one": the options in the order the question listed them
   const m = last.match(/\b(first|second|third|fourth|fifth|last|1st|2nd|3rd|4th|5th|one|two|three|four|five)\b/); if (!m) return false;
-  const listed = q.split(/[:?]/).slice(1).join(" ").split(/,|\bor\b/).map(x => x.trim()).filter(Boolean); const i = ORD[m[1]] === -1 ? listed.length - 1 : ORD[m[1]];
+  const listed = q.split("?").flatMap(s => s.includes(":") ? s.slice(s.lastIndexOf(":") + 1).split(/,|\bor\b/).map(x => x.trim()).filter(Boolean) : []); /* the choices the question offered, in order */
+  const i = ORD[m[1]] === -1 ? listed.length - 1 : ORD[m[1]];
   return listed.length > 1 && listed[i] === l;
 }
 // ---- yes and no ----
@@ -125,7 +126,7 @@ function fieldSaidIn(action, f, lines) {
   if (!f || !lines.length) return false; const all = lines.join(" \n ").toLowerCase();
   if (f.k === "capacity") return ratedIn(lines);
   if (f.k === "fund") return listMatch("fund", lines[lines.length - 1]).hits.length === 1 || !!(typeof V !== "undefined" && V && V.data && String(V.data.fund || "").trim()); /* already on the form from an earlier answer (12:09 AM call, Nov 1: reported left out while the form kept it) */ /* a state with two entities is a choice still to make (10:05 AM call) */
-  if (LIST_WORDS[f.k]) return Object.values(LIST_WORDS[f.k]).some(re => re.test(all) || re.test(all.replace(/-/g, " "))); /* campaign included: a state name or a national word */
+  if (LIST_WORDS[f.k]) { const t = wordsForList(f.k, all); return Object.values(LIST_WORDS[f.k]).some(re => re.test(t) || re.test(t.replace(/-/g, " "))); } /* campaign: a state name or a national word, not as part of an entity's name */
   if (f.type === "money") return /\$|\d|\b(thousand|hundred|million|grand|bucks|dollars)\b/.test(listWordsOut(all));
   if (f.type === "date") { const w = listWordsOut(all); return DATE_WORDS.test(w) || /\d/.test(w); }
   return false; /* free text: the app can't tell, so it asks */

@@ -143,9 +143,15 @@ function listMatch(key, text, opts) {
 }
 // the answer to a list question: the one value the words point to (the first, when the words fit several and the list has no "which one" question), or null
 function listTake(key, text, opts) { const h = listMatch(key, text, opts).hits; if (key === "fund") return h.length === 1 ? h[0] : null; return h.length ? h[0] : null; }
+// a state said as part of an entity's name is not its campaign: "North Dakota C4" names no campaign, "the Pennsylvania C4, Pennsylvania" does
+// (9:30 PM call, Nov 1: the entity answer counted as the campaign "just said", so the campaign question never came). Every reader of the
+// officer's words for a list goes through wordsForList, so the rule lives here once.
+const ENTITY_NAME_RE = new RegExp("\\b(" + ["National", ...Object.values(ENTITY_STATE).filter(Boolean)].map(s => listEsc(s.toLowerCase())).join("|") + ")('s)?\\s+(the\\s+)?(c\\s*-?\\s*3|c\\s*-?\\s*4|(state |fed(eral)? )?pac|entity)\\b", "g");
+const wordsForList = (key, text) => key === "campaign" ? String(text).replace(ENTITY_NAME_RE, " ") : String(text);
 // did the officer's own words (lines, newest last) give this value? asked: the question just put to them. The evidence guard uses this for every list.
 function listHeard(key, value, lines, asked) {
   if (key === "fund") return entityHeardIn(value, lines);
+  lines = lines.map(l => wordsForList(key, l));
   if (typeof optionAnswered === "function" && optionAnswered(String(value), lines, asked)) return true;
   const all = lines.map(listText).join(" \n "), re = (LIST_WORDS[key] || {})[String(value)];
   if (new RegExp("\\b" + listEsc(listText(value)) + "\\b").test(all)) return true;
