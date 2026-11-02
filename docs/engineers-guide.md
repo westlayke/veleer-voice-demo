@@ -16,7 +16,8 @@ the xAI key and the activity log. GitHub Pages serves the app, GitHub Actions ru
 
 Two copies live side by side: `preview-flow.html` with `preview/` is the only copy that is edited; `index.html` with
 `app/` is the live page, written by `tools/publish.sh live` at a go-live and never by hand. Release 1.0 is tag `v1.0`
-(branch `release-1.0`, notes in `docs/release-1.0.md`).
+(branch `release-1.0`, notes in `docs/release-1.0.md`); release 1.1, the Nov 1 9:34 PM ET build, is tag `v1.1` (branch `release-1.1`,
+notes in `docs/release-1.1.md`).
 
 ## The files, in load order
 
