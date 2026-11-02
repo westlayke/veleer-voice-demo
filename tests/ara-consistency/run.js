@@ -5,6 +5,7 @@
 // Nothing reaches the activity log or the Cloudflare Worker: the token comes from this script and log posts stay here.
 const http = require("http"), fs = require("fs"), path = require("path");
 const { stepsInPage, stepsLines } = require("../steps.js");
+const { pathsInPage, pathsLines } = require("../paths.js");
 const { smSection } = require("../patience/state-section.js");
 let chromium; try { ({ chromium } = require("playwright")); } catch (e) { try { ({ chromium } = require("/opt/node-tools/node_modules/playwright")); } catch (e2) { /* the combine job needs no browser */ } }
 const FLOWS = require("./flows");
@@ -254,7 +255,7 @@ async function converse(browser, base, flow, n) {
     await p.evaluate(() => { try { endCall("test done"); } catch (e) {} });
     await p.waitForTimeout(300);
     conv.acts = await p.evaluate(() => window.__acts.filter(a => a.role !== "tap"));
-    conv.steps = await p.evaluate(stepsInPage).catch(() => null);
+    conv.steps = await p.evaluate(stepsInPage).catch(() => null); conv.paths = await p.evaluate(pathsInPage).catch(() => null); /* which of the app's paths this conversation touched */
     conv.sm = await p.evaluate(() => window.__sm ? { ended: __sm.ended, transitions: __sm.transitions } : null).catch(() => null); /* the state machine: its state changes and the checks it ended itself */
     conv.forms = await p.evaluate(() => window.__forms || []);
     conv.drops = await p.evaluate(() => window.__drops || []);
@@ -385,7 +386,7 @@ function report(convs, extra) {
     md += `### Scripted lines paired by the service's id\n\n${idRows.length} scripted lines logged their ids (the first three per call): ${byId} paired by the service's id, ${byWords} taken by their words, ${byOrder} by order with no id; xAI refused a scripted line ${refused} times.\n\n` + idRows.slice(0, 6).map(r => `- ${r}`).join("\n") + "\n\n"; }
   if (DROP_AFTER_SAVE) { const rows = convs.flatMap(c => c.acts.filter(a => a.role === "step" && /where we were|^(Reconnected|Line reopened): /.test(a.text)).map(a => `${c.flow} #${c.n}: ${a.text.slice(0, 160)}`)), n = convs.flatMap(c => c.faults.filter(f => f.when === "after a save")).length;
     md += `## Drops after a save (DROP_AFTER_SAVE ${DROP_AFTER_SAVE}): Ara says where we were\n\n${n} drops right after a save. Ara said where we were herself on the first try ${rows.filter(r => /said where we were on try 1/.test(r)).length} times, on a later try ${rows.filter(r => /said where we were on try [2-9]/.test(r)).length}, and the app said it itself ${rows.filter(r => /didn't say where we were in/.test(r)).length} times.\n\n` + rows.map(r => `- ${r.replace(/\|/g, "/")}`).join("\n") + "\n\n"; }
-  md += `## Discrete steps and the app's scripted lines\n\n${stepsLines(convs).join("\n")}\n\n`;
+  md += `## Discrete steps and the app's scripted lines\n\n${stepsLines(convs).join("\n")}\n\n## Paths covered\n\n${pathsLines(convs).join("\n")}\n\n`;
   { const sm = smSection(convs); if (sm.length) md += sm.join("\n") + "\n"; }
   md += `## Rule breaks\n\n| Rule | Checked | Broken | Rate |\n|---|---:|---:|---:|\n` + rows.map(r => `| ${r.rule} | ${r.checked} | ${r.broken} | ${r.rate}% |`).join("\n") + "\n\n";
   md += `## By flow\n\n| Flow | Conversations | Ended saved | Avg cost | Avg minutes |\n|---|---:|---:|---:|---:|\n` + Object.entries(byFlow).map(([k, f]) => `| ${k} | ${f.n} | ${f.saved} | ${money(f.cost / f.n)} | ${(f.min / f.n).toFixed(2)} |`).join("\n") + "\n\n";

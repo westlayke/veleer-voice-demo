@@ -292,7 +292,7 @@ async function conversation(browser, base, n) {
   conv.log = await p.evaluate(() => VLOG.slice(-400)).catch(() => []); conv.lines = await p.evaluate(() => window.__lines.map(l => `${l.at} ${l.from}: ${l.text}`)).catch(() => []); conv.guidance = await p.evaluate(() => window.__guidance || []).catch(() => []);
   if (process.env.DEBUG) { console.log(conv.lines.join("\n")); console.log(conv.log.join("\n")); console.log("GUIDANCE\n" + conv.guidance.join("\n")); if (conv.sync && conv.sync.falseNudgeNotes && conv.sync.falseNudgeNotes.length) console.log("ASKS WITH NO TOOL MISSING\n" + conv.sync.falseNudgeNotes.join("\n")); }
   conv.longest = Math.max(0, ...conv.asks.map(a => a.silence));
-  conv.steps = await p.evaluate(stepsInPage).catch(() => null);
+  conv.steps = await p.evaluate(stepsInPage).catch(() => null); conv.paths = await p.evaluate(pathsInPage).catch(() => null); /* which of the app's paths this conversation touched */
   conv.sm = await p.evaluate(() => window.__sm ? { ended: __sm.ended, transitions: __sm.transitions } : null).catch(() => null); /* the state machine: its state changes and the checks it ended itself */
   conv.quiet = await p.evaluate(() => { /* stretches of silence: between one sound starting and the next (Ara's sounded lines, the officer's words, the phone's recordings), less the estimated length of the earlier one (2.5 words a second, recordings 2 s); Carverhill, Oct 30: never more than 5 or 6 s */
     const ev = (window.__lines || []).filter(l => !l.noaudio).map(l => ({ at: l.at, len: l.from === "officer" ? 0 : Math.min(12000, 400 * String(l.text).split(/\s+/).length) })).concat((window.__phoneSaid || []).map(s => ({ at: s.at, len: 2000 }))).sort((a, b) => a.at - b.at);
@@ -310,6 +310,7 @@ async function conversation(browser, base, n) {
 const { stateSection, smSection } = require("./state-section.js");
 const { faultSection, entitySection } = require("./fault-section.js");
 const { stepsInPage, stepsLines } = require("../steps.js");
+const { pathsInPage, pathsLines } = require("../paths.js");
 if (require.main === module) (async () => {
   await new Promise(r => server.listen(0, r)); const base = `http://localhost:${server.address().port}/`;
   const args = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--autoplay-policy=no-user-gesture-required"];
@@ -329,6 +330,7 @@ if (require.main === module) (async () => {
     "| Cause | Asks |", "|---|---|", ...Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `| ${k} | ${v} |`), "",
     "| Conversation | Minutes | Saves | Asks | Faults | Ended |", "|---|---|---|---|---|---|", ...convs.map(c => `| ${c.n} | ${c.minutes} | ${c.saves.length} | ${c.asks.map(a => `${a.silence} s (${a.cause})`).join("; ") || "none"} | ${c.faults.map(f => f.fault).join(", ") || "none"} | ${c.closedWon ? "Closed Won" : c.ended || ""}${c.errors.length ? " " + c.errors.join("; ") : ""} |`), "",
     "## Discrete steps and the app's scripted lines", "", ...stepsLines(convs), "",
+    "## Paths covered", "", ...pathsLines(convs), "",
     "## Silence", "", `Stretches with no sound (estimated, speaking time taken off): longest ${Math.max(0, ...convs.map(c => c.quiet ? c.quiet.longest : 0))} s; over 6.5 s: ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.over : 0), 0)} of ${convs.reduce((a, c) => a + (c.quiet ? c.quiet.n : 0), 0)} stretches, in ${convs.filter(c => c.quiet && c.quiet.over).length} of ${convs.length} conversations.`, "",
     ...faultSection(convs), ...entitySection(convs),
     ...stateSection(convs),

@@ -101,6 +101,10 @@ rows (the repository is public).
 - **Patient Pat** (`patience.yml`, `tests/patience/`): a stand-in officer with the patience measured on real calls
   talks through every form on up to 20 machines while drops, dead spots, stalls and soundless lines are thrown in;
   scores "are you there?" asks per 10 minutes, saves, hang-ups, and the share of app scripted lines per step.
+- **The path map** (`tests/paths.js`): every path a call can take (each form opened, saved and saved on the officer's yes,
+  each optional field, the read-back answers, the next-step answers, each voice command and tool, the line events, the
+  guards, the checks on Ara), drawn from the app's own tables. Patient Pat and the real-Ara run end their reports with
+  "Paths covered: N of M" and the misses by group, so the next goals are the gaps.
 - **Real Ara** (`ara-consistency.yml`, `tests/ara-consistency/`): the same stand-in officer against the live xAI
   service under a dollar budget (about 50 cents a conversation), with injected faults; scores every conversation
   (task saved, nothing invented, substantive asked, state honoured) and, with `diag=1`, keeps the event timeline.
