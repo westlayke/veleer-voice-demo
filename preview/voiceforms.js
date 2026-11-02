@@ -40,7 +40,7 @@ const OPT_Q = {
   permSource: (who) => `Next field: how ${who} agreed to texts. Fill it in, or move on?`,
   flags: (who) => `Last field: should ${who} be marked Ally - Do Not Solicit, or Do Not Contact? Most people are neither; say neither to move on.`,
   fund: () => `Next field: the entity they're most likely to give to, for example National C3, or one of the C4s or PACs. Fill it in, or move on?`,
-  campaign: () => { const f = readDraft().fund; return `Which campaign: National, or ${ENTITY_STATE[f]}?`; },
+  campaign: () => campaignQ(readDraft()),
   potential: () => `Next field: the potential amount. Fill it in, or move on?`,
   notes: () => `Last field: any notes. Fill them in, or move on?`
 };
@@ -73,6 +73,10 @@ function optNext() { // the next question still to ask: skips anything already a
   const d = readDraft();
   return optSteps().find(st => !V.opt.done.includes(st.k) && (!st.when || st.when(d)) && (st.group || st.f.type === "bool" ? true : optEmpty(d[st.k])));
 }
+// The campaign question names the entity when the officer didn't just say it (Carverhill's 6:49 PM call, Nov 1: the planned ask came with the
+// opportunity's entity already set, "Which campaign: National, or North Dakota?" left him asking twice which entity that was)
+function campaignQ(d) { const f = d && d.fund, q = `Which campaign: National, or ${ENTITY_STATE[f] || "the state"}?`;
+  return f && V && V.fromVoice && !V.fromVoice.has("fund") ? `The entity is ${entitySpoken(f)}. ${q}` : q; }
 function optSet(k, v) { const cur = readDraft(); (V.history = V.history || []).push(Object.assign({}, cur)); cur[k] = v; V.fromVoice.add(k); V.data = prefill(V.action, cur, V.target); renderOverlay(); }
 function optParse(k, raw, st) { // the officer's answer in their words -> the field's value, or null if it can't be read
   const t = String(raw || "").trim(), l = t.toLowerCase().replace(/[’‘]/g, "'"), f = (st && st.f) || (ACTIONS[V.action].fields.find(x => x.k === k) || {});
@@ -384,7 +388,7 @@ const REQ_Q = {
   "task.text": () => "What's the task?", "task.due": () => "When is it due?",
   "meeting.title": () => "What's the meeting about?", "meeting.date": () => "When is it, date and time?",
   "cultivate.decision": (w) => `Move ${w} to Cultivation, or defer?`, "cultivate.reason": () => "What's the reason to defer, and when should it come up again?",
-  lostReason: () => "What was the reason?", reason: () => "What's the reason?", campaign: (w, d) => `Which campaign: National, or ${ENTITY_STATE[d.fund] || "the state"}?`, fund: () => { const hits = typeof matchEntity === "function" ? matchEntity(officerLines(1)[0] || "").hits : [];
+  lostReason: () => "What was the reason?", reason: () => "What's the reason?", campaign: (w, d) => campaignQ(d), fund: () => { const hits = typeof matchEntity === "function" ? matchEntity(officerLines(1)[0] || "").hits : [];
     return hits.length > 1 && hits.length <= 5 ? `Which one: ${hits.map(entitySpoken).join(", ")}?` : "Which entity?"; }, email: (w) => `What's ${w}'s email address?`, mobile: (w) => `What's ${w}'s mobile number?`
 };
 // a contact with neither an email nor a mobile: the app's own question for the one it needs (6:58 PM call, Oct 29: after a reconnect the app said "that's everything the form needs" with no email or mobile on the form, and Ara had asked for them in her own words)

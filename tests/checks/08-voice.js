@@ -224,6 +224,7 @@ test("Oct 25 call notes: a new form opens only on the officer's word, a repeated
   r = await ara(p, "optional_fields", { step: "answer", value: "The PAC. C.A. Idaho PAC." }); // Grok re-sent the entity answer after a reconnect (Oct 25)
   let d = await p.evaluate(() => V && V.data);
   ok(!d.campaign && /Which campaign: National, or Idaho\?/.test(r.ask_exactly || r.status || ""), "the repeated entity answer filled the campaign: " + JSON.stringify({ campaign: d.campaign, r }));
+  ok(/^The entity is Idaho PAC\. Which campaign: National, or Idaho\?$/.test(await p.evaluate(() => { V.fromVoice.delete("fund"); const q = campaignQ(readDraft()); V.fromVoice.add("fund"); return q; })), "an entity the officer didn't say isn't named in the campaign question (Nov 1 6:49 PM call)");
   await said(p, "Idaho."); r = await ara(p, "optional_fields", { step: "answer", value: "Idaho" });
   d = await p.evaluate(() => V && V.data);
   ok(d.campaign === "Idaho" && /potential amount/.test(r.ask_exactly || ""), "the campaign the officer gave wasn't taken: " + JSON.stringify({ campaign: d.campaign, r }));
