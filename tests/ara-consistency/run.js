@@ -134,7 +134,7 @@ async function converse(browser, base, flow, n) {
           const rms = Math.sqrt(sq / d.length); for (let i = 0; i < d.length; i++) d[i] = d[i] / rms * 0.3; /* a dull, car-like rumble, normalised so NOISE is its level: 0.1 = rms 0.03 */
           const src = mctx.createBufferSource(); src.buffer = n; src.loop = true; const g = mctx.createGain(); g.gain.value = noise; src.connect(g).connect(dst); src.start(); }
         window.__mic = { ctx: mctx, dst, played: 0 }; window.__ara = []; // Ara's audio as it arrives, kept for the clip: [at, base64 pcm] with [at, null] marking each new reply
-        navigator.mediaDevices.getUserMedia = async () => dst.stream;
+        navigator.mediaDevices.getUserMedia = async () => dst.stream.clone(); /* a fresh stream each time: the app stops the old stream's tracks when it restarts the mic after a lock or held sound (restartAudio), and with one shared stream that silenced the officer for the rest of the call (Nov 1 $18 run: 3 of 7 misses) */
         window.__speak = (b64, gain) => new Promise((res) => { mctx.resume(); const bin = atob(b64), n = bin.length >> 1, buf = mctx.createBuffer(1, n, 24000), d = buf.getChannelData(0);
           for (let i = 0; i < n; i++) { const v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); d[i] = (v >= 0x8000 ? v - 0x10000 : v) / 32768; }
           const s = mctx.createBufferSource(); s.buffer = buf; const g = mctx.createGain(); g.gain.value = gain == null ? 1 : gain; s.connect(g).connect(dst); s.onended = () => { window.__mic.played++; res(n / 24); }; s.start(); }); /* gain 0: a quiet mic (FAULTS) */
